@@ -1,66 +1,227 @@
-### End-to-End Multi-Agent Development Workflow: Operating Manual
+# workflow.md — Единый регламент разработки и взаимодействия агентов
 
-This document defines the strict, state-driven lifecycle of a feature request on the Antigravity platform. All subagents (`pm_bot`, `dev_bot`, `py_bot`, `qa_bot`, `git_bot`) operate in isolated contexts and communicate exclusively through file-based artifacts and standard operating procedures.
+Этот документ определяет правила выполнения задач, проверок, передачи результатов, Git-процесса, безопасности и обработки блокеров на платформе Antigravity.
 
-#### 1. The End-to-End Process
-The lifecycle follows a deterministic, sequential state machine:
-1. **Intake & Planning (`pm_bot`)**: The orchestrator receives the human prompt, decomposes it, and writes the formal requirements to `tasks/<issue-folder>/TASK.md`.
-2. **Delegation (`pm_bot` → Developer)**: `pm_bot` spawns the specialist agent (e.g., `py_bot` for Python or `dev_bot` for Go) via `invoke_subagent`, passing the `TASK.md` path and enforcing the `flash` model.
-3. **Execution & Compilation (`dev_bot`/`py_bot`)**: The developer executes TDD. They are blocked by a **Hard Compilation Gate** (linting, tests, security scans). Code is refactored locally until all exit codes are `0`.
-4. **Developer Handoff**: Once tests pass, the developer writes `DEV_HANDOVER.md` and updates the state.
-5. **Smoke Verification (`pm_bot`)**: The orchestrator runs a sanity compilation (e.g., `go build ./...`). If it fails, the task immediately bounces back to the developer.
-6. **Independent QA (`qa_bot`)**: `pm_bot` spawns `qa_bot` to audit the code. `qa_bot` runs full isolated test suites and vulnerability scans, emitting `QA_REVIEW.md` with an explicit `APPROVED` or `REJECTED` status.
-7. **Version Control (`git_bot`)**: Upon `APPROVED`, `pm_bot` spawns `git_bot`. It reads the state log, creates a branch, commits the delta, pushes to origin, opens a PR, and monitors the CI/CD pipeline.
-8. **Done-Done Reporting (`pm_bot`)**: The orchestrator confirms CI/CD success, updates global state, and returns control to the human.
+---
 
-#### 2. State Management & Logging (`WORKLOG.md`)
-`WORKLOG.md` acts as the immutable global state machine and single source of truth for agent coordination.
-- **Purpose**: It prevents context degradation across isolated subagent boundaries, provides historical tracking, and governs loop limits.
-- **Lifecycle**:
-  - `pm_bot` initializes the cycle: `[TS] | pm_bot | PROJECT_START | <desc>`
-  - Developer claims task: `[TS] | dev_bot | IMPLEMENTATION_START | <desc>`
-  - Developer yields task: `[TS] | dev_bot | IMPLEMENTATION_COMPLETE | <desc>`
-  - QA sets verdict: `[TS] | qa_bot | REVIEW_APPROVED` (or `REVIEW_REJECTED`)
-- **Loop Prevention**: `pm_bot` continuously parses `WORKLOG.md`. If it detects the `DEV_REWORK` state more than twice for the same task, it aborts the loop, halts the state machine, and triggers a human escalation.
+## 1. Архитектура взаимодействия и жизненный цикл задач
 
-#### 3. Handover Documents
-Subagents do not pass conversational context. Handovers are entirely payload-driven via standard Markdown schemas located in `tasks/<issue-folder>/`.
+### 1.1. Базовые принципы
+- **Изоляция контекста**: Субагенты вызываются через `invoke_subagent` для выполнения изолированного этапа. Их контекст сообщений отделен от сессии оркестратора.
+- **Изоляция файлов**: Изоляция контекста агентов **не означает** автоматической изоляции файлов на диске. Параллельная работа требует непересекающегося владения файлами либо отдельных рабочих копий (worktree/ветки).
+- **Файловый обмен (Artifact Handover)**: Вся передача результатов между этапами происходит через структурированные Markdown-документы в каталоге задачи `tasks/<task-id>/`. Сообщения PM могут резюмировать результаты, но не заменяют файлы отчетов.
 
-**`TASK.md` (Initial Payload)**
-- **Author**: `pm_bot`
-- **Contents**: Architecture specs, scope constraints, database schemas, and explicit "Do Nots".
+### 1.2. Правило каталогов задач (`tasks/<task-id>/`)
+- **Обязательность**: Для **любого изменения репозитория** (включая однострочные правки кода, конфигов или документации) **должна существовать папка задачи** `tasks/<task-id>/` (используется текущая активная либо создается новая). Однострочная правка не отменяет создания `TASK.md` и артефактов верификации.
+- **Исключение**: Простое чтение файлов, поиск по кодовой базе, анализ или ответы на вопросы пользователя без модификации репозитория **не требуют** создания папки задачи.
 
-**`DEV_HANDOVER.md` (Developer → QA Payload)**
-- **Author**: `dev_bot` or `py_bot`
-- **Contents**: 
-  - *Files Changed*: Exact diff manifest.
-  - *Test Results*: Raw `stdout` of passing coverage targets (`pytest --cov` or `go test -cover`).
-  - *Linter/Security Output*: Raw `stdout` proving clean runs of `gosec`, `govulncheck`, `flake8`, `pip-audit`.
-  - *Notes for QA*: Expected edge cases, concurrency models, and data validation assumptions.
+### 1.3. Соразмерный запуск агентов
+- **Анализ и ответы без изменения файлов**: выполняет `pm_bot` самостоятельно без привлечения других ролей.
+- **Документационные задачи**: выполняет `pm_bot` (при необходимости с привлечением `qa_bot` для аудита связности). Если пользователь поручает зафиксировать или опубликовать изменения документации, привлекается `git_bot`. Разработчики приложения и тесты кода при этом не задействуются.
+- **Задачи разработки кода**: привлекается ответственный разработчик (`py_bot` или `dev_bot`), независимый `qa_bot` и `git_bot`.
+- **Смешанные задачи (Fullstack)**: `pm_bot` разделяет зоны ответственности:
+  - `py_bot` — бэкенд на Python.
+  - `dev_bot` — Go и веб-интерфейс (Frontend: HTML, CSS, JS/TS, UI).
+  - Один из разработчиков назначается ответственным за интеграцию.
 
-**`QA_REVIEW.md` (QA → Orchestrator Payload)**
-- **Author**: `qa_bot`
-- **Contents**: 
-  - *Verdict*: `APPROVED` or `REJECTED`.
-  - *Security Findings*: List of vulnerabilities. Any `MEDIUM` or higher severity mandates a `REJECTED` verdict.
-  - *Checklist*: Verification of test isolation, command injection safety, and logic validation.
+---
 
-#### 4. File Generation & Artifact Location Convention
-**STRICT CONSTRAINT**: All task-related work files, scratchpads, PR bodies, and intermediate artifacts MUST be saved inside the designated task folder (`tasks/<issue-folder>/`). They must NOT be saved in the repository root.
+## 2. Единый шаблон спецификации задачи (`tasks/<task-id>/TASK.md`)
 
-During a standard feature implementation cycle, the following non-source files are generated and stored strictly in the task folder:
-- `tasks/<issue-folder>/TASK.md` (Scope mapping)
-- `tasks/<issue-folder>/DEV_HANDOVER.md` (Execution evidence)
-- `tasks/<issue-folder>/QA_REVIEW.md` (Audit verification)
-- `tasks/<issue-folder>/pr_body.txt` (or any other git/PR related drafts)
+Файл `TASK.md` содержит актуальное состояние задачи и обновляется `pm_bot` при передаче задачи, получении отчетов и возникновении блокеров:
 
-The ONLY exceptions permitted in the repository root are:
-- `WORKLOG.md` (Global execution state)
-- `CICD_ERRORS.md` (Generated at root only if `git_bot` detects a remote pipeline failure post-push)
+```markdown
+# Task: <task-id> — <Краткое название>
 
-#### 5. Failure & Recovery
-The system leverages cascading failure recovery:
-- **Local Dev Breakage (Compilation/Test Fails)**: Addressed locally by the developer subagent. Creating a handover document while tests fail is a hard constraint violation. The developer loops internally until `stdout` shows success.
-- **QA Rejection**: If `qa_bot` finds logical flaws or security regressions, it halts, generates a `QA_REVIEW.md` detailing the exploit or failure trace, and flags `REVIEW_REJECTED`. 
-- **Orchestrator Rerouting**: `pm_bot` reads the rejection, logs `DEV_REWORK` in `WORKLOG.md`, and respawns the developer subagent. The prompt payload now includes the `QA_REVIEW.md` stack trace, forcing the developer to address the exact failure.
-- **Pipeline Failure**: If tests pass locally but fail in GitHub Actions, `git_bot` parses the failed job logs via `gh run view`, dumps the trace into `CICD_ERRORS.md`, and passes state back to `pm_bot` for another `DEV_REWORK` cycle.
+- **Цель**: <Понятное описание цели задачи>
+- **Границы изменений**:
+  - Разрешено изменять: <список файлов/каталогов>
+  - Запрещено изменять: <файлы/модули вне границ задачи>
+- **Критерии приемки**:
+  1. <Критерий 1>
+  2. <Критерий 2>
+- **Текущий статус**: [INIT | IN_DEV | READY_FOR_QA | IN_QA | QA_APPROVED | IN_GIT | DONE | BLOCKED | NEEDS_DECISION]
+- **Ответственный исполнитель**: <pm_bot / py_bot / dev_bot / qa_bot / git_bot / ops_bot>
+- **Рабочая ветка / копия**: <имя ветки или путь к рабочей копии>
+- **Блокер**: <нет / описание препятствия>
+- **Следующий шаг**: <конкретное следующее действие>
+- **Ссылки на отчеты**:
+  - DEV: `tasks/<task-id>/DEV_HANDOVER.md`
+  - QA: `tasks/<task-id>/QA_REVIEW.md`
+  - GIT: `tasks/<task-id>/GIT_HANDOVER.md`
+  - OPS: `tasks/<task-id>/OPS_HANDOVER.md`
+- **История попыток решения**:
+  - [Попытка 1]: <Проблема> | <Подход> | <Результат>
+  - [Попытка 2]: <Проблема> | <Подход> | <Результат>
+  - Счетчик попыток данного подхода: <N>/2
+```
+
+---
+
+## 3. Журнал состояний проекта (`WORKLOG.md`)
+
+- **Единый автор**: `pm_bot` является **единственным автором** файла `WORKLOG.md` в корне проекта. Исполнители фиксируют результаты в отчетах задачи, не дублируя записи в общий журнал.
+- **Формат записи**:
+  ```markdown
+  [YYYY-MM-DD HH:MM] | AGENT | ACTION | Description (Task: <task-id>)
+  ```
+- **Стандартные действия**: `TASK_INIT`, `GIT_PREPARE`, `DEV_ASSIGN`, `DEV_COMPLETE`, `QA_ASSIGN`, `QA_APPROVED`, `QA_REJECTED`, `GIT_COMMITTED`, `GIT_PR_CREATED`, `TASK_BLOCKED`, `TASK_DONE`.
+- **Экономия контекста**: При работе читаются только последние строки журнала; перечитывание всей истории без необходимости запрещено.
+
+---
+
+## 4. Соразмерная политика проверок (Verification Policy)
+
+Проверки определяются конфигурацией проекта, поведением компонентов и риском изменений:
+
+| Категория изменений | Проверки разработчика | Независимый аудит QA |
+|---|---|---|
+| **Документация и инструкции** | Проверка ссылок, целостности структуры, отсутствия конфликтов и битых путей. | Аудит связности документов, сценарная валидация workflow. |
+| **Локальная правка кода** | Связанные unit-тесты, линтеры **только затронутых файлов** (не форматировать весь репозиторий). | Анализ git diff, запуск релевантных тестов затронутого компонента, контроль отсутствия регрессий. |
+| **API, ядро, схемы данных** | Unit-тесты + интеграционные тесты зависимых модулей, проверка контрактов. | Проверка граничных условий и зависимых интеграций. |
+| **Безопасность и зависимости** | Аудит зависимостей, отсутствие секретов, профильные сканеры при изменении манифестов. | Независимый аудит diff на уязвимости, права доступа и санитизацию. |
+| **Frontend / Веб-интерфейс** | Проектная сборка UI, линтеры компонентов, валидация пользовательского сценария в браузере (если инструмент доступен). | Проверка сценариев взаимодействия, обработка ошибок UI, визуальная целостность. |
+| **Перед созданием PR** | Обязательный набор проверок, установленный в конфигурации проекта для PR. | Верификация готовности к открытию PR. |
+| **Перед релизом** | Полный регрессионный тестовый набор проекта и CI. | Финальная валидация релизного снимка. |
+
+### Правила проведения проверок:
+1. **Конфигурация проекта первична**: Инструменты, параметры линтеров и тестовые раннеры берутся из конфигурации проекта (`pyproject.toml`, `package.json` и др.). Не вводить обязательства сверх настроек проекта.
+2. **Локальность форматирования**: Утилиты форматирования (`black`, `prettier`, `gofmt`) запускаются **только на измененных в задаче файлах**, чтобы не засорять git diff чужими правками.
+3. **Чистая диагностика**: Запрещено перенаправлять ошибки в `2>/dev/null` или подавлять диагностику.
+4. **Отсутствие инструмента = BLOCKED**: Если обязательный по регламенту инструмент отсутствует в окружении, выставляется статус `BLOCKED` (а не фиктивный `PASS`).
+5. **Неизменившийся результат**: Повторный запуск тяжелых проверок на неизменившемся коде и окружении требует явного обоснования.
+6. **Порог безопасности**: Подтвержденная уязвимость уровня `MEDIUM` или выше в diff задачи означает вердикт **`REJECTED`**.
+
+---
+
+## 5. Статусы и протокол передачи результатов (Handover)
+
+### 5.1. Статусы этапов
+- **Разработчик (`DEV_HANDOVER.md`)**:
+  - `READY_FOR_QA` — реализация завершена, локальные проверки пройдены, артефакт готов к аудиту.
+  - `BLOCKED` — работа остановлена из-за непреодолимого блокера.
+  - `NEEDS_DECISION` — требуется решение пользователя или PM по архитектуре/требованиям.
+- **Контроль качества (`QA_REVIEW.md`)**:
+  - `APPROVED` — критерии приемки выполнены, обязательные проверки пройдены в проверенной области.
+  - `REJECTED` — выявлены дефекты, падение тестов или уязвимости `MEDIUM+`.
+  - `BLOCKED` — проверку невозможно завершить из-за внешних сбоев окружения.
+- **Git и публикация (`GIT_HANDOVER.md`)**:
+  - `LOCALLY_VERIFIED` -> `PR_CREATED` -> `CI_PASSED` -> `MERGED` -> `DEPLOYED`.
+
+### 5.2. Единый шаблон отчета проверки (`tasks/<task-id>/QA_REVIEW.md`)
+Отчеты **не содержат заранее отмеченных успешных чекбоксов** или шаблонных фраз «уязвимостей нет». Все поля заполняются по фактическим результатам:
+
+```markdown
+# QA Review: <task-id>
+
+## Вердикт: [APPROVED | REJECTED | BLOCKED]
+- **Базовый коммит (Base Commit)**: <хеш>
+- **Идентификатор снимка (Diff Snapshot Hash)**: <sha256>
+- **Ответственный исполнитель**: <py_bot / dev_bot / pm_bot>
+
+## Результаты проверок
+| Проверка | Команда / Способ | Статус (PASS / FAIL / NOT_RUN / N/A) | Основание и ограничения | Ссылка на доказательство |
+|---|---|---|---|---|
+| Границы diff | `git status` + diff | [Статус] | [Краткое основание] | tasks/<task-id>/logs/... |
+| Тесты | <команда> | [Статус] | [Краткое основание] | tasks/<task-id>/logs/... |
+| Линтеры/Стиль | <команда> | [Статус] | [Краткое основание] | tasks/<task-id>/logs/... |
+| Безопасность | <команда / аудит diff> | [Статус] | [Краткое основание] | tasks/<task-id>/logs/... |
+
+## Выявленные замечания и дефекты
+- (Перечень замечаний с уровнем критичности: LOW / MEDIUM / HIGH, либо отметка об их отсутствии в рамках проверенной области)
+
+## Итоговое заключение и следующий шаг
+- <Рекомендация для pm_bot / git_bot>
+```
+
+> [!NOTE]
+> `APPROVED` означает подтверждение выполнения критериев приемки `TASK.md` и соразмерных проверок в границах задачи. Это не является гарантией абсолютного отсутствия дефектов во всем репозитории.
+
+---
+
+## 6. Воспроизводимый QA-снимок и обработка служебных артефактов
+
+### 6.1. Фиксация QA-снимка (Diff Snapshot)
+Для исключения рассинхронизации между проверенным кодом и будущим коммитом QA-одобрение связывается с точным снимком состояния:
+1. **Базовая версия**: фиксируется базовый коммит (`BASE_COMMIT=$(git rev-parse HEAD)`).
+2. **Полный набор изменений**: учитываются все измененные, удаленные и новые (untracked) файлы задачи, включая бинарные. Для новых файлов выполняется `git add -N <files>`.
+3. **Идентификатор содержимого**: вычисляется воспроизводимый хеш диффа задачи:
+   ```bash
+   DIFF_SNAPSHOT_HASH=$(git diff $BASE_COMMIT -- . ':(exclude)tasks/*' ':(exclude)WORKLOG.md' | sha256sum | awk '{print $1}')
+   ```
+4. **Проверка перед коммитом**: `git_bot` индексирует файлы задачи (`git add`) и перед `git commit` сверяет staged diff с `DIFF_SNAPSHOT_HASH`. При несовпадении коммит блокируется до повторного QA.
+
+### 6.2. Обращение со служебными артефактами задачи
+- Служебные отчеты задачи (`tasks/<task-id>/TASK.md`, `QA_REVIEW.md`, `WORKLOG.md`, `DEV_HANDOVER.md`, `GIT_HANDOVER.md`, `OPS_HANDOVER.md`), обновляемые в ходе и по итогам этапов, исключаются из расчетного хеша прикладного снимка. Их обновление **не запускает бесконечный цикл** повторного QA-одобрения собственного отчета.
+- **Исключение для документационных задач**: Если предметом задачи является изменение инструкций (`AGENTS.md`, `workflow.md`, `.agents/*`), эти файлы **являются проверяемым результатом (deliverables)** и обязательно входят в QA-снимок.
+
+---
+
+## 7. Двухэтапная работа с Git (`git_bot`)
+
+Работа `git_bot` разделена на два четких этапа, устраняющих противоречия:
+
+### Этап 1: PREPARE (до начала разработки)
+- Вызывается `pm_bot` до передачи задачи разработчику.
+- Действия:
+  1. Проверка чистоты рабочей копии (`git status`).
+  2. Сохранение незавершенных пользовательских изменений (stash/commit по согласованию).
+  3. Определение базовой и целевой ветки (без безусловного `main`).
+  4. Создание и переключение на рабочую ветку (`feat/<task-id>-<name>` / `fix/<task-id>-<name>`) либо подготовка изолированной рабочей копии.
+- **QA-одобрение для этапа PREPARE не требуется.**
+- *Вызов git_bot на этапе PREPARE не дает разрешения на push, merge или deploy.*
+
+### Этап 2: FINALIZE (после завершения и одобрения QA)
+- Вызывается `pm_bot` только при наличии `QA_REVIEW.md` со статусом `APPROVED`.
+- Действия:
+  1. Проверка статуса `APPROVED` и совпадения QA-снимка (diff snapshot hash).
+  2. Атомарная индексация файлов задачи (`git add <files>`, запрещен слепой `git add .`).
+  3. Проверка staging на отсутствие секретов, токенов и мусора.
+  4. Формирование коммита в императивном стиле со ссылкой на задачу.
+  5. Выполнение **только явно разрешенных пользователем** действий публикации (`push`, создание PR).
+  6. Формирование отчета `tasks/<task-id>/GIT_HANDOVER.md`.
+
+---
+
+## 8. Безопасность инфраструктуры и временные секреты (`ops_bot`)
+
+1. **Безопасность сетевых подключений**:
+   - Запрещено использование `StrictHostKeyChecking=no` как стандартного режима. Подключение осуществляется через проверенные ключи хостов и `known_hosts`.
+2. **Изоляция и права доступа к секретам**:
+   - Временное хранилище секретов организуется строго **вне репозитория** (в приватной системной временной папке или каталоге сессии `scratch/`).
+   - Каталог временных секретов создается с правами **`700`** (`chmod 700 <dir>`).
+   - Файлы приватных ключей и учетных данных сохраняются с правами **`600`** (`chmod 600 <file>`).
+   - Пароли и ключи **никогда не попадают** в репозиторий, файлы `tasks/`, отчеты или логи.
+3. **Регламент очистки секретов**:
+   - Агент удаляет **только созданные им временные копии** файлов ключей (`rm -f <temp_file>`).
+   - **Категорически запрещено** удалять постоянные пользовательские ключи (`~/.ssh/*`) и чужие временные файлы.
+   - Требуется корректное удаление; если очистка не удалась, агент обязан зафиксировать статус `BLOCKED` и честно сообщить об этом (без ложных обещаний "физического гарантированного уничтожения").
+4. **Развертывание и откат (Rollback)**:
+   - Деплой требует: целевого контура, фиксированной версии/тега, проверок жизнеспособности (health-check) и согласованного плана отката.
+   - При сбое деплоя выполняется откат к предыдущей версии, сбор маскированной диагностики и формирование отчета `tasks/<task-id>/OPS_HANDOVER.md`.
+
+---
+
+## 9. Защита от зацикливания и лимиты попыток (Loop Prevention)
+
+1. **Правило двух попыток**:
+   - Если разработчик или QA сталкивается с одной и той же проблемой/ошибкой 2 раза подряд при одном подходе — **повторение прежнего подхода запрещено**.
+   - Агент обязан остановиться, зафиксировать проблему в истории `TASK.md` со статусом `BLOCKED` и передать задачу `pm_bot`.
+2. **Сохранение истории между перезапусками**:
+   - Пересоздание субагента **не сбрасывает** счетчик попыток — история хранится в `TASK.md`.
+   - Лимит относится именно к повторению одного тупикового подхода, а не к обычным ожидаемым итерациям разработки или TDD-цикла.
+3. **Эскалация**:
+   - `pm_bot` выбирает альтернативную гипотезу либо эскалирует вопрос пользователю с конкретными вариантами выбора при существенной неоднозначности требований.
+   - Рутинные обратимые решения принимаются самостоятельно.
+
+---
+
+## 10. Границы пользовательских разрешений
+
+1. **Принцип явного согласия**:
+   - Операции `git push`, слияние PR (`merge`), деплой на серверы (`deploy`) и потенциально деструктивные команды выполняются **только в пределах явно согласованного пользователем объема работ**.
+   - Разрешение на подготовку ветки или локальный коммит не означает разрешения на `push` или `deploy`.
+2. **Отсутствие повторных переспросов**:
+   - Если пользователь уже предоставил явное разрешение на конкретный этап и условия (например, локальная правка файлов инструкций), повторный запрос не производится.
+3. **Приоритет пользователя**:
+   - Внутреннее решение `pm_bot` или статус `APPROVED` от QA не заменяют необходимого разрешения пользователя на публикацию или инфраструктурные изменения.
