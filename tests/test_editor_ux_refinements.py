@@ -139,30 +139,49 @@ class TestEditorUXRefinements(unittest.TestCase):
     # 5. CONTEXTUAL BUBBLE TOOLBAR
     # --------------------------------------------------------------------------
     def test_refinement_5_bubble_toolbar_strictly_above_without_colors(self):
-        """5. Contextual bubble toolbar strictly above selection without colors."""
+        """5. Contextual bubble toolbar strictly above selection without colors, and 4 align buttons without 'Еще' dropdown."""
         # Positioned strictly above selection in bubble.js
         self.assertIn("Math.max(10, bounds.top)", self.bubble_js)
         self.assertNotIn("placeBelow", self.bubble_js)
         self.assertNotIn("position-below", self.bubble_js)
 
-        # Swatch listeners removed from bubble.js
+        # Swatch listeners and moreBtn/moreMenu removed from bubble.js
         self.assertNotIn("color-swatch", self.bubble_js)
         self.assertNotIn("reset-text-color", self.bubble_js)
         self.assertNotIn("reset-bg-color", self.bubble_js)
+        self.assertNotIn("bubble-more-btn", self.bubble_js)
+        self.assertNotIn("bubble-more-menu", self.bubble_js)
 
-        # HTML: bubble-more-menu contains alignment, but no color groups
-        more_menu_match = re.search(r'<div id="bubble-more-menu"[^>]*>(.*?)</div>\s*</div>\s*</div>', self.html, re.DOTALL)
-        self.assertIsNotNone(more_menu_match)
-        more_menu_content = more_menu_match.group(1)
-        self.assertIn('Выравнивание', more_menu_content)
-        self.assertIn('data-align=', more_menu_content)
-        self.assertNotIn('Цвет текста', more_menu_content)
-        self.assertNotIn('Цвет фона (выделение)', more_menu_content)
-        self.assertNotIn('data-color=', more_menu_content)
-        self.assertNotIn('data-bg=', more_menu_content)
+        # HTML: #bubble-more-btn and #bubble-more-menu removed
+        self.assertNotIn('id="bubble-more-btn"', self.html)
+        self.assertNotIn('id="bubble-more-menu"', self.html)
+        self.assertNotIn('Цвет текста', self.html)
+        self.assertNotIn('Цвет фона (выделение)', self.html)
+        self.assertNotIn('data-color=', self.html)
+        self.assertNotIn('data-bg=', self.html)
 
-        # CSS: position-below class removed
+        # HTML: 4 align buttons in #bubble-toolbar with SVG icons and data-format="align"
+        bubble_match = re.search(r'<div id="bubble-toolbar"[^>]*>(.*?)</div>\s*<!-- Floating Contextual Table Action Bar', self.html, re.DOTALL)
+        self.assertIsNotNone(bubble_match)
+        bubble_content = bubble_match.group(1)
+
+        align_buttons = re.findall(r'<button[^>]*data-format="align"[^>]*>(.*?)</button>', bubble_content, re.DOTALL)
+        self.assertEqual(len(align_buttons), 4, f"Expected 4 align buttons in bubble-toolbar, found {len(align_buttons)}")
+
+        # Verify left, center, right, justify
+        self.assertIn('data-format="align" data-value="" title="По левому краю" aria-label="По левому краю"', bubble_content)
+        self.assertIn('data-format="align" data-value="center" title="По центру" aria-label="По центру"', bubble_content)
+        self.assertIn('data-format="align" data-value="right" title="По правому краю" aria-label="По правому краю"', bubble_content)
+        self.assertIn('data-format="align" data-value="justify" title="По ширине" aria-label="По ширине"', bubble_content)
+
+        # Verify SVG icons
+        for btn_content in align_buttons:
+            self.assertIn('<svg width="15" height="15"', btn_content)
+
+        # CSS: position-below and bubble-more-* classes removed
         self.assertNotIn('.bubble-toolbar.position-below', self.css)
+        self.assertNotIn('.bubble-more-btn', self.css)
+        self.assertNotIn('.bubble-more-menu', self.css)
 
     # --------------------------------------------------------------------------
     # 6. CLEAN UP "+" MENU

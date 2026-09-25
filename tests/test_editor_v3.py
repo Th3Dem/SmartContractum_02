@@ -154,7 +154,7 @@ class TestContextualBubbleToolbar11ToolsOrder(unittest.TestCase):
         10. Link (Ссылка)
         11. Formula (Формула)
         """
-        bubble_match = re.search(r'<div id="bubble-toolbar"[^>]*>(.*?)<div class="bubble-dropdown-wrapper">', self.html, re.DOTALL)
+        bubble_match = re.search(r'<div id="bubble-toolbar"[^>]*>(.*?)<div class="bubble-divider">', self.html, re.DOTALL)
         self.assertIsNotNone(bubble_match, "Bubble toolbar container not found")
         bubble_content = bubble_match.group(1)
 
@@ -186,16 +186,28 @@ class TestContextualBubbleToolbar11ToolsOrder(unittest.TestCase):
                 self.assertIn(f'data-action="{expected["action"]}"', attrs, f"Tool {i+1} action mismatch")
             self.assertIn(expected['title'], attrs, f"Tool {i+1} Russian tooltip mismatch")
 
-    def test_bubble_more_dropdown_features(self):
-        """Verify 'Еще' dropdown contains alignment and colors are removed."""
-        self.assertIn('id="bubble-more-btn"', self.html)
-        self.assertIn('id="bubble-more-menu"', self.html)
-        self.assertIn('Выравнивание', self.html)
-        self.assertIn('data-align=', self.html)
-        self.assertNotIn('Цвет текста', self.html)
-        self.assertNotIn('Цвет фона (выделение)', self.html)
-        self.assertNotIn('data-color=', self.html)
-        self.assertNotIn('data-bg=', self.html)
+    def test_bubble_align_buttons_and_no_more_dropdown(self):
+        """Verify 'Еще' dropdown is removed and 4 alignment buttons are in bubble toolbar."""
+        self.assertNotIn('id="bubble-more-btn"', self.html)
+        self.assertNotIn('id="bubble-more-menu"', self.html)
+        self.assertNotIn('bubble-dropdown-wrapper', self.html)
+
+        # 4 alignment buttons after divider in bubble toolbar
+        bubble_match = re.search(r'<div id="bubble-toolbar"[^>]*>(.*?)</div>\s*<!-- Floating Contextual Table Action Bar', self.html, re.DOTALL)
+        self.assertIsNotNone(bubble_match, "Bubble toolbar container not found")
+        bubble_content = bubble_match.group(1)
+
+        align_matches = re.findall(r'<button[^>]*data-format="align"[^>]*>(.*?)</button>', bubble_content, re.DOTALL)
+        self.assertEqual(len(align_matches), 4, f"Expected 4 align buttons, found {len(align_matches)}")
+
+        # Check each align button attributes and SVG
+        self.assertIn('data-format="align" data-value="" title="По левому краю"', bubble_content)
+        self.assertIn('data-format="align" data-value="center" title="По центру"', bubble_content)
+        self.assertIn('data-format="align" data-value="right" title="По правому краю"', bubble_content)
+        self.assertIn('data-format="align" data-value="justify" title="По ширине"', bubble_content)
+
+        for match in align_matches:
+            self.assertIn('<svg width="15" height="15"', match)
 
     def test_bubble_js_contract(self):
         """Verify bubble.js handles non-empty range selection, prevents selection blur, and handles Escape."""

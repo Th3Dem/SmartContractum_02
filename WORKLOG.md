@@ -44,3 +44,6 @@
 [2026-09-25 18:56] | qa_bot | QA_APPROVED | Независимый аудит 6 доработок UX редактора успешно завершен, вердикт APPROVED (Task: task-05-editor-ux-refinements)
 [2026-09-25 18:57] | pm_bot | TASK_DONE | Доработки UX и аудит завершены, готовы к фиксации (Task: task-05-editor-ux-refinements)
 [2026-09-25 18:58] | git_bot | GIT_COMMITTED | Фиксация коммита 0644127 на этапе FINALIZE (Task: task-05-editor-ux-refinements)
+[2026-09-25 18:59] | git_bot | GIT_COMMITTED | Слияние ветки feat/task-05-editor-ux-refinements в main (коммит 33f55e2) (Task: task-05-editor-ux-refinements)
+[2026-09-25 19:05] | pm_bot | TASK_INIT | Инициализация выноса кнопок выравнивания текста в основную панель Bubble Toolbar в виде иконок и удаления кнопки «Еще» (Task: task-06-bubble-align-icons)
+[2026-09-25 19:10] | dev_bot | DEV_COMPLETE | Перенос 4 иконок выравнивания в Bubble Toolbar и удаление кнопки «Еще» завершены, 73 теста успешно пройдены (100%), DEV_HANDOVER со статусом READY_FOR_QA (Task: task-06-bubble-align-icons)

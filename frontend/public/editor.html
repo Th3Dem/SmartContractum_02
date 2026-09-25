@@ -457,7 +457,7 @@
       </div>
     </footer>
 
-    <!-- Contextual Bubble Toolbar (Selection: 11 Tools in EXACT Order + More Dropdown) -->
+    <!-- Contextual Bubble Toolbar (Selection: 11 Tools + 4 Alignment Buttons) -->
     <div id="bubble-toolbar" class="bubble-toolbar" role="toolbar" aria-label="Форматирование текста">
       <!-- 1. Bold (Жирный) -->
       <button type="button" class="bubble-btn" data-format="bold" title="Жирный" aria-label="Жирный">
@@ -541,24 +541,41 @@
 
       <div class="bubble-divider"></div>
 
-      <!-- "Еще" (More) dropdown -->
-      <div class="bubble-dropdown-wrapper">
-        <button type="button" class="bubble-btn bubble-more-btn" id="bubble-more-btn" title="Еще форматирование" aria-label="Еще">
-          <span>Еще ▾</span>
-        </button>
-        <div id="bubble-more-menu" class="bubble-more-menu">
-          <!-- Alignment -->
-          <div class="more-menu-group">
-            <div class="more-menu-title">Выравнивание</div>
-            <div class="align-button-group">
-              <button type="button" class="bubble-align-btn" data-align="" title="По левому краю">Слева</button>
-              <button type="button" class="bubble-align-btn" data-align="center" title="По центру">Центр</button>
-              <button type="button" class="bubble-align-btn" data-align="right" title="По правому краю">Справа</button>
-              <button type="button" class="bubble-align-btn" data-align="justify" title="По ширине">Ширина</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- 12. Align Left (По левому краю) -->
+      <button type="button" class="bubble-btn" data-format="align" data-value="" title="По левому краю" aria-label="По левому краю">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="15" y2="12"></line>
+          <line x1="3" y1="18" x2="18" y2="18"></line>
+        </svg>
+      </button>
+
+      <!-- 13. Align Center (По центру) -->
+      <button type="button" class="bubble-btn" data-format="align" data-value="center" title="По центру" aria-label="По центру">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="6" y1="12" x2="18" y2="12"></line>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+        </svg>
+      </button>
+
+      <!-- 14. Align Right (По правому краю) -->
+      <button type="button" class="bubble-btn" data-format="align" data-value="right" title="По правому краю" aria-label="По правому краю">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="9" y1="12" x2="21" y2="12"></line>
+          <line x1="6" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+
+      <!-- 15. Align Justify (По ширине) -->
+      <button type="button" class="bubble-btn" data-format="align" data-value="justify" title="По ширине" aria-label="По ширине">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
     </div>
 
     <!-- Floating Contextual Table Action Bar -->

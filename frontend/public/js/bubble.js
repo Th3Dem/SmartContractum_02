@@ -1,7 +1,7 @@
 /**
  * Antigravity WYSIWYG Editor - Floating Contextual Bubble Toolbar
  * Appears ONLY when non-empty text is selected in the editor (mouse or keyboard).
- * 11 Tools in EXACT order + "Еще" dropdown (text color, background color, alignment).
+ * 11 Tools + 4 Alignment Buttons.
  * Sequential formatting without clearing selection, Escape to close, viewport bounds checking.
  */
 
@@ -13,8 +13,6 @@
       this.editor = editor;
       this.bubble = document.getElementById('bubble-toolbar');
       this.editorContainer = editor.container;
-      this.moreBtn = document.getElementById('bubble-more-btn');
-      this.moreMenu = document.getElementById('bubble-more-menu');
 
       if (!this.bubble) return;
 
@@ -47,30 +45,10 @@
         }
       });
 
-      // Toggle "Еще" dropdown
-      if (this.moreBtn && this.moreMenu) {
-        this.moreBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.moreMenu.classList.toggle('show');
-        });
-      }
-
       // Handle button clicks in bubble toolbar
       this.bubble.addEventListener('click', (e) => {
-        // Handle Align buttons
-        const alignBtn = e.target.closest('.bubble-align-btn');
-        if (alignBtn) {
-          const alignVal = alignBtn.getAttribute('data-align');
-          const range = this.editor.getSelection() || this.currentRange;
-          if (range) {
-            this.editor.format('align', alignVal || false);
-          }
-          if (this.moreMenu) this.moreMenu.classList.remove('show');
-          return;
-        }
-
         // Handle standard bubble button
-        const btn = e.target.closest('.bubble-btn:not(#bubble-more-btn)');
+        const btn = e.target.closest('.bubble-btn');
         if (!btn) return;
 
         const format = btn.getAttribute('data-format');
@@ -79,6 +57,13 @@
 
         const range = this.editor.getSelection() || this.currentRange;
         if (!range || range.length === 0) return;
+
+        // Alignment format
+        if (format === 'align') {
+          this.editor.format('align', value || false);
+          this.updateActiveStates(range);
+          return;
+        }
 
         // 8. Clear formatting
         if (action === 'clear-format') {
@@ -116,21 +101,9 @@
         }
       });
 
-      // Close more menu when clicking outside
-      document.addEventListener('click', (e) => {
-        if (this.moreMenu && !this.moreMenu.contains(e.target) && e.target !== this.moreBtn) {
-          this.moreMenu.classList.remove('show');
-        }
-      });
-
-      // Escape closes bubble toolbar and more menu
+      // Escape closes bubble toolbar
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-          if (this.moreMenu && this.moreMenu.classList.contains('show')) {
-            this.moreMenu.classList.remove('show');
-            e.stopPropagation();
-            return;
-          }
           if (this.bubble.classList.contains('show')) {
             this.hide();
           }
@@ -168,9 +141,6 @@
     hide() {
       if (this.bubble) {
         this.bubble.classList.remove('show');
-        if (this.moreMenu) {
-          this.moreMenu.classList.remove('show');
-        }
       }
     }
 
@@ -208,6 +178,12 @@
       buttons.forEach((btn) => {
         const fmt = btn.getAttribute('data-format');
         const val = btn.getAttribute('data-value');
+
+        if (fmt === 'align') {
+          const currentAlign = formats.align || '';
+          btn.classList.toggle('is-active', (val || '') === currentAlign);
+          return;
+        }
 
         if (val) {
           btn.classList.toggle('is-active', formats[fmt] === val || formats[fmt] === parseInt(val, 10));
