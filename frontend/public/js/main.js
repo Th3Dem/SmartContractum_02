@@ -1,6 +1,7 @@
 /**
  * Antigravity WYSIWYG Editor - Main Bootstrap
- * Orchestrates themes, modules, modals, stats, and shortcuts
+ * Orchestrates themes, modules, modals, live stats, preview mode, and shortcuts.
+ * 100% offline-first.
  */
 
 (function (window) {
@@ -9,6 +10,7 @@
   class EditorApplication {
     constructor() {
       this.theme = 'light';
+      this.mode = 'edit'; // 'edit' or 'preview'
       this.editor = null;
       this.titleInput = null;
       this.Toolbar = null;
@@ -47,8 +49,10 @@
       this.bindTitleEvents();
       this.bindStats();
       this.bindModals();
+      this.bindModeToggle();
       this.bindExportImport();
       this.bindShortcuts();
+      this.bindInlineSpoilerInteraction();
     }
 
     /* ==========================================================================
@@ -78,20 +82,62 @@
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('ag_theme', theme);
 
-      // Update toggle icon
-      const toggleBtn = document.getElementById('btn-theme-toggle');
-      if (toggleBtn) {
-        toggleBtn.innerHTML = theme === 'dark'
-          ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>'
-          : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-        toggleBtn.setAttribute('title', theme === 'dark' ? 'Светлая тема' : 'Темная тема');
-      }
-
       // Switch Highlight.js theme
       const hljsThemeLink = document.getElementById('hljs-theme');
       if (hljsThemeLink) {
         hljsThemeLink.href = theme === 'dark' ? 'vendor/highlight/github-dark.min.css' : 'vendor/highlight/github.min.css';
       }
+    }
+
+    /* ==========================================================================
+       Mode Switching (Edit / Preview)
+       ========================================================================== */
+    bindModeToggle() {
+      const editBtn = document.getElementById('btn-mode-edit');
+      const previewBtn = document.getElementById('btn-mode-preview');
+
+      if (editBtn) {
+        editBtn.addEventListener('click', () => this.setMode('edit'));
+      }
+      if (previewBtn) {
+        previewBtn.addEventListener('click', () => this.setMode('preview'));
+      }
+    }
+
+    setMode(mode) {
+      this.mode = mode;
+      const editBtn = document.getElementById('btn-mode-edit');
+      const previewBtn = document.getElementById('btn-mode-preview');
+
+      if (mode === 'preview') {
+        document.body.classList.add('preview-mode');
+        if (editBtn) editBtn.classList.remove('active');
+        if (previewBtn) previewBtn.classList.add('active');
+
+        this.editor.enable(false);
+        if (this.titleInput) this.titleInput.setAttribute('readonly', 'true');
+        if (this.Blocks) this.Blocks.hide();
+        if (this.Bubble) this.Bubble.hide();
+      } else {
+        document.body.classList.remove('preview-mode');
+        if (editBtn) editBtn.classList.add('active');
+        if (previewBtn) previewBtn.classList.remove('active');
+
+        this.editor.enable(true);
+        if (this.titleInput) this.titleInput.removeAttribute('readonly');
+      }
+    }
+
+    bindInlineSpoilerInteraction() {
+      // In preview mode, clicking an inline spoiler reveals / hides it
+      this.editor.root.addEventListener('click', (e) => {
+        if (this.mode === 'preview') {
+          const spoiler = e.target.closest('.editor-inline-spoiler');
+          if (spoiler) {
+            spoiler.classList.toggle('is-revealed');
+          }
+        }
+      });
     }
 
     /* ==========================================================================
@@ -127,7 +173,7 @@
     }
 
     /* ==========================================================================
-       Document Statistics (Words, Chars, Reading Time)
+       Document Statistics (Words, Chars, Reading Time) in Bottom Status Bar
        ========================================================================== */
     bindStats() {
       this.editor.on('text-change', () => {
@@ -164,7 +210,7 @@
         });
       });
 
-      // Drafts modal button
+      // Drafts modal button in header
       const draftsBtn = document.getElementById('btn-drafts-modal');
       if (draftsBtn) {
         draftsBtn.addEventListener('click', () => {
@@ -178,10 +224,10 @@
        ========================================================================== */
     bindExportImport() {
       const exportModal = document.getElementById('export-modal');
-      const exportBtn = document.getElementById('btn-export-modal');
       const exportCodeBox = document.getElementById('export-code-box');
       const exportCopyBtn = document.getElementById('export-copy-btn');
       const exportDownloadBtn = document.getElementById('export-download-btn');
+      const exportWarningBanner = document.getElementById('export-warning-banner');
 
       let currentExportType = 'html';
 
@@ -196,16 +242,47 @@
           content = this.Converter.exportToJSON();
         }
         exportCodeBox.textContent = content;
+
+        // Display loss warnings if any
+        const warnings = this.Converter.getLastWarnings();
+        if (exportWarningBanner) {
+          if (warnings && warnings.length > 0) {
+            exportWarningBanner.innerHTML = '⚠️ <strong>Предупреждение о совместимости:</strong><br>' + warnings.map(w => `• ${w}`).join('<br>');
+            exportWarningBanner.style.display = 'block';
+          } else {
+            exportWarningBanner.style.display = 'none';
+          }
+        }
       };
 
-      if (exportBtn && exportModal) {
-        exportBtn.addEventListener('click', () => {
-          updateExportPreview();
-          exportModal.classList.add('show');
+      // Header Export menu triggers
+      const menuExportHtml = document.getElementById('menu-export-html');
+      const menuExportMd = document.getElementById('menu-export-markdown');
+      const menuExportJson = document.getElementById('menu-export-json');
+      const menuImportJson = document.getElementById('menu-import-json');
+
+      const openExportWithTab = (tabName) => {
+        currentExportType = tabName;
+        document.querySelectorAll('[data-export-tab]').forEach(tab => {
+          tab.classList.toggle('active', tab.getAttribute('data-export-tab') === tabName);
         });
+        updateExportPreview();
+        if (exportModal) exportModal.classList.add('show');
+        const exportMenu = document.getElementById('export-dropdown-menu');
+        if (exportMenu) exportMenu.classList.remove('show');
+      };
+
+      if (menuExportHtml) {
+        menuExportHtml.addEventListener('click', () => openExportWithTab('html'));
+      }
+      if (menuExportMd) {
+        menuExportMd.addEventListener('click', () => openExportWithTab('markdown'));
+      }
+      if (menuExportJson) {
+        menuExportJson.addEventListener('click', () => openExportWithTab('json'));
       }
 
-      // Export format tabs
+      // Export format tabs in modal
       const exportTabs = document.querySelectorAll('[data-export-tab]');
       exportTabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -245,15 +322,16 @@
 
       // Import modal
       const importModal = document.getElementById('import-modal');
-      const importBtn = document.getElementById('btn-import-modal');
       const importTextarea = document.getElementById('import-json-textarea');
       const importSubmitBtn = document.getElementById('import-submit-btn');
       const importFileInput = document.getElementById('import-file-input');
 
-      if (importBtn && importModal) {
-        importBtn.addEventListener('click', () => {
+      if (menuImportJson && importModal) {
+        menuImportJson.addEventListener('click', () => {
           if (importTextarea) importTextarea.value = '';
           importModal.classList.add('show');
+          const exportMenu = document.getElementById('export-dropdown-menu');
+          if (exportMenu) exportMenu.classList.remove('show');
         });
       }
 
@@ -292,7 +370,7 @@
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
-          document.querySelectorAll('.color-picker-popover.show').forEach(p => p.classList.remove('show'));
+          document.querySelectorAll('.dropdown-menu.show').forEach(d => d.classList.remove('show'));
         }
       });
     }

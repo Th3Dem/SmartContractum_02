@@ -1,0 +1,79 @@
+test_draft_object_schema (test_editor_frontend.TestDraftStorageContract.test_draft_object_schema) ... ok
+test_html_export_structure (test_editor_frontend.TestExportFormatConverters.test_html_export_structure)
+Verify complete HTML export document structure. ... ok
+test_json_export_structure (test_editor_frontend.TestExportFormatConverters.test_json_export_structure)
+Verify the structured JSON schema exported by the editor. ... ok
+test_json_import_validation (test_editor_frontend.TestExportFormatConverters.test_json_import_validation)
+Verify JSON import parsing with required fields. ... ok
+test_markdown_conversion_headings_and_styles (test_editor_frontend.TestExportFormatConverters.test_markdown_conversion_headings_and_styles)
+Verify markdown conversion rules. ... ok
+test_markdown_tables_and_checklists (test_editor_frontend.TestExportFormatConverters.test_markdown_tables_and_checklists)
+Verify markdown table format and checklists. ... ok
+test_required_css_files_exist (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_css_files_exist) ... ok
+test_required_html_files_exist (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_html_files_exist) ... ok
+test_required_js_modules_exist (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_js_modules_exist) ... ok
+test_vendor_libraries_exist_locally (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_vendor_libraries_exist_locally) ... ok
+test_zero_external_cdn_in_html (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_zero_external_cdn_in_html)
+Ensure no external http/https or // CDN references in editor.html or index.html. ... ok
+test_zero_external_fonts_or_imports_in_css (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_zero_external_fonts_or_imports_in_css)
+Ensure CSS files do not contain external @import or external url() references. ... ok
+test_preserve_safe_elements (test_editor_frontend.TestHTMLSanitizationXSS.test_preserve_safe_elements) ... ok
+test_strip_iframe_and_object (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_iframe_and_object) ... ok
+test_strip_inline_event_handlers (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_inline_event_handlers) ... ok
+test_strip_javascript_pseudo_urls (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_javascript_pseudo_urls) ... ok
+test_strip_script_tags (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_script_tags) ... ok
+test_anchor_and_person_blots_exist (test_editor_v3.TestAnchorAndPersonBlocks.test_anchor_and_person_blots_exist)
+Ensure AnchorBlot and PersonBlot are registered. ... ok
+test_anchor_unique_id_check (test_editor_v3.TestAnchorAndPersonBlocks.test_anchor_unique_id_check)
+Verify unique ID check for anchors in toolbar.js. ... ok
+test_12_block_items_exact_order (test_editor_v3.TestBlockInserter12ItemsOrder.test_12_block_items_exact_order)
+Verify 12 main block items in exact order: ... ok
+test_additional_blocks_group (test_editor_v3.TestBlockInserter12ItemsOrder.test_additional_blocks_group)
+Group 'Дополнительно' contains Table and Checklist. ... ok
+test_keyboard_navigation_and_slash_command (test_editor_v3.TestBlockInserter12ItemsOrder.test_keyboard_navigation_and_slash_command)
+Keyboard navigation: ArrowUp, ArrowDown, Enter, Escape, and slash command '/'. ... ok
+test_11_bubble_buttons_exact_order (test_editor_v3.TestContextualBubbleToolbar11ToolsOrder.test_11_bubble_buttons_exact_order)
+Verify the 11 buttons in exact order: ... ok
+test_bubble_js_contract (test_editor_v3.TestContextualBubbleToolbar11ToolsOrder.test_bubble_js_contract)
+Verify bubble.js handles non-empty range selection, prevents selection blur, and handles Escape. ... ok
+test_bubble_more_dropdown_features (test_editor_v3.TestContextualBubbleToolbar11ToolsOrder.test_bubble_more_dropdown_features)
+Verify 'Еще' dropdown contains text color, background highlight, and text alignment. ... ok
+test_json_schema_v2 (test_editor_v3.TestExportersAndLossWarnings.test_json_schema_v2)
+JSON export uses schema 'antigravity-editor-v2'. ... ok
+test_loss_warnings_on_export (test_editor_v3.TestExportersAndLossWarnings.test_loss_warnings_on_export)
+Loss warnings are generated when exporting custom blocks. ... ok
+test_both_formula_blots_exist (test_editor_v3.TestFormulas.test_both_formula_blots_exist)
+Ensure both InlineFormulaBlot and BlockFormulaBlot are defined. ... ok
+test_both_spoilers_registered (test_editor_v3.TestInlineAndBlockSpoilers.test_both_spoilers_registered)
+Ensure both InlineSpoilerBlot and SpoilerBlot are registered. ... ok
+test_spoiler_markdown_conversion (test_editor_v3.TestInlineAndBlockSpoilers.test_spoiler_markdown_conversion)
+Verify inline spoiler converts to ||text|| and block spoiler to <details>. ... ok
+test_background_colors (test_editor_v3.TestPageLayoutAndDesign.test_background_colors)
+Calm light-gray page background (#f4f5f7 / dark: #111315). ... ok
+test_central_block_dimensions (test_editor_v3.TestPageLayoutAndDesign.test_central_block_dimensions)
+Central block width: 800-880px (recommended 840px), horizontal padding: 40-56px (recommended 48px). ... ok
+test_document_title_and_editor_left_boundary_alignment (test_editor_v3.TestPageLayoutAndDesign.test_document_title_and_editor_left_boundary_alignment)
+Document title H1 and editor content aligned to exact same left boundary. ... ok
+test_symmetrical_side_zones_layout (test_editor_v3.TestPageLayoutAndDesign.test_symmetrical_side_zones_layout)
+Symmetrical side zones 240-280px in 3-column layout. ... ok
+test_bottom_status_bar (test_editor_v3.TestPersistentToolbarRemovalAndNewBars.test_bottom_status_bar)
+Bottom status bar contains stats (words, chars, reading time) and Undo/Redo. ... ok
+test_compact_top_document_bar (test_editor_v3.TestPersistentToolbarRemovalAndNewBars.test_compact_top_document_bar)
+Top bar contains branding, drafts button with badge, autosave indicator, preview toggle, export/import, more actions. ... ok
+test_persistent_formatting_toolbar_removed (test_editor_v3.TestPersistentToolbarRemovalAndNewBars.test_persistent_formatting_toolbar_removed)
+Ensure the old fixed formatting toolbar under the header is completely removed. ... ok
+test_allow_whitelisted_video_iframes (test_editor_v3.TestSanitizationWithVideoWhitelist.test_allow_whitelisted_video_iframes) ... ok
+test_converter_js_enforces_sandbox_on_allowed_iframes (test_editor_v3.TestSanitizationWithVideoWhitelist.test_converter_js_enforces_sandbox_on_allowed_iframes)
+Verify converter.js sets safe sandbox attribute on allowed iframes during sanitization. ... ok
+test_strip_xss_attacks (test_editor_v3.TestSanitizationWithVideoWhitelist.test_strip_xss_attacks) ... ok
+test_invalid_video_urls (test_editor_v3.TestVideoParsers.test_invalid_video_urls) ... ok
+test_video_embed_iframe_contains_sandbox_attribute (test_editor_v3.TestVideoParsers.test_video_embed_iframe_contains_sandbox_attribute)
+Assert that video embed iframes in core.js contain the safe sandbox attribute (DoD requirement). ... ok
+test_vimeo_variations (test_editor_v3.TestVideoParsers.test_vimeo_variations) ... ok
+test_vk_video_variations (test_editor_v3.TestVideoParsers.test_vk_video_variations) ... ok
+test_youtube_variations (test_editor_v3.TestVideoParsers.test_youtube_variations) ... ok
+
+----------------------------------------------------------------------
+Ran 45 tests in 0.037s
+
+OK

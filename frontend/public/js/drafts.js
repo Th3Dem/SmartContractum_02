@@ -1,13 +1,14 @@
 /**
  * Antigravity WYSIWYG Editor - Local Drafts & Autosave Manager
- * Robust IndexedDB storage, auto-recovery, and status indicator
+ * IndexedDB storage with schema versioning (v2), auto-recovery, drafts badge count,
+ * and autosave status indicator. 100% offline-first.
  */
 
 (function (window) {
   'use strict';
 
   const DB_NAME = 'AntigravityEditorDB';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORE_NAME = 'drafts';
 
   class DraftsManager {
@@ -24,14 +25,17 @@
       this.statusTextEl = document.getElementById('save-status-text');
       this.draftsModal = document.getElementById('drafts-modal');
       this.draftsListEl = document.getElementById('drafts-list');
+      this.draftsBadgeEl = document.getElementById('drafts-badge');
       this.newDraftBtn = document.getElementById('btn-new-draft');
 
       this.initDB().then(() => {
         this.bindEvents();
+        this.updateBadge();
         this.autoRestore();
       }).catch(err => {
         console.warn('IndexedDB unavailable, fallback to localStorage:', err);
         this.bindEvents();
+        this.updateBadge();
         this.autoRestore();
       });
     }
@@ -100,88 +104,93 @@
       }, this.debounceDelay);
     }
 
-    setSavingStatus(isSaving, customText) {
-      if (!this.statusEl) return;
-
+    setSavingStatus(isSaving) {
+      if (!this.statusEl || !this.statusTextEl) return;
       if (isSaving) {
         this.statusEl.classList.add('saving');
-        if (this.statusTextEl) this.statusTextEl.textContent = 'Сохранение...';
+        this.statusTextEl.textContent = 'Сохранение...';
       } else {
         this.statusEl.classList.remove('saving');
-        if (this.statusTextEl) {
-          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          this.statusTextEl.textContent = customText || `Сохранено в ${time}`;
-        }
+        this.statusTextEl.textContent = 'Все изменения сохранены';
       }
     }
 
     /* ==========================================================================
-       Save / Load / Delete Operations
+       Draft Storage Operations
        ========================================================================== */
-    saveCurrent(options = {}) {
+    async saveCurrent({ isAuto = false, isManual = false } = {}) {
       const title = this.titleInput ? this.titleInput.value.trim() : '';
+      const text = this.editor.getText().trim();
       const delta = this.editor.getContents();
       const html = this.editor.root.innerHTML;
-      const text = this.editor.getText().trim();
 
-      // Count words & chars
+      // Don't save empty blank drafts automatically
+      if (!title && !text && isAuto) {
+        this.setSavingStatus(false);
+        return;
+      }
+
       const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
       const chars = text.length;
       const readingTime = Math.max(1, Math.ceil(words / 200));
 
       const draft = {
         id: this.currentDraftId,
+        schema: 'antigravity-editor-v2',
         title: title || 'Без названия',
         delta: delta,
         html: html,
-        textSnippet: text.substring(0, 160),
+        textSnippet: text.substring(0, 120),
         wordCount: words,
         charCount: chars,
         readingTime: readingTime,
         updatedAt: Date.now()
       };
 
-      return new Promise((resolve) => {
+      try {
         if (this.db) {
-          const tx = this.db.transaction(STORE_NAME, 'readwrite');
-          const store = tx.objectStore(STORE_NAME);
-          store.put(draft);
-          tx.oncomplete = () => {
-            localStorage.setItem('ag_active_draft_id', this.currentDraftId);
-            this.setSavingStatus(false);
-            if (options.isManual && window.EditorApp && window.EditorApp.showToast) {
-              window.EditorApp.showToast('Черновик успешно сохранен!', 'success');
-            }
-            resolve(draft);
-          };
-          tx.onerror = () => {
-            this.fallbackSave(draft);
-            this.setSavingStatus(false);
-            resolve(draft);
-          };
+          await this.putToDB(draft);
         } else {
-          this.fallbackSave(draft);
-          this.setSavingStatus(false);
-          resolve(draft);
+          this.putToLocalStorage(draft);
         }
+
+        localStorage.setItem('ag_active_draft_id', this.currentDraftId);
+        this.setSavingStatus(false);
+        this.updateBadge();
+
+        if (isManual && window.EditorApp && window.EditorApp.showToast) {
+          window.EditorApp.showToast('Черновик успешно сохранен!', 'success');
+        }
+      } catch (err) {
+        console.error('Failed to save draft:', err);
+        this.setSavingStatus(false);
+      }
+    }
+
+    putToDB(draft) {
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.put(draft);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
       });
     }
 
-    fallbackSave(draft) {
+    putToLocalStorage(draft) {
       try {
-        localStorage.setItem('ag_active_draft_id', draft.id);
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
         drafts[draft.id] = draft;
         localStorage.setItem('ag_drafts_fallback', JSON.stringify(drafts));
       } catch (e) {
-        console.error('LocalStorage save error:', e);
+        console.warn('LocalStorage save failed:', e);
       }
     }
 
-    getAllDrafts() {
-      return new Promise((resolve) => {
-        if (this.db) {
-          const tx = this.db.transaction(STORE_NAME, 'readonly');
+    async getAllDrafts() {
+      if (this.db) {
+        return new Promise((resolve) => {
+          const tx = this.db.transaction([STORE_NAME], 'readonly');
           const store = tx.objectStore(STORE_NAME);
           const req = store.getAll();
           req.onsuccess = () => {
@@ -189,54 +198,50 @@
             list.sort((a, b) => b.updatedAt - a.updatedAt);
             resolve(list);
           };
-          req.onerror = () => {
-            resolve(this.fallbackGetAll());
-          };
-        } else {
-          resolve(this.fallbackGetAll());
-        }
-      });
-    }
-
-    fallbackGetAll() {
-      try {
+          req.onerror = () => resolve([]);
+        });
+      } else {
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
         const list = Object.values(drafts);
         list.sort((a, b) => b.updatedAt - a.updatedAt);
         return list;
-      } catch (e) {
-        return [];
       }
     }
 
-    restoreDraft(id) {
-      return new Promise((resolve) => {
-        if (this.db) {
-          const tx = this.db.transaction(STORE_NAME, 'readonly');
-          const store = tx.objectStore(STORE_NAME);
-          const req = store.get(id);
-          req.onsuccess = () => {
-            const draft = req.result;
-            if (draft) {
-              this.applyDraft(draft);
-            }
-            resolve(draft);
-          };
-          req.onerror = () => {
-            resolve(null);
-          };
-        } else {
-          const drafts = this.fallbackGetAll();
-          const draft = drafts.find(d => d.id === id);
-          if (draft) {
-            this.applyDraft(draft);
-          }
-          resolve(draft);
-        }
-      });
+    async updateBadge() {
+      if (!this.draftsBadgeEl) return;
+      try {
+        const drafts = await this.getAllDrafts();
+        this.draftsBadgeEl.textContent = drafts.length;
+      } catch (e) {
+        this.draftsBadgeEl.textContent = '0';
+      }
     }
 
-    applyDraft(draft) {
+    async autoRestore() {
+      const activeId = localStorage.getItem('ag_active_draft_id');
+      if (!activeId) return;
+
+      let draft = null;
+      if (this.db) {
+        draft = await new Promise((resolve) => {
+          const tx = this.db.transaction([STORE_NAME], 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get(activeId);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        });
+      } else {
+        const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
+        draft = drafts[activeId] || null;
+      }
+
+      if (draft) {
+        this.loadDraft(draft, false);
+      }
+    }
+
+    loadDraft(draft, notify = true) {
       this.currentDraftId = draft.id;
       localStorage.setItem('ag_active_draft_id', draft.id);
 
@@ -247,45 +252,20 @@
         }
       }
 
-      if (draft.delta) {
-        this.editor.setContents(draft.delta, 'silent');
+      if (draft.delta && draft.delta.ops) {
+        this.editor.setContents(draft.delta);
       } else if (draft.html) {
         this.editor.root.innerHTML = draft.html;
       }
 
-      this.setSavingStatus(false, 'Черновик восстановлен');
-      if (window.EditorApp && window.EditorApp.updateStats) {
-        window.EditorApp.updateStats();
+      this.setSavingStatus(false);
+
+      if (notify && window.EditorApp && window.EditorApp.showToast) {
+        window.EditorApp.showToast(`Черновик «${draft.title}» восстановлен`, 'info');
       }
     }
 
-    deleteDraft(id) {
-      return new Promise((resolve) => {
-        if (this.db) {
-          const tx = this.db.transaction(STORE_NAME, 'readwrite');
-          const store = tx.objectStore(STORE_NAME);
-          store.delete(id);
-          tx.oncomplete = () => {
-            if (this.currentDraftId === id) {
-              this.createNewDraft();
-            }
-            resolve(true);
-          };
-        } else {
-          try {
-            const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
-            delete drafts[id];
-            localStorage.setItem('ag_drafts_fallback', JSON.stringify(drafts));
-            if (this.currentDraftId === id) {
-              this.createNewDraft();
-            }
-          } catch (e) {}
-          resolve(true);
-        }
-      });
-    }
-
-    createNewDraft() {
+    async createNewDraft() {
       this.currentDraftId = 'draft_' + Date.now();
       localStorage.setItem('ag_active_draft_id', this.currentDraftId);
 
@@ -296,105 +276,103 @@
         }
       }
 
-      this.editor.setContents([], 'user');
-      this.setSavingStatus(false, 'Новый черновик');
-      this.closeDraftsModal();
-      this.editor.focus();
+      this.editor.setText('');
+      this.setSavingStatus(false);
+
+      if (this.draftsModal) {
+        this.draftsModal.classList.remove('show');
+      }
 
       if (window.EditorApp && window.EditorApp.showToast) {
-        window.EditorApp.showToast('Создан новый черновик', 'success');
+        window.EditorApp.showToast('Создан новый чистый черновик', 'success');
       }
     }
 
-    autoRestore() {
-      this.getAllDrafts().then((drafts) => {
-        if (drafts.length > 0) {
-          const active = drafts.find(d => d.id === this.currentDraftId) || drafts[0];
-          if (active) {
-            this.applyDraft(active);
-          }
-        }
-      });
+    async deleteDraft(id) {
+      if (this.db) {
+        await new Promise((resolve) => {
+          const tx = this.db.transaction([STORE_NAME], 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.delete(id);
+          req.onsuccess = () => resolve();
+          req.onerror = () => resolve();
+        });
+      } else {
+        const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
+        delete drafts[id];
+        localStorage.setItem('ag_drafts_fallback', JSON.stringify(drafts));
+      }
+
+      if (this.currentDraftId === id) {
+        this.createNewDraft();
+      }
+
+      this.updateBadge();
+      this.renderDraftsList();
     }
 
-    /* ==========================================================================
-       Drafts Modal UI
-       ========================================================================== */
-    openDraftsModal() {
-      this.renderDraftsList();
+    async openDraftsModal() {
+      await this.renderDraftsList();
       if (this.draftsModal) {
         this.draftsModal.classList.add('show');
       }
     }
 
-    closeDraftsModal() {
-      if (this.draftsModal) {
-        this.draftsModal.classList.remove('show');
-      }
-    }
-
-    renderDraftsList() {
+    async renderDraftsList() {
       if (!this.draftsListEl) return;
-      this.draftsListEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted);">Загрузка черновиков...</div>';
+      this.draftsListEl.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-muted);">Загрузка...</div>';
 
-      this.getAllDrafts().then((drafts) => {
-        if (drafts.length === 0) {
-          this.draftsListEl.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">Нет сохраненных черновиков</div>';
-          return;
-        }
+      const drafts = await this.getAllDrafts();
 
-        this.draftsListEl.innerHTML = '';
-        drafts.forEach((draft) => {
-          const card = document.createElement('div');
-          card.className = 'draft-card';
-          if (draft.id === this.currentDraftId) {
-            card.style.borderColor = 'var(--accent-color)';
-            card.style.backgroundColor = 'var(--accent-subtle)';
-          }
+      if (drafts.length === 0) {
+        this.draftsListEl.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">Сохраненных черновиков пока нет</div>';
+        return;
+      }
 
-          const dateStr = new Date(draft.updatedAt).toLocaleString([], {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-          });
+      this.draftsListEl.innerHTML = '';
+      drafts.forEach(d => {
+        const item = document.createElement('div');
+        item.className = `draft-item ${d.id === this.currentDraftId ? 'active' : ''}`;
 
-          card.innerHTML = `
-            <div class="draft-info">
-              <div class="draft-title">${this.escapeHTML(draft.title || 'Без названия')} ${draft.id === this.currentDraftId ? '<span class="badge">Текущий</span>' : ''}</div>
-              <div class="draft-meta">${dateStr} • ${draft.wordCount || 0} слов • ${draft.readingTime || 1} мин чтения</div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-sm" data-action="restore" data-id="${draft.id}">Открыть</button>
-              <button class="btn btn-sm btn-icon" data-action="delete" data-id="${draft.id}" title="Удалить" style="color: var(--danger-color);">✕</button>
-            </div>
-          `;
-
-          card.querySelector('[data-action="restore"]').addEventListener('click', () => {
-            this.restoreDraft(draft.id).then(() => {
-              this.closeDraftsModal();
-              if (window.EditorApp && window.EditorApp.showToast) {
-                window.EditorApp.showToast('Черновик открыт', 'success');
-              }
-            });
-          });
-
-          card.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm(`Удалить черновик "${draft.title}"?`)) {
-              this.deleteDraft(draft.id).then(() => {
-                this.renderDraftsList();
-              });
-            }
-          });
-
-          this.draftsListEl.appendChild(card);
+        const dateStr = new Date(d.updatedAt).toLocaleString('ru-RU', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit'
         });
-      });
-    }
 
-    escapeHTML(str) {
-      return (str || '').replace(/[&<>"']/g, (m) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[m]));
+        item.innerHTML = `
+          <div style="flex: 1; overflow: hidden; padding-right: 12px;">
+            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 3px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${d.title || 'Без названия'}
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 12px;">
+              <span>🕒 ${dateStr}</span>
+              <span>📝 ${d.wordCount || 0} сл.</span>
+              <span>⏱️ ${d.readingTime || 1} мин</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-sm btn-load" title="Восстановить">Открыть</button>
+            <button class="btn btn-sm btn-delete text-danger" title="Удалить">🗑️</button>
+          </div>
+        `;
+
+        item.querySelector('.btn-load').addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.loadDraft(d, true);
+          if (this.draftsModal) this.draftsModal.classList.remove('show');
+        });
+
+        item.querySelector('.btn-delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm(`Удалить черновик «${d.title}»?`)) {
+            this.deleteDraft(d.id);
+          }
+        });
+
+        this.draftsListEl.appendChild(item);
+      });
     }
   }
 

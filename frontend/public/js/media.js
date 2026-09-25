@@ -1,6 +1,7 @@
 /**
- * Antigravity WYSIWYG Editor - Media & Image Manager
- * 100% offline-first image upload (DataURL/base64), URL insertion, caption, alt, and alignment
+ * Antigravity WYSIWYG Editor - Media Manager (Images & Video Elements)
+ * 100% offline-first image upload (DataURL/base64), URL insertion, caption, alt, and alignment.
+ * Video URL parser for YouTube, Vimeo, VK Video with safe responsive iframe embeds.
  */
 
 (function (window) {
@@ -9,7 +10,7 @@
   class MediaManager {
     constructor(editor) {
       this.editor = editor;
-      this.modal = document.getElementById('image-modal');
+      this.imageModal = document.getElementById('image-modal');
       this.fileInput = document.getElementById('image-file-input');
       this.urlInput = document.getElementById('image-url-input');
       this.altInput = document.getElementById('image-alt-input');
@@ -18,6 +19,7 @@
       this.previewEl = document.getElementById('image-preview');
       this.insertBtn = document.getElementById('image-insert-btn');
 
+      this.currentInsertionIndex = null;
       this.currentImageDataUrl = null;
       this.activeTab = 'file'; // 'file' or 'url'
 
@@ -26,11 +28,80 @@
       this.bindDragDropPaste();
     }
 
+    /**
+     * Video URL parser for YouTube, Vimeo, and VK Video
+     * @param {string} inputUrl
+     * @returns {object|null}
+     */
+    static parseVideoUrl(inputUrl) {
+      if (!inputUrl || typeof inputUrl !== 'string') return null;
+      const url = inputUrl.trim();
+
+      // 1. YouTube (watch, youtu.be, embed, shorts)
+      const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+      if (ytMatch) {
+        const videoId = ytMatch[1];
+        return {
+          provider: 'youtube',
+          id: videoId,
+          embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
+          originalUrl: url
+        };
+      }
+
+      // 2. Vimeo (vimeo.com/{id}, player.vimeo.com/video/{id})
+      const vimeoMatch = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)/i);
+      if (vimeoMatch) {
+        const videoId = vimeoMatch[1];
+        return {
+          provider: 'vimeo',
+          id: videoId,
+          embedUrl: `https://player.vimeo.com/video/${videoId}`,
+          originalUrl: url
+        };
+      }
+
+      // 3. VK Video: iframe video_ext.php?oid=...&id=...(&hash=...)
+      const vkExtMatch = url.match(/(?:vk\.com|vkvideo\.ru)\/video_ext\.php\?(?:[^"'\s]*&)?oid=(-?[0-9]+)&id=([0-9]+)(?:&hash=([a-zA-Z0-9]+))?/i);
+      if (vkExtMatch) {
+        const oid = vkExtMatch[1];
+        const id = vkExtMatch[2];
+        const hash = vkExtMatch[3] || '';
+        return {
+          provider: 'vk',
+          oid: oid,
+          id: id,
+          hash: hash,
+          embedUrl: `https://vk.com/video_ext.php?oid=${oid}&id=${id}${hash ? '&hash=' + hash : ''}&hd=2`,
+          originalUrl: url
+        };
+      }
+
+      // 4. VK Video: standard URL vk.com/video{oid}_{id} or vkvideo.ru/video{oid}_{id}
+      const vkMatch = url.match(/(?:vk\.com|vkvideo\.ru)\/video(-?[0-9]+)_([0-9]+)/i);
+      if (vkMatch) {
+        const oid = vkMatch[1];
+        const id = vkMatch[2];
+        const hashMatch = url.match(/[?&]hash=([a-zA-Z0-9]+)/i);
+        const hash = hashMatch ? hashMatch[1] : '';
+        return {
+          provider: 'vk',
+          oid: oid,
+          id: id,
+          hash: hash,
+          embedUrl: `https://vk.com/video_ext.php?oid=${oid}&id=${id}${hash ? '&hash=' + hash : ''}&hd=2`,
+          originalUrl: url
+        };
+      }
+
+      return null;
+    }
+
     initElements() {
       // Tab switching
       const tabBtns = document.querySelectorAll('[data-image-tab]');
       tabBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', () => {
           tabBtns.forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
 
@@ -96,7 +167,7 @@
     bindDragDropPaste() {
       const editorRoot = this.editor.root;
 
-      // Drag & Drop
+      // Drag & Drop images into editor
       editorRoot.addEventListener('dragover', (e) => {
         e.preventDefault();
       });
@@ -147,6 +218,22 @@
       reader.readAsDataURL(file);
     }
 
+    openModal(index = null) {
+      this.currentInsertionIndex = index;
+      this.currentImageDataUrl = null;
+
+      if (this.fileInput) this.fileInput.value = '';
+      if (this.urlInput) this.urlInput.value = '';
+      if (this.altInput) this.altInput.value = '';
+      if (this.captionInput) this.captionInput.value = '';
+      if (this.alignSelect) this.alignSelect.value = 'center';
+      if (this.previewEl) this.previewEl.innerHTML = '';
+
+      if (this.imageModal) {
+        this.imageModal.classList.add('show');
+      }
+    }
+
     insertImage() {
       let src = '';
       if (this.activeTab === 'file') {
@@ -156,7 +243,7 @@
       }
 
       if (!src) {
-        alert('Пожалуйста, выберите файл изображения или введите ссылку.');
+        alert('Пожалуйста, выберите файл или укажите URL изображения.');
         return;
       }
 
@@ -164,8 +251,11 @@
       const caption = this.captionInput ? this.captionInput.value.trim() : '';
       const align = this.alignSelect ? this.alignSelect.value : 'center';
 
-      const range = this.editor.getSelection(true);
-      const index = range ? range.index : this.editor.getLength();
+      let index = this.currentInsertionIndex;
+      if (index === null || index === undefined) {
+        const range = this.editor.getSelection(true);
+        index = range ? range.index : this.editor.getLength();
+      }
 
       this.editor.insertEmbed(index, 'customImage', {
         src: src,
@@ -177,40 +267,23 @@
       this.editor.insertText(index + 1, '\n', 'user');
       this.editor.setSelection(index + 2, 'user');
 
-      this.closeModal();
+      if (this.imageModal) {
+        this.imageModal.classList.remove('show');
+      }
     }
 
-    sanitizeSrc(src) {
-      if (/^(javascript|vbscript|data:text\/html):/i.test(src)) {
+    sanitizeSrc(url) {
+      if (!url) return '';
+      const cleaned = url.trim();
+      if (cleaned.startsWith('javascript:') || cleaned.startsWith('data:text/html') || cleaned.startsWith('vbscript:')) {
         return '';
       }
-      return src;
-    }
-
-    openModal() {
-      this.resetModal();
-      if (this.modal) {
-        this.modal.classList.add('show');
-      }
-    }
-
-    closeModal() {
-      if (this.modal) {
-        this.modal.classList.remove('show');
-      }
-      this.resetModal();
-    }
-
-    resetModal() {
-      this.currentImageDataUrl = null;
-      if (this.fileInput) this.fileInput.value = '';
-      if (this.urlInput) this.urlInput.value = '';
-      if (this.altInput) this.altInput.value = '';
-      if (this.captionInput) this.captionInput.value = '';
-      if (this.previewEl) this.previewEl.innerHTML = '';
-      if (this.alignSelect) this.alignSelect.value = 'center';
+      return cleaned;
     }
   }
+
+  // Safe sandbox attribute configuration for video embed iframes (DoD requirement)
+  MediaManager.SAFE_IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-presentation allow-popups';
 
   window.MediaManager = MediaManager;
 

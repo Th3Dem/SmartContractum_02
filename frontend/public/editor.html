@@ -15,290 +15,467 @@
 </head>
 <body>
   <div class="app-container">
-    <!-- Top Navigation Header -->
+    <!-- Compact Top Document Bar -->
     <header class="app-header">
       <div class="header-left">
         <a href="index.html" class="brand" title="На главную">
           <div class="brand-icon">AG</div>
-          <span>Antigravity Writer</span>
+          <span class="brand-title">Antigravity Writer</span>
         </a>
 
+        <!-- Drafts Button with Badge -->
+        <button id="btn-drafts-modal" class="btn btn-drafts" title="Сохраненные черновики">
+          <span class="btn-icon">📁</span>
+          <span>Черновики</span>
+          <span id="drafts-badge" class="badge">0</span>
+        </button>
+
         <!-- Autosave Indicator -->
-        <div id="save-status" class="save-status">
+        <div id="save-status" class="save-status" title="Статус автосохранения">
           <span class="save-dot"></span>
           <span id="save-status-text">Все изменения сохранены</span>
         </div>
       </div>
 
       <div class="header-center">
-        <!-- Live Document Statistics -->
-        <div class="doc-stats">
-          <div class="doc-stats-item" title="Количество слов">
-            <span>📝</span>
-            <span id="stat-words">0 сл.</span>
-          </div>
-          <div class="doc-stats-item" title="Количество символов">
-            <span>🔤</span>
-            <span id="stat-chars">0 зн.</span>
-          </div>
-          <div class="doc-stats-item" title="Примерное время чтения">
-            <span>⏱️</span>
-            <span id="stat-reading-time">1 мин чтения</span>
-          </div>
+        <!-- Edit / Preview Mode Toggle -->
+        <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Режим отображения">
+          <button type="button" class="mode-btn active" id="btn-mode-edit" data-mode="edit" title="Режим редактирования">
+            <span class="mode-icon">✏️</span>
+            <span>Редактирование</span>
+          </button>
+          <button type="button" class="mode-btn" id="btn-mode-preview" data-mode="preview" title="Режим предпросмотра">
+            <span class="mode-icon">👁️</span>
+            <span>Предпросмотр</span>
+          </button>
         </div>
       </div>
 
       <div class="header-right">
-        <button id="btn-drafts-modal" class="btn" title="Сохраненные черновики">
-          <span>📁 Черновики</span>
-        </button>
-        <button id="btn-import-modal" class="btn" title="Импорт из JSON">
-          <span>📥 Импорт</span>
-        </button>
-        <button id="btn-export-modal" class="btn btn-primary" title="Экспорт в HTML / Markdown / JSON">
-          <span>📤 Экспорт</span>
-        </button>
-        <button id="btn-theme-toggle" class="btn btn-icon" title="Сменить тему">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
+        <!-- Import / Export Dropdown -->
+        <div class="dropdown-wrapper" id="dropdown-export-wrapper">
+          <button type="button" class="btn btn-primary dropdown-toggle" id="btn-export-dropdown" title="Экспорт и импорт статьи">
+            <span>📤 Экспорт / Импорт ▾</span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-right" id="export-dropdown-menu">
+            <div class="dropdown-header">Экспорт публикации</div>
+            <button type="button" class="dropdown-item" id="menu-export-html">
+              <span class="dropdown-item-icon">🌐</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">HTML</span>
+                <span class="dropdown-item-desc">Чистый HTML документ</span>
+              </span>
+            </button>
+            <button type="button" class="dropdown-item" id="menu-export-markdown">
+              <span class="dropdown-item-icon">📝</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">Markdown</span>
+                <span class="dropdown-item-desc">GitHub Flavored Markdown</span>
+              </span>
+            </button>
+            <button type="button" class="dropdown-item" id="menu-export-json">
+              <span class="dropdown-item-icon">💾</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">JSON</span>
+                <span class="dropdown-item-desc">Структурированный документ со схемой</span>
+              </span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-header">Импорт</div>
+            <button type="button" class="dropdown-item" id="menu-import-json">
+              <span class="dropdown-item-icon">📥</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">Импорт JSON</span>
+                <span class="dropdown-item-desc">Восстановление из JSON файла</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- More Actions Menu -->
+        <div class="dropdown-wrapper" id="dropdown-more-wrapper">
+          <button type="button" class="btn btn-icon" id="btn-more-actions" title="Дополнительные действия">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="1"></circle>
+              <circle cx="19" cy="12" r="1"></circle>
+              <circle cx="5" cy="12" r="1"></circle>
+            </svg>
+          </button>
+          <div class="dropdown-menu dropdown-menu-right" id="more-dropdown-menu">
+            <button type="button" class="dropdown-item" id="btn-theme-toggle">
+              <span class="dropdown-item-icon">🌓</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">Сменить тему</span>
+                <span class="dropdown-item-desc">Светлая / Темная</span>
+              </span>
+            </button>
+            <button type="button" class="dropdown-item" id="btn-shortcuts-modal">
+              <span class="dropdown-item-icon">⌨️</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">Горячие клавиши</span>
+                <span class="dropdown-item-desc">Список комбинаций клавиш</span>
+              </span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button type="button" class="dropdown-item text-danger" id="btn-clear-doc">
+              <span class="dropdown-item-icon">🗑️</span>
+              <span class="dropdown-item-text">
+                <span class="dropdown-item-title">Очистить статью</span>
+                <span class="dropdown-item-desc">Сбросить весь текст и заголовок</span>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- Sticky Top Toolbar -->
-    <div class="editor-toolbar-wrapper">
-      <div id="editor-toolbar" class="editor-toolbar">
-        <!-- History Group -->
-        <div class="toolbar-group">
-          <button class="tb-btn" data-action="undo" title="Отменить (Ctrl+Z)">
-            <svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
-          </button>
-          <button class="tb-btn" data-action="redo" title="Повторить (Ctrl+Y)">
-            <svg viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
-          </button>
-        </div>
+    <!-- Main Workspace (3-column layout with centered editor block) -->
+    <main class="app-main-layout">
+      <!-- Symmetrical Left Side Zone -->
+      <aside class="side-zone side-zone-left" aria-hidden="true"></aside>
 
-        <div class="toolbar-divider"></div>
+      <!-- Central Editor Column -->
+      <section class="editor-central-column">
+        <div class="editor-card" id="editor-card">
+          <!-- Floating Block Inserter (+) -->
+          <div id="block-inserter" class="block-inserter">
+            <button type="button" id="block-inserter-btn" class="block-inserter-btn" title="Добавить блок (+ или /)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
 
-        <!-- Heading Group -->
-        <div class="toolbar-group">
-          <select id="tb-heading" class="tb-select" title="Стиль текста">
-            <option value="p">Обычный текст</option>
-            <option value="2">Заголовок H2</option>
-            <option value="3">Подзаголовок H3</option>
-            <option value="4">Заголовок H4</option>
-          </select>
-        </div>
+            <!-- 12 Block Items in EXACT Order + Additional Group -->
+            <div id="block-menu" class="block-menu" role="menu">
+              <div class="block-menu-list">
+                <!-- 1. Заголовок -->
+                <div class="block-menu-item" data-block="header" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">H</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Заголовок</span>
+                    <span class="block-menu-desc">H2, H3 или H4</span>
+                  </div>
+                </div>
 
-        <div class="toolbar-divider"></div>
+                <!-- 2. Цитата -->
+                <div class="block-menu-item" data-block="blockquote" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">❝</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Цитата</span>
+                    <span class="block-menu-desc">Выделенный блок цитаты</span>
+                  </div>
+                </div>
 
-        <!-- Basic Text Formatting Group -->
-        <div class="toolbar-group">
-          <button class="tb-btn" data-format="bold" title="Жирный (Ctrl+B)">
-            <strong>B</strong>
-          </button>
-          <button class="tb-btn" data-format="italic" title="Курсив (Ctrl+I)">
-            <em>I</em>
-          </button>
-          <button class="tb-btn" data-format="underline" title="Подчеркнутый (Ctrl+U)">
-            <u>U</u>
-          </button>
-          <button class="tb-btn" data-format="strike" title="Зачеркнутый">
-            <s>S</s>
-          </button>
-        </div>
+                <!-- 3. Список -->
+                <div class="block-menu-item" data-block="bullet-list" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">•</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Список</span>
+                    <span class="block-menu-desc">Маркированный список</span>
+                  </div>
+                </div>
 
-        <div class="toolbar-divider"></div>
+                <!-- 4. Нумерованный список -->
+                <div class="block-menu-item" data-block="ordered-list" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">1.</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Нумерованный список</span>
+                    <span class="block-menu-desc">Последовательный нумерованный список</span>
+                  </div>
+                </div>
 
-        <!-- Colors Group -->
-        <div class="toolbar-group">
-          <button id="btn-text-color" class="tb-btn" title="Цвет текста">
-            <span style="font-weight: 700; border-bottom: 3px solid #ef4444; line-height: 1;">A</span>
-          </button>
-          <div id="popover-text-color" class="color-picker-popover">
-            <div class="color-palette"></div>
-            <button class="color-reset-btn">Сбросить цвет</button>
-          </div>
+                <!-- 5. Медиаэлемент -->
+                <div class="block-menu-item" data-block="media" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">▶</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Медиаэлемент</span>
+                    <span class="block-menu-desc">YouTube, Vimeo, VK Видео</span>
+                  </div>
+                </div>
 
-          <button id="btn-bg-color" class="tb-btn" title="Цвет фона (выделение)">
-            <span style="font-weight: 700; background-color: #fef08a; color: #000; padding: 0 4px; border-radius: 2px;">A</span>
-          </button>
-          <div id="popover-bg-color" class="color-picker-popover">
-            <div class="color-palette"></div>
-            <button class="color-reset-btn">Сбросить фон</button>
-          </div>
-        </div>
+                <!-- 6. Изображение -->
+                <div class="block-menu-item" data-block="image" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">🖼️</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Изображение</span>
+                    <span class="block-menu-desc">Загрузка файла или URL, подпись, alt</span>
+                  </div>
+                </div>
 
-        <div class="toolbar-divider"></div>
+                <!-- 7. Разделитель -->
+                <div class="block-menu-item" data-block="divider" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">―</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Разделитель</span>
+                    <span class="block-menu-desc">Горизонтальная линия</span>
+                  </div>
+                </div>
 
-        <!-- Script & Code Group -->
-        <div class="toolbar-group">
-          <button class="tb-btn" data-format="script" data-value="sub" title="Нижний индекс">
-            X<sub>2</sub>
-          </button>
-          <button class="tb-btn" data-format="script" data-value="super" title="Верхний индекс">
-            X<sup>2</sup>
-          </button>
-          <button class="tb-btn" data-format="code" title="Встроенный код">
-            <code>&lt;/&gt;</code>
-          </button>
-          <button class="tb-btn" data-action="link" title="Добавить ссылку (Ctrl+K)">
-            🔗
-          </button>
-        </div>
+                <!-- 8. Код -->
+                <div class="block-menu-item" data-block="code-block" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">&lt;/&gt;</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Код</span>
+                    <span class="block-menu-desc">Блок кода с подсветкой синтаксиса</span>
+                  </div>
+                </div>
 
-        <div class="toolbar-divider"></div>
+                <!-- 9. Формула -->
+                <div class="block-menu-item" data-block="formula" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">∑</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Формула</span>
+                    <span class="block-menu-desc">Блочная LaTeX формула с предпросмотром</span>
+                  </div>
+                </div>
 
-        <!-- Lists Group -->
-        <div class="toolbar-group">
-          <button class="tb-btn" data-action="bullet-list" title="Маркированный список">
-            •—
-          </button>
-          <button class="tb-btn" data-action="ordered-list" title="Нумерованный список">
-            1—
-          </button>
-          <button class="tb-btn" data-action="checklist" title="Список задач (чек-лист)">
-            ☑
-          </button>
-          <button class="tb-btn" data-action="outdent" title="Уменьшить отступ">
-            ⇤
-          </button>
-          <button class="tb-btn" data-action="indent" title="Увеличить отступ">
-            ⇥
-          </button>
-        </div>
+                <!-- 10. Спойлер -->
+                <div class="block-menu-item" data-block="spoiler" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">📁</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Спойлер</span>
+                    <span class="block-menu-desc">Раскрывающийся блок с заголовком</span>
+                  </div>
+                </div>
 
-        <div class="toolbar-divider"></div>
+                <!-- 11. Якорь -->
+                <div class="block-menu-item" data-block="anchor" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">⚓</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Якорь</span>
+                    <span class="block-menu-desc">Именованный маркер ID для ссылки</span>
+                  </div>
+                </div>
 
-        <!-- Structural Blocks Group -->
-        <div class="toolbar-group">
-          <button class="tb-btn" data-action="blockquote" title="Цитата">
-            ❝
-          </button>
-          <button class="tb-btn" data-action="divider" title="Разделитель (<hr>)">
-            ―
-          </button>
-          <button class="tb-btn" data-action="table" title="Вставить таблицу">
-            ▦
-          </button>
-          <button class="tb-btn" data-action="code-block" title="Блок кода">
-            📋
-          </button>
-          <button class="tb-btn" data-action="spoiler" title="Спойлер (раскрывающийся блок)">
-            📁
-          </button>
-          <button class="tb-btn" data-action="image" title="Вставить изображение">
-            🖼️
-          </button>
-        </div>
+                <!-- 12. Персона -->
+                <div class="block-menu-item" data-block="person" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">👤</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Персона</span>
+                    <span class="block-menu-desc">Карточка автора (фото, имя, роль, ссылка)</span>
+                  </div>
+                </div>
 
-        <div class="toolbar-divider"></div>
+                <!-- Группа Дополнительно -->
+                <div class="block-menu-divider"></div>
+                <div class="block-menu-group-title">Дополнительно</div>
 
-        <!-- Utility Group -->
-        <div class="toolbar-group">
-          <button class="tb-btn" data-action="clear-format" title="Очистить форматирование">
-            ⌫
-          </button>
-        </div>
-      </div>
-    </div>
+                <div class="block-menu-item" data-block="table" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">▦</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Таблица</span>
+                    <span class="block-menu-desc">Интерактивная таблица данных</span>
+                  </div>
+                </div>
 
-    <!-- Main Workspace -->
-    <main class="editor-workspace">
-      <div class="editor-wrapper">
-        <!-- Floating Block Inserter (+) -->
-        <div id="block-inserter" class="block-inserter">
-          <button id="block-inserter-btn" class="block-inserter-btn" title="Добавить блок">+</button>
-          <!-- Block Menu Popup -->
-          <div id="block-menu" class="block-menu">
-            <div class="block-menu-item" data-block="image">
-              <div class="block-menu-icon">🖼️</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Изображение</span>
-                <span class="block-menu-desc">Загрузка с диска или по ссылке</span>
+                <div class="block-menu-item" data-block="checklist" tabindex="0" role="menuitem">
+                  <div class="block-menu-icon">☑</div>
+                  <div class="block-menu-text">
+                    <span class="block-menu-label">Чек-лист</span>
+                    <span class="block-menu-desc">Список задач с чекбоксами</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="block-menu-item" data-block="code-block">
-              <div class="block-menu-icon">💻</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Блок кода</span>
-                <span class="block-menu-desc">С подсветкой синтаксиса</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="table">
-              <div class="block-menu-icon">📊</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Таблица</span>
-                <span class="block-menu-desc">Интерактивная таблица</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="blockquote">
-              <div class="block-menu-icon">💬</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Цитата</span>
-                <span class="block-menu-desc">Выделенный блок цитаты</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="spoiler">
-              <div class="block-menu-icon">📁</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Спойлер</span>
-                <span class="block-menu-desc">Скрывающийся блок текста</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="divider">
-              <div class="block-menu-icon">➖</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Разделитель</span>
-                <span class="block-menu-desc">Горизонтальная линия</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="checklist">
-              <div class="block-menu-icon">☑️</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Список задач</span>
-                <span class="block-menu-desc">Интерактивный чек-лист</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="ordered-list">
-              <div class="block-menu-icon">🔢</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Нумерованный список</span>
-                <span class="block-menu-desc">Последовательный список</span>
-              </div>
-            </div>
-            <div class="block-menu-item" data-block="bullet-list">
-              <div class="block-menu-icon">•</div>
-              <div class="block-menu-text">
-                <span class="block-menu-label">Маркированный список</span>
-                <span class="block-menu-desc">Список с маркерами</span>
-              </div>
+
+            <!-- Mini Header Submenu (H2, H3, H4) -->
+            <div id="header-submenu" class="header-submenu">
+              <button type="button" class="header-sub-item" data-header="2">
+                <span class="header-sub-icon">H2</span>
+                <span>Заголовок раздела</span>
+              </button>
+              <button type="button" class="header-sub-item" data-header="3">
+                <span class="header-sub-icon">H3</span>
+                <span>Подзаголовок</span>
+              </button>
+              <button type="button" class="header-sub-item" data-header="4">
+                <span class="header-sub-icon">H4</span>
+                <span>Малый заголовок</span>
+              </button>
             </div>
           </div>
-        </div>
 
-        <!-- Article Title (H1) -->
-        <div class="article-title-container">
-          <textarea id="article-title" class="article-title-input" rows="1" placeholder="Заголовок статьи"></textarea>
-        </div>
+          <!-- Document Title (H1) -->
+          <div class="article-title-container">
+            <textarea id="article-title" class="article-title-input" rows="1" placeholder="Заголовок статьи"></textarea>
+          </div>
 
-        <!-- Quill Canvas -->
-        <div id="editor"></div>
-      </div>
+          <!-- Quill Canvas -->
+          <div id="editor"></div>
+        </div>
+      </section>
+
+      <!-- Symmetrical Right Side Zone -->
+      <aside class="side-zone side-zone-right" aria-hidden="true"></aside>
     </main>
 
-    <!-- Floating Contextual Bubble Toolbar -->
-    <div id="bubble-toolbar" class="bubble-toolbar">
-      <button class="bubble-btn" data-format="bold" title="Жирный"><strong>B</strong></button>
-      <button class="bubble-btn" data-format="italic" title="Курсив"><em>I</em></button>
-      <button class="bubble-btn" data-format="underline" title="Подчеркнутый"><u>U</u></button>
-      <button class="bubble-btn" data-format="strike" title="Зачеркнутый"><s>S</s></button>
-      <button class="bubble-btn" data-format="header" data-value="2" title="H2">H2</button>
-      <button class="bubble-btn" data-format="header" data-value="3" title="H3">H3</button>
-      <button class="bubble-btn" data-action="link" title="Ссылка">🔗</button>
-      <button class="bubble-btn" data-format="code" title="Код"><code>&lt;&gt;</code></button>
-      <button class="bubble-btn" data-action="clear-format" title="Очистить">⌫</button>
+    <!-- Bottom Status Bar -->
+    <footer class="app-status-bar">
+      <div class="status-bar-left">
+        <!-- Compact Undo / Redo controls -->
+        <div class="history-controls">
+          <button type="button" class="status-btn" id="btn-undo" title="Отменить (Ctrl+Z)" aria-label="Отменить">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
+            </svg>
+          </button>
+          <button type="button" class="status-btn" id="btn-redo" title="Повторить (Ctrl+Y)" aria-label="Повторить">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="status-bar-right">
+        <!-- Live Document Statistics -->
+        <div class="doc-stats">
+          <div class="doc-stats-item" title="Количество слов">
+            <span class="stat-icon">📝</span>
+            <span id="stat-words">0 сл.</span>
+          </div>
+          <div class="doc-stats-item" title="Количество символов">
+            <span class="stat-icon">🔤</span>
+            <span id="stat-chars">0 зн.</span>
+          </div>
+          <div class="doc-stats-item" title="Примерное время чтения">
+            <span class="stat-icon">⏱️</span>
+            <span id="stat-reading-time">1 мин чтения</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Contextual Bubble Toolbar (Selection: 11 Tools in EXACT Order + More Dropdown) -->
+    <div id="bubble-toolbar" class="bubble-toolbar" role="toolbar" aria-label="Форматирование текста">
+      <!-- 1. Bold (Жирный) -->
+      <button type="button" class="bubble-btn" data-format="bold" title="Жирный" aria-label="Жирный">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+          <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+        </svg>
+      </button>
+
+      <!-- 2. Italic (Курсив) -->
+      <button type="button" class="bubble-btn" data-format="italic" title="Курсив" aria-label="Курсив">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="4" x2="10" y2="4"></line>
+          <line x1="14" y1="20" x2="5" y2="20"></line>
+          <line x1="15" y1="4" x2="9" y2="20"></line>
+        </svg>
+      </button>
+
+      <!-- 3. Underline (Подчеркнутый) -->
+      <button type="button" class="bubble-btn" data-format="underline" title="Подчеркнутый" aria-label="Подчеркнутый">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 3v7a6 6 0 0 0 12 0V3"></path>
+          <line x1="4" y1="21" x2="20" y2="21"></line>
+        </svg>
+      </button>
+
+      <!-- 4. Strike (Зачеркнутый) -->
+      <button type="button" class="bubble-btn" data-format="strike" title="Зачеркнутый" aria-label="Зачеркнутый">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <path d="M16 6a4 4 0 0 0-8 0c0 2 1 3 3 4"></path>
+          <path d="M8 18a4 4 0 0 0 8 0c0-1.5-.5-2.5-2-3"></path>
+        </svg>
+      </button>
+
+      <!-- 5. Subscript (Подстрочный) -->
+      <button type="button" class="bubble-btn" data-format="script" data-value="sub" title="Подстрочный" aria-label="Подстрочный">
+        <span class="script-badge">X<sub>2</sub></span>
+      </button>
+
+      <!-- 6. Superscript (Надстрочный) -->
+      <button type="button" class="bubble-btn" data-format="script" data-value="super" title="Надстрочный" aria-label="Надстрочный">
+        <span class="script-badge">X<sup>2</sup></span>
+      </button>
+
+      <!-- 7. Hidden text (Скрытый текст: inline spoiler) -->
+      <button type="button" class="bubble-btn" data-format="inline-spoiler" title="Скрытый текст (спойлер)" aria-label="Скрытый текст">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </svg>
+      </button>
+
+      <!-- 8. Clear formatting (Без форматирования) -->
+      <button type="button" class="bubble-btn" data-action="clear-format" title="Без форматирования" aria-label="Без форматирования">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18M6 6l12 12"></path>
+        </svg>
+      </button>
+
+      <!-- 9. Inline code (Встроенный код) -->
+      <button type="button" class="bubble-btn" data-format="code" title="Встроенный код" aria-label="Встроенный код">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6"></polyline>
+          <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+      </button>
+
+      <!-- 10. Link (Ссылка) -->
+      <button type="button" class="bubble-btn" data-action="link" title="Ссылка" aria-label="Ссылка">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+      </button>
+
+      <!-- 11. Formula (Формула) -->
+      <button type="button" class="bubble-btn" data-action="formula" title="Формула (LaTeX)" aria-label="Формула">
+        <span class="latex-badge">√x</span>
+      </button>
+
+      <div class="bubble-divider"></div>
+
+      <!-- "Еще" (More) dropdown -->
+      <div class="bubble-dropdown-wrapper">
+        <button type="button" class="bubble-btn bubble-more-btn" id="bubble-more-btn" title="Еще форматирование" aria-label="Еще">
+          <span>Еще ▾</span>
+        </button>
+        <div id="bubble-more-menu" class="bubble-more-menu">
+          <!-- Text Color -->
+          <div class="more-menu-group">
+            <div class="more-menu-title">Цвет текста</div>
+            <div class="color-palette text-colors">
+              <button type="button" class="color-swatch" data-color="#111827" style="background:#111827;" title="Основной"></button>
+              <button type="button" class="color-swatch" data-color="#2563eb" style="background:#2563eb;" title="Синий"></button>
+              <button type="button" class="color-swatch" data-color="#10b981" style="background:#10b981;" title="Зеленый"></button>
+              <button type="button" class="color-swatch" data-color="#ef4444" style="background:#ef4444;" title="Красный"></button>
+              <button type="button" class="color-swatch" data-color="#f59e0b" style="background:#f59e0b;" title="Оранжевый"></button>
+              <button type="button" class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6;" title="Фиолетовый"></button>
+              <button type="button" class="color-reset" data-action="reset-text-color">Сбросить</button>
+            </div>
+          </div>
+
+          <!-- Highlight Color -->
+          <div class="more-menu-group">
+            <div class="more-menu-title">Цвет фона (выделение)</div>
+            <div class="color-palette bg-colors">
+              <button type="button" class="color-swatch" data-bg="#fef08a" style="background:#fef08a;" title="Желтый"></button>
+              <button type="button" class="color-swatch" data-bg="#bbf7d0" style="background:#bbf7d0;" title="Зеленый"></button>
+              <button type="button" class="color-swatch" data-bg="#bfdbfe" style="background:#bfdbfe;" title="Голубой"></button>
+              <button type="button" class="color-swatch" data-bg="#fbcfe8" style="background:#fbcfe8;" title="Розовый"></button>
+              <button type="button" class="color-swatch" data-bg="#fed7aa" style="background:#fed7aa;" title="Оранжевый"></button>
+              <button type="button" class="color-reset" data-action="reset-bg-color">Сбросить</button>
+            </div>
+          </div>
+
+          <!-- Alignment -->
+          <div class="more-menu-group">
+            <div class="more-menu-title">Выравнивание</div>
+            <div class="align-button-group">
+              <button type="button" class="bubble-align-btn" data-align="" title="По левому краю">Слева</button>
+              <button type="button" class="bubble-align-btn" data-align="center" title="По центру">Центр</button>
+              <button type="button" class="bubble-align-btn" data-align="right" title="По правому краю">Справа</button>
+              <button type="button" class="bubble-align-btn" data-align="justify" title="По ширине">Ширина</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Floating Contextual Table Action Bar -->
@@ -313,7 +490,7 @@
     </div>
 
     <!-- Modals -->
-    <!-- Link Modal -->
+    <!-- 1. Link Modal -->
     <div id="link-modal" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-header">
@@ -338,7 +515,33 @@
       </div>
     </div>
 
-    <!-- Image Modal -->
+    <!-- 2. Media Element Modal (YouTube, Vimeo, VK Video) -->
+    <div id="media-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Вставка медиаэлемента (видео)</div>
+          <button class="modal-close-btn" data-modal-close>✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="media-url-input">Ссылка на видео (YouTube, Vimeo, VK Видео)</label>
+            <input id="media-url-input" class="form-input" type="text" placeholder="https://www.youtube.com/watch?v=... или https://vk.com/video...">
+            <div class="form-hint">Поддерживаются ссылки на YouTube, YouTube Shorts, Vimeo, VK Видео и VK Video player.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="media-caption-input">Подпись к видео (необязательно)</label>
+            <input id="media-caption-input" class="form-input" type="text" placeholder="Например: Обзор новой версии">
+          </div>
+          <div id="media-preview-container" class="media-preview-container" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-modal-close>Отмена</button>
+          <button id="media-insert-btn" class="btn btn-primary">Вставить видео</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Image Modal -->
     <div id="image-modal" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-header">
@@ -347,7 +550,7 @@
         </div>
         <div class="modal-body">
           <div class="tab-list">
-            <button class="tab-btn active" data-image-tab="file">Загрузить с диска</button>
+            <button class="tab-btn active" data-image-tab="file">Загрузить с устройства</button>
             <button class="tab-btn" data-image-tab="url">По ссылке (URL)</button>
           </div>
 
@@ -378,7 +581,7 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="image-align-select">Выравнивание</label>
+            <label class="form-label" for="image-align-select">Выравнивание и размер</label>
             <select id="image-align-select" class="form-select">
               <option value="center">По центру</option>
               <option value="left">Слева (с обтеканием)</option>
@@ -394,7 +597,101 @@
       </div>
     </div>
 
-    <!-- Table Modal -->
+    <!-- 4. LaTeX Formula Modal (Inline & Block) -->
+    <div id="formula-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Вставка формулы LaTeX</div>
+          <button class="modal-close-btn" data-modal-close>✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="formula-input">Код формулы LaTeX</label>
+            <textarea id="formula-input" class="form-textarea" rows="3" placeholder="E = mc^2 или \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"></textarea>
+            <div class="form-hint">Введите математическое выражение в стандартном синтаксисе LaTeX.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Тип формулы</label>
+            <div style="display: flex; gap: 16px;">
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="radio" name="formula-type" value="inline" id="formula-type-inline" checked>
+                <span>Встроенная (строчная)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="radio" name="formula-type" value="block" id="formula-type-block">
+                <span>Блочная (отдельный блок)</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Предпросмотр</label>
+            <div id="formula-live-preview" class="formula-live-preview">\(E = mc^2\)</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-modal-close>Отмена</button>
+          <button id="formula-apply-btn" class="btn btn-primary">Применить формулу</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Anchor Modal -->
+    <div id="anchor-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Вставка именованного якоря</div>
+          <button class="modal-close-btn" data-modal-close>✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="anchor-id-input">Идентификатор якоря (ID)</label>
+            <input id="anchor-id-input" class="form-input" type="text" placeholder="например: section-installation">
+            <div class="form-hint">Используется для создания прямых ссылок вида <code>#section-installation</code>. Должен быть уникальным в статье.</div>
+          </div>
+          <div id="anchor-error-msg" class="form-error" style="display:none; color:var(--danger-color); font-size:0.85rem; margin-top:6px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-modal-close>Отмена</button>
+          <button id="anchor-apply-btn" class="btn btn-primary">Вставить якорь</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Person Card Modal -->
+    <div id="person-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Карточка персоны</div>
+          <button class="modal-close-btn" data-modal-close>✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="person-name-input">Имя и фамилия *</label>
+            <input id="person-name-input" class="form-input" type="text" placeholder="Иван Иванов">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="person-role-input">Должность / Специализация</label>
+            <input id="person-role-input" class="form-input" type="text" placeholder="Senior Frontend Architect">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="person-link-input">Ссылка на профиль (необязательно)</label>
+            <input id="person-link-input" class="form-input" type="text" placeholder="https://github.com/username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="person-avatar-input">Фото / Аватар (URL или файл)</label>
+            <input id="person-avatar-input" class="form-input" type="text" placeholder="https://example.com/avatar.jpg" style="margin-bottom:6px;">
+            <input id="person-avatar-file" class="form-input" type="file" accept="image/*">
+          </div>
+          <div id="person-avatar-preview" style="text-align: center; margin-top: 10px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-modal-close>Отмена</button>
+          <button id="person-apply-btn" class="btn btn-primary">Вставить карточку</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Table Modal -->
     <div id="table-modal" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-header">
@@ -420,7 +717,7 @@
       </div>
     </div>
 
-    <!-- Drafts Modal -->
+    <!-- 8. Drafts Modal -->
     <div id="drafts-modal" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-header">
@@ -439,9 +736,9 @@
       </div>
     </div>
 
-    <!-- Export Modal -->
+    <!-- 9. Export Modal -->
     <div id="export-modal" class="modal-overlay">
-      <div class="modal-card">
+      <div class="modal-card modal-card-lg">
         <div class="modal-header">
           <div class="modal-title">Экспорт статьи</div>
           <button class="modal-close-btn" data-modal-close>✕</button>
@@ -452,6 +749,7 @@
             <button class="tab-btn" data-export-tab="markdown">Markdown</button>
             <button class="tab-btn" data-export-tab="json">JSON</button>
           </div>
+          <div id="export-warning-banner" class="export-warning-banner" style="display:none;"></div>
           <pre id="export-code-box" class="export-code-box"></pre>
         </div>
         <div class="modal-footer">
@@ -461,7 +759,7 @@
       </div>
     </div>
 
-    <!-- Import Modal -->
+    <!-- 10. Import Modal -->
     <div id="import-modal" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-header">
@@ -481,6 +779,32 @@
         <div class="modal-footer">
           <button class="btn" data-modal-close>Отмена</button>
           <button id="import-submit-btn" class="btn btn-primary">Импортировать</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11. Keyboard Shortcuts Modal -->
+    <div id="shortcuts-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Горячие клавиши</div>
+          <button class="modal-close-btn" data-modal-close>✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="shortcuts-grid">
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + B</span><span>Жирный текст</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + I</span><span>Курсив</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + U</span><span>Подчеркивание</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + K</span><span>Добавить / изменить ссылку</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + S</span><span>Сохранить черновик</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + Z</span><span>Отменить действие</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Ctrl + Y</span><span>Повторить действие</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">/</span><span>Открыть меню вставки блоков (в пустой строке)</span></div>
+            <div class="shortcut-row"><span class="shortcut-key">Esc</span><span>Закрыть меню, баббл или модальное окно</span></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" data-modal-close>Закрыть</button>
         </div>
       </div>
     </div>

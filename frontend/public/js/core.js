@@ -1,6 +1,8 @@
 /**
  * Antigravity WYSIWYG Editor - Core Quill Engine
- * Custom Blots, Keyboard Shortcuts, and Editor Initialization
+ * Custom Blots (Divider, Spoiler, Inline Spoiler, LaTeX Formulas, Video Media, Anchor, Person, Image),
+ * Keyboard Shortcuts, and Editor Initialization
+ * 100% offline-first.
  */
 
 (function (window) {
@@ -14,13 +16,15 @@
 
   const Quill = window.Quill;
   const BlockEmbed = Quill.import('blots/block/embed');
+  const Inline = Quill.import('blots/inline');
+  const Embed = Quill.import('blots/embed');
 
   /* ==========================================================================
      Custom Blots
      ========================================================================== */
 
   /**
-   * Divider Blot (<hr class="editor-divider">)
+   * 1. Divider Blot (<hr class="editor-divider">)
    */
   class DividerBlot extends BlockEmbed {
     static blotName = 'divider';
@@ -30,7 +34,7 @@
   Quill.register(DividerBlot, true);
 
   /**
-   * Spoiler Blot (<details class="editor-spoiler"><summary>...</summary><div>...</div></details>)
+   * 2. Block Spoiler Blot (<details class="editor-spoiler"><summary>...</summary><div>...</div></details>)
    */
   class SpoilerBlot extends BlockEmbed {
     static blotName = 'spoiler';
@@ -54,7 +58,7 @@
       body.contentEditable = 'true';
       body.innerText = bodyText;
 
-      // Stop propagation to prevent Quill from interfering with embed inner content editing
+      // Prevent Quill selection interference when editing inside embed
       [summary, body].forEach(el => {
         el.addEventListener('keydown', (e) => e.stopPropagation());
         el.addEventListener('keyup', (e) => e.stopPropagation());
@@ -78,7 +82,160 @@
   Quill.register(SpoilerBlot, true);
 
   /**
-   * Custom Figure / Image Blot with Caption, Alt, and Alignment
+   * 3. Inline Spoiler Blot (Hidden text, revealed on click in preview mode)
+   */
+  class InlineSpoilerBlot extends Inline {
+    static blotName = 'inline-spoiler';
+    static tagName = 'span';
+    static className = 'editor-inline-spoiler';
+  }
+  Quill.register(InlineSpoilerBlot, true);
+
+  /**
+   * 4. Inline LaTeX Formula Blot
+   */
+  class InlineFormulaBlot extends Embed {
+    static blotName = 'inlineFormula';
+    static tagName = 'span';
+    static className = 'editor-inline-formula';
+
+    static create(value) {
+      const node = super.create();
+      const latex = typeof value === 'string' ? value : (value && value.latex ? value.latex : '');
+      node.setAttribute('data-latex', latex);
+      node.textContent = latex ? `\\(${latex}\\)` : '\\(...)';
+      node.title = `LaTeX: ${latex}`;
+      return node;
+    }
+
+    static value(node) {
+      return {
+        latex: node.getAttribute('data-latex') || ''
+      };
+    }
+  }
+  Quill.register(InlineFormulaBlot, true);
+
+  /**
+   * 5. Block LaTeX Formula Blot
+   */
+  class BlockFormulaBlot extends BlockEmbed {
+    static blotName = 'blockFormula';
+    static tagName = 'div';
+    static className = 'editor-block-formula';
+
+    static create(value) {
+      const node = super.create();
+      const latex = typeof value === 'string' ? value : (value && value.latex ? value.latex : '');
+      node.setAttribute('data-latex', latex);
+
+      const renderDiv = document.createElement('div');
+      renderDiv.className = 'formula-rendered';
+      renderDiv.textContent = latex ? `$$\n${latex}\n$$` : '$$ ... $$';
+      node.appendChild(renderDiv);
+
+      const badge = document.createElement('div');
+      badge.className = 'formula-badge';
+      badge.innerHTML = `<span>LaTeX</span> <button type="button" class="formula-edit-action" title="Редактировать формулу">✎ Изменить</button>`;
+      node.appendChild(badge);
+
+      return node;
+    }
+
+    static value(node) {
+      return {
+        latex: node.getAttribute('data-latex') || ''
+      };
+    }
+  }
+  Quill.register(BlockFormulaBlot, true);
+
+  /**
+   * 6. Media Element Blot (YouTube, Vimeo, VK Video with responsive iframe)
+   */
+  class MediaEmbedBlot extends BlockEmbed {
+    static blotName = 'mediaEmbed';
+    static tagName = 'div';
+    static className = 'editor-media-embed';
+
+    static create(value) {
+      const node = super.create();
+      const data = typeof value === 'object' && value ? value : {};
+      const embedUrl = data.embedUrl || '';
+      const originalUrl = data.originalUrl || embedUrl;
+      const provider = data.provider || 'video';
+      const caption = data.caption || '';
+
+      node.setAttribute('data-provider', provider);
+      node.setAttribute('data-embed-url', embedUrl);
+      node.setAttribute('data-original-url', originalUrl);
+
+      const ratio = document.createElement('div');
+      ratio.className = 'media-aspect-ratio';
+
+      const iframe = document.createElement('iframe');
+      iframe.src = embedUrl;
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('allowfullscreen', 'true');
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-popups');
+      ratio.appendChild(iframe);
+      node.appendChild(ratio);
+
+      const fallback = document.createElement('div');
+      fallback.className = 'media-fallback-banner';
+      fallback.innerHTML = `<span>Видео (${provider.toUpperCase()})</span> <a href="${originalUrl}" target="_blank" rel="noopener noreferrer">Смотреть на источнике ↗</a>`;
+      node.appendChild(fallback);
+
+      const cap = document.createElement('div');
+      cap.className = 'media-caption';
+      cap.contentEditable = 'true';
+      cap.setAttribute('placeholder', 'Подпись к видео...');
+      cap.innerText = caption;
+      cap.addEventListener('keydown', (e) => e.stopPropagation());
+      cap.addEventListener('keyup', (e) => e.stopPropagation());
+      node.appendChild(cap);
+
+      return node;
+    }
+
+    static value(node) {
+      const cap = node.querySelector('.media-caption');
+      return {
+        provider: node.getAttribute('data-provider') || '',
+        embedUrl: node.getAttribute('data-embed-url') || '',
+        originalUrl: node.getAttribute('data-original-url') || '',
+        caption: cap ? cap.innerText.trim() : ''
+      };
+    }
+  }
+  Quill.register(MediaEmbedBlot, true);
+  window.MediaEmbedBlot = MediaEmbedBlot;
+  window.VideoEmbed = MediaEmbedBlot;
+  window.VideoBlot = MediaEmbedBlot;
+
+  // Also safely override Quill default 'video' blot if available to ensure sandbox isolation
+  try {
+    const QuillVideo = Quill.import('formats/video');
+    if (QuillVideo) {
+      class SafeVideoBlot extends QuillVideo {
+        static blotName = 'video';
+        static create(value) {
+          const node = super.create(value);
+          if (node && node.tagName && node.tagName.toLowerCase() === 'iframe') {
+            node.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-popups');
+          }
+          return node;
+        }
+      }
+      Quill.register(SafeVideoBlot, true);
+    }
+  } catch (e) {
+    // Ignore if formats/video is not present
+  }
+
+  /**
+   * 7. Custom Image Blot (Caption, Alt, Alignment)
    */
   class CustomImageBlot extends BlockEmbed {
     static blotName = 'customImage';
@@ -125,12 +282,128 @@
   }
   Quill.register(CustomImageBlot, true);
 
+  /**
+   * 8. Anchor Blot (Named anchor with unique ID check)
+   */
+  class AnchorBlot extends BlockEmbed {
+    static blotName = 'anchor';
+    static tagName = 'div';
+    static className = 'editor-anchor-block';
+
+    static create(value) {
+      const node = super.create();
+      const id = typeof value === 'string' ? value : (value && value.id ? value.id : 'anchor');
+      const cleanId = id.trim().toLowerCase().replace(/[^a-z0-9а-яё_-]/gi, '-');
+      node.setAttribute('data-anchor-id', cleanId);
+
+      const targetA = document.createElement('a');
+      targetA.id = cleanId;
+      targetA.className = 'editor-anchor-target';
+      node.appendChild(targetA);
+
+      const badge = document.createElement('span');
+      badge.className = 'editor-anchor-badge';
+      badge.innerHTML = `<span class="anchor-icon">⚓</span> <span class="anchor-id-display">#${cleanId}</span>`;
+      node.appendChild(badge);
+
+      const hint = document.createElement('span');
+      hint.className = 'editor-anchor-hint';
+      hint.textContent = 'Якорь для перехода по ссылке';
+      node.appendChild(hint);
+
+      return node;
+    }
+
+    static value(node) {
+      return {
+        id: node.getAttribute('data-anchor-id') || ''
+      };
+    }
+  }
+  Quill.register(AnchorBlot, true);
+
+  /**
+   * 9. Person Card Blot (Avatar, Name, Role, Link)
+   */
+  class PersonBlot extends BlockEmbed {
+    static blotName = 'person';
+    static tagName = 'div';
+    static className = 'editor-person-card';
+
+    static create(value) {
+      const node = super.create();
+      const data = typeof value === 'object' && value ? value : {};
+      const name = data.name || 'Имя Фамилия';
+      const role = data.role || 'Специализация / Должность';
+      const link = data.link || '';
+      const avatar = data.avatar || '';
+
+      node.setAttribute('data-name', name);
+      node.setAttribute('data-role', role);
+      node.setAttribute('data-link', link);
+      node.setAttribute('data-avatar', avatar);
+
+      const avatarWrap = document.createElement('div');
+      avatarWrap.className = 'person-avatar-wrap';
+
+      if (avatar) {
+        const img = document.createElement('img');
+        img.src = avatar;
+        img.alt = name;
+        img.className = 'person-avatar-img';
+        avatarWrap.appendChild(img);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'person-avatar-placeholder';
+        placeholder.textContent = name.charAt(0).toUpperCase() || '👤';
+        avatarWrap.appendChild(placeholder);
+      }
+
+      const info = document.createElement('div');
+      info.className = 'person-info';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'person-name';
+      nameEl.textContent = name;
+      info.appendChild(nameEl);
+
+      const roleEl = document.createElement('div');
+      roleEl.className = 'person-role';
+      roleEl.textContent = role;
+      info.appendChild(roleEl);
+
+      if (link) {
+        const linkEl = document.createElement('a');
+        linkEl.className = 'person-link';
+        linkEl.href = link;
+        linkEl.target = '_blank';
+        linkEl.rel = 'noopener noreferrer';
+        linkEl.textContent = link.replace(/^https?:\/\//i, '');
+        info.appendChild(linkEl);
+      }
+
+      node.appendChild(avatarWrap);
+      node.appendChild(info);
+      return node;
+    }
+
+    static value(node) {
+      return {
+        name: node.getAttribute('data-name') || '',
+        role: node.getAttribute('data-role') || '',
+        link: node.getAttribute('data-link') || '',
+        avatar: node.getAttribute('data-avatar') || ''
+      };
+    }
+  }
+  Quill.register(PersonBlot, true);
+
   /* ==========================================================================
      Core Editor Initialization
      ========================================================================== */
 
   /**
-   * Initialize Quill instance with full module support
+   * Initialize Quill instance
    * @param {string|HTMLElement} container
    * @returns {Quill}
    */
@@ -139,7 +412,7 @@
       theme: 'snow',
       placeholder: 'Начните писать статью или нажмите "+" для добавления блоков...',
       modules: {
-        toolbar: false, // We control the UI via our sticky toolbar & bubble toolbar
+        toolbar: false, // Formatting toolbar replaced with contextual Bubble Toolbar
         table: true,
         syntax: window.hljs ? { hljs: window.hljs } : false,
         history: {
