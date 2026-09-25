@@ -24,7 +24,8 @@
       this.editorCard = document.getElementById('editor-card');
       this.controls = document.getElementById('node-controls');
       this.dragHandle = this.controls ? this.controls.querySelector('.node__drag-control') : null;
-      this.dotsBtn = this.controls ? this.controls.querySelector('.node__dots') : null;
+      this.deleteBtn = this.controls ? (this.controls.querySelector('#btn-node-direct-delete') || this.controls.querySelector('.node__delete') || this.controls.querySelector('.node__dots')) : null;
+      this.dotsBtn = this.deleteBtn;
       this.actionMenu = document.getElementById('node-action-menu');
       this.dropLine = document.getElementById('node-drop-line');
 
@@ -115,7 +116,7 @@
     }
 
     /* ==========================================================================
-       HTML5 Drag & Drop Reordering
+       HTML5 Drag & Drop Reordering (Full-width edge to edge)
        ========================================================================== */
     bindDragAndDrop() {
       if (!this.dragHandle) return;
@@ -148,24 +149,59 @@
         if (this.dropLine) {
           this.dropLine.style.display = 'none';
         }
+        this.currentDropTarget = null;
       });
 
-      const editorRoot = this.editor.root;
-
-      editorRoot.addEventListener('dragover', (e) => {
+      const handleDragOver = (e) => {
         if (!this.draggedBlock) return;
         e.preventDefault();
 
-        const targetBlock = e.target.closest('.ql-editor > *');
+        const blocks = Array.from(this.editor.root.querySelectorAll('.ql-editor > *'));
+        if (!blocks.length) return;
+
+        let targetBlock = null;
+        let isAbove = false;
+        const cardRect = this.editorCard.getBoundingClientRect();
+
+        // 1. Direct block hover
+        const directBlock = e.target ? e.target.closest('.ql-editor > *') : null;
+        if (directBlock && directBlock !== this.draggedBlock) {
+          targetBlock = directBlock;
+          const rect = targetBlock.getBoundingClientRect();
+          isAbove = (e.clientY - rect.top) < (rect.height / 2);
+        } else {
+          // 2. Full width detection: find target block dynamically by comparing e.clientY with block rects
+          for (const block of blocks) {
+            if (block === this.draggedBlock) continue;
+            const rect = block.getBoundingClientRect();
+            if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+              targetBlock = block;
+              isAbove = (e.clientY - rect.top) < (rect.height / 2);
+              break;
+            }
+          }
+
+          // Edge fallback: above first block or below last block
+          if (!targetBlock) {
+            const firstBlock = blocks.find(b => b !== this.draggedBlock);
+            const lastBlock = [...blocks].reverse().find(b => b !== this.draggedBlock);
+            if (firstBlock && e.clientY < firstBlock.getBoundingClientRect().top) {
+              targetBlock = firstBlock;
+              isAbove = true;
+            } else if (lastBlock && e.clientY > lastBlock.getBoundingClientRect().bottom) {
+              targetBlock = lastBlock;
+              isAbove = false;
+            }
+          }
+        }
+
         if (!targetBlock || targetBlock === this.draggedBlock) {
           if (this.dropLine) this.dropLine.style.display = 'none';
+          this.currentDropTarget = null;
           return;
         }
 
-        const cardRect = this.editorCard.getBoundingClientRect();
         const targetRect = targetBlock.getBoundingClientRect();
-        const isAbove = (e.clientY - targetRect.top) < (targetRect.height / 2);
-
         if (this.dropLine) {
           const lineTop = isAbove
             ? (targetRect.top - cardRect.top)
@@ -177,9 +213,9 @@
           this.currentDropTarget = targetBlock;
           this.currentDropAbove = isAbove;
         }
-      });
+      };
 
-      editorRoot.addEventListener('drop', (e) => {
+      const handleDrop = (e) => {
         if (!this.draggedBlock || !this.currentDropTarget) return;
         e.preventDefault();
 
@@ -207,13 +243,33 @@
         this.attachToBlock(this.draggedBlock);
         this.draggedBlock = null;
         this.currentDropTarget = null;
+      };
+
+      // Listen on this.editorCard and document across full width
+      this.editorCard.addEventListener('dragover', handleDragOver);
+      this.editorCard.addEventListener('drop', handleDrop);
+      this.editor.root.addEventListener('dragover', handleDragOver);
+      this.editor.root.addEventListener('drop', handleDrop);
+      document.addEventListener('dragover', (e) => {
+        if (this.draggedBlock) handleDragOver(e);
+      });
+      document.addEventListener('drop', (e) => {
+        if (this.draggedBlock) handleDrop(e);
       });
     }
 
     /* ==========================================================================
-       Node Actions Context Menu (...)
+       Node Actions & Direct Delete
        ========================================================================== */
     bindActionMenu() {
+      // Direct delete on deleteBtn click
+      const directDeleteBtn = this.deleteBtn || (this.controls ? this.controls.querySelector('.node__delete') : null);
+      if (directDeleteBtn) {
+        directDeleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.deleteBlock();
+        });
+      }
       if (!this.dotsBtn || !this.actionMenu) return;
 
       this.dotsBtn.addEventListener('click', (e) => {

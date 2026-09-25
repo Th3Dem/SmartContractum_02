@@ -187,26 +187,27 @@ class TestContextualBubbleToolbar11ToolsOrder(unittest.TestCase):
             self.assertIn(expected['title'], attrs, f"Tool {i+1} Russian tooltip mismatch")
 
     def test_bubble_more_dropdown_features(self):
-        """Verify 'Еще' dropdown contains text color, background highlight, and text alignment."""
+        """Verify 'Еще' dropdown contains alignment and colors are removed."""
         self.assertIn('id="bubble-more-btn"', self.html)
         self.assertIn('id="bubble-more-menu"', self.html)
-        self.assertIn('Цвет текста', self.html)
-        self.assertIn('Цвет фона (выделение)', self.html)
         self.assertIn('Выравнивание', self.html)
-        self.assertIn('data-color=', self.html)
-        self.assertIn('data-bg=', self.html)
         self.assertIn('data-align=', self.html)
+        self.assertNotIn('Цвет текста', self.html)
+        self.assertNotIn('Цвет фона (выделение)', self.html)
+        self.assertNotIn('data-color=', self.html)
+        self.assertNotIn('data-bg=', self.html)
 
     def test_bubble_js_contract(self):
         """Verify bubble.js handles non-empty range selection, prevents selection blur, and handles Escape."""
         self.assertIn('range && range.length > 0', self.bubble_js)
         self.assertIn('e.preventDefault()', self.bubble_js)
         self.assertIn('Escape', self.bubble_js)
-        self.assertIn('position-below', self.bubble_js)
+        self.assertIn('Math.max(10, bounds.top)', self.bubble_js)
+        self.assertNotIn('position-below', self.bubble_js)
 
 
 class TestBlockInserter12ItemsOrder(unittest.TestCase):
-    """Test 4: 12 '+' Menu items in EXACT required order + 'Дополнительно' group."""
+    """Test 4: Block items in EXACT required order without 'Дополнительно' group."""
 
     def setUp(self):
         html_path = os.path.join(FRONTEND_DIR, 'editor.html')
@@ -218,7 +219,7 @@ class TestBlockInserter12ItemsOrder(unittest.TestCase):
             self.blocks_js = f.read()
 
     def test_12_block_items_exact_order(self):
-        """Verify 12 main block items in exact order:
+        """Verify block items in exact order:
         1. Header (Заголовок)
         2. Quote (Цитата)
         3. List (Список)
@@ -231,8 +232,9 @@ class TestBlockInserter12ItemsOrder(unittest.TestCase):
         10. Spoiler (Спойлер)
         11. Anchor (Якорь)
         12. Person (Персона)
+        13. Table (Таблица)
         """
-        menu_match = re.search(r'<div id="block-menu"[^>]*>(.*?)<div class="block-menu-divider"></div>', self.html, re.DOTALL)
+        menu_match = re.search(r'<div id="block-menu"[^>]*>(.*?)(?:<!-- Node Controls|<div id="node-controls")', self.html, re.DOTALL)
         self.assertIsNotNone(menu_match, "Block menu container not found")
         menu_content = menu_match.group(1)
 
@@ -249,16 +251,17 @@ class TestBlockInserter12ItemsOrder(unittest.TestCase):
             'formula',
             'spoiler',
             'anchor',
-            'person'
+            'person',
+            'table'
         ]
 
         self.assertEqual(items, expected_items, f"Items mismatch: got {items}, expected {expected_items}")
 
     def test_additional_blocks_group(self):
-        """Group 'Дополнительно' contains Table and Checklist."""
-        self.assertIn('Дополнительно', self.html)
+        """Verify 'Дополнительно' and 'checklist' are removed and table is retained."""
+        self.assertNotIn('Дополнительно', self.html)
+        self.assertNotIn('data-block="checklist"', self.html)
         self.assertIn('data-block="table"', self.html)
-        self.assertIn('data-block="checklist"', self.html)
 
     def test_keyboard_navigation_and_slash_command(self):
         """Keyboard navigation: ArrowUp, ArrowDown, Enter, Escape, and slash command '/'."""

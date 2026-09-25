@@ -162,7 +162,10 @@
       const node = super.create();
       const data = typeof value === 'object' && value ? value : {};
       const embedUrl = data.embedUrl || '';
-      const originalUrl = data.originalUrl || embedUrl;
+      let originalUrl = data.originalUrl || embedUrl;
+      if (originalUrl && !/^https?:\/\//i.test(originalUrl)) {
+        originalUrl = 'https://' + originalUrl;
+      }
       const provider = data.provider || 'video';
       const caption = data.caption || '';
 
@@ -185,6 +188,18 @@
       const fallback = document.createElement('div');
       fallback.className = 'media-fallback-banner';
       fallback.innerHTML = `<span>Видео (${provider.toUpperCase()})</span> <a href="${originalUrl}" target="_blank" rel="noopener noreferrer">Смотреть на источнике ↗</a>`;
+
+      const linkEl = fallback.querySelector('a');
+      if (linkEl) {
+        linkEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (originalUrl) {
+            window.open(originalUrl, '_blank', 'noopener,noreferrer');
+          }
+        });
+      }
+
       node.appendChild(fallback);
 
       const cap = document.createElement('div');

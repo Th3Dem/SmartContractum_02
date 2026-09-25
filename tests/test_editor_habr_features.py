@@ -311,30 +311,23 @@ class TestNodeControls(unittest.TestCase):
             self.js_code = f.read()
 
     def test_node_controls_html_elements(self):
-        """Verify node-controls container, drag handle, dots button, and menu in HTML."""
+        """Verify node-controls container, drag handle, trash button, and drop line in HTML."""
         self.assertIn('id="node-controls"', self.html)
         self.assertIn('class="node__drag-control"', self.html)
         self.assertIn('draggable="true"', self.html)
         self.assertIn('data-drag-handle', self.html)
 
-        self.assertIn('class="node__dots', self.html)
-        self.assertIn('id="node-action-menu"', self.html)
+        self.assertIn('id="btn-node-direct-delete"', self.html)
+        self.assertIn('node__delete', self.html)
+        self.assertNotIn('id="node-action-menu"', self.html)
         self.assertIn('id="node-drop-line"', self.html)
 
     def test_node_actions_menu_items(self):
-        """Context menu contains Transform (H2, H3, quote, list, p), Duplicate, and Delete."""
-        self.assertIn('Преобразовать', self.html)
-        self.assertIn('data-transform="paragraph"', self.html)
-        self.assertIn('data-transform="header-2"', self.html)
-        self.assertIn('data-transform="header-3"', self.html)
-        self.assertIn('data-transform="blockquote"', self.html)
-        self.assertIn('data-transform="bullet-list"', self.html)
-
-        self.assertIn('Дублировать блок', self.html)
-        self.assertIn('data-action="duplicate-node"', self.html)
-
-        self.assertIn('Удалить блок', self.html)
-        self.assertIn('data-action="delete-node"', self.html)
+        """Verify 3-dots dropdown menu was replaced with direct delete trash button."""
+        self.assertIn('id="btn-node-direct-delete"', self.html)
+        self.assertIn('title="Удалить блок"', self.html)
+        self.assertNotIn('id="node-action-menu"', self.html)
+        self.assertNotIn('data-transform="paragraph"', self.html)
 
     def test_node_controls_js_manager(self):
         """NodeControlsManager implements hover/focus, HTML5 drag-and-drop, and actions."""

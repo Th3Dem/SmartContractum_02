@@ -18,6 +18,11 @@
 
       if (!this.bubble) return;
 
+      const editorCard = document.getElementById('editor-card');
+      if (editorCard && this.bubble.parentNode !== editorCard) {
+        editorCard.appendChild(this.bubble);
+      }
+
       this.currentRange = null;
       this.bindEvents();
     }
@@ -59,50 +64,6 @@
           const range = this.editor.getSelection() || this.currentRange;
           if (range) {
             this.editor.format('align', alignVal || false);
-          }
-          if (this.moreMenu) this.moreMenu.classList.remove('show');
-          return;
-        }
-
-        // Handle Text Color swatch
-        const colorSwatch = e.target.closest('.color-swatch[data-color]');
-        if (colorSwatch) {
-          const color = colorSwatch.getAttribute('data-color');
-          const range = this.editor.getSelection() || this.currentRange;
-          if (range) {
-            this.editor.format('color', color);
-          }
-          if (this.moreMenu) this.moreMenu.classList.remove('show');
-          return;
-        }
-
-        // Handle Reset Text Color
-        if (e.target.closest('[data-action="reset-text-color"]')) {
-          const range = this.editor.getSelection() || this.currentRange;
-          if (range) {
-            this.editor.format('color', false);
-          }
-          if (this.moreMenu) this.moreMenu.classList.remove('show');
-          return;
-        }
-
-        // Handle Background Color swatch
-        const bgSwatch = e.target.closest('.color-swatch[data-bg]');
-        if (bgSwatch) {
-          const bg = bgSwatch.getAttribute('data-bg');
-          const range = this.editor.getSelection() || this.currentRange;
-          if (range) {
-            this.editor.format('background', bg);
-          }
-          if (this.moreMenu) this.moreMenu.classList.remove('show');
-          return;
-        }
-
-        // Handle Reset Background Color
-        if (e.target.closest('[data-action="reset-bg-color"]')) {
-          const range = this.editor.getSelection() || this.currentRange;
-          if (range) {
-            this.editor.format('background', false);
           }
           if (this.moreMenu) this.moreMenu.classList.remove('show');
           return;
@@ -225,24 +186,10 @@
 
       // Horizontal center of selection relative to editor-card
       const left = (containerRect.left - cardRect.left) + bounds.left + (bounds.width / 2);
-      // Vertical top of selection relative to editor-card
-      const top = (containerRect.top - cardRect.top) + bounds.top;
+      // Vertical top strictly above the selection relative to editor-card
+      const top = (containerRect.top - cardRect.top) + Math.max(10, bounds.top);
 
-      // Check available space above selection in viewport
-      const selectionScreenTop = containerRect.top + bounds.top;
-      const bubbleHeight = 52; // approx height of bubble toolbar
-      const placeBelow = selectionScreenTop < bubbleHeight + 70; // header space
-
-      this.bubble.classList.toggle('position-below', placeBelow);
-
-      if (placeBelow) {
-        // Place below selection
-        const bottom = (containerRect.top - cardRect.top) + bounds.bottom;
-        this.bubble.style.top = `${bottom}px`;
-      } else {
-        // Place above selection
-        this.bubble.style.top = `${top}px`;
-      }
+      this.bubble.style.top = `${top}px`;
 
       // Constrain horizontal position within editorCard bounds
       const minLeft = 140;

@@ -77,26 +77,14 @@
 
         const blockType = item.getAttribute('data-block');
         if (blockType === 'header') {
-          e.stopPropagation();
-          this.toggleHeaderSubmenu();
+          this.insertHeader(2);
+          this.closeMenu();
           return;
         }
 
         this.insertBlock(blockType);
         this.closeMenu();
       });
-
-      // Handle Header Submenu clicks (H2, H3, H4)
-      if (this.headerSubmenu) {
-        this.headerSubmenu.addEventListener('click', (e) => {
-          const subItem = e.target.closest('.header-sub-item');
-          if (!subItem) return;
-
-          const hLevel = parseInt(subItem.getAttribute('data-header'), 10) || 2;
-          this.insertHeader(hLevel);
-          this.closeMenu();
-        });
-      }
 
       // Keyboard navigation inside block menu (Arrows, Enter, Escape)
       document.addEventListener('keydown', (e) => {
@@ -127,7 +115,8 @@
             const item = this.menuItems[this.highlightedIndex];
             const blockType = item.getAttribute('data-block');
             if (blockType === 'header') {
-              this.toggleHeaderSubmenu();
+              this.insertHeader(2);
+              this.closeMenu();
             } else {
               this.insertBlock(blockType);
               this.closeMenu();
@@ -139,8 +128,7 @@
       // Close menu when clicking outside
       document.addEventListener('click', (e) => {
         if (!this.blockMenu.contains(e.target) &&
-            !this.inserterBtn.contains(e.target) &&
-            (!this.headerSubmenu || !this.headerSubmenu.contains(e.target))) {
+            !this.inserterBtn.contains(e.target)) {
           this.closeMenu();
         }
       });
@@ -194,16 +182,8 @@
     closeMenu() {
       this.blockMenu.classList.remove('show');
       this.inserterBtn.classList.remove('active');
-      if (this.headerSubmenu) {
-        this.headerSubmenu.classList.remove('show');
-      }
       this.highlightedIndex = -1;
       this.clearHighlight();
-    }
-
-    toggleHeaderSubmenu() {
-      if (!this.headerSubmenu) return;
-      this.headerSubmenu.classList.toggle('show');
     }
 
     navigateMenu(direction) {
@@ -342,11 +322,6 @@
           if (window.EditorApp && window.EditorApp.Table) {
             window.EditorApp.Table.insertDefaultTable(index);
           }
-          break;
-
-        // Additional: Checklist
-        case 'checklist':
-          this.editor.formatLine(index, 1, 'list', 'check');
           break;
 
         default:

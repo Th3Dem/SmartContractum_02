@@ -154,7 +154,7 @@
                   <div class="block-menu-icon">H</div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Заголовок</span>
-                    <span class="block-menu-desc">H2, H3 или H4</span>
+                    <span class="block-menu-desc">Заголовок раздела</span>
                   </div>
                 </div>
 
@@ -257,10 +257,7 @@
                   </div>
                 </div>
 
-                <!-- Группа Дополнительно -->
-                <div class="block-menu-divider"></div>
-                <div class="block-menu-group-title">Дополнительно</div>
-
+                <!-- 13. Таблица -->
                 <div class="block-menu-item" data-block="table" tabindex="0" role="menuitem">
                   <div class="block-menu-icon">▦</div>
                   <div class="block-menu-text">
@@ -268,31 +265,7 @@
                     <span class="block-menu-desc">Интерактивная таблица данных</span>
                   </div>
                 </div>
-
-                <div class="block-menu-item" data-block="checklist" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">☑</div>
-                  <div class="block-menu-text">
-                    <span class="block-menu-label">Чек-лист</span>
-                    <span class="block-menu-desc">Список задач с чекбоксами</span>
-                  </div>
-                </div>
               </div>
-            </div>
-
-            <!-- Mini Header Submenu (H2, H3, H4) -->
-            <div id="header-submenu" class="header-submenu">
-              <button type="button" class="header-sub-item" data-header="2">
-                <span class="header-sub-icon">H2</span>
-                <span>Заголовок раздела</span>
-              </button>
-              <button type="button" class="header-sub-item" data-header="3">
-                <span class="header-sub-icon">H3</span>
-                <span>Подзаголовок</span>
-              </button>
-              <button type="button" class="header-sub-item" data-header="4">
-                <span class="header-sub-icon">H4</span>
-                <span>Малый заголовок</span>
-              </button>
             </div>
           </div>
 
@@ -305,58 +278,16 @@
               </svg>
             </div>
 
-            <!-- Right: 3-dots Node Action Context Menu -->
+            <!-- Right: Direct Delete Trash Button -->
             <div class="right-menu__container" contenteditable="false">
-              <button type="button" class="node__dots button-icon" title="Действия с блоком" aria-label="Действия с блоком">
-                <svg class="svg-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M5 10c1.1046 0 2 .8954 2 2s-.8954 2-2 2-2-.8954-2-2 .8954-2 2-2m7 0c1.1046 0 2 .8954 2 2s-.8954 2-2 2-2-.8954-2-2 .8954-2 2-2m7 0c1.1046 0 2 .8954 2 2s-.8954 2-2 2-2-.8954-2-2 .8954-2 2-2"/>
+              <button type="button" class="node__delete node__dots button-icon" id="btn-node-direct-delete" title="Удалить блок" aria-label="Удалить блок">
+                <svg class="svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
                 </svg>
               </button>
-
-              <div class="node-action-menu dropdown-menu" id="node-action-menu">
-                <div class="dropdown-header">Действия с блоком</div>
-                <div class="dropdown-submenu-wrapper" id="node-transform-wrapper">
-                  <button type="button" class="dropdown-item dropdown-submenu-toggle" id="btn-node-transform">
-                    <span class="dropdown-item-icon">🔄</span>
-                    <span class="dropdown-item-title">Преобразовать</span>
-                    <span class="dropdown-arrow">▸</span>
-                  </button>
-                  <div class="dropdown-submenu" id="node-transform-submenu">
-                    <button type="button" class="dropdown-item" data-transform="paragraph">
-                      <span class="dropdown-item-icon">¶</span>
-                      <span>Параграф</span>
-                    </button>
-                    <button type="button" class="dropdown-item" data-transform="header-2">
-                      <span class="dropdown-item-icon">H2</span>
-                      <span>Заголовок H2</span>
-                    </button>
-                    <button type="button" class="dropdown-item" data-transform="header-3">
-                      <span class="dropdown-item-icon">H3</span>
-                      <span>Заголовок H3</span>
-                    </button>
-                    <button type="button" class="dropdown-item" data-transform="blockquote">
-                      <span class="dropdown-item-icon">❝</span>
-                      <span>Цитата</span>
-                    </button>
-                    <button type="button" class="dropdown-item" data-transform="bullet-list">
-                      <span class="dropdown-item-icon">•</span>
-                      <span>Список</span>
-                    </button>
-                  </div>
-                </div>
-
-                <button type="button" class="dropdown-item" data-action="duplicate-node" id="btn-node-duplicate">
-                  <span class="dropdown-item-icon">📋</span>
-                  <span class="dropdown-item-title">Дублировать блок</span>
-                </button>
-
-                <div class="dropdown-divider"></div>
-
-                <button type="button" class="dropdown-item text-danger" data-action="delete-node" id="btn-node-delete">
-                  <span class="dropdown-item-icon">🗑️</span>
-                  <span class="dropdown-item-title">Удалить блок</span>
-                </button>
-              </div>
             </div>
           </div>
 
@@ -616,33 +547,6 @@
           <span>Еще ▾</span>
         </button>
         <div id="bubble-more-menu" class="bubble-more-menu">
-          <!-- Text Color -->
-          <div class="more-menu-group">
-            <div class="more-menu-title">Цвет текста</div>
-            <div class="color-palette text-colors">
-              <button type="button" class="color-swatch" data-color="#111827" style="background:#111827;" title="Основной"></button>
-              <button type="button" class="color-swatch" data-color="#2563eb" style="background:#2563eb;" title="Синий"></button>
-              <button type="button" class="color-swatch" data-color="#10b981" style="background:#10b981;" title="Зеленый"></button>
-              <button type="button" class="color-swatch" data-color="#ef4444" style="background:#ef4444;" title="Красный"></button>
-              <button type="button" class="color-swatch" data-color="#f59e0b" style="background:#f59e0b;" title="Оранжевый"></button>
-              <button type="button" class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6;" title="Фиолетовый"></button>
-              <button type="button" class="color-reset" data-action="reset-text-color">Сбросить</button>
-            </div>
-          </div>
-
-          <!-- Highlight Color -->
-          <div class="more-menu-group">
-            <div class="more-menu-title">Цвет фона (выделение)</div>
-            <div class="color-palette bg-colors">
-              <button type="button" class="color-swatch" data-bg="#fef08a" style="background:#fef08a;" title="Желтый"></button>
-              <button type="button" class="color-swatch" data-bg="#bbf7d0" style="background:#bbf7d0;" title="Зеленый"></button>
-              <button type="button" class="color-swatch" data-bg="#bfdbfe" style="background:#bfdbfe;" title="Голубой"></button>
-              <button type="button" class="color-swatch" data-bg="#fbcfe8" style="background:#fbcfe8;" title="Розовый"></button>
-              <button type="button" class="color-swatch" data-bg="#fed7aa" style="background:#fed7aa;" title="Оранжевый"></button>
-              <button type="button" class="color-reset" data-action="reset-bg-color">Сбросить</button>
-            </div>
-          </div>
-
           <!-- Alignment -->
           <div class="more-menu-group">
             <div class="more-menu-title">Выравнивание</div>
