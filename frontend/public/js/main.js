@@ -45,6 +45,12 @@
       this.Media = new window.MediaManager(this.editor);
       this.Converter = new window.Converter(this.editor, this.titleInput);
       this.Drafts = new window.DraftsManager(this.editor, this.titleInput);
+      if (window.NodeControlsManager) {
+        this.NodeControls = new window.NodeControlsManager(this.editor);
+      }
+      if (window.ImageMenuManager) {
+        this.ImageMenu = new window.ImageMenuManager(this.editor);
+      }
 
       this.bindTitleEvents();
       this.bindStats();
@@ -53,6 +59,8 @@
       this.bindExportImport();
       this.bindShortcuts();
       this.bindInlineSpoilerInteraction();
+      this.bindTypograph();
+      this.bindChecklist();
     }
 
     /* ==========================================================================
@@ -118,6 +126,8 @@
         if (this.titleInput) this.titleInput.setAttribute('readonly', 'true');
         if (this.Blocks) this.Blocks.hide();
         if (this.Bubble) this.Bubble.hide();
+        if (this.NodeControls) this.NodeControls.hide();
+        if (this.ImageMenu) this.ImageMenu.hide();
       } else {
         document.body.classList.remove('preview-mode');
         if (editBtn) editBtn.classList.add('active');
@@ -373,6 +383,94 @@
           document.querySelectorAll('.dropdown-menu.show').forEach(d => d.classList.remove('show'));
         }
       });
+    }
+
+    /* ==========================================================================
+       Sidebar Widgets: Typograph & Live Checklist
+       ========================================================================== */
+    bindTypograph() {
+      const typoBtn = document.getElementById('btn-typograph');
+      if (!typoBtn) return;
+
+      typoBtn.addEventListener('click', () => {
+        if (window.Typograph) {
+          window.Typograph.typographEditor(this.editor, this.titleInput);
+          this.typographVerified = true;
+          const statusEl = document.getElementById('typograph-status');
+          if (statusEl) {
+            statusEl.style.display = 'flex';
+          }
+          this.showToast('Текст статьи успешно оттипографилен', 'success');
+          this.updateChecklist();
+        }
+      });
+    }
+
+    bindChecklist() {
+      this.typographVerified = false;
+
+      this.editor.on('text-change', () => {
+        this.updateChecklist();
+      });
+
+      if (this.titleInput) {
+        this.titleInput.addEventListener('input', () => {
+          this.updateChecklist();
+        });
+      }
+
+      this.updateChecklist();
+    }
+
+    updateChecklist() {
+      const titleFilled = this.titleInput ? this.titleInput.value.trim().length > 0 : false;
+
+      const text = this.editor.getText().trim();
+      const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+      const wordsMet = words > 100;
+
+      const hasHeaders = Boolean(this.editor.root.querySelector('h2, h3, h4'));
+
+      const typoMet = Boolean(this.typographVerified);
+
+      const chkTitle = document.getElementById('chk-title');
+      const chkWords = document.getElementById('chk-words');
+      const chkHeaders = document.getElementById('chk-headers');
+      const chkTypo = document.getElementById('chk-typograph');
+
+      const setItemState = (el, isChecked) => {
+        if (!el) return;
+        el.classList.toggle('checked', isChecked);
+        const box = el.querySelector('.checklist-box');
+        if (box) box.textContent = isChecked ? '✓' : '';
+      };
+
+      setItemState(chkTitle, titleFilled);
+      setItemState(chkWords, wordsMet);
+      setItemState(chkHeaders, hasHeaders);
+      setItemState(chkTypo, typoMet);
+
+      const completedCount = [titleFilled, wordsMet, hasHeaders, typoMet].filter(Boolean).length;
+      const pct = Math.round((completedCount / 4) * 100);
+
+      const progressFill = document.getElementById('checklist-progress-fill');
+      if (progressFill) {
+        progressFill.style.width = `${pct}%`;
+      }
+
+      const badge = document.getElementById('readiness-badge');
+      if (badge) {
+        if (completedCount === 4) {
+          badge.className = 'readiness-badge badge-success';
+          badge.textContent = 'Готово к публикации';
+        } else if (completedCount > 0) {
+          badge.className = 'readiness-badge badge-warning';
+          badge.textContent = `Черновик (${completedCount}/4)`;
+        } else {
+          badge.className = 'readiness-badge badge-muted';
+          badge.textContent = 'Черновик (0/4)';
+        }
+      }
     }
 
     showToast(message, type = 'info', duration = 3000) {
