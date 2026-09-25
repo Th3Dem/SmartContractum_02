@@ -1,0 +1,29 @@
+test_draft_object_schema (tests.test_editor_frontend.TestDraftStorageContract.test_draft_object_schema) ... ok
+test_html_export_structure (tests.test_editor_frontend.TestExportFormatConverters.test_html_export_structure)
+Verify complete HTML export document structure. ... ok
+test_json_export_structure (tests.test_editor_frontend.TestExportFormatConverters.test_json_export_structure)
+Verify the structured JSON schema exported by the editor. ... ok
+test_json_import_validation (tests.test_editor_frontend.TestExportFormatConverters.test_json_import_validation)
+Verify JSON import parsing with required fields. ... ok
+test_markdown_conversion_headings_and_styles (tests.test_editor_frontend.TestExportFormatConverters.test_markdown_conversion_headings_and_styles)
+Verify markdown conversion rules. ... ok
+test_markdown_tables_and_checklists (tests.test_editor_frontend.TestExportFormatConverters.test_markdown_tables_and_checklists)
+Verify markdown table format and checklists. ... ok
+test_required_css_files_exist (tests.test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_css_files_exist) ... ok
+test_required_html_files_exist (tests.test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_html_files_exist) ... ok
+test_required_js_modules_exist (tests.test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_js_modules_exist) ... ok
+test_vendor_libraries_exist_locally (tests.test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_vendor_libraries_exist_locally) ... ok
+test_zero_external_cdn_in_html (tests.test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_zero_external_cdn_in_html)
+Ensure no external http/https or // CDN references in editor.html or index.html. ... ok
+test_zero_external_fonts_or_imports_in_css (tests.test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_zero_external_fonts_or_imports_in_css)
+Ensure CSS files do not contain external @import or external url() references. ... ok
+test_preserve_safe_elements (tests.test_editor_frontend.TestHTMLSanitizationXSS.test_preserve_safe_elements) ... ok
+test_strip_iframe_and_object (tests.test_editor_frontend.TestHTMLSanitizationXSS.test_strip_iframe_and_object) ... ok
+test_strip_inline_event_handlers (tests.test_editor_frontend.TestHTMLSanitizationXSS.test_strip_inline_event_handlers) ... ok
+test_strip_javascript_pseudo_urls (tests.test_editor_frontend.TestHTMLSanitizationXSS.test_strip_javascript_pseudo_urls) ... ok
+test_strip_script_tags (tests.test_editor_frontend.TestHTMLSanitizationXSS.test_strip_script_tags) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.007s
+
+OK

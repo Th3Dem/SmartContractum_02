@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity Writer — Модульный автономный WYSIWYG редактор</title>
+
+  <!-- Local Stylesheets (100% Offline-First) -->
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/editor.css">
+
+  <style>
+    .welcome-container {
+      max-width: 900px;
+      margin: 60px auto;
+      padding: 0 24px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: var(--accent-subtle);
+      color: var(--accent-color);
+      border-radius: var(--radius-full);
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .hero-title {
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 60px;
+    }
+
+    .btn-hero {
+      padding: 14px 32px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      transition: all var(--transition-fast);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+      text-align: left;
+      margin-top: 40px;
+    }
+
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      transition: transform var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent-color);
+    }
+
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+    }
+
+    .feature-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .feature-desc {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <a href="index.html" class="brand">
+          <div class="brand-icon">AG</div>
+          <span>Antigravity Writer</span>
+        </a>
+      </div>
+      <div class="header-right">
+        <button id="btn-theme-toggle" class="btn btn-icon" title="Сменить тему">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        <a href="editor.html" class="btn btn-primary">Перейти в редактор →</a>
+      </div>
+    </header>
+
+    <main class="welcome-container">
+      <div class="hero-badge">100% Offline-First • Quill 2.0 • Референс Хабра</div>
+      <h1 class="hero-title">Профессиональный редактор статей и публикаций</h1>
+      <p class="hero-subtitle">
+        Создавайте глубокие материалы, документацию и лонгриды в комфортной среде с расширенными инструментами типографики, таблицами, блоками кода и спойлерами.
+      </p>
+
+      <div class="hero-actions">
+        <a href="editor.html" class="btn btn-primary btn-hero">Открыть редактор статей →</a>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <div class="feature-title">Чистая типографика Хабра</div>
+          <div class="feature-desc">Отдельный заголовок H1, выверенная ширина строки (820px), заголовки H2-H4, списки, чек-листы и блочные цитаты.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">✨</div>
+          <div class="feature-title">Плавающие инструменты</div>
+          <div class="feature-desc">Контекстная Bubble Toolbar при выделении текста и плавающая кнопка «+» для быстрой вставки любых структурных блоков.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <div class="feature-title">Интерактивные таблицы</div>
+          <div class="feature-desc">Создание таблиц любого размера, контекстное добавление и удаление строк и столбцов в один клик.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💻</div>
+          <div class="feature-title">Блоки кода и спойлеры</div>
+          <div class="feature-desc">Подсветка синтаксиса с Highlight.js, выбор языка программирования и складные спойлеры (&lt;details&gt;&lt;summary&gt;).</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <div class="feature-title">Автосохранение в IndexedDB</div>
+          <div class="feature-desc">Надежное сохранение черновиков каждые несколько секунд, история версий и моментальное восстановление при сбое.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <div class="feature-title">Импорт и экспорт</div>
+          <div class="feature-desc">Экспорт в чистый HTML, GitHub Flavored Markdown и структурированный JSON с защитой от XSS-атак.</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Theme toggle initialization
+    const savedTheme = localStorage.getItem('ag_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    const toggleBtn = document.getElementById('btn-theme-toggle');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('ag_theme', next);
+      });
+    }
+  </script>
+</body>
+</html>

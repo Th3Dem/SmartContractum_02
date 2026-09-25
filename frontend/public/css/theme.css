@@ -1,0 +1,152 @@
+/**
+ * Antigravity WYSIWYG Editor - Theme & Variables
+ * 100% Offline-First, Modern Clean Design
+ */
+
+:root {
+  /* Color Palette - Light Theme (Default) */
+  --bg-page: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-muted: #e2e8f0;
+  --bg-hover: #f1f5f9;
+  --bg-active: #e2e8f0;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-placeholder: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --border-color: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --border-focus: #3b82f6;
+
+  --accent-color: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: #eff6ff;
+  --accent-text: #1d4ed8;
+
+  --success-color: #10b981;
+  --success-subtle: #ecfdf5;
+  --warning-color: #f59e0b;
+  --warning-subtle: #fffbeb;
+  --danger-color: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-subtle: #fef2f2;
+
+  /* Code Block Colors */
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --code-border: #334155;
+  --inline-code-bg: #f1f5f9;
+  --inline-code-text: #e11d48;
+
+  /* Blockquote Colors */
+  --quote-border: #3b82f6;
+  --quote-bg: #f8fafc;
+  --quote-text: #334155;
+
+  /* Spoilers & Details */
+  --spoiler-bg: #f8fafc;
+  --spoiler-border: #cbd5e1;
+  --spoiler-header-hover: #f1f5f9;
+
+  /* Tables */
+  --table-border: #cbd5e1;
+  --table-header-bg: #f8fafc;
+  --table-row-alt: #f8fafc;
+  --table-cell-hover: #f1f5f9;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+
+  --line-height-body: 1.7;
+  --line-height-heading: 1.3;
+  --font-size-base: 17px;
+
+  /* Layout */
+  --max-reading-width: 820px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-page: #0f172a;
+  --bg-surface: #1e293b;
+  --bg-elevated: #334155;
+  --bg-subtle: #1e293b;
+  --bg-muted: #334155;
+  --bg-hover: #334155;
+  --bg-active: #475569;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-placeholder: #64748b;
+  --text-inverse: #0f172a;
+
+  --border-color: #334155;
+  --border-subtle: #1e293b;
+  --border-focus: #60a5fa;
+
+  --accent-color: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-subtle: #1e3a8a;
+  --accent-text: #93c5fd;
+
+  --success-color: #34d399;
+  --success-subtle: #064e3b;
+  --warning-color: #fbbf24;
+  --warning-subtle: #78350f;
+  --danger-color: #f87171;
+  --danger-hover: #ef4444;
+  --danger-subtle: #7f1d1d;
+
+  /* Code Block Colors */
+  --code-bg: #0b1120;
+  --code-text: #e2e8f0;
+  --code-border: #1e293b;
+  --inline-code-bg: #0f172a;
+  --inline-code-text: #fb7185;
+
+  /* Blockquote Colors */
+  --quote-border: #60a5fa;
+  --quote-bg: #1e293b;
+  --quote-text: #cbd5e1;
+
+  /* Spoilers & Details */
+  --spoiler-bg: #1e293b;
+  --spoiler-border: #334155;
+  --spoiler-header-hover: #334155;
+
+  /* Tables */
+  --table-border: #334155;
+  --table-header-bg: #1e293b;
+  --table-row-alt: #172033;
+  --table-cell-hover: #263449;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7);
+}
