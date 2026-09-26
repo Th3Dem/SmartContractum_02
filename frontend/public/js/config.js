@@ -1,0 +1,199 @@
+/**
+ * Antigravity WYSIWYG Editor - Centralized Publication Configuration
+ * Dictionaries for audiences, topics, formats, complexities, and limits.
+ * 100% offline-first. Strict Onest font family and no emojis.
+ */
+
+(function (window) {
+  'use strict';
+
+  const AUDIENCES = [
+    {
+      id: 'smart-contracts-dev',
+      title: 'Разработчики смарт-контрактов',
+      description: 'Создание, отладка, оптимизация и архитектура смарт-контрактов'
+    },
+    {
+      id: 'architects-integrators',
+      title: 'Архитекторы и интеграторы',
+      description: 'Проектирование распределенных систем, интеграция с внешними сервисами'
+    },
+    {
+      id: 'analysts',
+      title: 'Аналитики',
+      description: 'Системный и бизнес-анализ, формализация требований к логике сделок'
+    },
+    {
+      id: 'qa-engineers',
+      title: 'Тестировщики и инженеры качества',
+      description: 'Функциональное тестирование, верификация и тест-кейсы смарт-контрактов'
+    },
+    {
+      id: 'security-auditors',
+      title: 'Специалисты по ИБ и аудиторы',
+      description: 'Аудит безопасности, поиск уязвимостей и защита транзакций'
+    },
+    {
+      id: 'legal-compliance',
+      title: 'Юристы и специалисты по комплаенсу',
+      description: 'Правовой статус смарт-контрактов, регуляторные требования и комплаенс'
+    },
+    {
+      id: 'data-oracles',
+      title: 'Специалисты по данным и оракулам',
+      description: 'Поставка доверенных внешних данных, провайдеры оракулов и аналитика'
+    },
+    {
+      id: 'devops-sre',
+      title: 'Инженеры эксплуатации и DevOps/SRE',
+      description: 'Развертывание узлов, мониторинг, надежность и сопровождение инфраструктуры'
+    },
+    {
+      id: 'product-project-managers',
+      title: 'Руководители продуктов и проектов',
+      description: 'Управление продуктом, roadmap, метрики эффективности и внедрения'
+    },
+    {
+      id: 'business-users',
+      title: 'Бизнес-заказчики и пользователи',
+      description: 'Практическая польза, бизнес-сценарии и экономический эффект'
+    }
+  ];
+
+  const TOPICS = [
+    { id: 'pksc-architecture', title: 'Архитектура и развитие ПКСК' },
+    { id: 'smart-contracts-development', title: 'Разработка смарт-контрактов' },
+    { id: 'business-logic-deals', title: 'Бизнес-логика и моделирование сделок' },
+    { id: 'testing-and-quality', title: 'Тестирование и качество' },
+    { id: 'information-security', title: 'Информационная безопасность' },
+    { id: 'audit-and-verification', title: 'Аудит и проверка смарт-контрактов' },
+    { id: 'law-and-compliance', title: 'Право и комплаенс' },
+    { id: 'oracles-and-data', title: 'Оракулы и доверенные внешние данные' },
+    { id: 'integrations-and-api', title: 'Интеграции и API' },
+    { id: 'digital-ruble-payments', title: 'Цифровой рубль и программируемые расчеты' },
+    { id: 'lifecycle-versioning', title: 'Жизненный цикл и версии смарт-контрактов' },
+    { id: 'infrastructure-operations', title: 'Инфраструктура и эксплуатация' },
+    { id: 'business-cases-adoption', title: 'Бизнес-сценарии и внедрение' }
+  ];
+
+  const FORMATS = [
+    {
+      id: 'tutorial',
+      title: 'Туториал',
+      description: 'Пошаговое практическое руководство по решению конкретной задачи'
+    },
+    {
+      id: 'retrospective',
+      title: 'Ретроспектива',
+      description: 'Разбор завершенного проекта, выводы, ошибки и извлеченные уроки'
+    },
+    {
+      id: 'opinion',
+      title: 'Мнение',
+      description: 'Авторский взгляд на тренды, спорные вопросы и развитие технологий'
+    },
+    {
+      id: 'interview',
+      title: 'Интервью',
+      description: 'Беседа с экспертом отрасли, разработчиком или участником команды'
+    },
+    {
+      id: 'reportage',
+      title: 'Репортаж',
+      description: 'Освещение отраслевого события, хакатона, конференции или релиза'
+    },
+    {
+      id: 'case-study',
+      title: 'Кейс',
+      description: 'Реальный пример внедрения решения с описанием результатов и метрик'
+    },
+    {
+      id: 'roadmap',
+      title: 'Roadmap',
+      description: 'Стратегический план развития технологии, архитектуры или продукта'
+    },
+    {
+      id: 'review',
+      title: 'Обзор',
+      description: 'Сравнительный анализ инструментов, библиотек, фреймворков или подходов'
+    },
+    {
+      id: 'faq',
+      title: 'FAQ',
+      description: 'Ответы на часто задаваемые вопросы с практическими пояснениями'
+    },
+    {
+      id: 'digest',
+      title: 'Дайджест',
+      description: 'Тематическая подборка актуальных новостей, статей и материалов'
+    },
+    {
+      id: 'analytics',
+      title: 'Аналитика',
+      description: 'Глубокое исследование рынка, статистических данных или стека технологий'
+    }
+  ];
+
+  const COMPLEXITIES = [
+    {
+      id: 'none',
+      title: 'Не указан',
+      description: 'Материал подходит для широкого круга читателей без требований к опыту'
+    },
+    {
+      id: 'easy',
+      title: 'Простой',
+      description: 'Базовые понятия и концепции, подходит начинающим специалистам'
+    },
+    {
+      id: 'medium',
+      title: 'Средний',
+      description: 'Требуется понимание базовых технологий и практический опыт'
+    },
+    {
+      id: 'hard',
+      title: 'Сложный',
+      description: 'Глубокий технический анализ для опытных экспертов и разработчиков'
+    }
+  ];
+
+  const LIMITS = {
+    KEYWORDS_MIN: 1,
+    KEYWORDS_MAX: 10,
+    KEYWORD_MAX_LEN: 60,
+    TOPICS_MIN: 1,
+    TOPICS_MAX: 5,
+    DESCRIPTION_MIN: 50,
+    DESCRIPTION_MAX: 500,
+    COVER_MAX_BYTES: 10 * 1024 * 1024, // 10MB
+    COVER_WIDTH: 780,
+    COVER_HEIGHT: 440
+  };
+
+  const PublicationConfig = {
+    AUDIENCES,
+    TOPICS,
+    FORMATS,
+    COMPLEXITIES,
+    LIMITS,
+
+    getAudienceById(id) {
+      return AUDIENCES.find(a => a.id === id) || null;
+    },
+
+    getTopicById(id) {
+      return TOPICS.find(t => t.id === id) || null;
+    },
+
+    getFormatById(id) {
+      return FORMATS.find(f => f.id === id) || null;
+    },
+
+    getComplexityById(id) {
+      return COMPLEXITIES.find(c => c.id === id) || null;
+    }
+  };
+
+  window.PublicationConfig = PublicationConfig;
+
+})(window);

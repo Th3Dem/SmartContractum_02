@@ -20,6 +20,7 @@
       this.Media = null;
       this.Drafts = null;
       this.Converter = null;
+      this.Publication = null;
 
       this.init();
     }
@@ -45,6 +46,10 @@
       this.Media = new window.MediaManager(this.editor);
       this.Converter = new window.Converter(this.editor, this.titleInput);
       this.Drafts = new window.DraftsManager(this.editor, this.titleInput);
+      if (window.PublicationManager) {
+        this.Publication = new window.PublicationManager(this.editor, this.titleInput);
+        window.publicationManager = this.Publication;
+      }
       if (window.NodeControlsManager) {
         this.NodeControls = new window.NodeControlsManager(this.editor);
       }
@@ -164,6 +169,9 @@
       this.titleInput.addEventListener('input', () => {
         this.adjustTitleHeight();
         this.updateDocumentTitle();
+        if (this.Publication) {
+          this.Publication.updateReadinessUI();
+        }
       });
 
       this.titleInput.addEventListener('keydown', (e) => {
@@ -193,6 +201,9 @@
     bindStats() {
       this.editor.on('text-change', () => {
         this.updateStats();
+        if (this.Publication) {
+          this.Publication.updateReadinessUI();
+        }
       });
       this.updateStats();
     }
@@ -217,8 +228,19 @@
        ========================================================================== */
     bindModals() {
       // Close modal on click on overlay or close button
+      // Note: publication-modal backdrop click does NOT close modal (spec requirement)
       document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
+          if (modal.id === 'publication-modal') {
+            if (e.target.closest('.modal-close-btn') || e.target.closest('[data-modal-close]')) {
+              if (this.Publication) {
+                this.Publication.closeModal(true);
+              } else {
+                modal.classList.remove('show');
+              }
+            }
+            return;
+          }
           if (e.target === modal || e.target.closest('.modal-close-btn') || e.target.closest('[data-modal-close]')) {
             modal.classList.remove('show');
           }

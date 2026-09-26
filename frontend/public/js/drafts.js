@@ -134,6 +134,13 @@
       const chars = text.length;
       const readingTime = Math.max(1, Math.ceil(words / 200));
 
+      let publicationSettings = null;
+      if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.getSettings === 'function') {
+        publicationSettings = window.EditorApp.Publication.getSettings();
+      } else if (window.publicationManager && typeof window.publicationManager.getSettings === 'function') {
+        publicationSettings = window.publicationManager.getSettings();
+      }
+
       const draft = {
         id: this.currentDraftId,
         schema: 'antigravity-editor-v2',
@@ -144,6 +151,7 @@
         wordCount: words,
         charCount: chars,
         readingTime: readingTime,
+        publicationSettings: publicationSettings,
         updatedAt: Date.now()
       };
 
@@ -258,6 +266,21 @@
         this.editor.root.innerHTML = draft.html;
       }
 
+      // Restore publication settings or reset if not present (backward compatibility)
+      if (draft.publicationSettings) {
+        if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.loadSettings === 'function') {
+          window.EditorApp.Publication.loadSettings(draft.publicationSettings);
+        } else if (window.publicationManager && typeof window.publicationManager.loadSettings === 'function') {
+          window.publicationManager.loadSettings(draft.publicationSettings);
+        }
+      } else {
+        if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.resetSettings === 'function') {
+          window.EditorApp.Publication.resetSettings();
+        } else if (window.publicationManager && typeof window.publicationManager.resetSettings === 'function') {
+          window.publicationManager.resetSettings();
+        }
+      }
+
       this.setSavingStatus(false);
 
       if (notify && window.EditorApp && window.EditorApp.showToast) {
@@ -277,6 +300,14 @@
       }
 
       this.editor.setText('');
+
+      // Reset publication settings for new draft
+      if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.resetSettings === 'function') {
+        window.EditorApp.Publication.resetSettings();
+      } else if (window.publicationManager && typeof window.publicationManager.resetSettings === 'function') {
+        window.publicationManager.resetSettings();
+      }
+
       this.setSavingStatus(false);
 
       if (this.draftsModal) {

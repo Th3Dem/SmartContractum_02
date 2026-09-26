@@ -60,6 +60,14 @@
       </div>
 
       <div class="header-right">
+        <!-- Next to Settings Button (Publication) -->
+        <button type="button" class="btn btn-primary btn-next-settings" id="btn-next-to-settings" title="Добавьте заголовок и текст статьи" disabled>
+          <span>Далее к настройкам</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+
         <!-- Import / Export Dropdown -->
         <div class="dropdown-wrapper" id="dropdown-export-wrapper">
           <button type="button" class="btn btn-primary dropdown-toggle" id="btn-export-dropdown" title="Экспорт и импорт статьи">
@@ -1171,6 +1179,227 @@
       </div>
     </div>
 
+    <!-- 12. Publication Settings Modal -->
+    <div id="publication-modal" class="modal-overlay pub-modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pub-modal-title">
+      <div class="modal-card pub-modal-card">
+        <!-- Sticky Header -->
+        <div class="modal-header pub-modal-header">
+          <div class="pub-header-content">
+            <h2 class="modal-title pub-modal-title" id="pub-modal-title">Настройки публикации</h2>
+            <div class="pub-modal-subtitle">Подготовка статьи к отправке в ленту сообщества</div>
+          </div>
+          <button class="modal-close-btn" id="pub-modal-close-btn" aria-label="Закрыть окно настроек">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Scrollable Body with 6 Sections in Exact Order -->
+        <div class="modal-body pub-modal-body">
+          <!-- 1. Целевая аудитория -->
+          <section class="pub-section" id="pub-section-audience">
+            <div class="pub-section-header">
+              <span class="pub-section-num">1</span>
+              <div>
+                <h3 class="pub-section-title">Целевая аудитория <span class="pub-required">*</span></h3>
+                <p class="pub-section-hint">Для кого в первую очередь написана статья? Выбор поможет распределять материалы по потокам и учитывать интересы читателей.</p>
+              </div>
+            </div>
+            <div class="pub-search-wrapper">
+              <svg class="pub-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="pub-audience-search" class="pub-search-input" placeholder="Поиск аудитории..." autocomplete="off">
+            </div>
+            <div id="pub-audience-list" class="pub-audience-grid" role="radiogroup" aria-label="Целевая аудитория"></div>
+            <div id="pub-audience-error" class="pub-field-error" aria-live="polite"></div>
+          </section>
+
+          <!-- 2. Темы публикации -->
+          <section class="pub-section" id="pub-section-topics">
+            <div class="pub-section-header">
+              <span class="pub-section-num">2</span>
+              <div>
+                <div class="pub-title-row">
+                  <h3 class="pub-section-title">Темы публикации <span class="pub-required">*</span></h3>
+                  <span class="pub-counter"><span id="pub-topics-count">0</span> из 5</span>
+                </div>
+                <p class="pub-section-hint">Выберите от 1 до 5 ключевых направлений статьи для тематической классификации.</p>
+              </div>
+            </div>
+            <div id="pub-topics-selected" class="pub-chips-container"></div>
+            <div class="pub-search-wrapper" style="margin-top: 10px;">
+              <svg class="pub-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="pub-topics-search" class="pub-search-input" placeholder="Поиск темы для добавления..." autocomplete="off">
+            </div>
+            <div id="pub-topics-available" class="pub-topics-pills-grid"></div>
+            <div id="pub-topics-error" class="pub-field-error" aria-live="polite"></div>
+          </section>
+
+          <!-- 3. Ключевые слова -->
+          <section class="pub-section" id="pub-section-keywords">
+            <div class="pub-section-header">
+              <span class="pub-section-num">3</span>
+              <div>
+                <div class="pub-title-row">
+                  <h3 class="pub-section-title">Ключевые слова <span class="pub-required">*</span></h3>
+                  <span class="pub-counter"><span id="pub-keywords-count">0</span> из 10</span>
+                </div>
+                <p class="pub-section-hint">Укажите от 1 до 10 ключевых фраз (до 60 символов на фразу). Разделяйте запятой или клавишей Enter. Например: безопасная сделка, оракулы, аудит кода.</p>
+              </div>
+            </div>
+            <div id="pub-keywords-container" class="pub-keywords-input-box">
+              <input type="text" id="pub-keywords-input" class="pub-keyword-field" placeholder="Введите метку и нажмите Enter или запятую..." autocomplete="off">
+            </div>
+            <div id="pub-keywords-error" class="pub-field-error" aria-live="polite"></div>
+          </section>
+
+          <!-- 4. Формат публикации -->
+          <section class="pub-section" id="pub-section-format">
+            <div class="pub-section-header">
+              <span class="pub-section-num">4</span>
+              <div>
+                <h3 class="pub-section-title">Формат публикации</h3>
+                <p class="pub-section-hint">Определяет подачу материала (необязательное поле). По умолчанию «Не указан».</p>
+              </div>
+            </div>
+            <div id="pub-format-options" class="pub-format-grid"></div>
+          </section>
+
+          <!-- 5. Уровень сложности -->
+          <section class="pub-section" id="pub-section-complexity">
+            <div class="pub-section-header">
+              <span class="pub-section-num">5</span>
+              <div>
+                <h3 class="pub-section-title">Уровень сложности</h3>
+                <p class="pub-section-hint">Помогает читателю оценить порог входа для понимания материала.</p>
+              </div>
+            </div>
+            <div id="pub-complexity-options" class="pub-segmented-control" role="radiogroup">
+              <button type="button" class="pub-segment-btn is-active" data-complexity="none">Не указан</button>
+              <button type="button" class="pub-segment-btn" data-complexity="easy">Простой</button>
+              <button type="button" class="pub-segment-btn" data-complexity="medium">Средний</button>
+              <button type="button" class="pub-segment-btn" data-complexity="hard">Сложный</button>
+            </div>
+            <div id="pub-complexity-desc" class="pub-complexity-hint">Материал подходит для широкого круга читателей без требований к опыту</div>
+          </section>
+
+          <!-- 6. Отображение в ленте -->
+          <section class="pub-section" id="pub-section-feed">
+            <div class="pub-section-header">
+              <span class="pub-section-num">6</span>
+              <div>
+                <h3 class="pub-section-title">Отображение в ленте</h3>
+                <p class="pub-section-hint">Настройте обложку и краткое описание статьи, а также проверьте вид карточки в ленте.</p>
+              </div>
+            </div>
+
+            <!-- Cover Image Upload & Canvas Cropper -->
+            <div class="pub-subsection">
+              <h4 class="pub-subsection-title">Обложка статьи</h4>
+              <p class="pub-subsection-hint">Рекомендуемый размер: 780×440 px (соотношение 39:22). Форматы: PNG, JPG, WebP, GIF (до 10 МБ).</p>
+              
+              <div id="pub-cover-dropzone" class="pub-dropzone">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pub-dropzone-icon">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <div class="pub-dropzone-title">Перетащите изображение сюда или <span class="pub-dropzone-link">выберите файл</span></div>
+                <div class="pub-dropzone-sub">PNG, JPG, WebP, GIF до 10 МБ</div>
+              </div>
+              <input type="file" id="pub-cover-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display: none;">
+
+              <!-- Cropper Container -->
+              <div id="pub-cropper-wrapper" class="pub-cropper-wrapper">
+                <div class="pub-cropper-header">
+                  <span class="pub-cropper-title">Кадрирование обложки (780×440)</span>
+                  <div class="pub-cropper-zoom-box">
+                    <span>Масштаб:</span>
+                    <input type="range" id="pub-cropper-zoom" min="1" max="3" step="0.05" value="1">
+                  </div>
+                </div>
+                <div class="pub-cropper-canvas-box">
+                  <canvas id="pub-cropper-canvas" width="780" height="440"></canvas>
+                </div>
+                <div class="pub-cropper-actions">
+                  <button type="button" id="pub-cropper-cancel-btn" class="btn">Отмена</button>
+                  <button type="button" id="pub-cropper-apply-btn" class="btn btn-primary">Применить кадрирование</button>
+                </div>
+              </div>
+
+              <!-- Cover Preview with Actions -->
+              <div id="pub-cover-preview-wrapper" class="pub-cover-preview-box" style="display: none;">
+                <div class="pub-cover-img-frame">
+                  <img id="pub-cover-img" src="" alt="Обложка">
+                </div>
+                <div class="pub-cover-toolbar">
+                  <button type="button" id="pub-cover-crop-btn" class="btn btn-sm">Кадрировать</button>
+                  <button type="button" id="pub-cover-replace-btn" class="btn btn-sm">Заменить</button>
+                  <button type="button" id="pub-cover-delete-btn" class="btn btn-sm text-danger">Удалить</button>
+                </div>
+              </div>
+
+              <div id="pub-cover-notice" class="pub-field-notice" aria-live="polite"></div>
+              <div id="pub-cover-warning" class="pub-field-warning" aria-live="polite"></div>
+              <div id="pub-cover-error" class="pub-field-error" aria-live="polite"></div>
+            </div>
+
+            <!-- Description -->
+            <div class="pub-subsection">
+              <div class="pub-title-row">
+                <h4 class="pub-subsection-title">Краткое описание <span class="pub-required">*</span></h4>
+                <span class="pub-counter"><span id="pub-desc-count">0</span> / 500</span>
+              </div>
+              <p class="pub-subsection-hint">Текст от 50 до 500 символов, отображаемый под заголовком в ленте. Автоматически извлекается из первого абзаца статьи.</p>
+              <textarea id="pub-description" class="pub-textarea" rows="4" placeholder="Введите краткое описание публикации (от 50 до 500 символов)..."></textarea>
+              <div id="pub-desc-error" class="pub-field-error" aria-live="polite"></div>
+            </div>
+
+            <!-- Live Card Preview -->
+            <div class="pub-subsection">
+              <h4 class="pub-subsection-title">Живой предпросмотр карточки статьи</h4>
+              <p class="pub-subsection-hint">Так ваша статья будет выглядеть в ленте публикаций.</p>
+              <div class="pub-card-preview-container">
+                <article class="pub-feed-card" id="pub-card-preview">
+                  <div class="pub-feed-card-cover" id="preview-card-cover" style="display: none;"></div>
+                  <div class="pub-feed-card-body">
+                    <div class="pub-feed-card-meta" id="preview-card-badges">
+                      <span class="pub-badge pub-badge-format" id="preview-card-badge-format" style="display: none;"></span>
+                      <span class="pub-badge" id="preview-card-badge-complexity" style="display: none;"></span>
+                      <span class="pub-feed-card-time" id="preview-card-time">~1 мин чтения</span>
+                    </div>
+                    <h3 class="pub-feed-card-title" id="preview-card-title">Заголовок публикации</h3>
+                    <p class="pub-feed-card-desc" id="preview-card-desc">Краткое описание публикации появится здесь...</p>
+                    <div class="pub-feed-card-footer">
+                      <span class="pub-feed-card-link">
+                        <span>Читать далее</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Sticky Footer -->
+        <div class="modal-footer pub-modal-footer">
+          <button type="button" class="btn pub-btn-secondary" id="btn-pub-back">Назад к статье</button>
+          <button type="button" class="btn btn-primary pub-btn-submit" id="btn-pub-submit">Отправить на модерацию</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
   </div>
@@ -1180,16 +1409,18 @@
   <script src="vendor/quill/quill.js"></script>
 
   <!-- Modular Application Scripts -->
-  <script src="js/core.js?v=2"></script>
-  <script src="js/toolbar.js?v=2"></script>
-  <script src="js/bubble.js?v=2"></script>
-  <script src="js/blocks.js?v=2"></script>
-  <script src="js/table.js?v=2"></script>
-  <script src="js/media.js?v=2"></script>
-  <script src="js/converter.js?v=2"></script>
-  <script src="js/drafts.js?v=2"></script>
-  <script src="js/typograph.js?v=2"></script>
-  <script src="js/node-controls.js?v=2"></script>
-  <script src="js/main.js?v=2"></script>
+  <script src="js/core.js?v=3"></script>
+  <script src="js/toolbar.js?v=3"></script>
+  <script src="js/bubble.js?v=3"></script>
+  <script src="js/blocks.js?v=3"></script>
+  <script src="js/table.js?v=3"></script>
+  <script src="js/media.js?v=3"></script>
+  <script src="js/config.js?v=3"></script>
+  <script src="js/converter.js?v=3"></script>
+  <script src="js/drafts.js?v=3"></script>
+  <script src="js/publication.js?v=3"></script>
+  <script src="js/typograph.js?v=3"></script>
+  <script src="js/node-controls.js?v=3"></script>
+  <script src="js/main.js?v=3"></script>
 </body>
 </html>

@@ -435,13 +435,19 @@
       const html = this.sanitizeHTML(this.editor.root.innerHTML);
       const text = this.editor.getText().trim();
       const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
-      const chars = text.length;
+      let publicationSettings = null;
+      if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.getSettings === 'function') {
+        publicationSettings = window.EditorApp.Publication.getSettings();
+      } else if (window.publicationManager && typeof window.publicationManager.getSettings === 'function') {
+        publicationSettings = window.publicationManager.getSettings();
+      }
 
       const doc = {
         schema: 'antigravity-editor-v2',
         title: title,
         contents: delta,
         html: html,
+        publicationSettings: publicationSettings,
         metadata: {
           wordCount: words,
           charCount: chars,
@@ -477,6 +483,15 @@
           this.editor.root.innerHTML = this.sanitizeHTML(data.html);
         } else {
           throw new Error('JSON не содержит полей "contents" или "html"');
+        }
+
+        // Restore publicationSettings if present
+        if (data.publicationSettings) {
+          if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.loadSettings === 'function') {
+            window.EditorApp.Publication.loadSettings(data.publicationSettings);
+          } else if (window.publicationManager && typeof window.publicationManager.loadSettings === 'function') {
+            window.publicationManager.loadSettings(data.publicationSettings);
+          }
         }
 
         if (window.EditorApp && window.EditorApp.showToast) {
