@@ -2411,12 +2411,6 @@ body.preview-mode .editor-card {
 }
 
 @media (max-width: 600px) {
-  .app-header {
-    padding: 0 12px;
-  }
-  .brand-title {
-    display: none;
-  }
   .editor-card {
     padding: 24px 16px;
   }
@@ -3461,13 +3455,6 @@ body.modal-open {
     radial-gradient(circle at 10% 10%, rgba(56, 97, 251, 0.05) 0%, transparent 40%),
     radial-gradient(circle at 90% 90%, rgba(22, 199, 132, 0.04) 0%, transparent 40%);
   background-attachment: fixed;
-}
-
-[data-theme="dark"] .app-header {
-  background: rgba(11, 20, 38, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="dark"] #editor-card,

@@ -1,0 +1,27 @@
+=== DEV CHECKS: task-21-rebuild-unified-header-menu ===
+[PASS] Header extracted from frontend/public/index.html
+[PASS] Header extracted from frontend/public/feed.html
+[PASS] Header extracted from frontend/public/editor.html
+[PASS] Normalized markup index.html == feed.html (100% symbol-for-symbol identical)
+[PASS] Normalized markup index.html == editor.html (100% symbol-for-symbol identical)
+[PASS] index.html: navIndex is active (class="nav-link active is-active")
+[PASS] index.html: navCommunity is inactive (class="nav-link")
+[PASS] index.html: navEditor is inactive (class="nav-link")
+[PASS] feed.html: navIndex is inactive (class="nav-link")
+[PASS] feed.html: navCommunity is active (class="nav-link active is-active")
+[PASS] feed.html: navEditor is inactive (class="nav-link")
+[PASS] editor.html: navIndex is inactive (class="nav-link")
+[PASS] editor.html: navCommunity is inactive (class="nav-link")
+[PASS] editor.html: navEditor is active (class="nav-link active is-active")
+[PASS] theme.css: .header-container has strict 3-col anti-shift grid (260px 1fr 260px)
+[PASS] theme.css: .brand-logo justify-self: start
+[PASS] theme.css: .header-nav justify-self: center
+[PASS] theme.css: .header-right-group justify-self: end, gap: 14px
+[PASS] theme.css: .nav-list gap: 8px
+[PASS] theme.css: .nav-link padding: 8px 16px, border-radius: 8px, font-size: 0.92rem, font-weight: 600
+[PASS] frontend/public/css/editor.css: Zero header class overrides detected
+[PASS] frontend/public/css/feed.css: Zero header class overrides detected
+[PASS] frontend/public/index.html: 0 emojis confirmed
+[PASS] frontend/public/feed.html: 0 emojis confirmed
+[PASS] frontend/public/editor.html: 0 emojis confirmed
+[PASS] frontend/public/css/theme.css: 0 emojis confirmed

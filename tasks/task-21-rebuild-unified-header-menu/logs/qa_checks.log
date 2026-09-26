@@ -1,0 +1,25 @@
+QA Check Log: task-21-rebuild-unified-header-menu
+Date: 2026-09-26
+
+1. Diff Boundaries:
+Files changed:
+frontend/public/css/editor.css
+frontend/public/css/theme.css
+frontend/public/editor.html
+frontend/public/feed.html
+frontend/public/index.html
+tests/test_feed_page_and_palette.py
+
+All modified files are allowed. `editor.css` cleanup of overrides is acceptable.
+Diff Snapshot Hash: dcdbe1e87b0e7700d2ef844223acb05e853ed0d51f35828d6d0d562369a1e94f
+
+2. Tests Execution:
+All tests passed (186/186 PASS, 0 FAILURES, 0 ERRORS).
+
+3. Criteria Audit:
+- Header structures in `index.html`, `feed.html`, and `editor.html` are cleanly refactored and 100% identical structurally.
+- Navigation includes "Главная", "Сообщество", and "Редактор" linking correctly to `#navIndex`, `#navCommunity`, and `#navEditor`.
+- Active classes are correctly placed (`active is-active`) in each respective HTML file.
+- Header layout is 3-column grid (`grid-template-columns: 260px 1fr 260px`) and navigation is centered (`justify-self: center`).
+
+Verdict: PASS

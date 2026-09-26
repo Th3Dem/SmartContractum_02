@@ -256,7 +256,7 @@ body {
 }
 
 .header-container {
-  max-width: var(--max-width, 1360px);
+  max-width: 1360px;
   height: 100%;
   margin: 0 auto;
   padding: 0 24px;
@@ -361,7 +361,7 @@ body {
 .nav-list {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -375,8 +375,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  border-radius: 8px;
   color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: 0.92rem;

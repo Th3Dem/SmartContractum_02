@@ -31,91 +31,101 @@
          1. TOP STICKY HEADER (Unified Design System)
     ================================================================= -->
     <header class="app-header" id="appHeader">
-      <div class="header-container">
-        <!-- Brand Logo -->
-        <a href="index.html" class="brand-logo" aria-label="SmartContractum Главная" title="На главную">
-          <div class="logo-icon-box" aria-hidden="true">
-            <svg class="smart-contract-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="scDocGradFeedUnified" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#38bdf8"></stop>
-                  <stop offset="0.5" stop-color="#6188ff"></stop>
-                  <stop offset="1" stop-color="#16c784"></stop>
-                </linearGradient>
-              </defs>
-              <path d="M7 3.5h11.5l7.5 7.5v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z" fill="rgba(56, 189, 248, 0.06)" stroke="url(#scDocGradFeedUnified)" stroke-width="1.8" stroke-linejoin="round"></path>
-              <path d="M18.5 3.5v6a1.5 1.5 0 0 0 1.5 1.5h6" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
-              <line x1="9.5" y1="12.5" x2="15.5" y2="12.5" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"></line>
-              <line x1="9.5" y1="17.5" x2="19.5" y2="17.5" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round"></line>
-              <line x1="9.5" y1="22.5" x2="16.5" y2="22.5" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round"></line>
-              <circle cx="23" cy="23" r="5" fill="#0b1426" stroke="#16c784" stroke-width="1.8"></circle>
-              <path d="M21 23l1.5 1.5 3-3" stroke="#16c784" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-          </div>
-          <div class="logo-text-group">
-            <span class="logo-title"><span class="logo-smart">Smart</span><span class="logo-contractum">Contractum</span></span>
-          </div>
-        </a>
-
-        <!-- Navigation Links (2 items: Главная, Редактор) -->
-        <nav class="header-nav" id="headerNav" aria-label="Основная навигация">
-          <ul class="nav-list">
-            <li class="nav-item">
-              <a href="index.html" class="nav-link" id="navIndex">
-                <span class="nav-icon-box">
-                  <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
-                  </svg>
-                </span>
-                <span class="nav-text">Главная</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="editor.html" class="nav-link" id="navEditor">
-                <span class="nav-icon-box">
-                  <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
-                  </svg>
-                </span>
-                <span class="nav-text">Редактор</span>
-              </a>
-            </li>
-          </ul>
-        </nav>
-
-        <!-- Header Right Group: Theme Switcher + Auth -->
-        <div class="header-right-group">
-          <!-- Theme Toggle Switch (Dark / Light Tumbler) -->
-          <button type="button" class="btn-theme-toggle" id="btnThemeToggle" role="switch" aria-checked="false" title="Переключить тему оформления" aria-label="Переключить тему оформления">
-            <span class="theme-toggle-track" aria-hidden="true">
-              <span class="theme-toggle-thumb">
-                <svg class="theme-icon-moon" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-                </svg>
-                <svg class="theme-icon-sun" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
-                </svg>
-              </span>
-            </span>
-          </button>
-
-          <!-- User Login / Profile Action Button (Header Session State) -->
-          <div class="header-user-bar">
-            <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
-              <div class="btn-user-avatar-wrap" aria-hidden="true">
-                <svg class="btn-user-svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
-                </svg>
-                <span class="btn-user-status-dot" id="headerUserDot" title="Верифицирован в ПКСК" style="display: none;"></span>
-              </div>
-              <span class="btn-user-label" id="headerUserLabel">Войти / Регистрация</span>
-              <svg class="btn-user-arrow" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 010-1.06z" clip-rule="evenodd"></path>
-              </svg>
+        <div class="header-container">
+            <!-- Brand Logo -->
+            <a href="index.html" class="brand-logo" aria-label="SmartContractum Главная" title="На главную">
+                <div class="logo-icon-box" aria-hidden="true">
+                    <svg class="smart-contract-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="scDocGradFeedUnified" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#38bdf8"></stop>
+                                <stop offset="0.5" stop-color="#6188ff"></stop>
+                                <stop offset="1" stop-color="#16c784"></stop>
+                            </linearGradient>
+                        </defs>
+                        <path d="M7 3.5h11.5l7.5 7.5v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z" fill="rgba(56, 189, 248, 0.06)" stroke="url(#scDocGradFeedUnified)" stroke-width="1.8" stroke-linejoin="round"></path>
+                        <path d="M18.5 3.5v6a1.5 1.5 0 0 0 1.5 1.5h6" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                        <line x1="9.5" y1="12.5" x2="15.5" y2="12.5" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"></line>
+                        <line x1="9.5" y1="17.5" x2="19.5" y2="17.5" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round"></line>
+                        <line x1="9.5" y1="22.5" x2="16.5" y2="22.5" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round"></line>
+                        <circle cx="23" cy="23" r="5" fill="#0b1426" stroke="#16c784" stroke-width="1.8"></circle>
+                        <path d="M21 23l1.5 1.5 3-3" stroke="#16c784" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </div>
+                <div class="logo-text-group">
+                    <span class="logo-title"><span class="logo-smart">Smart</span><span class="logo-contractum">Contractum</span></span>
+                </div>
             </a>
-          </div>
+
+            <!-- Navigation Links (3 items: Главная, Сообщество, Редактор) -->
+            <nav class="header-nav" id="headerNav" aria-label="Основная навигация">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="index.html" class="nav-link" id="navIndex">
+                            <span class="nav-icon-box">
+                                <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Главная</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="feed.html" class="nav-link active is-active" id="navCommunity">
+                            <span class="nav-icon-box">
+                                <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Сообщество</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="editor.html" class="nav-link" id="navEditor">
+                            <span class="nav-icon-box">
+                                <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Редактор</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Header Right Group: Theme Switcher + Auth -->
+            <div class="header-right-group">
+                <!-- Theme Toggle Switch (Dark / Light Tumbler) -->
+                <button type="button" class="btn-theme-toggle" id="btnThemeToggle" role="switch" aria-checked="false" title="Переключить тему оформления" aria-label="Переключить тему оформления">
+                    <span class="theme-toggle-track" aria-hidden="true">
+                        <span class="theme-toggle-thumb">
+                            <svg class="theme-icon-moon" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                            </svg>
+                            <svg class="theme-icon-sun" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+                            </svg>
+                        </span>
+                    </span>
+                </button>
+
+                <!-- User Login / Profile Action Button (Header Session State) -->
+                <div class="header-user-bar">
+                    <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
+                        <div class="btn-user-avatar-wrap" aria-hidden="true">
+                            <svg class="btn-user-svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="btn-user-status-dot" id="headerUserDot" title="Верифицирован в ПКСК" style="display: none;"></span>
+                        </div>
+                        <span class="btn-user-label" id="headerUserLabel">Войти / Регистрация</span>
+                        <svg class="btn-user-arrow" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 010-1.06z" clip-rule="evenodd"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
         </div>
-      </div>
     </header>
 
     <!-- ================================================================
