@@ -139,13 +139,11 @@
     }
 
     bindInlineSpoilerInteraction() {
-      // In preview mode, clicking an inline spoiler reveals / hides it
+      // Clicking an inline spoiler toggles reveal / hide in all modes (edit and preview)
       this.editor.root.addEventListener('click', (e) => {
-        if (this.mode === 'preview') {
-          const spoiler = e.target.closest('.editor-inline-spoiler');
-          if (spoiler) {
-            spoiler.classList.toggle('is-revealed');
-          }
+        const spoiler = e.target.closest('.editor-inline-spoiler');
+        if (spoiler) {
+          spoiler.classList.toggle('is-revealed');
         }
       });
     }

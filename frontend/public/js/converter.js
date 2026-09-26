@@ -140,7 +140,7 @@
     h2 { font-size: 1.75rem; font-weight: 700; margin-top: 1.8em; margin-bottom: 0.6em; }
     h3 { font-size: 1.35rem; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; }
     h4 { font-size: 1.15rem; font-weight: 600; margin-top: 1.3em; margin-bottom: 0.5em; }
-    pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; }
+    pre { background: #f8f9fa; color: #24292f; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; }
     blockquote { border-left: 4px solid #2563eb; margin: 1.5em 0; padding: 10px 18px; background: #f8fafc; font-style: italic; }
     table { width: 100%; border-collapse: collapse; margin: 1.5em 0; }
     th, td { border: 1px solid #d1d5db; padding: 8px 12px; }
@@ -275,7 +275,7 @@
           }
           case 'details': {
             const summary = node.querySelector('summary');
-            const summaryText = summary ? summary.textContent.trim() : 'Спойлер';
+            const summaryText = (summary && summary.textContent.trim()) ? summary.textContent.trim() : 'Спойлер';
             const bodyEl = node.querySelector('.editor-spoiler-body') || node;
             const bodyClone = bodyEl.cloneNode(true);
             const sumInClone = bodyClone.querySelector('summary');

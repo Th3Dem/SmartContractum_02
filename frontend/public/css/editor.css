@@ -511,17 +511,55 @@ a:hover {
   font-size: 0.88em;
 }
 
+.ql-snow .ql-editor .ql-code-block-container,
+.ql-editor .ql-code-block-container,
 .ql-editor pre.ql-syntax {
   background-color: var(--code-bg);
   color: var(--code-text);
   border: 1px solid var(--code-border);
   border-radius: var(--radius-md);
-  padding: 16px;
-  overflow-x: auto;
+  padding: 14px 18px;
   font-family: var(--font-mono);
   font-size: 0.9rem;
   line-height: 1.55;
-  margin: 1.5em 0;
+  margin: 2.2em 0 1.2em 0;
+  position: relative;
+  overflow: visible;
+}
+
+.ql-code-block-container select.ql-ui,
+.ql-snow .ql-editor .ql-code-block-container select.ql-ui {
+  position: absolute;
+  top: -26px;
+  right: 0;
+  height: 22px;
+  line-height: 20px;
+  padding: 0 20px 0 8px;
+  font-family: 'Onest', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: all 0.15s ease;
+  z-index: 5;
+}
+
+.ql-code-block-container select.ql-ui:hover,
+.ql-code-block-container select.ql-ui:focus,
+.ql-snow .ql-editor .ql-code-block-container select.ql-ui:hover,
+.ql-snow .ql-editor .ql-code-block-container select.ql-ui:focus {
+  color: var(--text-primary);
+  border-color: var(--border-dark);
+  background-color: var(--bg-surface);
 }
 
 .ql-editor ul, .ql-editor ol {
@@ -851,36 +889,61 @@ a:hover {
   background-color: var(--spoiler-header-hover);
 }
 
+.editor-spoiler-title:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-placeholder);
+  pointer-events: none;
+  font-weight: 500;
+}
+
 .editor-spoiler-body {
   padding: 16px;
   outline: none;
   color: var(--text-primary);
+  min-height: 48px;
+}
+
+.editor-spoiler-body:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-placeholder);
+  pointer-events: none;
 }
 
 /* 3. Inline Spoiler Blot */
 .editor-inline-spoiler {
-  background-color: var(--bg-subtle);
-  border-bottom: 2px dashed var(--accent-color);
-  padding: 0 4px;
-  border-radius: 3px;
-  cursor: text;
-}
-
-.preview-mode .editor-inline-spoiler {
-  background-color: var(--text-muted);
-  color: transparent;
-  border-bottom: none;
+  filter: blur(4.5px);
+  background-color: var(--bg-hover);
+  padding: 1px 5px;
   border-radius: 4px;
   cursor: pointer;
   user-select: none;
-  transition: all 0.2s ease;
-  padding: 1px 6px;
+  display: inline-block;
+  transition: filter 0.2s ease, background-color 0.2s ease;
+}
+
+.editor-inline-spoiler.is-revealed {
+  filter: none;
+  user-select: text;
+  background-color: var(--bg-subtle);
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.preview-mode .editor-inline-spoiler {
+  filter: blur(4.5px);
+  background-color: var(--bg-hover);
+  padding: 1px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  display: inline-block;
+  transition: filter 0.2s ease, background-color 0.2s ease;
 }
 
 .preview-mode .editor-inline-spoiler.is-revealed {
+  filter: none;
+  user-select: text;
   background-color: var(--bg-subtle);
-  color: var(--text-primary);
-  user-select: auto;
+  border-bottom: 1px dashed var(--border-color);
 }
 
 /* 4. Formulas (Inline & Block LaTeX) */

@@ -88,7 +88,27 @@
           return;
         }
 
-        // Standard formats (bold, italic, underline, strike, script, inline-spoiler, code)
+        // Inline spoiler format
+        if (format === 'inline-spoiler') {
+          const current = this.editor.getFormat(range);
+          let isActive = !!current['inline-spoiler'];
+          if (!isActive) {
+            try {
+              const [leaf] = this.editor.getLeaf(range.index);
+              if (leaf && leaf.domNode) {
+                const el = leaf.domNode.nodeType === 1 ? leaf.domNode : leaf.domNode.parentElement;
+                if (el && el.closest('.editor-inline-spoiler')) {
+                  isActive = true;
+                }
+              }
+            } catch (err) {}
+          }
+          this.editor.format('inline-spoiler', !isActive);
+          this.updateActiveStates(range);
+          return;
+        }
+
+        // Standard formats (bold, italic, underline, strike, script, code)
         if (format) {
           const current = this.editor.getFormat(range);
           if (value !== null && value !== undefined) {
@@ -175,9 +195,28 @@
       const formats = this.editor.getFormat(range);
       const buttons = this.bubble.querySelectorAll('.bubble-btn[data-format]');
 
+      // Check if current format has 'inline-spoiler' or selection is within an .editor-inline-spoiler
+      let isInsideInlineSpoiler = !!formats['inline-spoiler'];
+      if (!isInsideInlineSpoiler) {
+        try {
+          const [leaf] = this.editor.getLeaf(range.index);
+          if (leaf && leaf.domNode) {
+            const el = leaf.domNode.nodeType === 1 ? leaf.domNode : leaf.domNode.parentElement;
+            if (el && el.closest('.editor-inline-spoiler')) {
+              isInsideInlineSpoiler = true;
+            }
+          }
+        } catch (err) {}
+      }
+
       buttons.forEach((btn) => {
         const fmt = btn.getAttribute('data-format');
         const val = btn.getAttribute('data-value');
+
+        if (fmt === 'inline-spoiler') {
+          btn.classList.toggle('is-active', isInsideInlineSpoiler);
+          return;
+        }
 
         if (fmt === 'align') {
           const currentAlign = formats.align || '';

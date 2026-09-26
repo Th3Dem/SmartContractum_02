@@ -45,24 +45,40 @@
       const node = super.create();
       node.setAttribute('open', '');
 
-      const titleText = (typeof value === 'object' && value.title) ? value.title : (typeof value === 'string' && value ? value : 'Заголовок спойлера');
-      const bodyText = (typeof value === 'object' && value.body) ? value.body : 'Скрытый текст спойлера...';
+      const titleText = (typeof value === 'object' && value.title) ? value.title : (typeof value === 'string' && value ? value : '');
+      const bodyText = (typeof value === 'object' && value.body) ? value.body : '';
 
       const summary = document.createElement('summary');
       summary.className = 'editor-spoiler-title';
       summary.contentEditable = 'true';
-      summary.innerText = titleText;
+      summary.setAttribute('data-placeholder', 'Заголовок спойлера');
+      if (titleText && titleText !== 'Заголовок спойлера (нажмите для редактирования)') {
+        summary.innerText = titleText;
+      }
 
       const body = document.createElement('div');
       body.className = 'editor-spoiler-body';
       body.contentEditable = 'true';
-      body.innerText = bodyText;
+      body.setAttribute('data-placeholder', 'Скрытый текст спойлера...');
+      if (bodyText && bodyText !== 'Скрытый текст спойлера...') {
+        body.innerText = bodyText;
+      }
 
-      // Prevent Quill selection interference when editing inside embed
+      // Prevent Quill selection interference & handle empty state cleanup so :empty works reliably
       [summary, body].forEach(el => {
         el.addEventListener('keydown', (e) => e.stopPropagation());
-        el.addEventListener('keyup', (e) => e.stopPropagation());
         el.addEventListener('keypress', (e) => e.stopPropagation());
+        el.addEventListener('keyup', (e) => {
+          e.stopPropagation();
+          if (el.innerHTML === '<br>' || !el.textContent.trim()) {
+            el.innerHTML = '';
+          }
+        });
+        el.addEventListener('input', (e) => {
+          if (el.innerHTML === '<br>' || !el.textContent.trim()) {
+            el.innerHTML = '';
+          }
+        });
       });
 
       node.appendChild(summary);

@@ -397,8 +397,8 @@
         // 10. Spoiler (<details><summary>)
         case 'spoiler':
           this.editor.insertEmbed(index, 'spoiler', {
-            title: 'Заголовок спойлера (нажмите для редактирования)',
-            body: 'Скрытый текст спойлера...'
+            title: '',
+            body: ''
           }, 'user');
           if (!isLineEmpty) {
             this.editor.insertText(index + 1, '\n', 'user');
