@@ -36,11 +36,11 @@
   5. Корректная поддержка светлой и темной темы (цвета страниц и карточек берутся строго из CSS-переменных `--bg-page`, `--bg-card`, `--text-primary`, `--border-color` и т.д., без нечитаемого текста).
   6. Все unit-тесты в `tests/` проходят успешно (100% PASS, 0 failures, 0 errors).
 
-- **Текущий статус**: QA_APPROVED
-- **Ответственный исполнитель**: git_bot
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
 - **Рабочая ветка / копия**: feat/task-18-clean-native-feed-redesign
 - **Блокер**: нет
-- **Следующий шаг**: Фиксация изменений git_bot на этапе FINALIZE
+- **Следующий шаг**: Ожидание согласования слияния (merge) в main и push от пользователя
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-18-clean-native-feed-redesign/DEV_HANDOVER.md`
   - QA: `tasks/task-18-clean-native-feed-redesign/QA_REVIEW.md`
