@@ -595,7 +595,7 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
 
     def test_editor_has_document_action_bar(self):
         """Verify editor.html has #editorDocumentBar containing #btn-drafts-modal, #drafts-badge,
-        and #save-status; Antigravity Writer and #btn-more-actions are removed."""
+        #save-status, and #btn-next-to-settings aligned with editor card."""
         bar_start = self.editor_html.find('id="editorDocumentBar"')
         self.assertNotEqual(bar_start, -1, "#editorDocumentBar not found in editor.html")
         bar_end = self.editor_html.find('class="app-main-layout"', bar_start)
@@ -606,17 +606,33 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
         self.assertNotIn('Antigravity Writer', bar_content, "Antigravity Writer must be removed from #editorDocumentBar")
         self.assertNotIn('brand-icon', bar_content)
 
-        # #btn-drafts-modal
+        # Container alignment structure matching editor workspace container
+        self.assertIn('class="editor-docbar-container"', bar_content)
+        self.assertIn('class="editor-docbar-main"', bar_content)
+        self.assertIn('class="editor-docbar-sidebar-spacer"', bar_content)
+
+        # #btn-drafts-modal and save status in header-left
         self.assertIn('id="btn-drafts-modal"', bar_content, "#btn-drafts-modal not found in #editorDocumentBar")
-
-        # #drafts-badge
         self.assertIn('id="drafts-badge"', bar_content, "#drafts-badge not found in #editorDocumentBar")
-
-        # #save-status
         self.assertIn('id="save-status"', bar_content, "#save-status not found in #editorDocumentBar")
+
+        # #btn-next-to-settings in header-right (aligned to right edge of editor card)
+        self.assertIn('id="btn-next-to-settings"', bar_content, "#btn-next-to-settings not found in #editorDocumentBar")
+        self.assertIn('class="header-right"', bar_content)
+
+        # Relative order: drafts button -> save status -> next-to-settings button
+        drafts_pos = bar_content.find('id="btn-drafts-modal"')
+        status_pos = bar_content.find('id="save-status"')
+        next_pos = bar_content.find('id="btn-next-to-settings"')
+        self.assertTrue(0 < drafts_pos < status_pos < next_pos, "Controls must be ordered: drafts -> status -> next button")
 
         # #btn-more-actions removed per requirement 10
         self.assertNotIn('id="btn-more-actions"', bar_content, "#btn-more-actions must be removed from #editorDocumentBar")
+
+        # CSS alignment rules
+        self.assertIn('.editor-docbar-container', self.editor_css)
+        self.assertIn('.editor-docbar-main', self.editor_css)
+        self.assertIn('.editor-docbar-sidebar-spacer', self.editor_css)
 
     def test_editor_buttons_design_and_palette(self):
         """Verify editor.css defines the unified button styles:

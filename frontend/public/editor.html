@@ -123,23 +123,40 @@
       </div>
     </header>
 
-    <!-- Dedicated Document Sub-bar (Simplified, clean inline status) -->
+    <!-- Dedicated Document Sub-bar (Aligned with Editor Card) -->
     <div class="editor-document-bar" id="editorDocumentBar">
-      <div class="header-left">
-        <!-- Drafts Button with Badge -->
-        <button id="btn-drafts-modal" class="btn btn-drafts" title="Сохраненные черновики">
-          <svg class="btn-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-          </svg>
-          <span>Черновики</span>
-          <span id="drafts-badge" class="badge">0</span>
-        </button>
+      <div class="editor-docbar-container">
+        <div class="editor-docbar-main">
+          <div class="header-left">
+            <!-- Drafts Button with Badge -->
+            <button id="btn-drafts-modal" class="btn btn-drafts" title="Сохраненные черновики">
+              <svg class="btn-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Черновики</span>
+              <span id="drafts-badge" class="badge">0</span>
+            </button>
 
-        <!-- Autosave Indicator (Clean text status on panel background) -->
-        <div id="save-status" class="save-status" title="Статус автосохранения">
-          <span class="save-dot"></span>
-          <span id="save-status-text">Все изменения сохранены</span>
+            <!-- Autosave Indicator (Clean text status on panel background) -->
+            <div id="save-status" class="save-status" title="Статус автосохранения">
+              <span class="save-dot"></span>
+              <span id="save-status-text">Все изменения сохранены</span>
+            </div>
+          </div>
+
+          <div class="header-right">
+            <!-- Next to publication button -->
+            <button type="button" class="btn btn-primary btn-next-to-pub" id="btn-next-to-settings" disabled title="Добавьте заголовок и текст статьи">
+              <span>Далее к публикации</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
         </div>
+
+        <!-- Spacer matching the right sidebar (350px) to keep exact column alignment -->
+        <div class="editor-docbar-sidebar-spacer" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -418,16 +435,6 @@
 
           <!-- Quill Canvas -->
           <div id="editor"></div>
-        </div>
-
-        <!-- Bottom Action Bar (Publication) -->
-        <div class="editor-bottom-bar">
-          <button type="button" class="btn btn-primary btn-next-to-pub" id="btn-next-to-settings" disabled title="Добавьте заголовок и текст статьи">
-            <span>Далее к публикации</span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </button>
         </div>
       </section>
 
