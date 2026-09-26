@@ -218,5 +218,13 @@
 [2026-09-27 00:33] | pm_bot | TASK_DONE | [FAST-TRACK] Добавлен тумблер переключения темной и светлой темы (#btnThemeToggle) слева от кнопки «Вход» во всех шаблонах (index.html, feed.html, editor.html), добавлены стили и верифицированы тесты (187/187 тестов PASS) (Task: fast-track-add-header-theme-toggle)
 [2026-09-27 00:43] | pm_bot | TASK_DONE | [FAST-TRACK] Выровнены элементы панели editorDocumentBar по границам блока редактирования статьи: кнопка «Черновики» и статус сохранения выровнены по левому краю статьи, кнопка «Далее к публикации» (#btn-next-to-settings) перенесена наверх и выровнена по правому краю статьи (187/187 тестов PASS) (Task: fast-track-align-editor-subbar-and-top-publication-btn)
 [2026-09-27 00:50] | pm_bot | TASK_DONE | [FAST-TRACK] В блоке «Чек-лист публикации» убрано слово «Черновик» из бейджа готовности (#readiness-badge), оставлены только компактные цифры прогресса (0/4, 1/4, 2/4, 3/4, 4/4) (187/187 тестов PASS) (Task: fast-track-checklist-badge-digits-only)
+[2026-09-27 01:04] | pm_bot | TASK_INIT | Инициализация доработки ленты публикаций, поиска, тем, фильтрации и сценария чтения статей (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:05] | git_bot | GIT_PREPARE | Создана и переключена рабочая ветка feat/task-24-feed-redesign-and-article-reading (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:06] | pm_bot | DEV_ASSIGN | Назначение задачи dev_bot (редизайн ленты, поиск, темы из PublicationConfig, фильтры, закладки, article.html и серверные эндпоинты) (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:38] | dev_bot | DEV_COMPLETE | Реализация редизайна ленты, сценария чтения article.html, серверных эндпоинтов /api/articles и расширенных тестов завершена, 208 тестов успешно пройдены (100% PASS), DEV_HANDOVER со статусом READY_FOR_QA (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:39] | pm_bot | QA_ASSIGN | Назначение задачи qa_bot для независимого аудита diff, тестов (208 тестов) и расчета QA-снимка (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:41] | qa_bot | QA_APPROVED | Независимый аудит завершен со статусом APPROVED (208/208 PASS, snapshot 0361e801947fb2f0d6b397eb2076d5e8eb42b77f5aed34479f69e278778ba0cd) (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:41] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: фиксация коммита и слияние в main (Task: task-24-feed-redesign-and-article-reading)
+
 
 

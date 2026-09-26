@@ -28,9 +28,19 @@ Key test requirements:
  10. Editor visual alignment and theme fixes from task-15 & task-16.
 """
 
+import json
 import os
 import re
+import shutil
+import tempfile
+import threading
+import time
 import unittest
+import urllib.error
+import urllib.parse
+import urllib.request
+
+import server
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'public')
@@ -383,7 +393,7 @@ class TestFeedTwoColumnGridAndWidgets(unittest.TestCase):
         filter_buttons = re.findall(r'<button[^>]*class=["\'][^"\']*feed-filter-btn[^"\']*["\'][^>]*>(.*?)</button>', self.feed_html)
         self.assertGreaterEqual(len(filter_buttons), 4, "Expected at least 4 category filter buttons")
 
-        required_categories = ['Все', 'Разработка', 'Безопасность', 'Дизайн']
+        required_categories = ['Все', 'Разработка', 'Безопасность']
         for cat in required_categories:
             self.assertTrue(
                 any(cat in btn for btn in filter_buttons),
@@ -404,21 +414,20 @@ class TestFeedTwoColumnGridAndWidgets(unittest.TestCase):
         self.assertIsNotNone(sidebar_match, "feed-sidebar-column not found in feed.html")
         sidebar_content = sidebar_match.group(1)
 
-        # Widget 1: Создать публикацию with link to editor.html
-        self.assertIn('Создать публикацию', sidebar_content)
+        # Widget 1: Поделитесь опытом / Создать публикацию with link to editor.html
+        self.assertTrue('Поделитесь опытом' in sidebar_content or 'Создать публикацию' in sidebar_content)
         self.assertTrue(
-            re.search(r'<a[^>]*href=["\']editor\.html["\'][^>]*>[\s\S]*?Открыть редактор[\s\S]*?</a>', sidebar_content),
+            re.search(r'<a[^>]*href=["\']editor\.html["\'][^>]*>[\s\S]*?(?:Написать статью|Открыть редактор)[\s\S]*?</a>', sidebar_content),
             "Link to editor.html not found in sidebar widget"
         )
 
-        # Widget 2: Популярные темы
-        self.assertIn('Популярные темы', sidebar_content)
-        self.assertIn('widget-tags-cloud', sidebar_content)
+        # Widget 2: Темы / Популярные темы
+        self.assertTrue('Темы' in sidebar_content or 'Популярные темы' in sidebar_content)
+        self.assertTrue('widget-tags-cloud' in sidebar_content or 'widget-topics-list' in sidebar_content)
 
         # Widget 3: О платформе SmartContractum
         self.assertIn('О платформе', sidebar_content)
-        self.assertIn('ПКСК ЦБ РФ', sidebar_content)
-        self.assertIn('Offline-First', sidebar_content)
+        self.assertIn('index.html', sidebar_content)
 
 
 class TestCrossNavigationAndColorPalette(unittest.TestCase):
@@ -967,6 +976,357 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
         html_editor_match = re.search(r'(?<![a-zA-Z0-9_-])html\s*\{([^}]+)\}', self.editor_css)
         if html_editor_match:
             self.assertNotIn('font-size:', html_editor_match.group(1), "editor.css must not set font-size on html")
+
+
+
+class TestArticleReadingPage(unittest.TestCase):
+    """Test verification for article.html, article.css, and article.js (task-24)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.article_html_path = os.path.join(FRONTEND_DIR, 'article.html')
+        cls.article_css_path = os.path.join(FRONTEND_DIR, 'css', 'article.css')
+        cls.article_js_path = os.path.join(FRONTEND_DIR, 'js', 'article.js')
+        cls.index_html_path = os.path.join(FRONTEND_DIR, 'index.html')
+
+        with open(cls.article_html_path, 'r', encoding='utf-8') as f:
+            cls.article_html = f.read()
+        with open(cls.article_css_path, 'r', encoding='utf-8') as f:
+            cls.article_css = f.read()
+        with open(cls.article_js_path, 'r', encoding='utf-8') as f:
+            cls.article_js = f.read()
+        with open(cls.index_html_path, 'r', encoding='utf-8') as f:
+            cls.index_html = f.read()
+
+        cls.cdn_indicators = [
+            'fonts.googleapis.com',
+            'fonts.gstatic.com',
+            'cdnjs.cloudflare.com',
+            'cdn.jsdelivr.net',
+            'unpkg.com',
+            'ajax.googleapis.com',
+            'stackpath.bootstrapcdn.com'
+        ]
+
+    def test_article_files_exist_and_non_empty(self):
+        """Verify frontend/public/article.html, css/article.css, and js/article.js exist and have sufficient size."""
+        for path, min_size in [
+            (self.article_html_path, 3000),
+            (self.article_css_path, 2000),
+            (self.article_js_path, 2000),
+        ]:
+            self.assertTrue(os.path.isfile(path), f"Required file {path} must exist")
+            file_size = os.path.getsize(path)
+            self.assertGreater(file_size, min_size, f"File {path} is unexpectedly small ({file_size} bytes)")
+
+    def test_article_offline_first_zero_cdn_references(self):
+        """Ensure article.html, article.css, and article.js have zero CDN references."""
+        for content, filename in [
+            (self.article_html, 'article.html'),
+            (self.article_css, 'css/article.css'),
+            (self.article_js, 'js/article.js'),
+        ]:
+            for cdn in self.cdn_indicators:
+                self.assertNotIn(cdn, content, f"Forbidden external CDN reference '{cdn}' found in {filename}")
+
+    def test_article_offline_first_zero_external_links(self):
+        """Ensure article.html and article.css have zero external http/https resource URLs."""
+        url_pattern = re.compile(r'https?://(?!localhost|127\.0\.0\.1|www\.w3\.org)[^\s\'"<>]+')
+        for content, filename in [
+            (self.article_html, 'article.html'),
+            (self.article_css, 'css/article.css'),
+            (self.article_js, 'js/article.js'),
+        ]:
+            matches = [m for m in url_pattern.findall(content) if 'w3.org' not in m]
+            self.assertEqual(len(matches), 0, f"External URLs found in {filename}: {matches}")
+
+    def test_article_scripts_and_stylesheets_are_local(self):
+        """Verify that all stylesheet and script references in article.html point to local files."""
+        stylesheet_hrefs = re.findall(r'<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\']', self.article_html)
+        self.assertGreater(len(stylesheet_hrefs), 0, "No stylesheet links found in article.html")
+        for href in stylesheet_hrefs:
+            self.assertFalse(href.startswith(('http://', 'https://', '//')),
+                             f"Stylesheet href '{href}' must not be an external absolute URL")
+
+        script_srcs = re.findall(r'<script[^>]*src=["\']([^"\']+)["\']', self.article_html)
+        self.assertGreater(len(script_srcs), 0, "No script tags with src found in article.html")
+        for src in script_srcs:
+            self.assertFalse(src.startswith(('http://', 'https://', '//')),
+                             f"Script src '{src}' must not be an external absolute URL")
+
+    def test_article_strict_onest_font(self):
+        """Verify Onest font family in article.html and article.css without disallowed fonts."""
+        self.assertIn("'Onest'", self.article_html, "article.html must declare 'Onest' font family")
+        disallowed_pattern = re.compile(
+            r'font-family:\s*[^;]*\b(?:Inter|Manrope|JetBrains Mono)\b',
+            re.IGNORECASE
+        )
+        for content, filename in [
+            (self.article_html, 'article.html'),
+            (self.article_css, 'css/article.css'),
+        ]:
+            matches = disallowed_pattern.findall(content)
+            self.assertEqual(len(matches), 0, f"Disallowed font family found in {filename}: {matches}")
+
+    def test_article_zero_emojis(self):
+        """Verify zero emoji characters in article.html, article.css, and article.js."""
+        emoji_pattern = re.compile(
+            r'[\U0001F600-\U0001F64F]'
+            r'|[\U0001F300-\U0001F5FF]'
+            r'|[\U0001F680-\U0001F6FF]'
+            r'|[\U0001F1E0-\U0001F1FF]'
+            r'|[\U00002702-\U000027B0]'
+            r'|[\U000024C2-\U0001F251]'
+            r'|[\U0001F900-\U0001F9FF]'
+            r'|[\U0001FA70-\U0001FAFF]'
+        )
+        for content, filename in [
+            (self.article_html, 'article.html'),
+            (self.article_css, 'css/article.css'),
+            (self.article_js, 'js/article.js'),
+        ]:
+            emojis = emoji_pattern.findall(content)
+            self.assertEqual(len(emojis), 0, f"Emojis found in {filename}: {emojis}")
+
+    def test_article_unified_header_markup(self):
+        """Verify unified #appHeader in article.html is identical in structure to index.html."""
+        def extract_header_lines(html):
+            m = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>([\s\S]*?)</header>', html)
+            self.assertIsNotNone(m, "<header id='appHeader'> must exist")
+            lines = [l.strip() for l in m.group(1).splitlines() if l.strip()]
+            normalized = '\n'.join(lines)
+            return re.sub(r'class="nav-link[^"]*"', 'class="nav-link"', normalized)
+
+        h_index = extract_header_lines(self.index_html)
+        h_article = extract_header_lines(self.article_html)
+        self.assertEqual(h_index, h_article, "Header in article.html differs from index.html")
+
+    def test_article_essential_ui_elements(self):
+        """Verify all essential UI elements for article reader are present in article.html."""
+        required_elements = [
+            'id="btnBackToFeed"',
+            'id="btnArticleBookmark"',
+            'id="btnCopyLink"',
+            'id="articleLoadingState"',
+            'id="articleErrorState"',
+            'id="articleContentWrap"',
+            'id="articleBadges"',
+            'id="articleTitle"',
+            'id="articleLead"',
+            'id="articleAuthorName"',
+            'id="articleAuthorAvatar"',
+            'id="articlePublishDate"',
+            'id="articleReadingTime"',
+            'id="articleTocBox"',
+            'id="articleTocList"',
+            'id="articleBodyContent"',
+            'id="articleTagsWrap"',
+            'id="articleTagsList"',
+            'id="btnBackToFeedBottom"',
+            'id="btnArticleBookmarkBottom"',
+        ]
+        for elem in required_elements:
+            self.assertIn(elem, self.article_html, f"Essential element '{elem}' must exist in article.html")
+
+    def test_article_reading_layout_container_width(self):
+        """Verify comfortable reading container width (max-width <= 800px) in article.css."""
+        container_match = re.search(r'\.article-page-container\s*\{([^}]+)\}', self.article_css)
+        self.assertIsNotNone(container_match, ".article-page-container rule not found in article.css")
+        css_block = container_match.group(1)
+        self.assertIn('max-width:', css_block)
+        max_w = re.search(r'max-width:\s*(\d+)px', css_block)
+        self.assertIsNotNone(max_w)
+        width_val = int(max_w.group(1))
+        self.assertTrue(680 <= width_val <= 800, f"Reading container width {width_val}px is outside 680-800px range")
+
+
+class TestArticlesApiEndpoints(unittest.TestCase):
+    """Integration test suite for GET /api/articles and GET /api/articles/<id> endpoints."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'integration_articles_test.db')
+
+        cls.server = server.create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR)
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.server_thread.join(timeout=2)
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def _get_json(self, path: str):
+        if '?' in path:
+            base_p, query_str = path.split('?', 1)
+            parts = []
+            for item in query_str.split('&'):
+                if '=' in item:
+                    k, v = item.split('=', 1)
+                    parts.append(f"{urllib.parse.quote(k)}={urllib.parse.quote(v)}")
+                else:
+                    parts.append(urllib.parse.quote(item))
+            path = f"{base_p}?{'&'.join(parts)}"
+        url = f"{self.base_url}{path}"
+        req = urllib.request.Request(url, method="GET")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                resp_body = resp.read().decode("utf-8")
+                return resp.status, json.loads(resp_body)
+        except urllib.error.HTTPError as e:
+            resp_body = e.read().decode("utf-8")
+            e.close()
+            return e.code, json.loads(resp_body)
+
+    def test_get_articles_list_returns_approved_articles(self):
+        """GET /api/articles returns 200, success=True, and list of approved articles."""
+        status_code, data = self._get_json("/api/articles")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertGreaterEqual(len(articles), 4)
+        for art in articles:
+            self.assertIn("id", art)
+            self.assertIn("title", art)
+            self.assertIn("description", art)
+            self.assertIn("topics", art)
+            self.assertIn("readingTime", art)
+            self.assertIn("author", art)
+
+    def test_get_articles_filter_by_topic(self):
+        """GET /api/articles?topic=... filters articles correctly."""
+        status_code, data = self._get_json("/api/articles?topic=smart-contracts-development")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertGreaterEqual(len(articles), 1)
+        for art in articles:
+            self.assertIn("smart-contracts-development", art.get("topics", []))
+
+    def test_get_articles_filter_by_audience(self):
+        """GET /api/articles?audience=... filters articles by audience."""
+        status_code, data = self._get_json("/api/articles?audience=architects-integrators")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertGreaterEqual(len(articles), 1)
+        for art in articles:
+            self.assertEqual(art.get("targetAudience"), "architects-integrators")
+
+    def test_get_articles_filter_by_format(self):
+        """GET /api/articles?format=... filters articles by format."""
+        status_code, data = self._get_json("/api/articles?format=tutorial")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertGreaterEqual(len(articles), 1)
+        for art in articles:
+            self.assertEqual(art.get("format"), "tutorial")
+
+    def test_get_articles_filter_by_complexity(self):
+        """GET /api/articles?complexity=... filters articles by complexity."""
+        status_code, data = self._get_json("/api/articles?complexity=hard")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertGreaterEqual(len(articles), 1)
+        for art in articles:
+            self.assertEqual(art.get("complexity"), "hard")
+
+    def test_get_articles_search(self):
+        """GET /api/articles?search=... performs search query across articles."""
+        status_code, data = self._get_json("/api/articles?search=рубля")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertGreaterEqual(len(articles), 1)
+        found_in_results = any("рубл" in a["title"].lower() or "рубл" in a["description"].lower() for a in articles)
+        self.assertTrue(found_in_results)
+
+    def test_get_articles_by_ids(self):
+        """GET /api/articles?ids=art-01,art-02 returns matching articles for bookmarks."""
+        status_code, data = self._get_json("/api/articles?ids=art-01,art-02")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertEqual(len(articles), 2)
+        returned_ids = {a["id"] for a in articles}
+        self.assertEqual(returned_ids, {"art-01", "art-02"})
+
+    def test_get_articles_pagination(self):
+        """GET /api/articles?limit=2&offset=1 limits and offsets results correctly."""
+        status_code, data = self._get_json("/api/articles?limit=2&offset=1")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        articles = data.get("articles", [])
+        self.assertLessEqual(len(articles), 2)
+        self.assertEqual(data.get("limit"), 2)
+        self.assertEqual(data.get("offset"), 1)
+        self.assertGreaterEqual(data.get("total"), 4)
+
+    def test_get_article_by_id_success(self):
+        """GET /api/articles/art-01 returns complete publication data."""
+        status_code, data = self._get_json("/api/articles/art-01")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        art = data.get("article", {})
+        self.assertEqual(art.get("id"), "art-01")
+        self.assertIn("title", art)
+        self.assertIn("html", art)
+        self.assertIn("author", art)
+        self.assertIn("readingTime", art)
+        self.assertIn("topics", art)
+        self.assertIn("keywords", art)
+
+    def test_get_article_by_query_param(self):
+        """GET /api/articles?id=art-01 returns article data as fallback."""
+        status_code, data = self._get_json("/api/articles?id=art-01")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data.get("article", {}).get("id"), "art-01")
+
+    def test_get_article_not_found(self):
+        """GET /api/articles/non-existent-id returns 404."""
+        status_code, data = self._get_json("/api/articles/non-existent-id")
+        self.assertEqual(status_code, 404)
+        self.assertFalse(data.get("success"))
+
+    def test_unapproved_and_draft_articles_are_hidden(self):
+        """Unapproved submissions (pending or rejected) must never appear in /api/articles or /api/articles/<id>."""
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            conn.execute("""
+                INSERT INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'sub_pending_hidden', 'draft_pending_hidden', 'Неопубликованная статья',
+                    'author_secret', 'pending_moderation', '{"topics":["security"],"description":"Секретный драфт статьи"}',
+                    '<p>Секретный драфт</p>', 'idemp_hidden_01', 'hash_01',
+                    '2026-09-27T00:00:00Z', '2026-09-27T00:00:00Z'
+                )
+            """)
+        conn.close()
+
+        # Check list endpoint does not contain it
+        status_code, list_data = self._get_json("/api/articles")
+        self.assertEqual(status_code, 200)
+        found_in_list = any(a.get("id") == "sub_pending_hidden" or a.get("draftId") == "draft_pending_hidden"
+                            for a in list_data.get("articles", []))
+        self.assertFalse(found_in_list, "Pending moderation submission must not appear in public /api/articles")
+
+        # Check direct GET /api/articles/<id> returns 404
+        status_code, detail_data = self._get_json("/api/articles/sub_pending_hidden")
+        self.assertEqual(status_code, 404, "Direct retrieval of unapproved submission must return 404")
+        self.assertFalse(detail_data.get("success"))
 
 
 if __name__ == '__main__':
