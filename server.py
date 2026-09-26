@@ -671,8 +671,10 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] =
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Antigravity Moderation Server")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Port to listen on (default 8000)")
+    parser.add_argument("port_pos", nargs="?", type=int, default=None, help="Port to listen on (positional)")
+    parser.add_argument("--port", type=int, default=None, help="Port to listen on (default 8000)")
     parser.add_argument("--host", type=str, default=os.environ.get("HOST", "0.0.0.0"), help="Host to bind to (default 0.0.0.0)")
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
     args = parser.parse_args()
-    run_server(host=args.host, port=args.port, db_path=args.db)
+    port = args.port or args.port_pos or int(os.environ.get("PORT", 8000))
+    run_server(host=args.host, port=port, db_path=args.db)
