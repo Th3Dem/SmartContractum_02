@@ -25,7 +25,9 @@
 
         <!-- Drafts Button with Badge -->
         <button id="btn-drafts-modal" class="btn btn-drafts" title="Сохраненные черновики">
-          <span class="btn-icon">📁</span>
+          <svg class="btn-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
           <span>Черновики</span>
           <span id="drafts-badge" class="badge">0</span>
         </button>
@@ -41,11 +43,17 @@
         <!-- Edit / Preview Mode Toggle -->
         <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Режим отображения">
           <button type="button" class="mode-btn active" id="btn-mode-edit" data-mode="edit" title="Режим редактирования">
-            <span class="mode-icon">✏️</span>
+            <svg class="mode-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
             <span>Редактирование</span>
           </button>
           <button type="button" class="mode-btn" id="btn-mode-preview" data-mode="preview" title="Режим предпросмотра">
-            <span class="mode-icon">👁️</span>
+            <svg class="mode-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
             <span>Предпросмотр</span>
           </button>
         </div>
@@ -55,26 +63,54 @@
         <!-- Import / Export Dropdown -->
         <div class="dropdown-wrapper" id="dropdown-export-wrapper">
           <button type="button" class="btn btn-primary dropdown-toggle" id="btn-export-dropdown" title="Экспорт и импорт статьи">
-            <span>📤 Экспорт / Импорт ▾</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span>Экспорт / Импорт</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
           </button>
           <div class="dropdown-menu dropdown-menu-right" id="export-dropdown-menu">
             <div class="dropdown-header">Экспорт публикации</div>
             <button type="button" class="dropdown-item" id="menu-export-html">
-              <span class="dropdown-item-icon">🌐</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">HTML</span>
                 <span class="dropdown-item-desc">Чистый HTML документ</span>
               </span>
             </button>
             <button type="button" class="dropdown-item" id="menu-export-markdown">
-              <span class="dropdown-item-icon">📝</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">Markdown</span>
                 <span class="dropdown-item-desc">GitHub Flavored Markdown</span>
               </span>
             </button>
             <button type="button" class="dropdown-item" id="menu-export-json">
-              <span class="dropdown-item-icon">💾</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">JSON</span>
                 <span class="dropdown-item-desc">Структурированный документ со схемой</span>
@@ -83,7 +119,13 @@
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Импорт</div>
             <button type="button" class="dropdown-item" id="menu-import-json">
-              <span class="dropdown-item-icon">📥</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">Импорт JSON</span>
                 <span class="dropdown-item-desc">Восстановление из JSON файла</span>
@@ -103,14 +145,32 @@
           </button>
           <div class="dropdown-menu dropdown-menu-right" id="more-dropdown-menu">
             <button type="button" class="dropdown-item" id="btn-theme-toggle">
-              <span class="dropdown-item-icon">🌓</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">Сменить тему</span>
                 <span class="dropdown-item-desc">Светлая / Темная</span>
               </span>
             </button>
             <button type="button" class="dropdown-item" id="btn-shortcuts-modal">
-              <span class="dropdown-item-icon">⌨️</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+                  <line x1="6" y1="8" x2="6" y2="8.01"></line>
+                  <line x1="10" y1="8" x2="10" y2="8.01"></line>
+                  <line x1="14" y1="8" x2="14" y2="8.01"></line>
+                  <line x1="18" y1="8" x2="18" y2="8.01"></line>
+                  <line x1="6" y1="12" x2="6" y2="12.01"></line>
+                  <line x1="10" y1="12" x2="10" y2="12.01"></line>
+                  <line x1="14" y1="12" x2="14" y2="12.01"></line>
+                  <line x1="18" y1="12" x2="18" y2="12.01"></line>
+                  <line x1="7" y1="16" x2="17" y2="16"></line>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">Горячие клавиши</span>
                 <span class="dropdown-item-desc">Список комбинаций клавиш</span>
@@ -118,7 +178,14 @@
             </button>
             <div class="dropdown-divider"></div>
             <button type="button" class="dropdown-item text-danger" id="btn-clear-doc">
-              <span class="dropdown-item-icon">🗑️</span>
+              <span class="dropdown-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </span>
               <span class="dropdown-item-text">
                 <span class="dropdown-item-title">Очистить статью</span>
                 <span class="dropdown-item-desc">Сбросить весь текст и заголовок</span>
@@ -151,7 +218,11 @@
               <div class="block-menu-list">
                 <!-- 1. Заголовок -->
                 <div class="block-menu-item" data-block="header" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">H</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 6v12M20 6v12M4 12h16"></path>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Заголовок</span>
                     <span class="block-menu-desc">Заголовок раздела</span>
@@ -160,7 +231,12 @@
 
                 <!-- 2. Цитата -->
                 <div class="block-menu-item" data-block="blockquote" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">❝</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path>
+                      <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Цитата</span>
                     <span class="block-menu-desc">Выделенный блок цитаты</span>
@@ -169,7 +245,16 @@
 
                 <!-- 3. Список -->
                 <div class="block-menu-item" data-block="bullet-list" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">•</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6"></line>
+                      <line x1="8" y1="12" x2="21" y2="12"></line>
+                      <line x1="8" y1="18" x2="21" y2="18"></line>
+                      <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                      <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                      <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Список</span>
                     <span class="block-menu-desc">Маркированный список</span>
@@ -178,7 +263,16 @@
 
                 <!-- 4. Нумерованный список -->
                 <div class="block-menu-item" data-block="ordered-list" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">1.</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="10" y1="6" x2="21" y2="6"></line>
+                      <line x1="10" y1="12" x2="21" y2="12"></line>
+                      <line x1="10" y1="18" x2="21" y2="18"></line>
+                      <path d="M4 6h1v4"></path>
+                      <path d="M4 10h2"></path>
+                      <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Нумерованный список</span>
                     <span class="block-menu-desc">Последовательный нумерованный список</span>
@@ -187,7 +281,11 @@
 
                 <!-- 5. Медиаэлемент -->
                 <div class="block-menu-item" data-block="media" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">▶</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Медиаэлемент</span>
                     <span class="block-menu-desc">YouTube, Vimeo, VK Видео</span>
@@ -196,7 +294,13 @@
 
                 <!-- 6. Изображение -->
                 <div class="block-menu-item" data-block="image" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">🖼️</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Изображение</span>
                     <span class="block-menu-desc">Загрузка файла или URL, подпись, alt</span>
@@ -205,7 +309,11 @@
 
                 <!-- 7. Разделитель -->
                 <div class="block-menu-item" data-block="divider" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">―</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="3" y1="12" x2="21" y2="12"></line>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Разделитель</span>
                     <span class="block-menu-desc">Горизонтальная линия</span>
@@ -214,7 +322,12 @@
 
                 <!-- 8. Код -->
                 <div class="block-menu-item" data-block="code-block" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">&lt;/&gt;</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Код</span>
                     <span class="block-menu-desc">Блок кода с подсветкой синтаксиса</span>
@@ -223,7 +336,11 @@
 
                 <!-- 9. Формула -->
                 <div class="block-menu-item" data-block="formula" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">∑</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 4H6l7 8-7 8h12"></path>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Формула</span>
                     <span class="block-menu-desc">Блочная LaTeX формула с предпросмотром</span>
@@ -232,7 +349,12 @@
 
                 <!-- 10. Спойлер -->
                 <div class="block-menu-item" data-block="spoiler" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">📁</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                      <path d="M7 10l5 5 5-5"></path>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Спойлер</span>
                     <span class="block-menu-desc">Раскрывающийся блок с заголовком</span>
@@ -241,7 +363,13 @@
 
                 <!-- 11. Якорь -->
                 <div class="block-menu-item" data-block="anchor" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">⚓</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="5" r="3"></circle>
+                      <line x1="12" y1="22" x2="12" y2="8"></line>
+                      <path d="M5 12H2a10 10 0 0 0 20 0h-3"></path>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Якорь</span>
                     <span class="block-menu-desc">Именованный маркер ID для ссылки</span>
@@ -250,7 +378,12 @@
 
                 <!-- 12. Персона -->
                 <div class="block-menu-item" data-block="person" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">👤</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Персона</span>
                     <span class="block-menu-desc">Карточка автора (фото, имя, роль, ссылка)</span>
@@ -259,7 +392,14 @@
 
                 <!-- 13. Таблица -->
                 <div class="block-menu-item" data-block="table" tabindex="0" role="menuitem">
-                  <div class="block-menu-icon">▦</div>
+                  <div class="block-menu-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="3" y1="9" x2="21" y2="9"></line>
+                      <line x1="3" y1="15" x2="21" y2="15"></line>
+                      <line x1="12" y1="3" x2="12" y2="21"></line>
+                    </svg>
+                  </div>
                   <div class="block-menu-text">
                     <span class="block-menu-label">Таблица</span>
                     <span class="block-menu-desc">Интерактивная таблица данных</span>
@@ -342,18 +482,32 @@
           <!-- Widget 1: «Типограф» -->
           <div class="sidebar-widget widget-typograph" id="widget-typograph">
             <div class="widget-header">
-              <span class="widget-icon">✨</span>
+              <span class="widget-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                  <line x1="9" y1="20" x2="15" y2="20"></line>
+                  <line x1="12" y1="4" x2="12" y2="20"></line>
+                </svg>
+              </span>
               <h3 class="widget-title">Типограф</h3>
             </div>
             <p class="widget-description">
               После редактирования улучшает типографику текста: исправляет кавычки, тире и привязывает союзы/предлоги.
             </p>
             <button type="button" class="btn btn-typograph" id="btn-typograph">
-              <span class="btn-icon">⚡</span>
+              <span class="btn-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"></path>
+                </svg>
+              </span>
               <span>Оттипографить текст</span>
             </button>
             <div class="typograph-status" id="typograph-status" style="display: none;">
-              <span class="status-icon">✓</span>
+              <span class="status-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
               <span>Текст успешно оттипографилен</span>
             </div>
           </div>
@@ -361,7 +515,12 @@
           <!-- Widget 2: «Памятка автору» -->
           <div class="sidebar-widget widget-author-guide" id="widget-author-guide">
             <div class="widget-header">
-              <span class="widget-icon">💡</span>
+              <span class="widget-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+              </span>
               <h3 class="widget-title">Памятка автору</h3>
             </div>
             <div class="guide-section">
@@ -389,7 +548,13 @@
           <div class="sidebar-widget widget-checklist" id="widget-checklist">
             <div class="widget-header">
               <div class="widget-title-group">
-                <span class="widget-icon">📋</span>
+                <span class="widget-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                    <polyline points="9 14 11 16 15 11"></polyline>
+                  </svg>
+                </span>
                 <h3 class="widget-title">Чек-лист публикации</h3>
               </div>
               <span class="readiness-badge badge-warning" id="readiness-badge">Черновик (0/4)</span>
@@ -426,13 +591,15 @@
         <!-- Compact Undo / Redo controls -->
         <div class="history-controls">
           <button type="button" class="status-btn" id="btn-undo" title="Отменить (Ctrl+Z)" aria-label="Отменить">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
             </svg>
           </button>
           <button type="button" class="status-btn" id="btn-redo" title="Повторить (Ctrl+Y)" aria-label="Повторить">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
             </svg>
           </button>
         </div>
@@ -442,15 +609,33 @@
         <!-- Live Document Statistics -->
         <div class="doc-stats">
           <div class="doc-stats-item" title="Количество слов">
-            <span class="stat-icon">📝</span>
+            <span class="stat-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+            </span>
             <span id="stat-words">0 сл.</span>
           </div>
           <div class="doc-stats-item" title="Количество символов">
-            <span class="stat-icon">🔤</span>
+            <span class="stat-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                <line x1="9" y1="20" x2="15" y2="20"></line>
+                <line x1="12" y1="4" x2="12" y2="20"></line>
+              </svg>
+            </span>
             <span id="stat-chars">0 зн.</span>
           </div>
           <div class="doc-stats-item" title="Примерное время чтения">
-            <span class="stat-icon">⏱️</span>
+            <span class="stat-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </span>
             <span id="stat-reading-time">1 мин чтения</span>
           </div>
         </div>
@@ -584,9 +769,18 @@
       <button class="btn btn-sm" data-table-action="row-below" title="Вставить строку ниже">+ Стр. ↓</button>
       <button class="btn btn-sm" data-table-action="col-left" title="Вставить колонку слева">+ Кол. ←</button>
       <button class="btn btn-sm" data-table-action="col-right" title="Вставить колонку справа">+ Кол. →</button>
-      <button class="btn btn-sm" data-table-action="delete-row" title="Удалить текущую строку">🗑️ Стр.</button>
-      <button class="btn btn-sm" data-table-action="delete-col" title="Удалить текущую колонку">🗑️ Кол.</button>
-      <button class="btn btn-sm" data-table-action="delete-table" title="Удалить всю таблицу" style="color: var(--danger-color);">✕ Табл.</button>
+      <button class="btn btn-sm" data-table-action="delete-row" title="Удалить текущую строку">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        <span>Стр.</span>
+      </button>
+      <button class="btn btn-sm" data-table-action="delete-col" title="Удалить текущую колонку">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        <span>Кол.</span>
+      </button>
+      <button class="btn btn-sm" data-table-action="delete-table" title="Удалить всю таблицу" style="color: var(--danger-color);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <span>Табл.</span>
+      </button>
     </div>
 
     <!-- Modals -->
@@ -595,7 +789,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Добавить или изменить ссылку</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -620,7 +819,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Вставка медиаэлемента (видео)</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -646,7 +850,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Вставка изображения</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="tab-list">
@@ -702,7 +911,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Вставка формулы LaTeX</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -740,7 +954,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Вставка именованного якоря</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -762,7 +981,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Карточка персоны</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -796,7 +1020,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Создание таблицы</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div style="display: flex; gap: 16px;">
@@ -822,7 +1051,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Сохраненные черновики</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
@@ -841,7 +1075,12 @@
       <div class="modal-card modal-card-lg">
         <div class="modal-header">
           <div class="modal-title">Экспорт статьи</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="tab-list">
@@ -853,8 +1092,21 @@
           <pre id="export-code-box" class="export-code-box"></pre>
         </div>
         <div class="modal-footer">
-          <button id="export-copy-btn" class="btn">📋 Скопировать</button>
-          <button id="export-download-btn" class="btn btn-primary">💾 Скачать файл</button>
+          <button id="export-copy-btn" class="btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Скопировать</span>
+          </button>
+          <button id="export-download-btn" class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Скачать файл</span>
+          </button>
         </div>
       </div>
     </div>
@@ -864,7 +1116,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Импорт статьи из JSON</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -888,7 +1145,12 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">Горячие клавиши</div>
-          <button class="modal-close-btn" data-modal-close>✕</button>
+          <button class="modal-close-btn" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="modal-body">
           <div class="shortcuts-grid">

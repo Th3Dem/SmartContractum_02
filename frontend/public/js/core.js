@@ -136,7 +136,7 @@
 
       const badge = document.createElement('div');
       badge.className = 'formula-badge';
-      badge.innerHTML = `<span>LaTeX</span> <button type="button" class="formula-edit-action" title="Редактировать формулу">✎ Изменить</button>`;
+      badge.innerHTML = `<span>LaTeX</span> <button type="button" class="formula-edit-action" title="Редактировать формулу"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg><span>Изменить</span></button>`;
       node.appendChild(badge);
 
       return node;
@@ -318,7 +318,7 @@
 
       const badge = document.createElement('span');
       badge.className = 'editor-anchor-badge';
-      badge.innerHTML = `<span class="anchor-icon">⚓</span> <span class="anchor-id-display">#${cleanId}</span>`;
+      badge.innerHTML = `<span class="anchor-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><circle cx="12" cy="5" r="3"></circle><line x1="12" y1="22" x2="12" y2="8"></line><path d="M5 12H2a10 10 0 0 0 20 0h-3"></path></svg></span> <span class="anchor-id-display">#${cleanId}</span>`;
       node.appendChild(badge);
 
       const hint = document.createElement('span');
@@ -346,13 +346,13 @@
     static className = 'editor-person-card';
 
     static create(value) {
-      const node = super.create();
       const data = typeof value === 'object' && value ? value : {};
       const name = data.name || 'Имя Фамилия';
       const role = data.role || 'Специализация / Должность';
       const link = data.link || '';
       const avatar = data.avatar || '';
 
+      const node = super.create();
       node.setAttribute('data-name', name);
       node.setAttribute('data-role', role);
       node.setAttribute('data-link', link);
@@ -370,7 +370,12 @@
       } else {
         const placeholder = document.createElement('div');
         placeholder.className = 'person-avatar-placeholder';
-        placeholder.textContent = name.charAt(0).toUpperCase() || '👤';
+        const initial = name.trim().charAt(0).toUpperCase();
+        if (initial) {
+          placeholder.textContent = initial;
+        } else {
+          placeholder.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+        }
         avatarWrap.appendChild(placeholder);
       }
 

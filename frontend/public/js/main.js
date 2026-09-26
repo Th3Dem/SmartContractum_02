@@ -257,7 +257,7 @@
         const warnings = this.Converter.getLastWarnings();
         if (exportWarningBanner) {
           if (warnings && warnings.length > 0) {
-            exportWarningBanner.innerHTML = '⚠️ <strong>Предупреждение о совместимости:</strong><br>' + warnings.map(w => `• ${w}`).join('<br>');
+            exportWarningBanner.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Предупреждение о совместимости:</strong><br>' + warnings.map(w => `• ${w}`).join('<br>');
             exportWarningBanner.style.display = 'block';
           } else {
             exportWarningBanner.style.display = 'none';
@@ -442,7 +442,7 @@
         if (!el) return;
         el.classList.toggle('checked', isChecked);
         const box = el.querySelector('.checklist-box');
-        if (box) box.textContent = isChecked ? '✓' : '';
+        if (box) box.innerHTML = isChecked ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '';
       };
 
       setItemState(chkTitle, titleFilled);
@@ -482,14 +482,14 @@
 
       let icon = '';
       if (type === 'success') {
-        icon = '<span style="color: var(--success-color); font-weight: bold;">✓</span>';
+        icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
       } else if (type === 'danger') {
-        icon = '<span style="color: var(--danger-color); font-weight: bold;">✕</span>';
+        icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
       } else {
-        icon = '<span style="color: var(--accent-color); font-weight: bold;">ℹ</span>';
+        icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
       }
 
-      toast.innerHTML = `${icon} <span>${this.Converter.escapeHTML(message)}</span>`;
+      toast.innerHTML = `${icon}<span>${this.Converter.escapeHTML(message)}</span>`;
       container.appendChild(toast);
 
       setTimeout(() => {
