@@ -107,3 +107,6 @@
 [2026-09-26 17:26] | pm_bot | QA_ASSIGN | Передача артефактов на независимый аудит qa_bot (Task: task-13-header-mode-toggle-and-author-guide-polish)
 [2026-09-26 17:26] | qa_bot | QA_APPROVED | Независимый аудит доработок шапки и памятки успешно завершен, вердикт APPROVED (Task: task-13-header-mode-toggle-and-author-guide-polish)
 [2026-09-26 17:27] | pm_bot | TASK_DONE | Разработка и аудит завершены, передача git_bot для фиксации коммита (Task: task-13-header-mode-toggle-and-author-guide-polish)
+[2026-09-26 17:28] | git_bot | GIT_COMMITTED | Фиксация коммита 9950ce4 на этапе FINALIZE (Task: task-13-header-mode-toggle-and-author-guide-polish)
+[2026-09-26 17:30] | git_bot | GIT_COMMITTED | Слияние ветки feat/task-13-header-mode-toggle-and-author-guide-polish в main (коммит 9950ce4) (Task: task-13-header-mode-toggle-and-author-guide-polish)
+[2026-09-26 17:30] | pm_bot | TASK_DONE | Задача task-13 успешно завершена в статусе Done-Done. Все 151 тест пройдены (100%) (Task: task-13-header-mode-toggle-and-author-guide-polish)

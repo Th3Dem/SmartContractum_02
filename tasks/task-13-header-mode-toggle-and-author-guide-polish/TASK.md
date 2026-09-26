@@ -33,11 +33,11 @@
   5. Все 151 автоматических теста проходят успешно (100% pass).
   6. Полное соответствие `GEMINI.md`: 100% offline-first, только шрифт Onest, строгие SVG-иконки, 0 эмодзи.
 
-- **Текущий статус**: IN_GIT
-- **Ответственный исполнитель**: git_bot
-- **Рабочая ветка / копия**: feat/task-13-header-mode-toggle-and-author-guide-polish
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
+- **Рабочая ветка / копия**: main (merged)
 - **Блокер**: нет
-- **Следующий шаг**: Этап FINALIZE в git_bot (проверка QA-хеша, атомарный коммит).
+- **Следующий шаг**: Задача завершена. Все 151 тест пройдены (100%).
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-13-header-mode-toggle-and-author-guide-polish/DEV_HANDOVER.md`
   - QA: `tasks/task-13-header-mode-toggle-and-author-guide-polish/QA_REVIEW.md`
