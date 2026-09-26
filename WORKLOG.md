@@ -225,6 +225,8 @@
 [2026-09-27 01:39] | pm_bot | QA_ASSIGN | Назначение задачи qa_bot для независимого аудита diff, тестов (208 тестов) и расчета QA-снимка (Task: task-24-feed-redesign-and-article-reading)
 [2026-09-27 01:41] | qa_bot | QA_APPROVED | Независимый аудит завершен со статусом APPROVED (208/208 PASS, snapshot 0361e801947fb2f0d6b397eb2076d5e8eb42b77f5aed34479f69e278778ba0cd) (Task: task-24-feed-redesign-and-article-reading)
 [2026-09-27 01:41] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: фиксация коммита и слияние в main (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:43] | git_bot | GIT_COMMITTED | Зафиксирован коммит 841d8e1 и выполнено слияние feat/task-24-feed-redesign-and-article-reading в main (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 01:43] | pm_bot | TASK_DONE | Задача task-24 успешно завершена в статусе Done-Done. Все 208 тестов пройдены (100%) (Task: task-24-feed-redesign-and-article-reading)
 
 
 
