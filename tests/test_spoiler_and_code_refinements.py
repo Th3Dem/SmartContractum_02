@@ -9,7 +9,7 @@ Unit tests for Task 09: Spoiler, Code Block, and Placeholder Refinements
    - main.js binds click interaction to toggle .is-revealed in both edit and preview modes.
    - bubble.js toggles inline-spoiler format and sets .is-active when inside inline spoiler.
 2. Code Block & Language Selector:
-   - theme.css code block variables (light: #f8f9fa, dark: #161b22).
+   - theme.css code block variables (light: #f8f9fa, dark: #0e121e).
    - editor.css overrides Quill Snow defaults for code container and pre.ql-syntax.
    - select.ql-ui positioned top: -26px, right: 0 with Onest font and custom SVG arrow.
    - Never overlaps code text due to reserved margin.
@@ -144,9 +144,9 @@ class TestCodeBlockRefinements(unittest.TestCase):
         dark_section = re.search(r'\[data-theme="dark"\]\s*\{([^}]+)\}', self.theme_css)
         self.assertIsNotNone(dark_section, "Dark theme block must exist in theme.css")
         dark_block = dark_section.group(1)
-        self.assertIn('--code-bg: #161b22;', dark_block)
+        self.assertIn('--code-bg: #0e121e;', dark_block)
         self.assertIn('--code-text: #e6edf3;', dark_block)
-        self.assertIn('--code-border: #30363d;', dark_block)
+        self.assertIn('--code-border: #222531;', dark_block)
 
     def test_editor_css_overrides_quill_code_block_container(self):
         """Ensure editor.css overrides Quill Snow dark defaults for code container and pre.ql-syntax."""

@@ -100,7 +100,7 @@
 
   /* Typography */
   --font-sans: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono: ui-monospace, SFMono-Regular, "Onest", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
 
   --letter-spacing-base: -0.01em;
@@ -122,68 +122,68 @@
   --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Dark Theme */
+/* Dark Theme (CoinMarketCap Midnight Navy & Feed Aesthetic) */
 [data-theme="dark"] {
-  --bg-page: #111315;
-  --bg-editor: #1a1d21;
-  --bg-surface: #1a1d21;
-  --bg-elevated: #24282e;
-  --bg-subtle: #24282e;
-  --bg-muted: #2e333b;
-  --bg-hover: #262a30;
-  --bg-active: #323740;
+  --bg-page: #0b1426;          /* Midnight Navy */
+  --bg-editor: #171924;        /* Dark Slate Card BG */
+  --bg-surface: #171924;
+  --bg-elevated: #222531;      /* Elevated toolbar/modal surface */
+  --bg-subtle: #1f2230;
+  --bg-muted: #2b3149;
+  --bg-hover: #1f2230;
+  --bg-active: #2b3149;
 
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --text-placeholder: #4b5563;
-  --text-inverse: #111315;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a7bb;
+  --text-muted: #616e85;
+  --text-placeholder: #475569;
+  --text-inverse: #0b1426;
 
-  --border-color: #2b3036;
-  --border-subtle: #22262b;
-  --border-dark: #475569;
-  --border-focus: #60a5fa;
+  --border-color: #222531;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-dark: #333a4d;
+  --border-focus: #3861fb;
 
-  --accent-color: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-subtle: #1e3a8a;
-  --accent-text: #93c5fd;
+  --accent-color: #3861fb;     /* CMC Royal Blue */
+  --accent-hover: #2752e7;
+  --accent-subtle: rgba(56, 97, 251, 0.15);
+  --accent-text: #6188ff;
 
-  --success-color: #34d399;
-  --success-subtle: #064e3b;
-  --warning-color: #fbbf24;
-  --warning-subtle: #78350f;
-  --danger-color: #f87171;
-  --danger-hover: #ef4444;
-  --danger-subtle: #7f1d1d;
+  --success-color: #16c784;    /* CMC Mint Green */
+  --success-subtle: rgba(22, 199, 132, 0.15);
+  --warning-color: #f59e0b;
+  --warning-subtle: rgba(245, 158, 11, 0.15);
+  --danger-color: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-subtle: rgba(239, 68, 68, 0.15);
 
   /* Code Block Colors */
-  --code-bg: #161b22;
+  --code-bg: #0e121e;
   --code-text: #e6edf3;
-  --code-border: #30363d;
-  --inline-code-bg: #21262d;
-  --inline-code-text: #ff7b72;
+  --code-border: #222531;
+  --inline-code-bg: #1b2030;
+  --inline-code-text: #38bdf8;
 
   /* Blockquote Colors */
-  --quote-border: #388bfd;
-  --quote-bg: #161b22;
-  --quote-text: #c9d1d9;
+  --quote-border: #3861fb;
+  --quote-bg: rgba(56, 97, 251, 0.06);
+  --quote-text: #cbd5e1;
 
   /* Spoilers & Details */
-  --spoiler-bg: #161b22;
-  --spoiler-border: #30363d;
-  --spoiler-header-hover: #21262d;
+  --spoiler-bg: #131620;
+  --spoiler-border: #222531;
+  --spoiler-header-hover: #1f2230;
 
   /* Tables */
-  --table-border: #30363d;
-  --table-header-bg: #161b22;
-  --table-row-alt: #12161c;
-  --table-cell-hover: #1c2129;
+  --table-border: #222531;
+  --table-header-bg: #1a1e2e;
+  --table-row-alt: #141724;
+  --table-cell-hover: #1f2230;
 
   /* Shadows */
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.6);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.6);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7);
 }

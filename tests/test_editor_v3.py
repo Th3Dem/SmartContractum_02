@@ -42,7 +42,7 @@ class TestPageLayoutAndDesign(unittest.TestCase):
             self.html = f.read()
 
     def test_background_colors(self):
-        """Calm light-gray page background (#f4f5f7 / dark: #111315)."""
+        """Calm light-gray page background (#f4f5f7 / dark: #0b1426)."""
         self.assertIn('--bg-page: #f4f5f7;', self.theme_css)
         self.assertIn('--bg-editor: #ffffff;', self.theme_css)
 
@@ -50,8 +50,8 @@ class TestPageLayoutAndDesign(unittest.TestCase):
         dark_section = re.search(r'\[data-theme="dark"\]\s*\{([^}]+)\}', self.theme_css)
         self.assertIsNotNone(dark_section)
         dark_content = dark_section.group(1)
-        self.assertIn('--bg-page: #111315;', dark_content)
-        self.assertIn('--bg-editor: #1a1d21;', dark_content)
+        self.assertIn('--bg-page: #0b1426;', dark_content)
+        self.assertIn('--bg-editor: #171924;', dark_content)
 
     def test_central_block_dimensions(self):
         """Central block width: 800-880px (recommended 840px), horizontal padding: 40-56px (recommended 48px)."""

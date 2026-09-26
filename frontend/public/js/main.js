@@ -72,13 +72,11 @@
        Theme Management
        ========================================================================== */
     initTheme() {
-      const savedTheme = localStorage.getItem('ag_theme');
+      const savedTheme = localStorage.getItem('ag_theme') || localStorage.getItem('sc_theme');
       if (savedTheme) {
         this.theme = savedTheme;
-      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        this.theme = 'dark';
       } else {
-        this.theme = 'light';
+        this.theme = document.documentElement.getAttribute('data-theme') || 'dark';
       }
       this.applyTheme(this.theme);
 
@@ -94,6 +92,7 @@
     applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('ag_theme', theme);
+      localStorage.setItem('sc_theme', theme);
 
       // Switch Highlight.js theme
       const hljsThemeLink = document.getElementById('hljs-theme');
