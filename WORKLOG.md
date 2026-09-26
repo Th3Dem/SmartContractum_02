@@ -77,3 +77,4 @@
 [2026-09-26 14:03] | pm_bot | QA_ASSIGN | Передача артефактов на независимый аудит qa_bot (Task: task-10-fix-inline-spoiler-blur-formatting)
 [2026-09-26 14:04] | qa_bot | QA_APPROVED | Независимый аудит исправления применения инлайн-спойлера успешно завершен, вердикт APPROVED (Task: task-10-fix-inline-spoiler-blur-formatting)
 [2026-09-26 14:04] | pm_bot | TASK_DONE | Разработка и аудит завершены, готовы к фиксации (Task: task-10-fix-inline-spoiler-blur-formatting)
+[2026-09-26 14:05] | git_bot | GIT_COMMITTED | Фиксация коммита 9e9a682 на этапе FINALIZE (Task: task-10-fix-inline-spoiler-blur-formatting)
