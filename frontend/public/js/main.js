@@ -80,9 +80,19 @@
       }
       this.applyTheme(this.theme);
 
-      const toggleBtn = document.getElementById('btn-theme-toggle');
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
+      // Header tumbler switch (#btnThemeToggle)
+      const headerToggleBtn = document.getElementById('btnThemeToggle');
+      if (headerToggleBtn) {
+        headerToggleBtn.addEventListener('click', () => {
+          this.theme = this.theme === 'dark' ? 'light' : 'dark';
+          this.applyTheme(this.theme);
+        });
+      }
+
+      // Dropdown toggle button (#btn-theme-toggle)
+      const dropdownToggleBtn = document.getElementById('btn-theme-toggle');
+      if (dropdownToggleBtn) {
+        dropdownToggleBtn.addEventListener('click', () => {
           this.theme = this.theme === 'dark' ? 'light' : 'dark';
           this.applyTheme(this.theme);
         });
@@ -93,6 +103,13 @@
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('ag_theme', theme);
       localStorage.setItem('sc_theme', theme);
+
+      // Update header tumbler UI
+      const headerToggleBtn = document.getElementById('btnThemeToggle');
+      if (headerToggleBtn) {
+        headerToggleBtn.setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
+        headerToggleBtn.setAttribute('title', theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на тёмную тему');
+      }
 
       // Switch Highlight.js theme
       const hljsThemeLink = document.getElementById('hljs-theme');

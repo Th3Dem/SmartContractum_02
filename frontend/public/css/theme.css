@@ -37,6 +37,7 @@
   /* Color Palette - Light Theme (Default) */
   --bg-page: #f4f5f7;
   --bg-editor: #ffffff;
+  --bg-card: #ffffff;
   --bg-surface: #ffffff;
   --bg-elevated: #ffffff;
   --bg-subtle: #ebedf0;
@@ -126,6 +127,7 @@
 [data-theme="dark"] {
   --bg-page: #0b1426;          /* Midnight Navy */
   --bg-editor: #171924;        /* Dark Slate Card BG */
+  --bg-card: #171924;          /* CMC Card & Table BG */
   --bg-surface: #171924;
   --bg-elevated: #222531;      /* Elevated toolbar/modal surface */
   --bg-subtle: #1f2230;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test Suite: Feed Page and Editor Designer Color Palette
-Verification for task-14-feed-page-and-editor-color-palette:
+Verification for task-14-feed-page-and-editor-color-palette & task-15-editor-feed-visual-alignment:
   1. Verification that frontend/public/feed.html exists.
   2. 100% Offline-First check: Ensure feed.html, landing_main.css, forum_social.css, hero_constellation.css
      have zero external http/https references to Google Fonts, CDNs, or external scripts.
@@ -17,6 +17,11 @@ Verification for task-14-feed-page-and-editor-color-palette:
      --accent-color: #3861fb, --success-color: #16c784,
      and editor.html defaults to data-theme="dark".
   8. Emojis check: verify zero emojis in feed.html.
+  9. Task-15 Visual alignment requirements:
+     - Top navigation header with #appHeader, brand-logo link to feed.html, #navEditor.is-active, #btnThemeToggle, #headerLoginBtn.
+     - Document action bar #editorDocumentBar with brand Antigravity Writer, #btn-drafts-modal, #drafts-badge, #save-status, #btn-more-actions.
+     - Unified button styles in editor.css (.btn-primary, .btn-next-to-pub/#btn-next-to-settings, secondary .btn/.btn-drafts).
+     - Strict Onest font and zero emojis in editor.html and editor.css.
 """
 
 import os
@@ -287,6 +292,147 @@ class TestZeroEmojisInFeedPage(unittest.TestCase):
         emoji_pattern = re.compile(r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50]')
         matches = emoji_pattern.findall(self.feed_html)
         self.assertEqual(len(matches), 0, f"Unexpected emoji characters found in feed.html: {matches}")
+
+
+class TestEditorFeedVisualAlignment(unittest.TestCase):
+    """Test Suite for task-15: Editor visual alignment with feed page, top navigation header,
+    document action bar, unified button design, zero emojis, and Onest font."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.editor_html_path = os.path.join(FRONTEND_DIR, 'editor.html')
+        cls.editor_css_path = os.path.join(FRONTEND_DIR, 'css', 'editor.css')
+        with open(cls.editor_html_path, 'r', encoding='utf-8') as f:
+            cls.editor_html = f.read()
+        with open(cls.editor_css_path, 'r', encoding='utf-8') as f:
+            cls.editor_css = f.read()
+
+    def test_editor_has_top_navigation_header(self):
+        """Verify editor.html contains the full top header with id='appHeader', brand-logo linking to feed.html,
+        nav link #navEditor with class 'is-active', theme toggle #btnThemeToggle, and login button #headerLoginBtn."""
+        # Top sticky header with id="appHeader"
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(header_match, "Top header with id='appHeader' not found in editor.html")
+        header_content = header_match.group(1)
+
+        # Brand-logo linking to feed.html
+        brand_logo_match = re.search(
+            r'<a[^>]*href=["\']feed\.html["\'][^>]*class=["\'][^"\']*brand-logo[^"\']*["\']|'
+            r'<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*href=["\']feed\.html["\']',
+            header_content
+        )
+        self.assertIsNotNone(brand_logo_match, "brand-logo link to feed.html not found in editor top header")
+
+        # Nav link #navEditor with class "is-active"
+        nav_editor_match = re.search(
+            r'<a[^>]*id=["\']navEditor["\'][^>]*class=["\'][^"\']*\bis-active\b[^"\']*["\']|'
+            r'<a[^>]*class=["\'][^"\']*\bis-active\b[^"\']*["\'][^>]*id=["\']navEditor["\']',
+            header_content
+        )
+        self.assertIsNotNone(nav_editor_match, "Nav link #navEditor with class 'is-active' not found in editor top header")
+
+        # Theme toggle button #btnThemeToggle
+        self.assertIn('id="btnThemeToggle"', header_content, "#btnThemeToggle button not found in editor top header")
+
+        # User login button #headerLoginBtn
+        self.assertIn('id="headerLoginBtn"', header_content, "#headerLoginBtn button not found in editor top header")
+
+    def test_editor_has_document_action_bar(self):
+        """Verify editor.html has #editorDocumentBar containing brand Antigravity Writer,
+        #btn-drafts-modal, #drafts-badge, #save-status, and #btn-more-actions."""
+        bar_start = self.editor_html.find('id="editorDocumentBar"')
+        self.assertNotEqual(bar_start, -1, "#editorDocumentBar not found in editor.html")
+        bar_end = self.editor_html.find('class="app-main-layout"', bar_start)
+        self.assertNotEqual(bar_end, -1, "app-main-layout boundary not found after editorDocumentBar")
+        bar_content = self.editor_html[bar_start:bar_end]
+
+        # Brand Antigravity Writer
+        self.assertIn('Antigravity Writer', bar_content, "Brand 'Antigravity Writer' not found in #editorDocumentBar")
+
+        # #btn-drafts-modal
+        self.assertIn('id="btn-drafts-modal"', bar_content, "#btn-drafts-modal not found in #editorDocumentBar")
+
+        # #drafts-badge
+        self.assertIn('id="drafts-badge"', bar_content, "#drafts-badge not found in #editorDocumentBar")
+
+        # #save-status
+        self.assertIn('id="save-status"', bar_content, "#save-status not found in #editorDocumentBar")
+
+        # #btn-more-actions
+        self.assertIn('id="btn-more-actions"', bar_content, "#btn-more-actions not found in #editorDocumentBar")
+
+    def test_editor_buttons_design_and_palette(self):
+        """Verify editor.css defines the unified button styles:
+        - .btn-primary with linear-gradient containing #3861fb and border-radius 9px.
+        - .btn-next-to-pub / #btn-next-to-settings with emerald gradient containing #10b981 / #059669 and box-shadow.
+        - secondary buttons (.btn, .btn-drafts) with background #171924, border #222531, and hover border #38bdf8."""
+
+        # 1. .btn-primary with linear-gradient containing #3861fb and border-radius 9px
+        btn_primary_match = re.search(r'\.btn-primary\s*\{([^}]+)\}', self.editor_css)
+        self.assertIsNotNone(btn_primary_match, ".btn-primary rule block not found in editor.css")
+        primary_css = btn_primary_match.group(1)
+        self.assertIn('linear-gradient', primary_css, ".btn-primary must use linear-gradient")
+        self.assertIn('#3861fb', primary_css, ".btn-primary gradient must contain #3861fb")
+        self.assertTrue(re.search(r'border-radius:\s*9px', primary_css), ".btn-primary must have border-radius: 9px")
+
+        # 2. .btn-next-to-pub / #btn-next-to-settings with emerald gradient containing #10b981 / #059669 and box-shadow
+        next_pub_match = re.search(r'([^{]*\.btn-next-to-pub[^{]*)\{([^}]+)\}', self.editor_css)
+        self.assertIsNotNone(next_pub_match, ".btn-next-to-pub rule block not found in editor.css")
+        next_pub_selectors = next_pub_match.group(1)
+        next_pub_css = next_pub_match.group(2)
+        self.assertTrue('#btn-next-to-settings' in next_pub_selectors or '.btn-next-to-pub' in next_pub_selectors,
+                        "#btn-next-to-settings or .btn-next-to-pub not found in next-to-pub selectors")
+        self.assertIn('#10b981', next_pub_css, ".btn-next-to-pub gradient must contain #10b981")
+        self.assertIn('#059669', next_pub_css, ".btn-next-to-pub gradient must contain #059669")
+        self.assertIn('box-shadow', next_pub_css, ".btn-next-to-pub must have box-shadow")
+
+        # 3. secondary buttons (.btn, .btn-drafts) with background #171924, border #222531, and hover border #38bdf8
+        btn_match = re.search(r'(?<![a-zA-Z0-9_-])\.btn\s*\{([^}]+)\}', self.editor_css)
+        self.assertIsNotNone(btn_match, ".btn rule block not found in editor.css")
+        btn_css = btn_match.group(1)
+        self.assertTrue(re.search(r'background(?:-color)?:\s*#171924', btn_css),
+                        ".btn must have background #171924")
+        self.assertTrue(re.search(r'border(?:-color)?:\s*(?:1px\s+solid\s+)?#222531', btn_css),
+                        ".btn must have border #222531")
+
+        btn_hover_match = re.search(r'(?<![a-zA-Z0-9_-])\.btn:hover\s*\{([^}]+)\}', self.editor_css)
+        self.assertIsNotNone(btn_hover_match, ".btn:hover rule block not found in editor.css")
+        btn_hover_css = btn_hover_match.group(1)
+        self.assertTrue(re.search(r'border-color:\s*#38bdf8', btn_hover_css),
+                        ".btn:hover must have hover border-color #38bdf8")
+
+        # .btn-drafts exists and inherits .btn styling
+        self.assertIn('.btn-drafts', self.editor_css, ".btn-drafts selector must be present in editor.css")
+        self.assertIn('class="btn btn-drafts"', self.editor_html,
+                      "Drafts button in editor.html must have class 'btn btn-drafts'")
+
+    def test_editor_zero_emojis_and_onest_font(self):
+        """Verify editor.html and editor.css contain zero emoji characters and strictly use Onest font."""
+        forbidden_emojis = [
+            '📁', '📤', '🌐', '📝', '💾', '📥', '🌓', '⌨️', '⌨', '🗑️', '🗑',
+            '✨', '💡', '📋', '🖼️', '🖼', '👤', '⚓', '✏️', '✏', '👁️', '👁',
+            '⏱️', '⏱', '🔤', '⚡', '📊', '💻', '🔄', '🔥', '🚀', '💬', '❤️',
+            '👍', '🎉', '🌟', '💎', '🔒', '🛡️', '⚙️', '🔍'
+        ]
+        emoji_pattern = re.compile(r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50]')
+
+        for filename, content in [('editor.html', self.editor_html), ('editor.css', self.editor_css)]:
+            for emoji in forbidden_emojis:
+                self.assertNotIn(emoji, content, f"Forbidden emoji '{emoji}' found in {filename}")
+            matches = emoji_pattern.findall(content)
+            self.assertEqual(len(matches), 0, f"Unexpected emoji characters found in {filename}: {matches}")
+
+        # Strict Onest font usage
+        self.assertIn("'Onest'", self.editor_html, "editor.html must declare 'Onest' font family")
+        self.assertIn("'Onest'", self.editor_css, "editor.css must declare 'Onest' font family")
+
+        disallowed_fonts_pattern = re.compile(
+            r'font-family:\s*[^;]*\b(?:Inter|Manrope|JetBrains Mono)\b',
+            re.IGNORECASE
+        )
+        for filename, content in [('editor.html', self.editor_html), ('editor.css', self.editor_css)]:
+            matches = disallowed_fonts_pattern.findall(content)
+            self.assertEqual(len(matches), 0, f"Disallowed legacy font found in {filename}: {matches}")
 
 
 if __name__ == '__main__':
