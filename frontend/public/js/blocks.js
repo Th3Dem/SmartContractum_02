@@ -18,6 +18,11 @@
 
       if (!this.inserter || !this.inserterBtn || !this.blockMenu) return;
 
+      // Portal to document.body to ensure unconstrained fixed positioning relative to viewport
+      if (typeof document !== 'undefined' && document.body && this.blockMenu.parentElement !== document.body) {
+        document.body.appendChild(this.blockMenu);
+      }
+
       this.currentLineIndex = 0;
       this.highlightedIndex = -1;
       this.menuItems = [];
@@ -132,6 +137,21 @@
           this.closeMenu();
         }
       });
+
+      // Dynamic repositioning on scroll and resize
+      const handleScrollOrResize = () => {
+        if (this.blockMenu && this.blockMenu.classList.contains('show')) {
+          this.updateMenuPosition();
+        }
+      };
+
+      window.addEventListener('scroll', handleScrollOrResize, { passive: true, capture: true });
+      window.addEventListener('resize', handleScrollOrResize, { passive: true });
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleScrollOrResize, { passive: true });
+        window.visualViewport.addEventListener('scroll', handleScrollOrResize, { passive: true });
+      }
     }
 
     updatePosition(index) {
@@ -152,6 +172,10 @@
 
       this.inserter.style.top = `${topOffset}px`;
       this.inserter.classList.add('visible');
+
+      if (this.blockMenu && this.blockMenu.classList.contains('show')) {
+        this.updateMenuPosition();
+      }
     }
 
     hide() {
@@ -177,13 +201,94 @@
 
       this.blockMenu.classList.add('show');
       this.inserterBtn.classList.add('active');
+
+      this.updateMenuPosition();
     }
 
     closeMenu() {
       this.blockMenu.classList.remove('show');
+      this.blockMenu.classList.remove('open-up');
+      this.blockMenu.classList.remove('open-down');
       this.inserterBtn.classList.remove('active');
       this.highlightedIndex = -1;
       this.clearHighlight();
+    }
+
+    updateMenuPosition() {
+      if (!this.blockMenu || !this.inserterBtn) return;
+
+      const header = document.querySelector('.app-header');
+      const statusBar = document.querySelector('.app-status-bar');
+      const headerBottom = header ? header.getBoundingClientRect().bottom : 58;
+      const statusTop = statusBar ? statusBar.getBoundingClientRect().top : (window.innerHeight - 44);
+
+      const btnRect = this.inserterBtn.getBoundingClientRect();
+      const GAP = 10;
+      const minAllowedTop = headerBottom + GAP;
+      const maxAllowedBottom = statusTop - GAP;
+
+      // Close menu automatically if button has scrolled out of visible workspace
+      if (btnRect.bottom < minAllowedTop || btnRect.top > maxAllowedBottom) {
+        this.closeMenu();
+        return;
+      }
+
+      const spaceBelow = maxAllowedBottom - btnRect.bottom;
+      const spaceAbove = btnRect.top - minAllowedTop;
+
+      const menuList = this.blockMenu.querySelector('.block-menu-list');
+      const fullMenuHeight = Math.min(440, (menuList ? menuList.scrollHeight : this.blockMenu.scrollHeight) || 440);
+
+      let direction = 'down';
+      let maxHeight = fullMenuHeight;
+      let top = 'auto';
+      let bottom = 'auto';
+
+      if (spaceBelow >= fullMenuHeight + 8) {
+        direction = 'down';
+        maxHeight = Math.min(fullMenuHeight, spaceBelow - 8);
+        top = btnRect.bottom + 6;
+        bottom = 'auto';
+      } else if (spaceAbove >= fullMenuHeight + 8) {
+        direction = 'up';
+        maxHeight = Math.min(fullMenuHeight, spaceAbove - 8);
+        bottom = (window.innerHeight - btnRect.top) + 6;
+        top = 'auto';
+      } else {
+        // Insufficient space for full menu in either direction
+        direction = spaceBelow >= spaceAbove ? 'down' : 'up';
+        const chosenSpace = direction === 'down' ? spaceBelow : spaceAbove;
+        maxHeight = Math.max(140, chosenSpace - 8);
+        if (direction === 'down') {
+          top = btnRect.bottom + 6;
+          bottom = 'auto';
+        } else {
+          bottom = (window.innerHeight - btnRect.top) + 6;
+          top = 'auto';
+        }
+      }
+
+      // Horizontal clamping: keep within viewport with margin
+      const menuWidth = this.blockMenu.offsetWidth || 330;
+      const left = Math.max(12, Math.min(btnRect.left, window.innerWidth - menuWidth - 12));
+
+      // Apply styles to blockMenu
+      this.blockMenu.style.position = 'fixed';
+      this.blockMenu.style.left = `${left}px`;
+      this.blockMenu.style.top = top !== 'auto' ? `${top}px` : 'auto';
+      this.blockMenu.style.bottom = bottom !== 'auto' ? `${bottom}px` : 'auto';
+      this.blockMenu.style.maxHeight = `${maxHeight}px`;
+      this.blockMenu.style.overflowY = 'auto';
+      this.blockMenu.style.overscrollBehavior = 'contain';
+      this.blockMenu.style.zIndex = '60';
+
+      if (direction === 'up') {
+        this.blockMenu.classList.add('open-up');
+        this.blockMenu.classList.remove('open-down');
+      } else {
+        this.blockMenu.classList.add('open-down');
+        this.blockMenu.classList.remove('open-up');
+      }
     }
 
     navigateMenu(direction) {

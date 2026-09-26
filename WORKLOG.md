@@ -56,3 +56,6 @@
 [2026-09-26 12:19] | qa_bot | QA_APPROVED | Независимый аудит дизайн-системы, шрифта Onest и SVG-иконок успешно завершен, вердикт APPROVED (Task: task-07-design-system-and-onest-font)
 [2026-09-26 12:20] | pm_bot | TASK_DONE | Разработка и аудит завершены, готовы к фиксации (Task: task-07-design-system-and-onest-font)
 [2026-09-26 12:21] | git_bot | GIT_COMMITTED | Фиксация коммита 7b7c75d на этапе FINALIZE (Task: task-07-design-system-and-onest-font)
+[2026-09-26 12:22] | git_bot | GIT_COMMITTED | Слияние ветки feat/task-07-design-system-and-onest-font в main (коммит e7db77c) (Task: task-07-design-system-and-onest-font)
+[2026-09-26 12:48] | pm_bot | TASK_INIT | Инициализация исправления позиционирования меню «+» и нижней строки состояния (Task: task-08-fix-block-menu-and-status-bar)
+[2026-09-26 12:54] | dev_bot | DEV_COMPLETE | Исправлено позиционирование меню «+» (умное раскрытие вверх/вниз) и фиксация статус-бара, 103 теста успешно пройдены (100%), DEV_HANDOVER со статусом READY_FOR_QA (Task: task-08-fix-block-menu-and-status-bar)
