@@ -97,11 +97,15 @@ class TestDesignSystemAndIcons(unittest.TestCase):
     # 3. SLEEK SVG VECTOR ICONS
     # =========================================================================
     def test_header_svg_icons(self):
-        """Verify header buttons have clean SVG vector icons, Antigravity Writer and more actions removed."""
-        # Main Header Branding: SmartContractum in #appHeader
-        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(header_match, "appHeader not found")
-        self.assertIn('SmartContractum', header_match.group(1))
+        """Verify top header (#appHeader, #btnThemeToggle) is completely removed,
+        while workspace action buttons retain clean SVG vector icons."""
+        # task-22: Complete removal of top header and its buttons
+        self.assertNotIn('id="appHeader"', self.editor_html, "#appHeader must be completely removed from editor.html")
+        self.assertNotIn('class="app-header"', self.editor_html, "class 'app-header' must be removed from editor.html")
+        self.assertNotIn('<header', self.editor_html, "<header> element must be completely removed from editor.html")
+        self.assertNotIn('id="btnThemeToggle"', self.editor_html, "#btnThemeToggle must be removed from editor.html")
+        self.assertNotIn('id="headerNav"', self.editor_html, "#headerNav must be removed from editor.html")
+        self.assertNotIn('id="headerLoginBtn"', self.editor_html, "#headerLoginBtn must be removed from editor.html")
 
         # Antigravity Writer removed from sub-bar per requirement 4
         self.assertNotIn('Antigravity Writer', self.editor_html)
@@ -122,8 +126,10 @@ class TestDesignSystemAndIcons(unittest.TestCase):
         self.assertIsNotNone(clear_btn_match, "btn-clear-doc not found in editor.html")
         self.assertIn('<svg', clear_btn_match.group(1), "btn-clear-doc missing SVG icon")
 
-        # Global theme toggle in main header
-        self.assertIn('id="btnThemeToggle"', self.editor_html)
+        # Next to settings / publication button has clean SVG icon
+        next_pub_btn = re.search(r'<button[^>]*id="btn-next-to-settings"[^>]*>(.*?)</button>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(next_pub_btn, "btn-next-to-settings not found in editor.html")
+        self.assertIn('<svg', next_pub_btn.group(1), "btn-next-to-settings missing SVG icon")
 
         # Verify #btn-export-dropdown and #export-dropdown-menu are NOT present
         self.assertNotIn('id="btn-export-dropdown"', self.editor_html)

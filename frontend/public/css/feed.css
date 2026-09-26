@@ -11,8 +11,8 @@
   width: 100%;
   max-width: var(--max-width, 1360px);
   margin: 0 auto;
-  padding: 28px 24px 64px 24px;
-  min-height: calc(100vh - var(--header-height, 64px));
+  padding: 32px 24px 64px 24px;
+  min-height: 100vh;
 }
 
 .feed-layout-grid {

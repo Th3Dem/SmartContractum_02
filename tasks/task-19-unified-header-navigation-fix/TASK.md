@@ -39,11 +39,11 @@
   4. Кнопки меню и профиля имеют одинаковый шрифт Onest, идентичный размер и стиль.
   5. Все автоматические тесты проходят успешно (100% PASS, 0 failures, 0 errors).
 
-- **Текущий статус**: QA_APPROVED
-- **Ответственный исполнитель**: git_bot
-- **Рабочая ветка / копия**: feat/task-19-unified-header-navigation-fix
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
+- **Рабочая ветка / копия**: main
 - **Блокер**: нет
-- **Следующий шаг**: Фиксация коммита git_bot на этапе FINALIZE
+- **Следующий шаг**: Задача полностью завершена (Done-Done). Ветка влита в main.
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-19-unified-header-navigation-fix/DEV_HANDOVER.md`
   - QA: `tasks/task-19-unified-header-navigation-fix/QA_REVIEW.md`

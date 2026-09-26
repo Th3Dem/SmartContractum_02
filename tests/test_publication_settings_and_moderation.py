@@ -602,7 +602,8 @@ class TestModerationServerIntegration(unittest.TestCase):
         with urllib.request.urlopen(req) as resp:
             self.assertEqual(resp.status, 200)
             content = resp.read().decode("utf-8")
-            self.assertIn("SmartContractum", content)
+            self.assertIn("editorDocumentBar", content)
+            self.assertIn("<!DOCTYPE html>", content)
 
         # 2. index.html
         url_index = f"{self.base_url}/index.html"

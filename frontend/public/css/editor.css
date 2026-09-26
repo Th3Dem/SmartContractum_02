@@ -104,21 +104,6 @@ a {
   flex-direction: column;
 }
 
-/* Site Top Navigation Header Styles & Active Link (Unified with feed.html) */
-.logo-name {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -0.4px;
-  display: inline-flex;
-  align-items: center;
-  color: #ffffff;
-  font-family: 'Onest', sans-serif;
-}
-
-[data-theme="light"] .logo-name {
-  color: #0f172a !important;
-}
-
 /* Dedicated Document Sub-bar (Antigravity Writer controls) */
 .editor-document-bar {
   height: 52px;
@@ -129,7 +114,7 @@ a {
   justify-content: space-between;
   padding: 0 24px;
   position: sticky;
-  top: 64px;
+  top: 0;
   z-index: 900;
   transition: background-color var(--transition-normal), border-color var(--transition-normal);
 }
@@ -1808,7 +1793,7 @@ body.preview-mode .editor-card {
 
 .sidebar-sticky-wrapper {
   position: sticky;
-  top: calc(var(--header-height, 64px) + 20px);
+  top: 72px;
   display: flex;
   flex-direction: column;
   gap: 20px;
