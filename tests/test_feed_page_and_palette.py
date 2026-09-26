@@ -928,6 +928,19 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
         self.assertIn("'Onest'", self.theme_css)
         self.assertIn('font-family: var(--font-sans);', self.theme_css)
 
+    def test_consistent_root_font_size_and_no_html_override_in_editor_css(self):
+        """Verify root html font-size is strictly 16px in theme.css and editor.css does not override html font-size,
+        preventing header font-size scaling discrepancies between index.html, feed.html, and editor.html."""
+        # theme.css sets html font-size: 16px
+        html_theme_match = re.search(r'html\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(html_theme_match, "html block not found in theme.css")
+        self.assertIn('font-size: 16px;', html_theme_match.group(1))
+
+        # editor.css must NOT set font-size on html (which would break rem scale across pages)
+        html_editor_match = re.search(r'(?<![a-zA-Z0-9_-])html\s*\{([^}]+)\}', self.editor_css)
+        if html_editor_match:
+            self.assertNotIn('font-size:', html_editor_match.group(1), "editor.css must not set font-size on html")
+
 
 if __name__ == '__main__':
     unittest.main()
