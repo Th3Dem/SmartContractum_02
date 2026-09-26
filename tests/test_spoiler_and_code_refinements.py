@@ -31,7 +31,7 @@ FRONTEND_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'public')
 
 
 class TestInlineSpoilerRefinements(unittest.TestCase):
-    """Test 1: Inline spoiler blur and reveal toggle (edit and preview modes)."""
+    """Test 1: Inline spoiler blur, reveal toggle, Blot implementation, and formatText."""
 
     @classmethod
     def setUpClass(cls):
@@ -47,24 +47,39 @@ class TestInlineSpoilerRefinements(unittest.TestCase):
         with open(cls.bubble_js_path, 'r', encoding='utf-8') as f:
             cls.bubble_js = f.read()
 
+        cls.core_js_path = os.path.join(FRONTEND_DIR, 'js', 'core.js')
+        with open(cls.core_js_path, 'r', encoding='utf-8') as f:
+            cls.core_js = f.read()
+
+    def test_inline_spoiler_blot_implementation(self):
+        """Ensure InlineSpoilerBlot has static formats, formats(), format() unwrap, and registration."""
+        self.assertIn("class InlineSpoilerBlot extends Inline", self.core_js)
+        self.assertIn("static formats(domNode)", self.core_js)
+        self.assertIn("formats()", self.core_js)
+        self.assertIn("formats['inline-spoiler'] = true;", self.core_js)
+        self.assertIn("if (name === this.statics.blotName && !value)", self.core_js)
+        self.assertIn("this.unwrap();", self.core_js)
+        self.assertIn("Quill.register(InlineSpoilerBlot, true);", self.core_js)
+        self.assertIn("Quill.register('formats/inline-spoiler', InlineSpoilerBlot, true);", self.core_js)
+
     def test_inline_spoiler_css_blurred_by_default(self):
-        """Ensure .editor-inline-spoiler has blur filter and proper styling."""
+        """Ensure .editor-inline-spoiler has blur filter and proper styling without user-select: none."""
         match = re.search(r'\.editor-inline-spoiler\s*\{([^}]+)\}', self.editor_css)
         self.assertIsNotNone(match, ".editor-inline-spoiler rule must exist in editor.css")
         block = match.group(1)
-        self.assertIn('filter: blur(4.5px);', block)
-        self.assertIn('background-color: var(--bg-hover);', block)
+        self.assertIn('filter: blur(5px);', block)
+        self.assertIn('-webkit-filter: blur(5px);', block)
+        self.assertIn('background-color: rgba(100, 116, 139, 0.15);', block)
         self.assertIn('cursor: pointer;', block)
-        self.assertIn('user-select: none;', block)
-        self.assertIn('display: inline-block;', block)
+        self.assertNotIn('user-select: none;', block)
 
     def test_inline_spoiler_css_revealed_state(self):
-        """Ensure .editor-inline-spoiler.is-revealed clears blur and allows text selection."""
-        match = re.search(r'\.editor-inline-spoiler\.is-revealed\s*\{([^}]+)\}', self.editor_css)
+        """Ensure .editor-inline-spoiler.is-revealed clears blur with !important."""
+        match = re.search(r'\.editor-inline-spoiler\.is-revealed[^{]*\{([^}]+)\}', self.editor_css)
         self.assertIsNotNone(match, ".editor-inline-spoiler.is-revealed rule must exist in editor.css")
         block = match.group(1)
-        self.assertIn('filter: none;', block)
-        self.assertIn('user-select: text;', block)
+        self.assertIn('filter: none !important;', block)
+        self.assertIn('-webkit-filter: none !important;', block)
         self.assertIn('background-color: var(--bg-subtle);', block)
         self.assertIn('border-bottom: 1px dashed var(--border-color);', block)
 
@@ -72,26 +87,32 @@ class TestInlineSpoilerRefinements(unittest.TestCase):
         """Ensure .preview-mode inline spoiler rules match blur and reveal behavior."""
         preview_match = re.search(r'\.preview-mode\s+\.editor-inline-spoiler\s*\{([^}]+)\}', self.editor_css)
         self.assertIsNotNone(preview_match, ".preview-mode .editor-inline-spoiler rule must exist")
-        self.assertIn('filter: blur(4.5px);', preview_match.group(1))
+        self.assertIn('filter: blur(5px);', preview_match.group(1))
+        self.assertIn('-webkit-filter: blur(5px);', preview_match.group(1))
 
-        revealed_match = re.search(r'\.preview-mode\s+\.editor-inline-spoiler\.is-revealed\s*\{([^}]+)\}', self.editor_css)
+        revealed_match = re.search(r'\.preview-mode\s+\.editor-inline-spoiler\.is-revealed[^{]*\{([^}]+)\}', self.editor_css)
         self.assertIsNotNone(revealed_match, ".preview-mode .editor-inline-spoiler.is-revealed rule must exist")
-        self.assertIn('filter: none;', revealed_match.group(1))
+        self.assertIn('filter: none !important;', revealed_match.group(1))
+        self.assertIn('-webkit-filter: none !important;', revealed_match.group(1))
 
     def test_main_js_binds_click_in_all_modes(self):
-        """Ensure bindInlineSpoilerInteraction toggles is-revealed without preview-mode-only restriction."""
+        """Ensure bindInlineSpoilerInteraction toggles is-revealed and data-revealed without preview-mode-only restriction."""
         method_match = re.search(r'bindInlineSpoilerInteraction\(\)\s*\{([\s\S]*?)\n\s{4}\}', self.main_js)
         self.assertIsNotNone(method_match, "bindInlineSpoilerInteraction method must exist in main.js")
         method_body = method_match.group(1)
         self.assertNotIn("if (this.mode === 'preview')", method_body,
                          "Inline spoiler toggle must not be restricted to preview mode")
         self.assertIn(".editor-inline-spoiler", method_body)
-        self.assertIn("classList.toggle('is-revealed')", method_body)
+        self.assertIn("classList.remove('is-revealed')", method_body)
+        self.assertIn("classList.add('is-revealed')", method_body)
+        self.assertIn("setAttribute('data-revealed', 'true')", method_body)
+        self.assertIn("removeAttribute('data-revealed')", method_body)
 
     def test_bubble_js_handles_inline_spoiler_format_and_active_state(self):
-        """Ensure bubble.js handles inline-spoiler format click and updateActiveStates."""
+        """Ensure bubble.js handles inline-spoiler format click with formatText and updateActiveStates."""
         self.assertIn("format === 'inline-spoiler'", self.bubble_js)
-        self.assertIn("this.editor.format('inline-spoiler'", self.bubble_js)
+        self.assertIn("this.editor.formatText(range.index, range.length, 'inline-spoiler', !isActive, 'user');", self.bubble_js)
+        self.assertIn("this.editor.setSelection(range.index, range.length, 'silent');", self.bubble_js)
         self.assertIn(".editor-inline-spoiler", self.bubble_js)
         self.assertIn("btn.classList.toggle('is-active', isInsideInlineSpoiler)", self.bubble_js)
 

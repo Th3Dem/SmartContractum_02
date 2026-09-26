@@ -143,7 +143,14 @@
       this.editor.root.addEventListener('click', (e) => {
         const spoiler = e.target.closest('.editor-inline-spoiler');
         if (spoiler) {
-          spoiler.classList.toggle('is-revealed');
+          const isRevealed = spoiler.classList.contains('is-revealed') || spoiler.getAttribute('data-revealed') === 'true';
+          if (isRevealed) {
+            spoiler.classList.remove('is-revealed');
+            spoiler.removeAttribute('data-revealed');
+          } else {
+            spoiler.classList.add('is-revealed');
+            spoiler.setAttribute('data-revealed', 'true');
+          }
         }
       });
     }

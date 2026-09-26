@@ -103,7 +103,12 @@
               }
             } catch (err) {}
           }
-          this.editor.format('inline-spoiler', !isActive);
+          if (range.length > 0) {
+            this.editor.formatText(range.index, range.length, 'inline-spoiler', !isActive, 'user');
+            this.editor.setSelection(range.index, range.length, 'silent');
+          } else {
+            this.editor.format('inline-spoiler', !isActive, 'user');
+          }
           this.updateActiveStates(range);
           return;
         }

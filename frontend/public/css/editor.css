@@ -911,37 +911,37 @@ a:hover {
 
 /* 3. Inline Spoiler Blot */
 .editor-inline-spoiler {
-  filter: blur(4.5px);
-  background-color: var(--bg-hover);
+  filter: blur(5px);
+  -webkit-filter: blur(5px);
+  background-color: rgba(100, 116, 139, 0.15);
   padding: 1px 5px;
   border-radius: 4px;
   cursor: pointer;
-  user-select: none;
-  display: inline-block;
   transition: filter 0.2s ease, background-color 0.2s ease;
 }
 
-.editor-inline-spoiler.is-revealed {
-  filter: none;
-  user-select: text;
+.editor-inline-spoiler.is-revealed,
+.editor-inline-spoiler[data-revealed="true"] {
+  filter: none !important;
+  -webkit-filter: none !important;
   background-color: var(--bg-subtle);
   border-bottom: 1px dashed var(--border-color);
 }
 
 .preview-mode .editor-inline-spoiler {
-  filter: blur(4.5px);
-  background-color: var(--bg-hover);
+  filter: blur(5px);
+  -webkit-filter: blur(5px);
+  background-color: rgba(100, 116, 139, 0.15);
   padding: 1px 5px;
   border-radius: 4px;
   cursor: pointer;
-  user-select: none;
-  display: inline-block;
   transition: filter 0.2s ease, background-color 0.2s ease;
 }
 
-.preview-mode .editor-inline-spoiler.is-revealed {
-  filter: none;
-  user-select: text;
+.preview-mode .editor-inline-spoiler.is-revealed,
+.preview-mode .editor-inline-spoiler[data-revealed="true"] {
+  filter: none !important;
+  -webkit-filter: none !important;
   background-color: var(--bg-subtle);
   border-bottom: 1px dashed var(--border-color);
 }

@@ -104,8 +104,34 @@
     static blotName = 'inline-spoiler';
     static tagName = 'span';
     static className = 'editor-inline-spoiler';
+
+    static create(value) {
+      const node = super.create();
+      node.classList.add('editor-inline-spoiler');
+      node.setAttribute('title', 'Нажмите, чтобы показать/скрыть скрытый текст');
+      return node;
+    }
+
+    static formats(domNode) {
+      return true;
+    }
+
+    formats() {
+      const formats = super.formats();
+      formats['inline-spoiler'] = true;
+      return formats;
+    }
+
+    format(name, value) {
+      if (name === this.statics.blotName && !value) {
+        this.unwrap();
+      } else {
+        super.format(name, value);
+      }
+    }
   }
   Quill.register(InlineSpoilerBlot, true);
+  Quill.register('formats/inline-spoiler', InlineSpoilerBlot, true);
 
   /**
    * 4. Inline LaTeX Formula Blot
