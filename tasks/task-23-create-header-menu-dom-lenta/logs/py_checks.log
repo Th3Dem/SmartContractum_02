@@ -1,0 +1,361 @@
+test_block_menu_fixed_and_overscroll (test_block_menu_positioning.TestBlockMenuCssEnhancements.test_block_menu_fixed_and_overscroll)
+.block-menu must have position: fixed, overscroll-behavior: contain, z-index: 60. ... ok
+test_block_menu_open_up_and_down_transform_origin (test_block_menu_positioning.TestBlockMenuCssEnhancements.test_block_menu_open_up_and_down_transform_origin)
+.block-menu.open-up and open-down classes configure smooth expansion origins. ... ok
+test_all_13_items_in_exact_order (test_block_menu_positioning.TestBlockMenuItemsPreserved.test_all_13_items_in_exact_order)
+All 13 items exist in HTML in exact specified order. ... ok
+test_blocks_js_handles_all_items (test_block_menu_positioning.TestBlockMenuItemsPreserved.test_blocks_js_handles_all_items)
+blocks.js handles all block types. ... ok
+test_keyboard_navigation_scrolls_into_view (test_block_menu_positioning.TestBlocksJsSourceCodeVerification.test_keyboard_navigation_scrolls_into_view)
+Keyboard navigation uses scrollIntoView({ block: 'nearest' }). ... ok
+test_open_up_and_open_down_classes_managed (test_block_menu_positioning.TestBlocksJsSourceCodeVerification.test_open_up_and_open_down_classes_managed)
+Classes open-up and open-down are toggled dynamically. ... ok
+test_overscroll_behavior_contain_inline (test_block_menu_positioning.TestBlocksJsSourceCodeVerification.test_overscroll_behavior_contain_inline)
+overscrollBehavior contain is explicitly set in JS. ... ok
+test_portals_to_document_body (test_block_menu_positioning.TestBlocksJsSourceCodeVerification.test_portals_to_document_body)
+BlockInserter portals #block-menu to document.body in constructor. ... ok
+test_scroll_and_resize_listeners_registered (test_block_menu_positioning.TestBlocksJsSourceCodeVerification.test_scroll_and_resize_listeners_registered)
+Scroll and resize listeners are registered on window and visualViewport. ... ok
+test_update_menu_position_method_exists (test_block_menu_positioning.TestBlocksJsSourceCodeVerification.test_update_menu_position_method_exists)
+updateMenuPosition() is implemented with viewport geometry checks. ... ok
+test_auto_closes_when_button_scrolled_above_header (test_block_menu_positioning.TestSmartPositioningAlgorithm.test_auto_closes_when_button_scrolled_above_header)
+Button scrolled up behind sticky header causes menu to close automatically. ... ok
+test_auto_closes_when_button_scrolled_below_status_bar (test_block_menu_positioning.TestSmartPositioningAlgorithm.test_auto_closes_when_button_scrolled_below_status_bar)
+Button scrolled down behind fixed status bar causes menu to close automatically. ... ok
+test_constrained_space_picks_larger_and_clamps_max_height (test_block_menu_positioning.TestSmartPositioningAlgorithm.test_constrained_space_picks_larger_and_clamps_max_height)
+When neither direction fits 440px, picks side with more room and clamps max_height. ... ok
+test_horizontal_clamping_left_and_right (test_block_menu_positioning.TestSmartPositioningAlgorithm.test_horizontal_clamping_left_and_right)
+Menu horizontally clamped with >= 12px margin from screen edges. ... ok
+test_opens_down_when_ample_space_below (test_block_menu_positioning.TestSmartPositioningAlgorithm.test_opens_down_when_ample_space_below)
+When button is in upper half with > 448px below, menu opens down. ... ok
+test_opens_up_when_near_bottom_status_bar (test_block_menu_positioning.TestSmartPositioningAlgorithm.test_opens_up_when_near_bottom_status_bar)
+When button is near status bar, menu flips UP above the button. ... ok
+test_editor_card_has_reserved_bottom_padding (test_block_menu_positioning.TestStatusBarAndLayoutReservedSpacing.test_editor_card_has_reserved_bottom_padding)
+.editor-card must reserve at least 64px bottom padding. ... ok
+test_main_layout_has_reserved_bottom_padding (test_block_menu_positioning.TestStatusBarAndLayoutReservedSpacing.test_main_layout_has_reserved_bottom_padding)
+.app-main-layout must reserve at least 96px bottom padding. ... ok
+test_status_bar_is_firmly_fixed_at_bottom (test_block_menu_positioning.TestStatusBarAndLayoutReservedSpacing.test_status_bar_is_firmly_fixed_at_bottom)
+Status bar must have position: fixed, bottom: 0, left: 0, right: 0, height: 44px, z-index: 40. ... ok
+test_bubble_css_clean_and_consistent (test_bubble_align_icons.TestBubbleAlignIcons.test_bubble_css_clean_and_consistent)
+Verify editor.css has no obsolete more-menu styles and contains .bubble-btn. ... ok
+test_bubble_html_align_buttons_structure (test_bubble_align_icons.TestBubbleAlignIcons.test_bubble_html_align_buttons_structure)
+Verify 4 align buttons are present directly in #bubble-toolbar after divider. ... ok
+test_bubble_html_more_dropdown_removed (test_bubble_align_icons.TestBubbleAlignIcons.test_bubble_html_more_dropdown_removed)
+Verify #bubble-more-btn, #bubble-more-menu, and dropdown wrapper are completely removed. ... ok
+test_bubble_js_align_handlers (test_bubble_align_icons.TestBubbleAlignIcons.test_bubble_js_align_handlers)
+Verify bubble.js handles alignment format and active states. ... ok
+test_bubble_js_no_more_references (test_bubble_align_icons.TestBubbleAlignIcons.test_bubble_js_no_more_references)
+Verify bubble.js has no references to moreBtn, moreMenu, or bubble-align-btn. ... ok
+test_article_title_and_editor_exact_alignment (test_design_system_and_icons.TestDesignSystemAndIcons.test_article_title_and_editor_exact_alignment)
+Verify #article-title and .ql-editor are aligned to the exact same left line (padding: 0). ... ok
+test_block_menu_all_13_items_have_unified_svg_icons (test_design_system_and_icons.TestDesignSystemAndIcons.test_block_menu_all_13_items_have_unified_svg_icons)
+Verify all 13 items in '+' block menu have unified 18x18 SVG vector icons. ... ok
+test_button_design_system_in_css (test_design_system_and_icons.TestDesignSystemAndIcons.test_button_design_system_in_css)
+Verify .btn, .btn-icon, .bubble-btn have compact height, 8px radius, clean border, flex alignment. ... ok
+test_font_face_and_theme_configuration (test_design_system_and_icons.TestDesignSystemAndIcons.test_font_face_and_theme_configuration)
+Verify @font-face is defined locally and Onest is configured in theme.css and editor.css. ... ok
+test_header_svg_icons (test_design_system_and_icons.TestDesignSystemAndIcons.test_header_svg_icons)
+Verify top header (#appHeader) and workspace action buttons retain clean SVG vector icons. ... ok
+test_modals_svg_close_buttons (test_design_system_and_icons.TestDesignSystemAndIcons.test_modals_svg_close_buttons)
+Verify all modal close buttons have SVG icons, ensuring drafts, shortcuts, image, ... ok
+test_onest_font_files_exist_locally (test_design_system_and_icons.TestDesignSystemAndIcons.test_onest_font_files_exist_locally)
+Verify Onest woff2 font files exist in vendor/fonts/onest/ with non-zero size. ... ok
+test_sidebar_widget_svg_icons (test_design_system_and_icons.TestDesignSystemAndIcons.test_sidebar_widget_svg_icons)
+Verify sidebar widgets: Typograph, Author Guide, and Checklist in right sidebar with clean SVG icons. ... ok
+test_status_bar_and_table_action_bar_svg_icons (test_design_system_and_icons.TestDesignSystemAndIcons.test_status_bar_and_table_action_bar_svg_icons)
+Verify status bar stats and table action bar have SVG icons. ... ok
+test_zero_emojis_in_editor_html (test_design_system_and_icons.TestDesignSystemAndIcons.test_zero_emojis_in_editor_html)
+Verify zero emojis in editor.html (no 📁, 📤, 🌐, 📝, 💾, 📥, 🌓, ⌨️, 🗑️, ✨, 💡, 📋, 🖼️, 👤, ⚓). ... ok
+test_zero_runtime_cdn_calls (test_design_system_and_icons.TestDesignSystemAndIcons.test_zero_runtime_cdn_calls)
+Verify zero external font CDN calls (100% offline-first). ... ok
+test_draft_object_schema (test_editor_frontend.TestDraftStorageContract.test_draft_object_schema) ... ok
+test_html_export_structure (test_editor_frontend.TestExportFormatConverters.test_html_export_structure)
+Verify complete HTML export document structure. ... ok
+test_json_export_structure (test_editor_frontend.TestExportFormatConverters.test_json_export_structure)
+Verify the structured JSON schema exported by the editor. ... ok
+test_json_import_validation (test_editor_frontend.TestExportFormatConverters.test_json_import_validation)
+Verify JSON import parsing with required fields. ... ok
+test_markdown_conversion_headings_and_styles (test_editor_frontend.TestExportFormatConverters.test_markdown_conversion_headings_and_styles)
+Verify markdown conversion rules. ... ok
+test_markdown_tables_and_checklists (test_editor_frontend.TestExportFormatConverters.test_markdown_tables_and_checklists)
+Verify markdown table format and checklists. ... ok
+test_required_css_files_exist (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_css_files_exist) ... ok
+test_required_html_files_exist (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_html_files_exist) ... ok
+test_required_js_modules_exist (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_required_js_modules_exist) ... ok
+test_vendor_libraries_exist_locally (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_vendor_libraries_exist_locally) ... ok
+test_zero_external_cdn_in_html (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_zero_external_cdn_in_html)
+Ensure no external http/https or // CDN references in editor.html or index.html. ... ok
+test_zero_external_fonts_or_imports_in_css (test_editor_frontend.TestFileIntegrityAndOfflineVendor.test_zero_external_fonts_or_imports_in_css)
+Ensure CSS files do not contain external @import or external url() references. ... ok
+test_preserve_safe_elements (test_editor_frontend.TestHTMLSanitizationXSS.test_preserve_safe_elements) ... ok
+test_strip_iframe_and_object (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_iframe_and_object) ... ok
+test_strip_inline_event_handlers (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_inline_event_handlers) ... ok
+test_strip_javascript_pseudo_urls (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_javascript_pseudo_urls) ... ok
+test_strip_script_tags (test_editor_frontend.TestHTMLSanitizationXSS.test_strip_script_tags) ... ok
+test_image_menu_css_styles (test_editor_habr_features.TestImageFloatingMenu.test_image_menu_css_styles)
+Verify CSS styles for full-width image, border toggle, and image menu. ... ok
+test_image_menu_html_structure (test_editor_habr_features.TestImageFloatingMenu.test_image_menu_html_structure)
+Image menu contains 'В тексте', 'Во всю ширину', 'В рамку', and 'Удалить' buttons. ... ok
+test_image_menu_js_manager (test_editor_habr_features.TestImageFloatingMenu.test_image_menu_js_manager)
+ImageMenuManager handles click on images, buttons toggle, and editable figcaption. ... ok
+test_node_actions_menu_items (test_editor_habr_features.TestNodeControls.test_node_actions_menu_items)
+Verify 3-dots dropdown menu was replaced with direct delete trash button. ... ok
+test_node_controls_html_elements (test_editor_habr_features.TestNodeControls.test_node_controls_html_elements)
+Verify node-controls container, drag handle, trash button, and drop line in HTML. ... ok
+test_node_controls_js_manager (test_editor_habr_features.TestNodeControls.test_node_controls_js_manager)
+NodeControlsManager implements hover/focus, HTML5 drag-and-drop, and actions. ... ok
+test_sidebar_responsive_hiding_under_1280px (test_editor_habr_features.TestSidebarWidgets.test_sidebar_responsive_hiding_under_1280px)
+Sidebar is hidden on screens under 1280px without breaking editor layout. ... ok
+test_sidebar_zone_right_container (test_editor_habr_features.TestSidebarWidgets.test_sidebar_zone_right_container)
+Verify .side-zone-right exists and contains sidebar sticky wrapper. ... ok
+test_widget_1_typograph (test_editor_habr_features.TestSidebarWidgets.test_widget_1_typograph)
+Widget 1: «Типограф» with icon, description, button #btn-typograph, and feedback status. ... ok
+test_widget_2_author_guide (test_editor_habr_features.TestSidebarWidgets.test_widget_2_author_guide)
+Widget 2: «Памятка автору» with 3 author guidelines and SVG icons. ... ok
+test_widget_3_checklist (test_editor_habr_features.TestSidebarWidgets.test_widget_3_checklist)
+Widget 3: «Чек-лист публикации» with 4 dynamic items and progress bar. ... ok
+test_dashes_conversion (test_editor_habr_features.TestTypographRules.test_dashes_conversion)
+Hyphens with spaces ' - ' are converted to em-dash ' — '. ... ok
+test_ellipsis_conversion (test_editor_habr_features.TestTypographRules.test_ellipsis_conversion)
+Triple dots '...' converted to ellipsis '…'. ... ok
+test_prepositions_non_breaking_spaces (test_editor_habr_features.TestTypographRules.test_prepositions_non_breaking_spaces)
+1-2 letter prepositions and conjunctions bound with \u00A0. ... ok
+test_preservation_of_code_formulas_and_urls (test_editor_habr_features.TestTypographRules.test_preservation_of_code_formulas_and_urls)
+Code blocks, LaTeX formulas, and URLs must NEVER be altered. ... ok
+test_quotes_conversion_simple_and_nested (test_editor_habr_features.TestTypographRules.test_quotes_conversion_simple_and_nested)
+Straight quotes are converted to «...» and nested to „...“. ... ok
+test_typograph_js_structure (test_editor_habr_features.TestTypographRules.test_typograph_js_structure)
+Verify typograph.js defines Typograph with required methods. ... ok
+test_refinement_1_header_instant_conversion_and_styling (test_editor_ux_refinements.TestEditorUXRefinements.test_refinement_1_header_instant_conversion_and_styling)
+1. Header in + menu: instant H2 conversion, no submenu, universal H2 styling. ... ok
+test_refinement_2_media_source_link_click_handler (test_editor_ux_refinements.TestEditorUXRefinements.test_refinement_2_media_source_link_click_handler)
+2. Fallback link in video element has explicit click listener opening new tab. ... ok
+test_refinement_3_trash_button_direct_deletion (test_editor_ux_refinements.TestEditorUXRefinements.test_refinement_3_trash_button_direct_deletion)
+3. Replace 3-dots button with direct delete trash button and remove dropdown. ... ok
+test_refinement_4_drag_and_drop_full_width (test_editor_ux_refinements.TestEditorUXRefinements.test_refinement_4_drag_and_drop_full_width)
+4. Drag & Drop listens across editorCard/document and drop line spans full width. ... ok
+test_refinement_5_bubble_toolbar_strictly_above_without_colors (test_editor_ux_refinements.TestEditorUXRefinements.test_refinement_5_bubble_toolbar_strictly_above_without_colors)
+5. Contextual bubble toolbar strictly above selection without colors, and 4 align buttons without 'Еще' dropdown. ... ok
+test_refinement_6_clean_plus_menu (test_editor_ux_refinements.TestEditorUXRefinements.test_refinement_6_clean_plus_menu)
+6. Clean up '+' menu: checklist and 'Дополнительно' removed, table in main list. ... ok
+test_anchor_and_person_blots_exist (test_editor_v3.TestAnchorAndPersonBlocks.test_anchor_and_person_blots_exist)
+Ensure AnchorBlot and PersonBlot are registered. ... ok
+test_anchor_unique_id_check (test_editor_v3.TestAnchorAndPersonBlocks.test_anchor_unique_id_check)
+Verify unique ID check for anchors in toolbar.js. ... ok
+test_12_block_items_exact_order (test_editor_v3.TestBlockInserter12ItemsOrder.test_12_block_items_exact_order)
+Verify block items in exact order: ... ok
+test_additional_blocks_group (test_editor_v3.TestBlockInserter12ItemsOrder.test_additional_blocks_group)
+Verify 'Дополнительно' and 'checklist' are removed and table is retained. ... ok
+test_keyboard_navigation_and_slash_command (test_editor_v3.TestBlockInserter12ItemsOrder.test_keyboard_navigation_and_slash_command)
+Keyboard navigation: ArrowUp, ArrowDown, Enter, Escape, and slash command '/'. ... ok
+test_11_bubble_buttons_exact_order (test_editor_v3.TestContextualBubbleToolbar11ToolsOrder.test_11_bubble_buttons_exact_order)
+Verify the 11 buttons in exact order: ... ok
+test_bubble_align_buttons_and_no_more_dropdown (test_editor_v3.TestContextualBubbleToolbar11ToolsOrder.test_bubble_align_buttons_and_no_more_dropdown)
+Verify 'Еще' dropdown is removed and 4 alignment buttons are in bubble toolbar. ... ok
+test_bubble_js_contract (test_editor_v3.TestContextualBubbleToolbar11ToolsOrder.test_bubble_js_contract)
+Verify bubble.js handles non-empty range selection, prevents selection blur, and handles Escape. ... ok
+test_json_schema_v2 (test_editor_v3.TestExportersAndLossWarnings.test_json_schema_v2)
+JSON export uses schema 'antigravity-editor-v2'. ... ok
+test_loss_warnings_on_export (test_editor_v3.TestExportersAndLossWarnings.test_loss_warnings_on_export)
+Loss warnings are generated when exporting custom blocks. ... ok
+test_both_formula_blots_exist (test_editor_v3.TestFormulas.test_both_formula_blots_exist)
+Ensure both InlineFormulaBlot and BlockFormulaBlot are defined. ... ok
+test_both_spoilers_registered (test_editor_v3.TestInlineAndBlockSpoilers.test_both_spoilers_registered)
+Ensure both InlineSpoilerBlot and SpoilerBlot are registered. ... ok
+test_spoiler_markdown_conversion (test_editor_v3.TestInlineAndBlockSpoilers.test_spoiler_markdown_conversion)
+Verify inline spoiler converts to ||text|| and block spoiler to <details>. ... ok
+test_background_colors (test_editor_v3.TestPageLayoutAndDesign.test_background_colors)
+Calm light-gray page background (#f4f5f7 / dark: #0b1426). ... ok
+test_central_block_dimensions (test_editor_v3.TestPageLayoutAndDesign.test_central_block_dimensions)
+Central block width: 900-960px (recommended 940px), horizontal padding: 40-56px (recommended 48px). ... ok
+test_document_title_and_editor_left_boundary_alignment (test_editor_v3.TestPageLayoutAndDesign.test_document_title_and_editor_left_boundary_alignment)
+Document title H1 and editor content aligned to exact same left boundary. ... ok
+test_symmetrical_side_zones_layout (test_editor_v3.TestPageLayoutAndDesign.test_symmetrical_side_zones_layout)
+Centered 2-column workgroup layout (editor column 940px + right sidebar 350px). ... ok
+test_bottom_status_bar (test_editor_v3.TestPersistentToolbarRemovalAndNewBars.test_bottom_status_bar)
+Bottom status bar contains stats (words, chars, reading time) and Undo/Redo. ... ok
+test_compact_top_document_bar (test_editor_v3.TestPersistentToolbarRemovalAndNewBars.test_compact_top_document_bar)
+Top bar contains drafts button with badge, autosave indicator; Antigravity Writer and more actions removed. ... ok
+test_persistent_formatting_toolbar_removed (test_editor_v3.TestPersistentToolbarRemovalAndNewBars.test_persistent_formatting_toolbar_removed)
+Ensure the old fixed formatting toolbar under the header is completely removed. ... ok
+test_allow_whitelisted_video_iframes (test_editor_v3.TestSanitizationWithVideoWhitelist.test_allow_whitelisted_video_iframes) ... ok
+test_converter_js_enforces_sandbox_on_allowed_iframes (test_editor_v3.TestSanitizationWithVideoWhitelist.test_converter_js_enforces_sandbox_on_allowed_iframes)
+Verify converter.js sets safe sandbox attribute on allowed iframes during sanitization. ... ok
+test_strip_xss_attacks (test_editor_v3.TestSanitizationWithVideoWhitelist.test_strip_xss_attacks) ... ok
+test_invalid_video_urls (test_editor_v3.TestVideoParsers.test_invalid_video_urls) ... ok
+test_video_embed_iframe_contains_sandbox_attribute (test_editor_v3.TestVideoParsers.test_video_embed_iframe_contains_sandbox_attribute)
+Assert that video embed iframes in core.js contain the safe sandbox attribute (DoD requirement). ... ok
+test_vimeo_variations (test_editor_v3.TestVideoParsers.test_vimeo_variations) ... ok
+test_vk_video_variations (test_editor_v3.TestVideoParsers.test_vk_video_variations) ... ok
+test_youtube_variations (test_editor_v3.TestVideoParsers.test_youtube_variations) ... ok
+test_both_pages_default_to_dark_theme (test_feed_page_and_palette.TestCrossNavigationAndColorPalette.test_both_pages_default_to_dark_theme)
+Verify both feed.html and editor.html root elements default to data-theme='dark'. ... ok
+test_cross_navigation_between_feed_and_editor (test_feed_page_and_palette.TestCrossNavigationAndColorPalette.test_cross_navigation_between_feed_and_editor)
+Verify cross-navigation and layout integrity: ... ok
+test_theme_color_palette_tokens (test_feed_page_and_palette.TestCrossNavigationAndColorPalette.test_theme_color_palette_tokens)
+Verify theme.css defines dark and light theme tokens. ... ok
+test_editor_buttons_design_and_palette (test_feed_page_and_palette.TestEditorFeedVisualAlignment.test_editor_buttons_design_and_palette)
+Verify editor.css defines the unified button styles: ... ok
+test_editor_has_document_action_bar (test_feed_page_and_palette.TestEditorFeedVisualAlignment.test_editor_has_document_action_bar)
+Verify editor.html has #editorDocumentBar containing #btn-drafts-modal, #drafts-badge, ... ok
+test_editor_has_top_navigation_header (test_feed_page_and_palette.TestEditorFeedVisualAlignment.test_editor_has_top_navigation_header)
+Verify editor.html includes the top header (#appHeader, brand-logo, ... ok
+test_editor_zero_emojis_and_onest_font (test_feed_page_and_palette.TestEditorFeedVisualAlignment.test_editor_zero_emojis_and_onest_font)
+Verify editor.html and editor.css contain zero emoji characters and strictly use Onest font. ... ok
+test_editor_header_exact_feed_structure (test_feed_page_and_palette.TestEditorVisualAndThemeIssues.test_editor_header_exact_feed_structure)
+Verify editor.html has top header present (#appHeader, logo-title, #headerNav), ... ok
+test_light_theme_high_contrast_text_tokens (test_feed_page_and_palette.TestEditorVisualAndThemeIssues.test_light_theme_high_contrast_text_tokens)
+Verify that theme.css defines high-contrast dark text (#0f172a) ... ok
+test_onest_font_smoothing_and_antialiasing (test_feed_page_and_palette.TestEditorVisualAndThemeIssues.test_onest_font_smoothing_and_antialiasing)
+Verify editor.css or editor.html specifies -webkit-font-smoothing: antialiased ... ok
+test_header_brand_logo_and_icon (test_feed_page_and_palette.TestFeedHeaderMenuAndNavigation.test_header_brand_logo_and_icon)
+Verify brand logo SmartContractum with SVG icon, href='index.html', and title in feed.html header. ... ok
+test_header_navigation_links (test_feed_page_and_palette.TestFeedHeaderMenuAndNavigation.test_header_navigation_links)
+Verify unified 2 navigation links: Дом (#navIndex), Лента (#navFeed), ... ok
+test_navigation_to_editor (test_feed_page_and_palette.TestFeedHeaderMenuAndNavigation.test_navigation_to_editor)
+Verify CTA #btnHeroWrite links to editor.html, while header #navEditor is completely removed. ... ok
+test_theme_toggle_switch_in_header (test_feed_page_and_palette.TestFeedHeaderMenuAndNavigation.test_theme_toggle_switch_in_header)
+Verify theme toggle button (#btnThemeToggle) is completely removed from feed.html, ... ok
+test_user_login_button_in_header (test_feed_page_and_palette.TestFeedHeaderMenuAndNavigation.test_user_login_button_in_header)
+Verify user login button (#headerLoginBtn) is present in feed.html, ... ok
+test_legacy_files_not_imported_in_html (test_feed_page_and_palette.TestFeedPageExistenceAndCleanliness.test_legacy_files_not_imported_in_html)
+Verify legacy files are not referenced or imported in feed.html and editor.html. ... ok
+test_legacy_files_physically_absent (test_feed_page_and_palette.TestFeedPageExistenceAndCleanliness.test_legacy_files_physically_absent)
+Verify legacy files (forum_social.*, landing_main.*, hero_constellation.*) are physically absent. ... ok
+test_native_feed_files_exist (test_feed_page_and_palette.TestFeedPageExistenceAndCleanliness.test_native_feed_files_exist)
+Verify frontend/public/feed.html, css/feed.css, and js/feed.js exist and are not empty. ... ok
+test_feed_cards_container_and_filter_buttons (test_feed_page_and_palette.TestFeedTwoColumnGridAndWidgets.test_feed_cards_container_and_filter_buttons)
+Verify #feedCardsContainer, .feed-filter-btn category filters, and .feed-card card styles. ... ok
+test_feed_sidebar_widgets (test_feed_page_and_palette.TestFeedTwoColumnGridAndWidgets.test_feed_sidebar_widgets)
+Verify sidebar contains required widgets (Создать публикацию, Популярные темы, О платформе). ... ok
+test_two_column_grid_structure (test_feed_page_and_palette.TestFeedTwoColumnGridAndWidgets.test_two_column_grid_structure)
+Verify 2-column grid layout in feed.html and feed.css. ... ok
+test_no_legacy_disallowed_font_families (test_feed_page_and_palette.TestFeedTypographyAndOnestFont.test_no_legacy_disallowed_font_families)
+Verify that legacy font families (Inter, Manrope, JetBrains Mono) are not used in font-family rules. ... ok
+test_strict_onest_font_usage (test_feed_page_and_palette.TestFeedTypographyAndOnestFont.test_strict_onest_font_usage)
+Verify that Onest font family is explicitly declared and applied in feed.html, feed.css, and theme.css. ... ok
+test_feed_scripts_and_stylesheets_are_local (test_feed_page_and_palette.TestOfflineFirstIntegrity.test_feed_scripts_and_stylesheets_are_local)
+Verify that all link[rel=stylesheet] and script[src] references in feed.html point to local files. ... ok
+test_offline_first_zero_cdn_references (test_feed_page_and_palette.TestOfflineFirstIntegrity.test_offline_first_zero_cdn_references)
+Ensure feed.html, feed.css, theme.css, and editor.html have zero CDN references. ... ok
+test_offline_first_zero_external_links_in_feed_and_css (test_feed_page_and_palette.TestOfflineFirstIntegrity.test_offline_first_zero_external_links_in_feed_and_css)
+Ensure feed.html, feed.css, and theme.css have zero external http/https resource URLs. ... ok
+test_community_nav_item_present_on_all_pages (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_community_nav_item_present_on_all_pages)
+Verify header navigation #headerNav and #navFeed are present across ... ok
+test_exact_header_markup_identity (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_exact_header_markup_identity)
+Verify 100% markup identity across index.html, feed.html, and editor.html headers. ... ok
+test_header_buttons_and_typography_consistency (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_header_buttons_and_typography_consistency)
+Verify header buttons (#headerLoginBtn) and Onest typography consistency across all 3 pages. ... ok
+test_no_conflicting_nav_link_overrides_in_editor_css (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_no_conflicting_nav_link_overrides_in_editor_css)
+Verify duplicate .nav-link overrides are removed from editor.css. ... ok
+test_stable_scrollbar_and_header_grid_layout_css (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_stable_scrollbar_and_header_grid_layout_css)
+Verify overflow-y: scroll, scrollbar-gutter: stable, --header-height: 60px, ... ok
+test_unified_brand_logo_across_all_pages (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_unified_brand_logo_across_all_pages)
+Verify header brand logo (.brand-logo, #appHeader) is present across all 3 pages ... ok
+test_unified_navigation_routing_and_active_states (test_feed_page_and_palette.TestTask19UnifiedHeaderNavigationAndLayout.test_unified_navigation_routing_and_active_states)
+Verify #headerNav and all header navigation links (#navIndex, #navFeed) ... ok
+test_zero_emojis_in_html (test_feed_page_and_palette.TestZeroEmojisInInterface.test_zero_emojis_in_html)
+Verify zero emojis in feed.html and editor.html. ... ok
+test_zero_emojis_in_styles_and_scripts (test_feed_page_and_palette.TestZeroEmojisInInterface.test_zero_emojis_in_styles_and_scripts)
+Verify zero emojis in feed.css, feed.js, and editor.css. ... ok
+test_acceptance_of_valid_text (test_publication_settings_and_moderation.TestArticleTextDetectionLogic.test_acceptance_of_valid_text)
+Text containing latin or cyrillic alphanumeric characters is accepted. ... ok
+test_rejection_of_dividers_only (test_publication_settings_and_moderation.TestArticleTextDetectionLogic.test_rejection_of_dividers_only)
+Dividers (<hr>) and divider containers without text are rejected. ... ok
+test_rejection_of_empty_and_whitespace_strings (test_publication_settings_and_moderation.TestArticleTextDetectionLogic.test_rejection_of_empty_and_whitespace_strings)
+Empty or whitespace-only body is rejected. ... ok
+test_rejection_of_empty_html_tags (test_publication_settings_and_moderation.TestArticleTextDetectionLogic.test_rejection_of_empty_html_tags)
+Empty paragraphs, breaks, and spans are rejected. ... ok
+test_rejection_of_images_only (test_publication_settings_and_moderation.TestArticleTextDetectionLogic.test_rejection_of_images_only)
+Images only, even with alt attributes, are rejected as article body text. ... ok
+test_rejection_of_nbsp_and_invisible_characters (test_publication_settings_and_moderation.TestArticleTextDetectionLogic.test_rejection_of_nbsp_and_invisible_characters)
+Non-breaking spaces, zero-width spaces, and entities only are rejected. ... ok
+test_init_db_creates_table_and_indexes (test_publication_settings_and_moderation.TestDatabaseAndSchema.test_init_db_creates_table_and_indexes)
+Ensure moderation_submissions table and indexes are created with proper columns and constraints. ... ok
+test_status_check_constraint (test_publication_settings_and_moderation.TestDatabaseAndSchema.test_status_check_constraint)
+Ensure check constraint rejects invalid statuses. ... ok
+test_case_insensitive_deduplication (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_case_insensitive_deduplication)
+Case-insensitive duplicates are ignored, keeping the first occurrence casing. ... ok
+test_collapsing_multiple_consecutive_spaces (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_collapsing_multiple_consecutive_spaces)
+Multiple consecutive spaces inside tags must be collapsed to a single space. ... ok
+test_comma_splitting (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_comma_splitting)
+Splitting comma-separated tags into distinct keyword items. ... ok
+test_filtering_empty_and_whitespace_only_tags (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_filtering_empty_and_whitespace_only_tags)
+Empty strings and commas without text are filtered out. ... ok
+test_list_input_support (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_list_input_support)
+Input can be provided as a list with internal commas or single tags. ... ok
+test_outer_whitespace_trimming (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_outer_whitespace_trimming)
+Leading and trailing spaces around tags must be trimmed. ... ok
+test_whitespace_preservation_inside_phrase (test_publication_settings_and_moderation.TestKeywordParsingAndNormalization.test_whitespace_preservation_inside_phrase)
+Spaces inside multi-word phrases must be preserved. ... ok
+test_health_check_endpoint (test_publication_settings_and_moderation.TestModerationServerIntegration.test_health_check_endpoint)
+GET /api/health returns ok status. ... ok
+test_idempotency_handling_no_duplicates (test_publication_settings_and_moderation.TestModerationServerIntegration.test_idempotency_handling_no_duplicates)
+Submitting multiple requests with identical idempotencyKey does not create duplicate rows. ... ok
+test_list_retrieval_endpoint (test_publication_settings_and_moderation.TestModerationServerIntegration.test_list_retrieval_endpoint)
+GET /api/moderation/list returns submissions queue. ... ok
+test_options_cors_preflight (test_publication_settings_and_moderation.TestModerationServerIntegration.test_options_cors_preflight)
+OPTIONS request receives 204 with CORS headers. ... ok
+test_static_file_serving (test_publication_settings_and_moderation.TestModerationServerIntegration.test_static_file_serving)
+Static files from frontend/public are served correctly via GET. ... ok
+test_status_retrieval_endpoint (test_publication_settings_and_moderation.TestModerationServerIntegration.test_status_retrieval_endpoint)
+GET /api/moderation/status?draftId=... returns submission status. ... ok
+test_status_transition_rejection_after_approval (test_publication_settings_and_moderation.TestModerationServerIntegration.test_status_transition_rejection_after_approval)
+Cannot submit draft to moderation if it is already approved. ... ok
+test_submit_success_flow_and_snapshot_hash (test_publication_settings_and_moderation.TestModerationServerIntegration.test_submit_success_flow_and_snapshot_hash)
+POST /api/moderation/submit creates immutable record with valid SHA-256 snapshot hash. ... ok
+test_description_length_bounds_failure (test_publication_settings_and_moderation.TestValidationFailures.test_description_length_bounds_failure)
+Description < 50 chars or > 500 chars must fail validation. ... ok
+test_duplicate_keywords_case_insensitive_failure (test_publication_settings_and_moderation.TestValidationFailures.test_duplicate_keywords_case_insensitive_failure)
+Duplicate keywords (case-insensitive) must fail validation. ... ok
+test_empty_body_failure (test_publication_settings_and_moderation.TestValidationFailures.test_empty_body_failure)
+Empty body, whitespace, empty tags or images only must fail validation. ... ok
+test_empty_title_failure (test_publication_settings_and_moderation.TestValidationFailures.test_empty_title_failure)
+Empty or whitespace title must fail validation. ... ok
+test_empty_topics_failure (test_publication_settings_and_moderation.TestValidationFailures.test_empty_topics_failure)
+Empty topics array must fail validation. ... ok
+test_keyword_longer_than_sixty_chars_failure (test_publication_settings_and_moderation.TestValidationFailures.test_keyword_longer_than_sixty_chars_failure)
+Keyword exceeding 60 characters must fail validation. ... ok
+test_missing_and_invalid_audience_failure (test_publication_settings_and_moderation.TestValidationFailures.test_missing_and_invalid_audience_failure)
+Missing or invalid target audience must fail validation. ... ok
+test_more_than_five_topics_failure (test_publication_settings_and_moderation.TestValidationFailures.test_more_than_five_topics_failure)
+>5 topics must fail validation. ... ok
+test_more_than_ten_keywords_failure (test_publication_settings_and_moderation.TestValidationFailures.test_more_than_ten_keywords_failure)
+>10 keywords must fail validation. ... ok
+test_zero_keywords_failure (test_publication_settings_and_moderation.TestValidationFailures.test_zero_keywords_failure)
+0 keywords must fail validation. ... ok
+test_blocks_js_inserts_empty_initial_spoiler_values (test_spoiler_and_code_refinements.TestBlockSpoilerDynamicPlaceholder.test_blocks_js_inserts_empty_initial_spoiler_values)
+Ensure '+' block menu inserts spoiler with empty strings rather than static placeholder text. ... ok
+test_converter_js_spoiler_fallback (test_spoiler_and_code_refinements.TestBlockSpoilerDynamicPlaceholder.test_converter_js_spoiler_fallback)
+Ensure converter.js exports empty spoiler titles to default 'Спойлер'. ... ok
+test_core_js_spoiler_blot_dynamic_placeholder (test_spoiler_and_code_refinements.TestBlockSpoilerDynamicPlaceholder.test_core_js_spoiler_blot_dynamic_placeholder)
+Ensure SpoilerBlot sets data-placeholder attributes and attaches empty state cleanup listeners. ... ok
+test_editor_css_spoiler_placeholder_styles (test_spoiler_and_code_refinements.TestBlockSpoilerDynamicPlaceholder.test_editor_css_spoiler_placeholder_styles)
+Ensure editor.css defines :empty::before styles using var(--text-placeholder). ... ok
+test_editor_css_overrides_quill_code_block_container (test_spoiler_and_code_refinements.TestCodeBlockRefinements.test_editor_css_overrides_quill_code_block_container)
+Ensure editor.css overrides Quill Snow dark defaults for code container and pre.ql-syntax. ... ok
+test_language_selector_styled_and_positioned_above_code (test_spoiler_and_code_refinements.TestCodeBlockRefinements.test_language_selector_styled_and_positioned_above_code)
+Ensure language selector is positioned top: -26px with Onest font and does not overlap code. ... ok
+test_theme_css_code_block_variables (test_spoiler_and_code_refinements.TestCodeBlockRefinements.test_theme_css_code_block_variables)
+Ensure theme.css defines clean light and dark palette for code blocks. ... ok
+test_bubble_js_handles_inline_spoiler_format_and_active_state (test_spoiler_and_code_refinements.TestInlineSpoilerRefinements.test_bubble_js_handles_inline_spoiler_format_and_active_state)
+Ensure bubble.js handles inline-spoiler format click with formatText and updateActiveStates. ... ok
+test_inline_spoiler_blot_implementation (test_spoiler_and_code_refinements.TestInlineSpoilerRefinements.test_inline_spoiler_blot_implementation)
+Ensure InlineSpoilerBlot has static formats, formats(), format() unwrap, and registration. ... ok
+test_inline_spoiler_css_blurred_by_default (test_spoiler_and_code_refinements.TestInlineSpoilerRefinements.test_inline_spoiler_css_blurred_by_default)
+Ensure .editor-inline-spoiler has blur filter and proper styling without user-select: none. ... ok
+test_inline_spoiler_css_revealed_state (test_spoiler_and_code_refinements.TestInlineSpoilerRefinements.test_inline_spoiler_css_revealed_state)
+Ensure .editor-inline-spoiler.is-revealed clears blur with !important. ... ok
+test_main_js_binds_click_in_all_modes (test_spoiler_and_code_refinements.TestInlineSpoilerRefinements.test_main_js_binds_click_in_all_modes)
+Ensure bindInlineSpoilerInteraction toggles is-revealed and data-revealed without preview-mode-only restriction. ... ok
+test_preview_mode_inline_spoiler_styling (test_spoiler_and_code_refinements.TestInlineSpoilerRefinements.test_preview_mode_inline_spoiler_styling)
+Ensure .preview-mode inline spoiler rules match blur and reveal behavior. ... ok
+test_no_external_cdn_references_in_codebase (test_spoiler_and_code_refinements.TestOfflineFirstAndRegression.test_no_external_cdn_references_in_codebase)
+Ensure 100% offline-first compliance (no http/https references to CDNs or fonts). ... ok
+test_onest_font_usage (test_spoiler_and_code_refinements.TestOfflineFirstAndRegression.test_onest_font_usage)
+Ensure Onest font is used across the system. ... ok
+
+----------------------------------------------------------------------
+Ran 186 tests in 0.690s
+
+OK

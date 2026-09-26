@@ -11,7 +11,7 @@
   width: 100%;
   max-width: var(--max-width, 1360px);
   margin: 0 auto;
-  padding: 32px 24px 64px 24px;
+  padding: 24px 24px 64px 24px;
   min-height: 100vh;
 }
 

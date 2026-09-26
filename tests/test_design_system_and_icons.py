@@ -97,15 +97,23 @@ class TestDesignSystemAndIcons(unittest.TestCase):
     # 3. SLEEK SVG VECTOR ICONS
     # =========================================================================
     def test_header_svg_icons(self):
-        """Verify top header (#appHeader, #btnThemeToggle) is completely removed,
-        while workspace action buttons retain clean SVG vector icons."""
-        # task-22: Complete removal of top header and its buttons
-        self.assertNotIn('id="appHeader"', self.editor_html, "#appHeader must be completely removed from editor.html")
-        self.assertNotIn('class="app-header"', self.editor_html, "class 'app-header' must be removed from editor.html")
-        self.assertNotIn('<header', self.editor_html, "<header> element must be completely removed from editor.html")
-        self.assertNotIn('id="btnThemeToggle"', self.editor_html, "#btnThemeToggle must be removed from editor.html")
-        self.assertNotIn('id="headerNav"', self.editor_html, "#headerNav must be removed from editor.html")
-        self.assertNotIn('id="headerLoginBtn"', self.editor_html, "#headerLoginBtn must be removed from editor.html")
+        """Verify top header (#appHeader) and workspace action buttons retain clean SVG vector icons."""
+        # task-23: Header and its vector SVG icons (house, feed, user login)
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(header_match, "appHeader must be present in editor.html")
+        header_content = header_match.group(1)
+        self.assertIn('class="smart-contract-logo-svg"', header_content)
+        self.assertIn('id="headerNav"', header_content)
+        self.assertIn('id="navIndex"', header_content)
+        self.assertIn('id="navFeed"', header_content)
+        self.assertIn('m3 9 9-7 9 7', header_content, "House SVG icon must be present in navIndex")
+        self.assertIn('M4 22h16', header_content, "Feed SVG icon must be present in navFeed")
+        self.assertIn('Дом', header_content)
+        self.assertIn('Лента', header_content)
+        self.assertIn('id="headerLoginBtn"', header_content)
+        self.assertIn('class="btn-user-svg"', header_content)
+        self.assertIn('class="btn-user-arrow"', header_content)
+        self.assertIn('Вход', header_content)
 
         # Antigravity Writer removed from sub-bar per requirement 4
         self.assertNotIn('Antigravity Writer', self.editor_html)

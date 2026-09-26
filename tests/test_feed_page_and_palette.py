@@ -17,8 +17,8 @@ Key test requirements:
      have zero external http/https references to Google Fonts or CDNs.
   4. Strict Onest font usage in feed.html and feed.css.
   5. Zero emojis (0 emojis) in feed.html, editor.html, and related assets.
-  6. Complete removal of top header menu from feed.html and all pages: #appHeader, #headerNav,
-     #btnThemeToggle, #headerLoginBtn completely absent.
+  6. Unified header in feed.html and all pages: #appHeader, brand SmartContractum (href="index.html"),
+     2 navigation items («Дом» / #navIndex, «Лента» / #navFeed), login button #headerLoginBtn.
   7. Navigation and layout integrity: feed.html links to editor.html via #btnHeroWrite;
      index.html links to feed.html and editor.html.
   8. Color palette in theme.css: dark theme CMC Midnight Navy tokens and high-contrast
@@ -206,7 +206,7 @@ class TestFeedTypographyAndOnestFont(unittest.TestCase):
 
 
 class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
-    """Test 6 & 7: Complete removal of top header menu and navigation in feed.html (task-22)."""
+    """Test 6 & 7: Unified header menu components and navigation in feed.html."""
 
     @classmethod
     def setUpClass(cls):
@@ -214,28 +214,80 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
             cls.feed_html = f.read()
 
     def test_header_brand_logo_and_icon(self):
-        """Verify #appHeader and top brand logo are completely removed from feed.html,
-        while page title and platform identity are preserved."""
-        # Top header and brand-logo element must be completely absent (task-22)
-        self.assertNotIn('id="appHeader"', self.feed_html, "#appHeader must not be present in feed.html")
-        self.assertNotIn('class="app-header"', self.feed_html, "class 'app-header' must not be present in feed.html")
-        self.assertNotIn('<header', self.feed_html, "<header> element must not be present in feed.html")
-        self.assertNotIn('class="brand-logo"', self.feed_html, ".brand-logo must not be present in feed.html")
-        self.assertNotIn('class="smart-contract-logo-svg"', self.feed_html, "header logo SVG must not be present in feed.html")
+        """Verify brand logo SmartContractum with SVG icon, href='index.html', and title in feed.html header."""
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
+        if not header_match:
+            header_match = re.search(r'<header[^>]*class="[^"]*app-header[^"]*"[^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(header_match, "appHeader element not found in feed.html")
+        header_content = header_match.group(1)
+
+        # Brand logo link points to index.html
+        brand_match = re.search(r'<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*>', header_content)
+        self.assertIsNotNone(brand_match, "brand-logo link not found in header")
+        brand_tag = brand_match.group(0)
+        self.assertIn('href="index.html"', brand_tag, "Brand logo link must point to index.html")
+
+        # Brand name components
+        self.assertIn('Smart', header_content)
+        self.assertIn('Contractum', header_content)
+
+        # Brand logo SVG icon
+        self.assertIn('class="smart-contract-logo-svg"', header_content)
+        self.assertIn('<svg', header_content)
 
         # Page title and platform identity outside header are intact
         self.assertIn('<title>Лента публикаций — SmartContractum</title>', self.feed_html)
         self.assertIn('feed-main-container', self.feed_html)
 
     def test_header_navigation_links(self):
-        """Verify header navigation (#headerNav, #navIndex, #navCommunity, #navEditor)
-        is completely removed from feed.html, while feed functional controls remain intact."""
-        # Header navigation container and links must be completely absent (task-22)
-        self.assertNotIn('id="headerNav"', self.feed_html, "#headerNav must be removed from feed.html")
-        self.assertNotIn('class="header-nav"', self.feed_html, "class 'header-nav' must be removed from feed.html")
-        self.assertNotIn('id="navIndex"', self.feed_html, "#navIndex must be removed from feed.html")
-        self.assertNotIn('id="navCommunity"', self.feed_html, "#navCommunity must be removed from feed.html")
-        self.assertNotIn('id="navEditor"', self.feed_html, "#navEditor must be removed from feed.html")
+        """Verify unified 2 navigation links: Дом (#navIndex), Лента (#navFeed),
+        active state on feed.html (#navFeed active is-active), and verify legacy items are absent."""
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
+        if not header_match:
+            header_match = re.search(r'<header[^>]*class="[^"]*app-header[^"]*"[^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(header_match)
+        header_content = header_match.group(1)
+
+        nav_match = re.search(r'<nav[^>]*class="[^"]*header-nav[^"]*"[^>]*>(.*?)</nav>', header_content, re.DOTALL)
+        self.assertIsNotNone(nav_match, "header-nav not found inside header")
+        nav_content = nav_match.group(1)
+
+        # 1. Дом (#navIndex) with href="index.html"
+        index_nav_match = re.search(
+            r'<a[^>]*id=["\']navIndex["\'][^>]*href=["\']index\.html["\'][^>]*>[\s\S]*?Дом[\s\S]*?</a>|'
+            r'<a[^>]*href=["\']index\.html["\'][^>]*id=["\']navIndex["\'][^>]*>[\s\S]*?Дом[\s\S]*?</a>',
+            nav_content
+        )
+        self.assertIsNotNone(index_nav_match, "#navIndex with href='index.html' not found in header-nav")
+
+        # 2. Лента (#navFeed) with href="feed.html"
+        feed_nav_match = re.search(
+            r'<a[^>]*id=["\']navFeed["\'][^>]*href=["\']feed\.html["\'][^>]*>[\s\S]*?Лента[\s\S]*?</a>|'
+            r'<a[^>]*href=["\']feed\.html["\'][^>]*id=["\']navFeed["\'][^>]*>[\s\S]*?Лента[\s\S]*?</a>',
+            nav_content
+        )
+        self.assertIsNotNone(feed_nav_match, "#navFeed with href='feed.html' not found in header-nav")
+
+        # All items must have SVG icons inside .nav-icon-box
+        nav_links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav_content, re.DOTALL)
+        self.assertEqual(len(nav_links), 2, f"Expected exactly 2 navigation links in header, got {len(nav_links)}")
+        for link_html in nav_links:
+            self.assertIn('nav-icon-box', link_html)
+            self.assertIn('<svg', link_html)
+
+        # Thematic SVG vector icons: house icon for Дом, publication feed icon for Лента
+        self.assertIn('m3 9 9-7 9 7', index_nav_match.group(0), "House SVG icon must be in navIndex")
+        self.assertIn('M4 22h16', feed_nav_match.group(0), "Feed SVG icon must be in navFeed")
+
+        # On feed.html: #navFeed has class active is-active, #navIndex is not active
+        nav_feed_tag = re.search(r'<a\b[^>]*id=["\']navFeed["\'][^>]*>', nav_content)
+        self.assertIsNotNone(nav_feed_tag)
+        self.assertIn('active', nav_feed_tag.group(0))
+        self.assertIn('is-active', nav_feed_tag.group(0))
+
+        nav_idx_tag = re.search(r'<a\b[^>]*id=["\']navIndex["\'][^>]*>', nav_content)
+        self.assertIsNotNone(nav_idx_tag)
+        self.assertNotIn('active', nav_idx_tag.group(0))
 
         # Legacy items remain absent
         self.assertNotIn('Эксперты', self.feed_html)
@@ -260,13 +312,14 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIn("localStorage.getItem('ag_theme')", self.feed_html)
 
     def test_user_login_button_in_header(self):
-        """Verify user login button (#headerLoginBtn) is completely removed from feed.html,
+        """Verify user login button (#headerLoginBtn) is present in feed.html,
         while main layout container is preserved."""
-        # Header user/login controls must be completely absent (task-22)
-        self.assertNotIn('id="headerLoginBtn"', self.feed_html, "#headerLoginBtn must be removed from feed.html")
-        self.assertNotIn('header-login-action-btn', self.feed_html, ".header-login-action-btn must be removed from feed.html")
-        self.assertNotIn('header-user-bar', self.feed_html, ".header-user-bar must be removed from feed.html")
-        self.assertNotIn('btn-user-svg', self.feed_html, ".btn-user-svg must be removed from feed.html")
+        # Header user/login controls must be present
+        self.assertIn('id="headerLoginBtn"', self.feed_html, "#headerLoginBtn must be present in feed.html")
+        self.assertIn('header-login-action-btn', self.feed_html, ".header-login-action-btn must be present in feed.html")
+        self.assertIn('header-user-bar', self.feed_html, ".header-user-bar must be present in feed.html")
+        self.assertIn('btn-user-svg', self.feed_html, ".btn-user-svg must be present in feed.html")
+        self.assertIn('Вход', self.feed_html)
 
         # Main layout structure is intact
         self.assertIn('class="app-container"', self.feed_html)
@@ -376,16 +429,16 @@ class TestCrossNavigationAndColorPalette(unittest.TestCase):
 
     def test_cross_navigation_between_feed_and_editor(self):
         """Verify cross-navigation and layout integrity:
-        - #appHeader and #headerNav are completely removed across feed.html, editor.html, index.html.
+        - #appHeader and #headerNav are present across feed.html, editor.html, index.html.
         - feed.html links to editor.html via #btnHeroWrite.
         - index.html links to feed.html and editor.html via hero CTA buttons.
-        - editor.html maintains document action bar and workspace without top header."""
-        # 1. Top header and header nav are completely absent on all pages (task-22)
+        - editor.html maintains document action bar and workspace under top header."""
+        # 1. Top header and header nav are present on all pages
         for page_name, html in [('feed.html', self.feed_html), ('editor.html', self.editor_html), ('index.html', self.index_html)]:
-            self.assertNotIn('id="appHeader"', html, f"#appHeader must not exist in {page_name}")
-            self.assertNotIn('class="app-header"', html, f"class 'app-header' must not exist in {page_name}")
-            self.assertNotIn('<header', html, f"<header> tag must not exist in {page_name}")
-            self.assertNotIn('id="headerNav"', html, f"#headerNav must not exist in {page_name}")
+            self.assertIn('id="appHeader"', html, f"#appHeader must exist in {page_name}")
+            self.assertIn('class="app-header"', html, f"class 'app-header' must exist in {page_name}")
+            self.assertIn('<header', html, f"<header> tag must exist in {page_name}")
+            self.assertIn('id="headerNav"', html, f"#headerNav must exist in {page_name}")
 
         # 2. feed.html -> editor.html via CTA #btnHeroWrite
         self.assertTrue(
@@ -505,33 +558,31 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
             cls.editor_css = f.read()
 
     def test_editor_has_top_navigation_header(self):
-        """Verify editor.html completely excludes the top header (#appHeader, brand-logo,
-        #headerNav, #btnThemeToggle, #headerLoginBtn) and #editorDocumentBar is the first primary layout element."""
-        # Strict requirement: #appHeader and all header elements must be completely absent (task-22)
-        self.assertNotIn('id="appHeader"', self.editor_html, "#appHeader must be completely removed from editor.html")
-        self.assertNotIn('class="app-header"', self.editor_html, "class 'app-header' must be removed from editor.html")
-        self.assertNotIn('<header', self.editor_html, "<header> element must be completely removed from editor.html")
-        self.assertNotIn('id="headerNav"', self.editor_html, "#headerNav must be completely removed from editor.html")
-        self.assertNotIn('id="btnThemeToggle"', self.editor_html, "#btnThemeToggle must be completely removed from editor.html")
-        self.assertNotIn('id="headerLoginBtn"', self.editor_html, "#headerLoginBtn must be completely removed from editor.html")
+        """Verify editor.html includes the top header (#appHeader, brand-logo,
+        #headerNav, #headerLoginBtn) and #editorDocumentBar is docked below it."""
+        # Top header and header elements must be present
+        self.assertIn('id="appHeader"', self.editor_html, "#appHeader must exist in editor.html")
+        self.assertIn('class="app-header"', self.editor_html, "class 'app-header' must exist in editor.html")
+        self.assertIn('<header', self.editor_html, "<header> element must exist in editor.html")
+        self.assertIn('id="headerNav"', self.editor_html, "#headerNav must exist in editor.html")
+        self.assertIn('id="headerLoginBtn"', self.editor_html, "#headerLoginBtn must exist in editor.html")
 
-        # #editorDocumentBar is present and is the first layout element inside .app-container
+        # #editorDocumentBar is present and is docked inside .app-container under #appHeader
         app_container_pos = self.editor_html.find('class="app-container"')
         self.assertNotEqual(app_container_pos, -1, "app-container not found in editor.html")
+        header_pos = self.editor_html.find('id="appHeader"')
+        self.assertNotEqual(header_pos, -1, "#appHeader not found in editor.html")
         doc_bar_pos = self.editor_html.find('id="editorDocumentBar"')
         self.assertNotEqual(doc_bar_pos, -1, "#editorDocumentBar not found in editor.html")
-        self.assertTrue(doc_bar_pos > app_container_pos, "#editorDocumentBar must be inside .app-container")
+        self.assertTrue(header_pos > app_container_pos, "#appHeader must be inside .app-container")
+        self.assertTrue(doc_bar_pos > header_pos, "#editorDocumentBar must be placed after #appHeader")
 
-        # Ensure no header elements between app-container and editorDocumentBar
-        between_content = self.editor_html[app_container_pos:doc_bar_pos]
-        self.assertNotIn('<header', between_content, "No <header> element allowed before #editorDocumentBar")
-
-        # editor.css sets .editor-document-bar top: 0
+        # editor.css sets .editor-document-bar top: var(--header-height, 60px)
         doc_bar_css_match = re.search(r'\.editor-document-bar\s*\{([^}]+)\}', self.editor_css)
         self.assertIsNotNone(doc_bar_css_match, ".editor-document-bar rule not found in editor.css")
         self.assertTrue(
-            re.search(r'top:\s*0\b', doc_bar_css_match.group(1)),
-            ".editor-document-bar must have top: 0 in editor.css"
+            re.search(r'top:\s*var\(--header-height,\s*60px\)', doc_bar_css_match.group(1)),
+            ".editor-document-bar must have top: var(--header-height, 60px) in editor.css"
         )
 
     def test_editor_has_document_action_bar(self):
@@ -672,14 +723,14 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
                          "theme.css must not define --text-primary as #fff in light mode")
 
     def test_editor_header_exact_feed_structure(self):
-        """Verify editor.html has top header completely removed (#appHeader, logo-title, #headerNav),
+        """Verify editor.html has top header present (#appHeader, logo-title, #headerNav),
         forum_social.css is NOT linked, and editor workspace is intact."""
-        # Top header container must be completely absent in editor.html (task-22)
-        self.assertNotIn('id="appHeader"', self.editor_html, "#appHeader must not exist in editor.html")
-        self.assertNotIn('class="app-header"', self.editor_html, "class 'app-header' must not exist in editor.html")
-        self.assertNotIn('<header', self.editor_html, "<header> tag must not exist in editor.html")
-        self.assertNotIn('id="headerNav"', self.editor_html, "#headerNav must not exist in editor.html")
-        self.assertNotIn('class="logo-title"', self.editor_html, "logo-title must not exist in editor.html")
+        # Top header container must exist in editor.html
+        self.assertIn('id="appHeader"', self.editor_html, "#appHeader must exist in editor.html")
+        self.assertIn('class="app-header"', self.editor_html, "class 'app-header' must exist in editor.html")
+        self.assertIn('<header', self.editor_html, "<header> tag must exist in editor.html")
+        self.assertIn('id="headerNav"', self.editor_html, "#headerNav must exist in editor.html")
+        self.assertIn('class="logo-title"', self.editor_html, "logo-title must exist in editor.html")
 
         # forum_social.css must NOT be linked
         self.assertNotIn('forum_social.css', self.editor_html, "forum_social.css must not be linked in editor.html")
@@ -716,7 +767,7 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
 
 
 class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
-    """Test Suite for task-19: Unified header navigation, anti-shift 3-col grid, and identical typography."""
+    """Test Suite for task-19 & task-23: Unified header navigation, anti-shift 3-col grid, and identical typography."""
 
     @classmethod
     def setUpClass(cls):
@@ -732,40 +783,52 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
             cls.editor_css = f.read()
 
     def test_unified_brand_logo_across_all_pages(self):
-        """Verify header brand logo (.brand-logo, #appHeader) is completely removed from all 3 pages
+        """Verify header brand logo (.brand-logo, #appHeader) is present across all 3 pages
         (index.html, feed.html, editor.html), while valid page structures remain."""
         pages = [('index.html', self.index_html), ('feed.html', self.feed_html), ('editor.html', self.editor_html)]
         for name, html in pages:
-            self.assertNotIn('class="brand-logo"', html, f"brand-logo must be removed from {name}")
-            self.assertNotIn("class='brand-logo'", html, f"brand-logo must be removed from {name}")
-            self.assertNotIn('id="appHeader"', html, f"appHeader must be removed from {name}")
-            self.assertNotIn('class="app-header"', html, f"app-header must be removed from {name}")
-            self.assertNotIn('<header', html, f"<header> tag must be removed from {name}")
+            self.assertIn('class="brand-logo"', html, f"brand-logo missing in {name}")
+            self.assertIn('id="appHeader"', html, f"appHeader missing in {name}")
+            self.assertIn('class="app-header"', html, f"app-header missing in {name}")
+            self.assertIn('<header', html, f"<header> tag missing in {name}")
             self.assertIn('<!DOCTYPE html>', html, f"<!DOCTYPE html> missing in {name}")
             self.assertIn('<title>', html, f"<title> missing in {name}")
 
     def test_unified_navigation_routing_and_active_states(self):
-        """Verify #headerNav and all header navigation links (#navIndex, #navCommunity, #navEditor)
-        are completely removed across all pages (index.html, feed.html, editor.html)."""
+        """Verify #headerNav and all header navigation links (#navIndex, #navFeed)
+        are present across all pages (index.html, feed.html, editor.html) with correct active states."""
         pages = [
-            (self.index_html, 'index.html'),
-            (self.feed_html, 'feed.html'),
-            (self.editor_html, 'editor.html')
+            (self.index_html, 'index.html', True, False),
+            (self.feed_html, 'feed.html', False, True),
+            (self.editor_html, 'editor.html', False, False)
         ]
 
-        for html, filename in pages:
-            # #headerNav and header-nav must be completely absent (task-22)
-            self.assertNotIn('id="headerNav"', html, f"#headerNav must be removed from {filename}")
-            self.assertNotIn('class="header-nav"', html, f"class 'header-nav' must be removed from {filename}")
-            self.assertNotIn('id="navIndex"', html, f"#navIndex must be removed from {filename}")
-            self.assertNotIn('id="navCommunity"', html, f"#navCommunity must be removed from {filename}")
-            self.assertNotIn('id="navEditor"', html, f"#navEditor must be removed from {filename}")
+        for html, filename, index_active, feed_active in pages:
+            self.assertIn('id="headerNav"', html, f"#headerNav must be in {filename}")
+            self.assertIn('class="header-nav"', html, f"class 'header-nav' must be in {filename}")
+            self.assertIn('id="navIndex"', html, f"#navIndex must be in {filename}")
+            self.assertIn('id="navFeed"', html, f"#navFeed must be in {filename}")
 
-            # App container is intact
+            idx_match = re.search(r'<a\b[^>]*id=["\']navIndex["\'][^>]*>', html)
+            self.assertIsNotNone(idx_match, f"#navIndex link not found in {filename}")
+            if index_active:
+                self.assertIn('active', idx_match.group(0), f"#navIndex must be active in {filename}")
+                self.assertIn('is-active', idx_match.group(0), f"#navIndex must have is-active in {filename}")
+            else:
+                self.assertNotIn('active', idx_match.group(0), f"#navIndex must not be active in {filename}")
+
+            feed_match = re.search(r'<a\b[^>]*id=["\']navFeed["\'][^>]*>', html)
+            self.assertIsNotNone(feed_match, f"#navFeed link not found in {filename}")
+            if feed_active:
+                self.assertIn('active', feed_match.group(0), f"#navFeed must be active in {filename}")
+                self.assertIn('is-active', feed_match.group(0), f"#navFeed must have is-active in {filename}")
+            else:
+                self.assertNotIn('active', feed_match.group(0), f"#navFeed must not be active in {filename}")
+
             self.assertIn('class="app-container"', html, f"app-container must exist in {filename}")
 
     def test_community_nav_item_present_on_all_pages(self):
-        """Verify header navigation #headerNav and #navCommunity are completely absent across
+        """Verify header navigation #headerNav and #navFeed are present across
         index.html, feed.html, and editor.html, while community feed remains accessible from index.html."""
         pages = [
             ('index.html', self.index_html),
@@ -773,8 +836,8 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
             ('editor.html', self.editor_html),
         ]
         for filename, html in pages:
-            self.assertNotIn('id="headerNav"', html, f"#headerNav must not exist in {filename}")
-            self.assertNotIn('id="navCommunity"', html, f"#navCommunity must not exist in {filename}")
+            self.assertIn('id="headerNav"', html, f"#headerNav must exist in {filename}")
+            self.assertIn('id="navFeed"', html, f"#navFeed must exist in {filename}")
 
         # Community feed is accessible from index.html hero actions
         self.assertTrue(
@@ -783,34 +846,51 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
         )
 
     def test_stable_scrollbar_and_header_grid_layout_css(self):
-        """Verify overflow-y: scroll, scrollbar-gutter: stable, --header-height: 0px,
-        and obsolete header CSS rules are removed from theme.css."""
+        """Verify overflow-y: scroll, scrollbar-gutter: stable, --header-height: 60px,
+        and header grid layout CSS rules in theme.css."""
         # html rule
         self.assertIn('overflow-y: scroll;', self.theme_css)
         self.assertIn('scrollbar-gutter: stable;', self.theme_css)
 
-        # Header height set to 0px
-        self.assertIn('--header-height: 0px;', self.theme_css, "--header-height must be 0px in theme.css")
+        # Header height set to 60px
+        self.assertIn('--header-height: 60px;', self.theme_css, "--header-height must be 60px in theme.css")
 
-        # Dead CSS rules removed from theme.css (task-22)
-        self.assertNotIn('.header-container', self.theme_css, ".header-container must be removed from theme.css")
-        self.assertNotIn('.header-nav', self.theme_css, ".header-nav must be removed from theme.css")
-        self.assertNotIn('.header-right-group', self.theme_css, ".header-right-group must be removed from theme.css")
-        self.assertNotIn('.btn-theme-toggle', self.theme_css, ".btn-theme-toggle must be removed from theme.css")
-        self.assertNotIn('.header-user-bar', self.theme_css, ".header-user-bar must be removed from theme.css")
+        # 3-column grid in .header-container
+        grid_match = re.search(r'\.header-container\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(grid_match, ".header-container rule not found in theme.css")
+        container_css = grid_match.group(1)
+        self.assertIn('display: grid;', container_css)
+        self.assertIn('grid-template-columns: 260px 1fr 260px;', container_css)
+        self.assertIn('align-items: center;', container_css)
+
+        # brand-logo justify-self: start
+        brand_css = re.search(r'\.brand-logo\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('justify-self: start;', brand_css)
+
+        # header-nav justify-self: center
+        nav_css = re.search(r'\.header-nav\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('justify-self: center;', nav_css)
+
+        # header-right-group justify-self: end and gap: 14px
+        right_css = re.search(r'\.header-right-group\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('justify-self: end;', right_css)
+        self.assertIn('gap: 14px;', right_css)
 
     def test_exact_header_markup_identity(self):
-        """Verify header markup is 100% absent across index.html, feed.html, and editor.html."""
-        pages = [
-            ('index.html', self.index_html),
-            ('feed.html', self.feed_html),
-            ('editor.html', self.editor_html),
-        ]
-        for name, html in pages:
+        """Verify 100% markup identity across index.html, feed.html, and editor.html headers."""
+        def extract_header_lines(html):
             m = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>([\s\S]*?)</header>', html)
-            self.assertIsNone(m, f"<header id='appHeader'> must be completely absent in {name}")
-            m_tag = re.search(r'<header\b[^>]*>', html)
-            self.assertIsNone(m_tag, f"<header> tag must not exist in {name}")
+            self.assertIsNotNone(m, "<header id='appHeader'> must exist")
+            lines = [l.strip() for l in m.group(1).splitlines() if l.strip()]
+            normalized = '\n'.join(lines)
+            return re.sub(r'class="nav-link[^"]*"', 'class="nav-link"', normalized)
+
+        h_index = extract_header_lines(self.index_html)
+        h_feed = extract_header_lines(self.feed_html)
+        h_editor = extract_header_lines(self.editor_html)
+
+        self.assertEqual(h_index, h_feed, "Header in feed.html differs from index.html")
+        self.assertEqual(h_index, h_editor, "Header in editor.html differs from index.html")
 
     def test_no_conflicting_nav_link_overrides_in_editor_css(self):
         """Verify duplicate .nav-link overrides are removed from editor.css."""
@@ -818,21 +898,30 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
         self.assertNotIn('.nav-link.active', self.editor_css)
 
     def test_header_buttons_and_typography_consistency(self):
-        """Verify header buttons (#headerLoginBtn, #btnThemeToggle) and their dead CSS rules
-        are completely removed across all 3 pages, while Onest typography is strictly preserved in theme.css."""
-        # Header button IDs must be absent across all 3 pages
+        """Verify header buttons (#headerLoginBtn) and Onest typography consistency across all 3 pages."""
+        # Header button IDs must be present across all 3 pages
         pages = [('index.html', self.index_html), ('feed.html', self.feed_html), ('editor.html', self.editor_html)]
         for name, html in pages:
-            self.assertNotIn('id="headerLoginBtn"', html, f"headerLoginBtn must not exist in {name}")
-            self.assertNotIn('id="headerUserDot"', html, f"headerUserDot must not exist in {name}")
-            self.assertNotIn('id="headerUserLabel"', html, f"headerUserLabel must not exist in {name}")
-            self.assertNotIn('id="btnThemeToggle"', html, f"btnThemeToggle must not exist in {name}")
-            self.assertNotIn('theme-toggle-track', html, f"theme-toggle-track must not exist in {name}")
+            self.assertIn('id="headerLoginBtn"', html, f"headerLoginBtn must exist in {name}")
+            self.assertIn('id="headerUserLabel"', html, f"headerUserLabel must exist in {name}")
+            self.assertIn('Вход', html, f"Text 'Вход' must exist in {name}")
+            self.assertIn('btn-user-arrow', html, f"btn-user-arrow must exist in {name}")
 
-        # Obsolete CSS classes for header buttons removed from theme.css
-        self.assertNotIn('.header-login-action-btn', self.theme_css, ".header-login-action-btn must be removed from theme.css")
-        self.assertNotIn('.btn-user-label', self.theme_css, ".btn-user-label must be removed from theme.css")
-        self.assertNotIn('.nav-link', self.theme_css, ".nav-link must be removed from theme.css")
+        # CSS font checks
+        login_btn_css = re.search(r'\.header-login-action-btn\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('font-family: var(--font-sans);', login_btn_css)
+        self.assertIn('font-size: 0.92rem;', login_btn_css)
+        self.assertIn('font-weight: 600;', login_btn_css)
+
+        user_label_css = re.search(r'\.btn-user-label\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('font-family: var(--font-sans);', user_label_css)
+        self.assertIn('font-size: 0.92rem;', user_label_css)
+        self.assertIn('font-weight: 600;', user_label_css)
+
+        nav_link_css = re.search(r'\.nav-link\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('font-family: var(--font-sans);', nav_link_css)
+        self.assertIn('font-size: 0.92rem;', nav_link_css)
+        self.assertIn('font-weight: 600;', nav_link_css)
 
         # Typography standards in theme.css strictly preserved
         self.assertIn('--font-sans:', self.theme_css)
