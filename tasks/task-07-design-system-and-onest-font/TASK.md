@@ -37,11 +37,11 @@
      - Создан набор тестов `tests/test_design_system_and_icons.py`, проверяющий подключение шрифта Onest, отсутствие эмодзи в интерфейсе и корректность SVG-иконок.
      - Все существующие и новые тесты проходят на 100% (OK).
 
-- **Текущий статус**: IN_PROGRESS
-- **Ответственный исполнитель**: git_bot
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
 - **Рабочая ветка / копия**: feat/task-07-design-system-and-onest-font
 - **Блокер**: нет
-- **Следующий шаг**: git_bot выполняет этап PREPARE (создание и переключение на ветку feat/task-07-design-system-and-onest-font)
+- **Следующий шаг**: слияние ветки feat/task-07-design-system-and-onest-font в main
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-07-design-system-and-onest-font/DEV_HANDOVER.md`
   - QA: `tasks/task-07-design-system-and-onest-font/QA_REVIEW.md`
