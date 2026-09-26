@@ -261,6 +261,8 @@
        ========================================================================== */
     bindExportImport() {
       const exportModal = document.getElementById('export-modal');
+      if (!exportModal) return;
+
       const exportCodeBox = document.getElementById('export-code-box');
       const exportCopyBtn = document.getElementById('export-copy-btn');
       const exportDownloadBtn = document.getElementById('export-download-btn');

@@ -1,0 +1,39 @@
+=== Antigravity dev_bot Checks Log ===
+Task: task-12-editor-layout-refinements-and-typograph
+Date: 2026-09-26T16:55:00Z
+Role: Frontend & Web Interface Developer (dev_bot)
+
+1. HTML Structure & Tag Balancing Check
+Command: StrictHTMLValidator on frontend/public/editor.html
+Result: PASS
+Details: 0 unclosed or mismatched tags. Layout has clean 3-column architecture (.side-zone-left, .editor-central-column, .side-zone-right).
+
+2. Element Removal & Movement Checks
+- #btn-export-dropdown removed from .app-header .header-right: CONFIRMED
+- #dropdown-export-wrapper removed from .app-header .header-right: CONFIRMED
+- #export-dropdown-menu removed from .app-header .header-right: CONFIRMED
+- #export-modal removed from editor.html: CONFIRMED
+- bindExportImport() in frontend/public/js/main.js guarded: CONFIRMED (if (!exportModal) return;)
+- .editor-bottom-bar added under #editor-card in .editor-central-column: CONFIRMED
+- #btn-next-to-settings moved to .editor-bottom-bar with label "Далее к публикации": CONFIRMED
+- #widget-typograph moved from .side-zone-right to .side-zone-left: CONFIRMED
+- Icons removed from #widget-typograph (widget-header and #btn-typograph): CONFIRMED
+- #btn-typograph text centered strictly horizontal & vertical: CONFIRMED (.btn-typograph { width: 100%; display: flex; justify-content: center; align-items: center; text-align: center; })
+- #widget-author-guide in .side-zone-right updated with 3 bullet items, old structure and shortcuts removed: CONFIRMED
+
+3. Design System & GEMINI.md Conformance
+- Font family: Onest used throughout (--font-sans: 'Onest', sans-serif).
+- Emojis check: 0 emojis found in frontend/public/editor.html, frontend/public/css/editor.css, frontend/public/js/main.js.
+- SVG icons: 2px stroke strict vector SVG icons used where icons are needed.
+- 100% Offline-First: All CSS and assets are local, 0 CDN links.
+
+4. Python Unit Tests Baseline Check
+Command: python3 -m unittest discover -s tests -p 'test_*.py'
+Result: 146 passed, 5 failed (expected layout assertion updates in Python tests).
+Failures:
+- test_header_svg_icons (test_design_system_and_icons.py): expects deleted btn-export-dropdown.
+- test_modals_svg_close_buttons (test_design_system_and_icons.py): expects deleted export-modal.
+- test_sidebar_widget_svg_icons (test_design_system_and_icons.py): expects old btn-typograph SVG icon and old DOM position before Widget 2.
+- test_widget_2_author_guide (test_editor_habr_features.py): expects old "Структура статьи" and "Ctrl+K" shortcuts removed in task 4.
+- test_compact_top_document_bar (test_editor_v3.py): expects deleted export-dropdown-menu in header.
+Note: Per Hard Constraint, dev_bot does NOT edit Python files (.py). These test assertions require synchronization by py_bot / QA in the next stage.
