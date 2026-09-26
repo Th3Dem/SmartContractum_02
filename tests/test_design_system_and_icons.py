@@ -114,6 +114,13 @@ class TestDesignSystemAndIcons(unittest.TestCase):
         self.assertIn('class="btn-user-svg"', header_content)
         self.assertIn('class="btn-user-arrow"', header_content)
         self.assertIn('Вход', header_content)
+        self.assertIn('id="btnThemeToggle"', header_content)
+        self.assertIn('class="theme-icon-moon"', header_content)
+        self.assertIn('class="theme-icon-sun"', header_content)
+        # Theme toggle is positioned before login button
+        toggle_pos = header_content.find('id="btnThemeToggle"')
+        login_pos = header_content.find('id="headerLoginBtn"')
+        self.assertTrue(0 < toggle_pos < login_pos, "btnThemeToggle must be positioned before headerLoginBtn")
 
         # Antigravity Writer removed from sub-bar per requirement 4
         self.assertNotIn('Antigravity Writer', self.editor_html)

@@ -215,3 +215,5 @@
 [2026-09-27 00:00] | git_bot | GIT_COMMITTED | Слияние ветки feat/task-23-create-header-menu-dom-lenta в main (коммит 5703e17) (Task: task-23-create-header-menu-dom-lenta)
 [2026-09-27 00:00] | pm_bot | TASK_DONE | Задача task-23 успешно завершена в статусе Done-Done. Все 186 тестов пройдены (100%) (Task: task-23-create-header-menu-dom-lenta)
 [2026-09-27 00:20] | pm_bot | TASK_DONE | [FAST-TRACK] Унифицирован базовый размер шрифта html (16px) и убран оверрайд из editor.css, устранены различия в размере SmartContractum и кнопки «Вход» между страницами «Дом» и «Лента» (187/187 тестов PASS) (Task: fast-track-unify-header-typography)
+[2026-09-27 00:33] | pm_bot | TASK_DONE | [FAST-TRACK] Добавлен тумблер переключения темной и светлой темы (#btnThemeToggle) слева от кнопки «Вход» во всех шаблонах (index.html, feed.html, editor.html), добавлены стили и верифицированы тесты (187/187 тестов PASS) (Task: fast-track-add-header-theme-toggle)
+

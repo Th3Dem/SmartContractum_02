@@ -299,13 +299,21 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIn('id="feedCardsContainer"', self.feed_html)
 
     def test_theme_toggle_switch_in_header(self):
-        """Verify theme toggle button (#btnThemeToggle) is completely removed from feed.html,
-        while theme attribute and initialization script remain intact."""
-        # Theme toggle button and track must be completely removed from header (task-22)
-        self.assertNotIn('id="btnThemeToggle"', self.feed_html, "#btnThemeToggle must be removed from feed.html")
-        self.assertNotIn('theme-toggle-track', self.feed_html, "theme-toggle-track must be removed from feed.html")
-        self.assertNotIn('theme-icon-moon', self.feed_html, "theme-icon-moon must be removed from feed.html")
-        self.assertNotIn('theme-icon-sun', self.feed_html, "theme-icon-sun must be removed from feed.html")
+        """Verify theme toggle button (#btnThemeToggle) is present in feed.html to the left of the login button,
+        with proper switch role, track, thumb, and icons."""
+        # Theme toggle button and track must be present in header to the left of #headerLoginBtn
+        self.assertIn('id="btnThemeToggle"', self.feed_html, "#btnThemeToggle must exist in feed.html")
+        self.assertIn('class="btn-theme-toggle"', self.feed_html)
+        self.assertIn('role="switch"', self.feed_html)
+        self.assertIn('theme-toggle-track', self.feed_html, "theme-toggle-track must exist in feed.html")
+        self.assertIn('theme-toggle-thumb', self.feed_html, "theme-toggle-thumb must exist in feed.html")
+        self.assertIn('theme-icon-moon', self.feed_html, "theme-icon-moon must exist in feed.html")
+        self.assertIn('theme-icon-sun', self.feed_html, "theme-icon-sun must exist in feed.html")
+
+        # Verify #btnThemeToggle is placed before #headerLoginBtn in DOM
+        toggle_pos = self.feed_html.find('id="btnThemeToggle"')
+        login_pos = self.feed_html.find('id="headerLoginBtn"')
+        self.assertTrue(0 < toggle_pos < login_pos, "#btnThemeToggle must be placed to the left of #headerLoginBtn")
 
         # Early theme initialization script and data-theme attribute must be preserved
         self.assertIn('data-theme="dark"', self.feed_html)
@@ -906,6 +914,9 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
             self.assertIn('id="headerUserLabel"', html, f"headerUserLabel must exist in {name}")
             self.assertIn('Вход', html, f"Text 'Вход' must exist in {name}")
             self.assertIn('btn-user-arrow', html, f"btn-user-arrow must exist in {name}")
+            self.assertIn('id="btnThemeToggle"', html, f"btnThemeToggle must exist in {name}")
+            self.assertIn('theme-toggle-track', html, f"theme-toggle-track must exist in {name}")
+            self.assertIn('theme-toggle-thumb', html, f"theme-toggle-thumb must exist in {name}")
 
         # CSS font checks
         login_btn_css = re.search(r'\.header-login-action-btn\s*\{([^}]+)\}', self.theme_css).group(1)
