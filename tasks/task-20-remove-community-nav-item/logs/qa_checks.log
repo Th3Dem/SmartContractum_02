@@ -1,0 +1,20 @@
+[QA_AUDIT] Starting QA checks for task-20-remove-community-nav-item
+[QA_AUDIT] Base commit: 7ff94ae
+[QA_AUDIT] Running git add -N .
+[QA_AUDIT] Calculating DIFF_SNAPSHOT_HASH
+[QA_AUDIT] DIFF_SNAPSHOT_HASH=bc5ef6d7e919451b850e626a7dd65d900d7f08ca1d548109193ef3dbd7ca352b
+[QA_AUDIT] Checking diff boundaries:
+frontend/public/editor.html
+frontend/public/feed.html
+frontend/public/index.html
+tests/test_feed_page_and_palette.py
+[QA_AUDIT] Diff boundaries are strictly compliant. Core Quill and data/* are not touched.
+[QA_AUDIT] Running unit tests: python3 -m unittest discover -s tests -p 'test_*.py' -v
+Ran 186 tests in 0.701s
+OK
+[QA_AUDIT] Test results: 186/186 PASS, 0 FAILURES, 0 ERRORS.
+[QA_AUDIT] Checking task criteria:
+[QA_AUDIT] Item 'Сообщество' (#navCommunity) is physically removed from #headerNav in index.html, feed.html, editor.html. (PASSED)
+[QA_AUDIT] Menu on all three pages contains exactly 2 items ('Главная' and 'Редактор'). (PASSED)
+[QA_AUDIT] Navigation is centered, 3-column grid preserved (validated by tests and unchanged CSS). (PASSED)
+[QA_AUDIT] Overall Verdict: APPROVED

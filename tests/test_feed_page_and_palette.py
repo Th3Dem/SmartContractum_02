@@ -17,11 +17,11 @@ Key test requirements:
      have zero external http/https references to Google Fonts or CDNs.
   4. Strict Onest font usage in feed.html and feed.css.
   5. Zero emojis (0 emojis) in feed.html, editor.html, and related assets.
-  6. Unified header in feed.html: #appHeader, brand SmartContractum (href="feed.html"),
-     3 navigation items (#navFeed with active class, #navCommunity, #navEditor),
+  6. Unified header in feed.html: #appHeader, brand SmartContractum (href="index.html"),
+     2 navigation items (#navIndex, #navEditor),
      theme toggle #btnThemeToggle, login button #headerLoginBtn.
   7. Cross-navigation: feed.html -> editor.html via #navEditor and #btnHeroWrite;
-     editor.html -> feed.html via brand logo link and community link.
+     editor.html -> index.html via brand logo link.
   8. Color palette in theme.css: dark theme CMC Midnight Navy tokens and high-contrast
      light theme tokens.
   9. Two-column feed grid: #feedCardsContainer, .feed-card, .feed-filter-btn,
@@ -237,7 +237,8 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIn('<svg', header_content)
 
     def test_header_navigation_links(self):
-        """Verify unified 3 navigation links: Главная (#navIndex), Сообщество (#navCommunity active), Редактор (#navEditor)."""
+        """Verify unified 2 navigation links: Главная (#navIndex), Редактор (#navEditor),
+        and verify Сообщество (#navCommunity) is absent from header-nav."""
         header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
         if not header_match:
             header_match = re.search(r'<header[^>]*class="[^"]*app-header[^"]*"[^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
@@ -256,19 +257,7 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         )
         self.assertIsNotNone(index_nav_match, "#navIndex with href='index.html' not found in header-nav")
 
-        # 2. Сообщество (#navCommunity) with active / is-active class and href="feed.html"
-        community_nav_match = re.search(
-            r'<a[^>]*id=["\']navCommunity["\'][^>]*href=["\']feed\.html["\'][^>]*>[\s\S]*?Сообщество[\s\S]*?</a>|'
-            r'<a[^>]*href=["\']feed\.html["\'][^>]*id=["\']navCommunity["\'][^>]*>[\s\S]*?Сообщество[\s\S]*?</a>',
-            nav_content
-        )
-        self.assertIsNotNone(community_nav_match, "#navCommunity with href='feed.html' not found in header-nav")
-        self.assertTrue(
-            re.search(r'class=["\'][^"\']*\b(?:active|is-active)\b', community_nav_match.group(0)),
-            "#navCommunity must have active or is-active class in feed.html"
-        )
-
-        # 3. Редактор (#navEditor) with href="editor.html"
+        # 2. Редактор (#navEditor) with href="editor.html"
         editor_nav_match = re.search(
             r'<a[^>]*id=["\']navEditor["\'][^>]*href=["\']editor\.html["\'][^>]*>[\s\S]*?Редактор[\s\S]*?</a>|'
             r'<a[^>]*href=["\']editor\.html["\'][^>]*id=["\']navEditor["\'][^>]*>[\s\S]*?Редактор[\s\S]*?</a>',
@@ -278,12 +267,14 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
 
         # All items must have SVG icons inside .nav-icon-box
         nav_links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav_content, re.DOTALL)
-        self.assertEqual(len(nav_links), 3, f"Expected exactly 3 navigation links in header, got {len(nav_links)}")
+        self.assertEqual(len(nav_links), 2, f"Expected exactly 2 navigation links in header, got {len(nav_links)}")
         for link_html in nav_links:
             self.assertIn('nav-icon-box', link_html)
             self.assertIn('<svg', link_html)
 
-        # Legacy items removed
+        # Legacy items and Сообщество (#navCommunity) removed
+        self.assertNotIn('navCommunity', nav_content, "#navCommunity must not be in header-nav")
+        self.assertNotIn('Сообщество', nav_content, "Text 'Сообщество' must not be in header-nav")
         self.assertNotIn('Эксперты', nav_content)
         self.assertNotIn('База знаний', nav_content)
 
@@ -410,7 +401,7 @@ class TestCrossNavigationAndColorPalette(unittest.TestCase):
             cls.theme_css = f.read()
 
     def test_cross_navigation_between_feed_and_editor(self):
-        """Verify cross-navigation: feed.html links to editor.html, and editor.html links back to feed.html."""
+        """Verify cross-navigation: feed.html links to editor.html, and editor.html header has brand logo linking to index.html with Сообщество absent."""
         # 1. feed.html -> editor.html
         self.assertTrue(
             re.search(r'<a[^>]*id=["\']navEditor["\'][^>]*href=["\']editor\.html["\']|<a[^>]*href=["\']editor\.html["\'][^>]*id=["\']navEditor["\']', self.feed_html),
@@ -421,7 +412,7 @@ class TestCrossNavigationAndColorPalette(unittest.TestCase):
             "feed.html must link to editor.html via #btnHeroWrite"
         )
 
-        # 2. editor.html -> feed.html
+        # 2. editor.html -> index.html via brand logo link
         editor_header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
         self.assertIsNotNone(editor_header_match, "appHeader not found in editor.html")
         editor_header = editor_header_match.group(1)
@@ -430,9 +421,9 @@ class TestCrossNavigationAndColorPalette(unittest.TestCase):
         logo_link_match = re.search(r'<a[^>]*href=["\']index\.html["\'][^>]*class=["\'][^"\']*brand-logo[^"\']*["\']|<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*href=["\']index\.html["\']', editor_header)
         self.assertIsNotNone(logo_link_match, "Brand logo in editor.html must link to index.html")
 
-        # Nav link Сообщество links to feed.html
-        community_link_match = re.search(r'<a[^>]*href=["\']feed\.html["\'][^>]*>[\s\S]*?Сообщество[\s\S]*?</a>', editor_header)
-        self.assertIsNotNone(community_link_match, "Navigation link 'Сообщество' in editor.html must link to feed.html")
+        # Nav link Сообщество was removed from editor.html header
+        self.assertNotIn('Сообщество', editor_header, "Navigation link 'Сообщество' must not be in editor.html header")
+        self.assertNotIn('navCommunity', editor_header, "id 'navCommunity' must not be in editor.html header")
 
     def test_both_pages_default_to_dark_theme(self):
         """Verify both feed.html and editor.html root elements default to data-theme='dark'."""
@@ -662,7 +653,7 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
     """Test Suite for task-16 & task-18: Editor visual and theme fixes:
     - High-contrast text tokens in light theme (#0f172a in theme.css).
     - Editor header exact feed structure (logo-title with logo-smart & logo-contractum,
-      all 3 nav links with .nav-icon-box and SVG icons, #navEditor with 'nav-link active',
+      all 2 nav links with .nav-icon-box and SVG icons, #navEditor with 'nav-link active',
       and legacy forum_social.css NOT linked).
     - Onest font smoothing (-webkit-font-smoothing: antialiased) and antialiasing (text-rendering: optimizeLegibility).
     """
@@ -699,8 +690,9 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
     def test_editor_header_exact_feed_structure(self):
         """Verify editor.html header contains:
         * logo-title with logo-smart ('Smart') and logo-contractum ('Contractum').
-        * all 3 navigation links contain .nav-icon-box with SVG icons.
+        * all 2 navigation links contain .nav-icon-box with SVG icons.
         * #navEditor with 'nav-link active'.
+        * #navCommunity and 'Сообщество' absent from headerNav.
         * forum_social.css is NOT linked."""
         # Top header container
         header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
@@ -720,21 +712,23 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
             "logo-title containing logo-smart ('Smart') and logo-contractum ('Contractum') not found in editor header"
         )
 
-        # 2. all 3 navigation links contain .nav-icon-box with SVG icons
+        # 2. all 2 navigation links contain .nav-icon-box with SVG icons
         nav_match = re.search(r'<nav[^>]*id=["\']headerNav["\'][^>]*>(.*?)</nav>', header_content, re.DOTALL)
         self.assertIsNotNone(nav_match, "headerNav not found in editor header")
         nav_content = nav_match.group(1)
 
         nav_links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav_content, re.DOTALL)
-        self.assertEqual(len(nav_links), 3, f"Expected 3 navigation links in header, got {len(nav_links)}")
+        self.assertEqual(len(nav_links), 2, f"Expected 2 navigation links in header, got {len(nav_links)}")
 
-        required_nav_names = ['Главная', 'Сообщество', 'Редактор']
+        required_nav_names = ['Главная', 'Редактор']
         for i, (link_html, expected_name) in enumerate(zip(nav_links, required_nav_names)):
             self.assertIn(expected_name, link_html, f"Navigation link {i+1} must contain text '{expected_name}'")
             self.assertIn('nav-icon-box', link_html, f"Navigation link '{expected_name}' must contain .nav-icon-box")
             self.assertIn('<svg', link_html, f"Navigation link '{expected_name}' must contain SVG icon inside .nav-icon-box")
 
         # Removed from navigation
+        self.assertNotIn('Сообщество', nav_content, "Text 'Сообщество' must not be in editor headerNav")
+        self.assertNotIn('navCommunity', nav_content, "#navCommunity must not be in editor headerNav")
         self.assertNotIn('Эксперты', nav_content)
         self.assertNotIn('База знаний', nav_content)
 
@@ -802,35 +796,72 @@ class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
             self.assertIn('title="На главную"', brand_tag, f"brand-logo must have title='На главную' in {name}")
 
     def test_unified_navigation_routing_and_active_states(self):
-        """Verify correct routing and active states: index -> #navIndex, feed -> #navCommunity, editor -> #navEditor."""
-        for html, active_id, inactive_ids, filename in [
-            (self.index_html, 'navIndex', ['navCommunity', 'navEditor'], 'index.html'),
-            (self.feed_html, 'navCommunity', ['navIndex', 'navEditor'], 'feed.html'),
-            (self.editor_html, 'navEditor', ['navIndex', 'navCommunity'], 'editor.html')
-        ]:
-            # Check navIndex points to index.html
-            idx_m = re.search(r'<a\b[^>]*id=["\']navIndex["\'][^>]*>', html)
-            self.assertIsNotNone(idx_m, f"navIndex not found in {filename}")
+        """Verify exactly 2 navigation items in #headerNav (Главная #navIndex, Редактор #navEditor),
+        correct routing, active states (index -> #navIndex, editor -> #navEditor, feed -> none active),
+        and absence of #navCommunity / 'Сообщество' in #headerNav across all pages."""
+        pages = [
+            (self.index_html, 'index.html', 'navIndex'),
+            (self.feed_html, 'feed.html', None),
+            (self.editor_html, 'editor.html', 'navEditor')
+        ]
+
+        for html, filename, active_id in pages:
+            # Extract headerNav
+            nav_match = re.search(r'<nav[^>]*id=["\']headerNav["\'][^>]*>([\s\S]*?)</nav>', html)
+            self.assertIsNotNone(nav_match, f"#headerNav not found in {filename}")
+            nav_content = nav_match.group(1)
+
+            # Exactly 2 navigation links
+            nav_links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav_content, re.DOTALL)
+            self.assertEqual(len(nav_links), 2, f"Expected exactly 2 navigation links in #headerNav in {filename}, got {len(nav_links)}")
+
+            # Check navIndex points to index.html with text 'Главная'
+            idx_m = re.search(r'<a\b[^>]*id=["\']navIndex["\'][^>]*>([\s\S]*?)</a>', nav_content)
+            self.assertIsNotNone(idx_m, f"navIndex not found in #headerNav in {filename}")
             self.assertIn('href="index.html"', idx_m.group(0))
+            self.assertIn('Главная', idx_m.group(1))
 
-            # Check navCommunity points to feed.html
-            comm_m = re.search(r'<a\b[^>]*id=["\']navCommunity["\'][^>]*>', html)
-            self.assertIsNotNone(comm_m, f"navCommunity not found in {filename}")
-            self.assertIn('href="feed.html"', comm_m.group(0))
-
-            # Check navEditor points to editor.html
-            ed_m = re.search(r'<a\b[^>]*id=["\']navEditor["\'][^>]*>', html)
-            self.assertIsNotNone(ed_m, f"navEditor not found in {filename}")
+            # Check navEditor points to editor.html with text 'Редактор'
+            ed_m = re.search(r'<a\b[^>]*id=["\']navEditor["\'][^>]*>([\s\S]*?)</a>', nav_content)
+            self.assertIsNotNone(ed_m, f"navEditor not found in #headerNav in {filename}")
             self.assertIn('href="editor.html"', ed_m.group(0))
+            self.assertIn('Редактор', ed_m.group(1))
 
-            # Active item has active / is-active
-            active_m = re.search(rf'<a\b[^>]*id=["\']{active_id}["\'][^>]*>', html)
-            self.assertTrue(re.search(r'\b(?:active|is-active)\b', active_m.group(0)), f"{active_id} must be active in {filename}")
+            # Explicit check: #navCommunity and text 'Сообщество' are absent from #headerNav
+            self.assertNotIn('navCommunity', nav_content, f"Forbidden #navCommunity found in #headerNav in {filename}")
+            self.assertNotIn('Сообщество', nav_content, f"Forbidden text 'Сообщество' found in #headerNav in {filename}")
 
-            # Inactive items do NOT have active / is-active
-            for inact_id in inactive_ids:
-                inact_m = re.search(rf'<a\b[^>]*id=["\']{inact_id}["\'][^>]*>', html)
-                self.assertFalse(re.search(r'\b(?:active|is-active)\b', inact_m.group(0)), f"{inact_id} must NOT be active in {filename}")
+            # Active item checks
+            all_nav_ids = ['navIndex', 'navEditor']
+            for nav_id in all_nav_ids:
+                link_m = re.search(rf'<a\b[^>]*id=["\']{nav_id}["\'][^>]*>', nav_content)
+                self.assertIsNotNone(link_m, f"{nav_id} not found in {filename}")
+                if nav_id == active_id:
+                    self.assertTrue(
+                        re.search(r'\b(?:active|is-active)\b', link_m.group(0)),
+                        f"{nav_id} must be active in {filename}"
+                    )
+                else:
+                    self.assertFalse(
+                        re.search(r'\b(?:active|is-active)\b', link_m.group(0)),
+                        f"{nav_id} must NOT be active in {filename}"
+                    )
+
+    def test_community_nav_item_absent_on_all_pages(self):
+        """Explicit verification that 'Сообщество' (#navCommunity) is absent from #headerNav
+        across all pages: index.html, feed.html, and editor.html."""
+        pages = [
+            ('index.html', self.index_html),
+            ('feed.html', self.feed_html),
+            ('editor.html', self.editor_html),
+        ]
+        for filename, html in pages:
+            nav_match = re.search(r'<nav[^>]*id=["\']headerNav["\'][^>]*>([\s\S]*?)</nav>', html)
+            self.assertIsNotNone(nav_match, f"#headerNav not found in {filename}")
+            nav_content = nav_match.group(1)
+
+            self.assertNotIn('navCommunity', nav_content, f"#navCommunity must not exist in #headerNav of {filename}")
+            self.assertNotIn('Сообщество', nav_content, f"'Сообщество' must not exist in #headerNav of {filename}")
 
     def test_stable_scrollbar_and_header_grid_layout_css(self):
         """Verify overflow-y: scroll, scrollbar-gutter: stable, and 3-column grid for .header-container."""
