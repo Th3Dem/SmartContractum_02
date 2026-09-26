@@ -217,5 +217,6 @@
 [2026-09-27 00:20] | pm_bot | TASK_DONE | [FAST-TRACK] Унифицирован базовый размер шрифта html (16px) и убран оверрайд из editor.css, устранены различия в размере SmartContractum и кнопки «Вход» между страницами «Дом» и «Лента» (187/187 тестов PASS) (Task: fast-track-unify-header-typography)
 [2026-09-27 00:33] | pm_bot | TASK_DONE | [FAST-TRACK] Добавлен тумблер переключения темной и светлой темы (#btnThemeToggle) слева от кнопки «Вход» во всех шаблонах (index.html, feed.html, editor.html), добавлены стили и верифицированы тесты (187/187 тестов PASS) (Task: fast-track-add-header-theme-toggle)
 [2026-09-27 00:43] | pm_bot | TASK_DONE | [FAST-TRACK] Выровнены элементы панели editorDocumentBar по границам блока редактирования статьи: кнопка «Черновики» и статус сохранения выровнены по левому краю статьи, кнопка «Далее к публикации» (#btn-next-to-settings) перенесена наверх и выровнена по правому краю статьи (187/187 тестов PASS) (Task: fast-track-align-editor-subbar-and-top-publication-btn)
+[2026-09-27 00:50] | pm_bot | TASK_DONE | [FAST-TRACK] В блоке «Чек-лист публикации» убрано слово «Черновик» из бейджа готовности (#readiness-badge), оставлены только компактные цифры прогресса (0/4, 1/4, 2/4, 3/4, 4/4) (187/187 тестов PASS) (Task: fast-track-checklist-badge-digits-only)
 
 

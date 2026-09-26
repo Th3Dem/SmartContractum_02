@@ -270,6 +270,12 @@ class TestSidebarWidgets(unittest.TestCase):
         self.assertIn('Чек-лист публикации', self.html)
         self.assertIn('id="readiness-badge"', self.html)
 
+        # Readiness badge shows only numbers (e.g. 0/4) without the word "Черновик"
+        badge_match = re.search(r'<span[^>]*id=["\']readiness-badge["\'][^>]*>(.*?)</span>', self.html, re.DOTALL)
+        self.assertIsNotNone(badge_match)
+        self.assertEqual(badge_match.group(1).strip(), '0/4')
+        self.assertNotIn('Черновик', badge_match.group(1))
+
         # 4 dynamic checklist items
         self.assertIn('id="chk-title"', self.html)
         self.assertIn('Заголовок статьи заполнен', self.html)

@@ -519,13 +519,16 @@
       if (badge) {
         if (completedCount === 4) {
           badge.className = 'readiness-badge badge-success';
-          badge.textContent = 'Готово к публикации';
+          badge.textContent = '4/4';
+          badge.title = 'Все пункты чек-листа выполнены (4/4)';
         } else if (completedCount > 0) {
           badge.className = 'readiness-badge badge-warning';
-          badge.textContent = `Черновик (${completedCount}/4)`;
+          badge.textContent = `${completedCount}/4`;
+          badge.title = `Выполнено пунктов чек-листа: ${completedCount}/4`;
         } else {
           badge.className = 'readiness-badge badge-muted';
-          badge.textContent = 'Черновик (0/4)';
+          badge.textContent = '0/4';
+          badge.title = 'Чек-лист не заполнен (0/4)';
         }
       }
     }
