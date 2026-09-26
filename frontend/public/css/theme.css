@@ -210,6 +210,8 @@
    ========================================================================== */
 html {
   box-sizing: border-box;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -254,18 +256,19 @@ body {
 }
 
 .header-container {
-  max-width: var(--max-width);
+  max-width: var(--max-width, 1360px);
   height: 100%;
   margin: 0 auto;
   padding: 0 24px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 260px 1fr 260px;
   align-items: center;
-  justify-content: space-between;
   gap: 20px;
 }
 
 /* Brand Logo */
 .brand-logo {
+  justify-self: start;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -350,6 +353,7 @@ body {
 
 /* Header Navigation */
 .header-nav {
+  justify-self: center;
   display: flex;
   align-items: center;
 }
@@ -374,6 +378,7 @@ body {
   padding: 8px 14px;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
+  font-family: var(--font-sans);
   font-size: 0.92rem;
   font-weight: 600;
   text-decoration: none !important;
@@ -439,6 +444,7 @@ body {
 }
 
 .nav-text {
+  font-family: var(--font-sans);
   font-size: 0.92rem;
   font-weight: 600;
   white-space: nowrap;
@@ -446,9 +452,10 @@ body {
 
 /* Header Right Group & Theme Toggle Button */
 .header-right-group {
+  justify-self: end;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .btn-theme-toggle {
@@ -566,8 +573,9 @@ body {
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.16) 0%, rgba(6, 182, 212, 0.10) 100%);
   border: 1px solid rgba(56, 189, 248, 0.35);
   color: #ffffff;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
   border-radius: var(--radius-full);
   text-decoration: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -655,7 +663,9 @@ body {
 }
 
 .btn-user-label {
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
   letter-spacing: 0.01em;
   color: #f1f5f9;
   transition: color 0.15s ease;
@@ -747,6 +757,11 @@ body {
 }
 
 @media (max-width: 900px) {
+  .header-container {
+    display: flex;
+    justify-content: space-between;
+  }
+
   .header-nav {
     display: none;
   }

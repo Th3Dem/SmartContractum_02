@@ -1,0 +1,9 @@
+[QA Checks]
+1. Base commit: a0cae54
+2. DIFF_SNAPSHOT_HASH: 41d7fba01bcb80d9c2ee2e95c0502bdf88ead35b0baca6cc5c112d040f8fd0b1
+3. Diff boundaries: Only allowed files modified (frontend/public/css/editor.css, frontend/public/css/theme.css, frontend/public/editor.html, frontend/public/feed.html, frontend/public/index.html, tests/test_feed_page_and_palette.py)
+4. Tests: 185 tests run, 185 passed.
+5. User requirements:
+ - Routing: Brand logo links to index.html on all pages. Navigation tabs correctly link to target pages and have "active is-active" class on corresponding pages.
+ - Layout Shifts: overflow-y: scroll and scrollbar-gutter: stable are set in theme.css. .header-container uses a 3-column grid with precise centering.
+ - Visual Identity: Buttons, toggles, and fonts are identical across all pages. Onest font is consistently used.

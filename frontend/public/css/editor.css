@@ -119,22 +119,6 @@ a {
   color: #0f172a !important;
 }
 
-.nav-link.is-active,
-.nav-link.active {
-  color: #38bdf8 !important;
-  background: rgba(56, 189, 248, 0.12) !important;
-  border: 1px solid rgba(56, 189, 248, 0.35) !important;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15) !important;
-}
-
-[data-theme="light"] .nav-link.is-active,
-[data-theme="light"] .nav-link.active {
-  color: #0284c7 !important;
-  background: rgba(2, 132, 199, 0.12) !important;
-  border-color: rgba(2, 132, 199, 0.35) !important;
-  box-shadow: 0 0 12px rgba(2, 132, 199, 0.2) !important;
-}
-
 /* Dedicated Document Sub-bar (Antigravity Writer controls) */
 .editor-document-bar {
   height: 52px;

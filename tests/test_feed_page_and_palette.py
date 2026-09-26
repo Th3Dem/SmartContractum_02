@@ -215,18 +215,18 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
             cls.feed_html = f.read()
 
     def test_header_brand_logo_and_icon(self):
-        """Verify brand logo SmartContractum with SVG icon, href='feed.html', and title in feed.html header."""
+        """Verify brand logo SmartContractum with SVG icon, href='index.html', and title in feed.html header."""
         header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
         if not header_match:
             header_match = re.search(r'<header[^>]*class="[^"]*app-header[^"]*"[^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
         self.assertIsNotNone(header_match, "appHeader element not found in feed.html")
         header_content = header_match.group(1)
 
-        # Brand logo link
+        # Brand logo link points to index.html
         brand_match = re.search(r'<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*>', header_content)
         self.assertIsNotNone(brand_match, "brand-logo link not found in header")
         brand_tag = brand_match.group(0)
-        self.assertIn('href="feed.html"', brand_tag, "Brand logo link must point to feed.html")
+        self.assertIn('href="index.html"', brand_tag, "Brand logo link must point to index.html")
 
         # Brand name components
         self.assertIn('Smart', header_content)
@@ -237,7 +237,7 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIn('<svg', header_content)
 
     def test_header_navigation_links(self):
-        """Verify unified 3 navigation links: Главная (#navFeed active), Сообщество (#navCommunity), Редактор (#navEditor)."""
+        """Verify unified 3 navigation links: Главная (#navIndex), Сообщество (#navCommunity active), Редактор (#navEditor)."""
         header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
         if not header_match:
             header_match = re.search(r'<header[^>]*class="[^"]*app-header[^"]*"[^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
@@ -248,21 +248,25 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIsNotNone(nav_match, "header-nav not found inside header")
         nav_content = nav_match.group(1)
 
-        # 1. Главная (#navFeed) with active / is-active class and href="feed.html"
-        feed_nav_match = re.search(
-            r'<a[^>]*id=["\']navFeed["\'][^>]*>[\s\S]*?Главная[\s\S]*?</a>|'
-            r'<a[^>]*href=["\']feed\.html["\'][^>]*id=["\']navFeed["\'][^>]*>',
+        # 1. Главная (#navIndex) with href="index.html"
+        index_nav_match = re.search(
+            r'<a[^>]*id=["\']navIndex["\'][^>]*href=["\']index\.html["\'][^>]*>[\s\S]*?Главная[\s\S]*?</a>|'
+            r'<a[^>]*href=["\']index\.html["\'][^>]*id=["\']navIndex["\'][^>]*>[\s\S]*?Главная[\s\S]*?</a>',
             nav_content
         )
-        self.assertIsNotNone(feed_nav_match, "#navFeed not found in header-nav")
-        self.assertTrue(
-            re.search(r'class=["\'][^"\']*\b(?:active|is-active)\b', feed_nav_match.group(0)),
-            "#navFeed must have active or is-active class in feed.html"
-        )
+        self.assertIsNotNone(index_nav_match, "#navIndex with href='index.html' not found in header-nav")
 
-        # 2. Сообщество (#navCommunity)
-        self.assertIn('id="navCommunity"', nav_content, "#navCommunity missing in header-nav")
-        self.assertIn('Сообщество', nav_content, "Text 'Сообщество' missing in header-nav")
+        # 2. Сообщество (#navCommunity) with active / is-active class and href="feed.html"
+        community_nav_match = re.search(
+            r'<a[^>]*id=["\']navCommunity["\'][^>]*href=["\']feed\.html["\'][^>]*>[\s\S]*?Сообщество[\s\S]*?</a>|'
+            r'<a[^>]*href=["\']feed\.html["\'][^>]*id=["\']navCommunity["\'][^>]*>[\s\S]*?Сообщество[\s\S]*?</a>',
+            nav_content
+        )
+        self.assertIsNotNone(community_nav_match, "#navCommunity with href='feed.html' not found in header-nav")
+        self.assertTrue(
+            re.search(r'class=["\'][^"\']*\b(?:active|is-active)\b', community_nav_match.group(0)),
+            "#navCommunity must have active or is-active class in feed.html"
+        )
 
         # 3. Редактор (#navEditor) with href="editor.html"
         editor_nav_match = re.search(
@@ -299,7 +303,7 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIn('id="headerLoginBtn"', self.feed_html)
         self.assertIn('header-login-action-btn', self.feed_html)
         self.assertIn('btn-user-svg', self.feed_html)
-        self.assertIn('Войти', self.feed_html) or self.assertIn('Вход', self.feed_html)
+        self.assertTrue('Войти' in self.feed_html or 'Вход' in self.feed_html, "Login button text not found")
 
     def test_navigation_to_editor(self):
         """Verify nav link 'Редактор' and CTA #btnHeroWrite have href='editor.html'."""
@@ -422,9 +426,9 @@ class TestCrossNavigationAndColorPalette(unittest.TestCase):
         self.assertIsNotNone(editor_header_match, "appHeader not found in editor.html")
         editor_header = editor_header_match.group(1)
 
-        # Logo links to feed.html
-        logo_link_match = re.search(r'<a[^>]*href=["\']feed\.html["\'][^>]*class=["\'][^"\']*brand-logo[^"\']*["\']|<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*href=["\']feed\.html["\']', editor_header)
-        self.assertIsNotNone(logo_link_match, "Brand logo in editor.html must link to feed.html")
+        # Logo links to index.html
+        logo_link_match = re.search(r'<a[^>]*href=["\']index\.html["\'][^>]*class=["\'][^"\']*brand-logo[^"\']*["\']|<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*href=["\']index\.html["\']', editor_header)
+        self.assertIsNotNone(logo_link_match, "Brand logo in editor.html must link to index.html")
 
         # Nav link Сообщество links to feed.html
         community_link_match = re.search(r'<a[^>]*href=["\']feed\.html["\'][^>]*>[\s\S]*?Сообщество[\s\S]*?</a>', editor_header)
@@ -769,6 +773,140 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
         # Check Onest font
         self.assertIn("'Onest'", self.editor_css, "editor.css must declare 'Onest' font family")
         self.assertIn("'Onest'", self.editor_html, "editor.html must declare 'Onest' font family")
+
+
+class TestTask19UnifiedHeaderNavigationAndLayout(unittest.TestCase):
+    """Test Suite for task-19: Unified header navigation, anti-shift 3-col grid, and identical typography."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'index.html'), 'r', encoding='utf-8') as f:
+            cls.index_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'feed.html'), 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'editor.html'), 'r', encoding='utf-8') as f:
+            cls.editor_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'theme.css'), 'r', encoding='utf-8') as f:
+            cls.theme_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'editor.css'), 'r', encoding='utf-8') as f:
+            cls.editor_css = f.read()
+
+    def test_unified_brand_logo_across_all_pages(self):
+        """Verify brand logo links to index.html with title='На главную' on all 3 pages."""
+        pages = [('index.html', self.index_html), ('feed.html', self.feed_html), ('editor.html', self.editor_html)]
+        for name, html in pages:
+            brand_match = re.search(r'<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*>', html)
+            self.assertIsNotNone(brand_match, f"brand-logo not found in {name}")
+            brand_tag = brand_match.group(0)
+            self.assertIn('href="index.html"', brand_tag, f"brand-logo must have href='index.html' in {name}")
+            self.assertIn('title="На главную"', brand_tag, f"brand-logo must have title='На главную' in {name}")
+
+    def test_unified_navigation_routing_and_active_states(self):
+        """Verify correct routing and active states: index -> #navIndex, feed -> #navCommunity, editor -> #navEditor."""
+        for html, active_id, inactive_ids, filename in [
+            (self.index_html, 'navIndex', ['navCommunity', 'navEditor'], 'index.html'),
+            (self.feed_html, 'navCommunity', ['navIndex', 'navEditor'], 'feed.html'),
+            (self.editor_html, 'navEditor', ['navIndex', 'navCommunity'], 'editor.html')
+        ]:
+            # Check navIndex points to index.html
+            idx_m = re.search(r'<a\b[^>]*id=["\']navIndex["\'][^>]*>', html)
+            self.assertIsNotNone(idx_m, f"navIndex not found in {filename}")
+            self.assertIn('href="index.html"', idx_m.group(0))
+
+            # Check navCommunity points to feed.html
+            comm_m = re.search(r'<a\b[^>]*id=["\']navCommunity["\'][^>]*>', html)
+            self.assertIsNotNone(comm_m, f"navCommunity not found in {filename}")
+            self.assertIn('href="feed.html"', comm_m.group(0))
+
+            # Check navEditor points to editor.html
+            ed_m = re.search(r'<a\b[^>]*id=["\']navEditor["\'][^>]*>', html)
+            self.assertIsNotNone(ed_m, f"navEditor not found in {filename}")
+            self.assertIn('href="editor.html"', ed_m.group(0))
+
+            # Active item has active / is-active
+            active_m = re.search(rf'<a\b[^>]*id=["\']{active_id}["\'][^>]*>', html)
+            self.assertTrue(re.search(r'\b(?:active|is-active)\b', active_m.group(0)), f"{active_id} must be active in {filename}")
+
+            # Inactive items do NOT have active / is-active
+            for inact_id in inactive_ids:
+                inact_m = re.search(rf'<a\b[^>]*id=["\']{inact_id}["\'][^>]*>', html)
+                self.assertFalse(re.search(r'\b(?:active|is-active)\b', inact_m.group(0)), f"{inact_id} must NOT be active in {filename}")
+
+    def test_stable_scrollbar_and_header_grid_layout_css(self):
+        """Verify overflow-y: scroll, scrollbar-gutter: stable, and 3-column grid for .header-container."""
+        # html rule
+        self.assertIn('overflow-y: scroll;', self.theme_css)
+        self.assertIn('scrollbar-gutter: stable;', self.theme_css)
+
+        # 3-column grid in .header-container
+        grid_match = re.search(r'\.header-container\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(grid_match, ".header-container rule not found in theme.css")
+        container_css = grid_match.group(1)
+        self.assertIn('display: grid;', container_css)
+        self.assertIn('grid-template-columns: 260px 1fr 260px;', container_css)
+        self.assertIn('align-items: center;', container_css)
+
+        # brand-logo justify-self: start
+        brand_css = re.search(r'\.brand-logo\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('justify-self: start;', brand_css)
+
+        # header-nav justify-self: center
+        nav_css = re.search(r'\.header-nav\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('justify-self: center;', nav_css)
+
+        # header-right-group justify-self: end and gap: 14px
+        right_css = re.search(r'\.header-right-group\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('justify-self: end;', right_css)
+        self.assertIn('gap: 14px;', right_css)
+
+    def test_exact_header_markup_identity(self):
+        """Verify 100% markup identity across index.html, feed.html, and editor.html headers."""
+        def extract_header_lines(html):
+            m = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>([\s\S]*?)</header>', html)
+            lines = [l.strip() for l in m.group(1).splitlines() if l.strip()]
+            normalized = '\n'.join(lines)
+            return re.sub(r'class="nav-link[^"]*"', 'class="nav-link"', normalized)
+
+        h_index = extract_header_lines(self.index_html)
+        h_feed = extract_header_lines(self.feed_html)
+        h_editor = extract_header_lines(self.editor_html)
+
+        self.assertEqual(h_index, h_feed, "Header in feed.html differs from index.html")
+        self.assertEqual(h_index, h_editor, "Header in editor.html differs from index.html")
+
+    def test_no_conflicting_nav_link_overrides_in_editor_css(self):
+        """Verify duplicate .nav-link overrides are removed from editor.css."""
+        self.assertNotIn('.nav-link.is-active', self.editor_css)
+        self.assertNotIn('.nav-link.active', self.editor_css)
+
+    def test_header_buttons_and_typography_consistency(self):
+        """Verify Onest font, font-size: 0.92rem, and font-weight: 600 applied to header items and login button."""
+        # Login button structure and text across all 3 pages
+        pages = [('index.html', self.index_html), ('feed.html', self.feed_html), ('editor.html', self.editor_html)]
+        for name, html in pages:
+            self.assertIn('id="headerLoginBtn"', html, f"headerLoginBtn missing in {name}")
+            self.assertIn('id="headerUserDot"', html, f"headerUserDot missing in {name}")
+            self.assertIn('id="headerUserLabel"', html, f"headerUserLabel missing in {name}")
+            self.assertIn('Войти / Регистрация', html, f"Text 'Войти / Регистрация' missing in {name}")
+            self.assertIn('btn-user-arrow', html, f"btn-user-arrow missing in {name}")
+            self.assertIn('id="btnThemeToggle"', html, f"btnThemeToggle missing in {name}")
+            self.assertIn('theme-toggle-track', html, f"theme-toggle-track missing in {name}")
+
+        # CSS font checks
+        login_btn_css = re.search(r'\.header-login-action-btn\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('font-family: var(--font-sans);', login_btn_css)
+        self.assertIn('font-size: 0.92rem;', login_btn_css)
+        self.assertIn('font-weight: 600;', login_btn_css)
+
+        user_label_css = re.search(r'\.btn-user-label\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('font-family: var(--font-sans);', user_label_css)
+        self.assertIn('font-size: 0.92rem;', user_label_css)
+        self.assertIn('font-weight: 600;', user_label_css)
+
+        nav_link_css = re.search(r'\.nav-link\s*\{([^}]+)\}', self.theme_css).group(1)
+        self.assertIn('font-family: var(--font-sans);', nav_link_css)
+        self.assertIn('font-size: 0.92rem;', nav_link_css)
+        self.assertIn('font-weight: 600;', nav_link_css)
 
 
 if __name__ == '__main__':
