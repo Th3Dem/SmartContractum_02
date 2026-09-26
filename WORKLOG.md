@@ -87,3 +87,5 @@
 [2026-09-26 15:39] | qa_bot | QA_APPROVED | Независимый аудит настроек публикации, модального окна и сервера очереди модерации успешно завершен, вердикт APPROVED (Task: task-11-publication-settings-and-moderation)
 [2026-09-26 15:39] | pm_bot | TASK_DONE | Разработка и аудит завершены, передача git_bot для фиксации локального коммита (Task: task-11-publication-settings-and-moderation)
 [2026-09-26 15:40] | git_bot | GIT_COMMITTED | Фиксация коммита be5db2a на этапе FINALIZE (Task: task-11-publication-settings-and-moderation)
+[2026-09-26 15:42] | git_bot | GIT_COMMITTED | Слияние ветки feat/task-11-publication-settings-and-moderation в main (коммит d6dc16a) (Task: task-11-publication-settings-and-moderation)
+[2026-09-26 15:42] | pm_bot | TASK_DONE | Задача task-11 успешно завершена в статусе Done-Done. Все 151 тест пройдены (100%) (Task: task-11-publication-settings-and-moderation)
