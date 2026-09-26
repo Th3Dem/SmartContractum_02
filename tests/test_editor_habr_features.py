@@ -255,12 +255,14 @@ class TestSidebarWidgets(unittest.TestCase):
         self.assertIn('id="typograph-status"', self.html)
 
     def test_widget_2_author_guide(self):
-        """Widget 2: «Памятка автору» with 3 author guidelines."""
+        """Widget 2: «Памятка автору» with 3 author guidelines and SVG icons."""
         self.assertIn('id="widget-author-guide"', self.html)
         self.assertIn('Памятка автору', self.html)
-        self.assertIn('Соблюдайте правила сайта', self.html)
-        self.assertIn('Следуйте советам и заботливо оформляйте публикации', self.html)
-        self.assertIn('Загружайте картинки меньше 8МБ для тела публикации и меньше 1МБ для обложки публикации', self.html)
+        self.assertIn('Соблюдайте правила платформы и этику сообщества', self.html)
+        self.assertIn('Уделяйте внимание структуре и аккуратному оформлению', self.html)
+        self.assertIn('Изображения: до 8 МБ в тексте статьи и до 1 МБ для обложки', self.html)
+        self.assertIn('guide-tips-iconified', self.html)
+        self.assertIn('guide-tip-icon', self.html)
 
     def test_widget_3_checklist(self):
         """Widget 3: «Чек-лист публикации» with 4 dynamic items and progress bar."""

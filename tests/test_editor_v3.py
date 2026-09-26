@@ -106,13 +106,14 @@ class TestPersistentToolbarRemovalAndNewBars(unittest.TestCase):
         self.assertNotIn('class="editor-toolbar"', self.html)
 
     def test_compact_top_document_bar(self):
-        """Top bar contains branding, drafts button with badge, autosave indicator, preview toggle, more actions, and export menu removed."""
+        """Top bar contains branding, drafts button with badge, autosave indicator, more actions; mode toggle and export menu removed."""
         self.assertIn('Antigravity Writer', self.html)
         self.assertIn('id="btn-drafts-modal"', self.html)
         self.assertIn('id="drafts-badge"', self.html)
         self.assertIn('id="save-status"', self.html)
-        self.assertIn('id="btn-mode-edit"', self.html)
-        self.assertIn('id="btn-mode-preview"', self.html)
+        self.assertNotIn('id="btn-mode-edit"', self.html)
+        self.assertNotIn('id="btn-mode-preview"', self.html)
+        self.assertNotIn('id="mode-toggle"', self.html)
         self.assertNotIn('id="export-dropdown-menu"', self.html)
         self.assertNotIn('id="btn-export-dropdown"', self.html)
         self.assertIn('id="btn-more-actions"', self.html)

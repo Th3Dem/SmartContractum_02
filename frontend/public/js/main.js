@@ -109,6 +109,10 @@
       const editBtn = document.getElementById('btn-mode-edit');
       const previewBtn = document.getElementById('btn-mode-preview');
 
+      if (!editBtn && !previewBtn) {
+        return;
+      }
+
       if (editBtn) {
         editBtn.addEventListener('click', () => this.setMode('edit'));
       }
@@ -127,7 +131,7 @@
         if (editBtn) editBtn.classList.remove('active');
         if (previewBtn) previewBtn.classList.add('active');
 
-        this.editor.enable(false);
+        if (this.editor && typeof this.editor.enable === 'function') this.editor.enable(false);
         if (this.titleInput) this.titleInput.setAttribute('readonly', 'true');
         if (this.Blocks) this.Blocks.hide();
         if (this.Bubble) this.Bubble.hide();
@@ -138,7 +142,7 @@
         if (editBtn) editBtn.classList.add('active');
         if (previewBtn) previewBtn.classList.remove('active');
 
-        this.editor.enable(true);
+        if (this.editor && typeof this.editor.enable === 'function') this.editor.enable(true);
         if (this.titleInput) this.titleInput.removeAttribute('readonly');
       }
     }

@@ -108,10 +108,8 @@ class TestDesignSystemAndIcons(unittest.TestCase):
         self.assertIsNotNone(drafts_btn_match, "btn-drafts-modal not found")
         self.assertIn('<svg', drafts_btn_match.group(1))
 
-        # Mode toggle buttons (Edit and Preview)
-        mode_toggle_match = re.search(r'<div class="mode-toggle"[^>]*>(.*?)</div>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(mode_toggle_match, "mode-toggle not found")
-        self.assertIn('<svg class="mode-icon"', mode_toggle_match.group(1))
+        # Mode toggle removed from header by user request
+        self.assertNotIn('id="mode-toggle"', self.editor_html)
 
         # More actions button
         more_btn_match = re.search(r'<button[^>]*id="btn-more-actions"[^>]*>(.*?)</button>', self.editor_html, re.DOTALL)
@@ -192,11 +190,15 @@ class TestDesignSystemAndIcons(unittest.TestCase):
         self.assertIsNotNone(right_zone_match, "side-zone-right not found")
         right_content = right_zone_match.group(1)
 
-        # Author guide widget header with SVG icon
+        # Author guide widget: header row has NO icon, list items have clean SVG icons
         guide_widget_match = re.search(r'<div[^>]*id="widget-author-guide"[^>]*>(.*?)</div>\s*<!-- Widget', right_content, re.DOTALL)
         self.assertIsNotNone(guide_widget_match, "widget-author-guide not found in side-zone-right")
-        self.assertIn('<span class="widget-icon">', guide_widget_match.group(1))
-        self.assertIn('<svg', guide_widget_match.group(1))
+        guide_header_match = re.search(r'<div[^>]*class="[^"]*widget-header[^"]*"[^>]*>(.*?)</div>', guide_widget_match.group(1), re.DOTALL)
+        self.assertIsNotNone(guide_header_match, "widget-header not found in widget-author-guide")
+        self.assertNotIn('<svg', guide_header_match.group(1))
+        self.assertNotIn('widget-icon', guide_header_match.group(1))
+        tip_svgs = re.findall(r'<span class="guide-tip-icon">\s*<svg[^>]*stroke-width="2"', guide_widget_match.group(1))
+        self.assertEqual(len(tip_svgs), 3, f"Expected 3 tip SVG icons with stroke-width 2, found {len(tip_svgs)}")
 
         # Checklist widget header with SVG icon
         check_widget_match = re.search(r'<div[^>]*id="widget-checklist"[^>]*>(.*?)</aside>', self.editor_html, re.DOTALL)

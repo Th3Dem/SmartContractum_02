@@ -1,0 +1,22 @@
+=== Frontend Verification Checks ===
+Sat Sep 26 17:21:56 MSK 2026
+
+[Check 1] Verify removal of #mode-toggle and mode buttons from editor.html:
+PASS: #mode-toggle successfully removed from editor.html
+PASS: #btn-mode-edit successfully removed from editor.html
+PASS: #btn-mode-preview successfully removed from editor.html
+
+[Check 2] Verify header-center is clean in editor.html:
+PASS: <div class="header-center"></div> is clean
+
+[Check 3] Verify #widget-author-guide header in editor.html has no icon and is right-aligned:
+PASS: widget-icon removed from widget-author-guide header
+
+[Check 4] Verify author guide 3 iconified tips and updated copy:
+PASS: Author guide tips correctly iconified with updated copy
+
+[Check 5] Verify CSS rules in editor.css:
+PASS: All CSS rules present in editor.css
+
+[Check 6] Verify JS null-safety in main.js:
+PASS: main.js has null-safeguards in bindModeToggle and setMode

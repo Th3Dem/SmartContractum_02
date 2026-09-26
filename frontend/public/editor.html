@@ -39,25 +39,7 @@
         </div>
       </div>
 
-      <div class="header-center">
-        <!-- Edit / Preview Mode Toggle -->
-        <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Режим отображения">
-          <button type="button" class="mode-btn active" id="btn-mode-edit" data-mode="edit" title="Режим редактирования">
-            <svg class="mode-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"></path>
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-            </svg>
-            <span>Редактирование</span>
-          </button>
-          <button type="button" class="mode-btn" id="btn-mode-preview" data-mode="preview" title="Режим предпросмотра">
-            <svg class="mode-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-            <span>Предпросмотр</span>
-          </button>
-        </div>
-      </div>
+      <div class="header-center"></div>
 
       <div class="header-right">
         <!-- More Actions Menu -->
@@ -441,18 +423,40 @@
           <!-- Widget 1: «Памятка автору» -->
           <div class="sidebar-widget widget-author-guide" id="widget-author-guide">
             <div class="widget-header">
-              <span class="widget-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                </svg>
-              </span>
               <h3 class="widget-title">Памятка автору</h3>
             </div>
-            <ul class="guide-tips">
-              <li>Соблюдайте правила сайта</li>
-              <li>Следуйте советам и заботливо оформляйте публикации</li>
-              <li>Загружайте картинки меньше 8МБ для тела публикации и меньше 1МБ для обложки публикации</li>
+            <ul class="guide-tips guide-tips-iconified">
+              <li class="guide-tip-item">
+                <span class="guide-tip-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    <polyline points="9 12 11 14 15 10"></polyline>
+                  </svg>
+                </span>
+                <span class="guide-tip-text">Соблюдайте правила платформы и этику сообщества</span>
+              </li>
+              <li class="guide-tip-item">
+                <span class="guide-tip-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </span>
+                <span class="guide-tip-text">Уделяйте внимание структуре и аккуратному оформлению</span>
+              </li>
+              <li class="guide-tip-item">
+                <span class="guide-tip-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                </span>
+                <span class="guide-tip-text">Изображения: до 8 МБ в тексте статьи и до 1 МБ для обложки</span>
+              </li>
             </ul>
           </div>
 
