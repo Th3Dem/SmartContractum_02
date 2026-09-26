@@ -1,0 +1,23 @@
+=== DEV CHECKS LOG ===
+Legacy file frontend/public/css/forum_social.css deleted: True
+Legacy file frontend/public/css/landing_main.css deleted: True
+Legacy file frontend/public/css/hero_constellation.css deleted: True
+Legacy file frontend/public/js/forum_social.js deleted: True
+Legacy file frontend/public/js/landing_main.js deleted: True
+File frontend/public/feed.html exists: True (size: 17691 bytes)
+File frontend/public/css/feed.css exists: True (size: 12303 bytes)
+File frontend/public/js/feed.js exists: True (size: 15856 bytes)
+File frontend/public/css/theme.css exists: True (size: 18469 bytes)
+Zero emojis check for frontend/public/feed.html: True
+Zero emojis check for frontend/public/css/feed.css: True
+Zero emojis check for frontend/public/js/feed.js: True
+Zero emojis check for frontend/public/css/theme.css: True
+Zero emojis check for frontend/public/editor.html: True
+Zero emojis check for frontend/public/index.html: True
+Offline-first check for frontend/public/feed.html: PASSED
+Offline-first check for frontend/public/css/feed.css: PASSED
+Offline-first check for frontend/public/js/feed.js: PASSED
+Offline-first check for frontend/public/css/theme.css: PASSED
+Header structure & legacy free in frontend/public/feed.html: PASSED
+Header structure & legacy free in frontend/public/editor.html: PASSED
+ALL DEV CHECKS PASSED SUCCESSFULLY!
