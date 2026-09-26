@@ -59,6 +59,20 @@
 }
 
 /* ----------------------------------------------------------------------
+   0.5 LIGHT THEME OVERRIDES (HIGH CONTRAST)
+---------------------------------------------------------------------- */
+[data-theme="light"] {
+    --text-primary: #0f172a !important;
+    --bg-primary: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-surface: #ffffff;
+    --border-color: #e2e8f0;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-placeholder: #94a3b8;
+}
+
+/* ----------------------------------------------------------------------
    CSS RESET & BASE TYPOGRAPHY
 ---------------------------------------------------------------------- */
 *, *::before, *::after {

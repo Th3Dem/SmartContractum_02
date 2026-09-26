@@ -1,0 +1,41 @@
+[PASS] theme.css [data-theme="light"] exists: 
+[PASS] theme.css light --text-primary: #0f172a !important: 
+[PASS] theme.css light --bg-page: #f8fafc: 
+[PASS] theme.css light --bg-editor: #ffffff: 
+[PASS] theme.css dark --text-primary: #ffffff !important: 
+[PASS] theme.css dark --bg-page: #0b1426: 
+[PASS] theme.css dark --bg-editor: #171924: 
+[PASS] landing_main.css [data-theme="light"] exists: 
+[PASS] landing_main.css light --text-primary: #0f172a: 
+[PASS] landing_main.css light --bg-primary: #f8fafc: 
+[PASS] landing_main.css light --bg-card: #ffffff: 
+[PASS] landing_main.css light --border-color: #e2e8f0: 
+[PASS] editor.css light body #f8fafc !important: 
+[PASS] editor.css light body color #0f172a !important: 
+[PASS] editor.css light #editor-card: 
+[PASS] editor.css light .article-title-input color #0f172a !important: 
+[PASS] editor.css light .ql-editor p, h2, etc: 
+[PASS] editor.css light .ql-editor.ql-blank::before color #94a3b8 !important: 
+[PASS] editor.css light .sidebar-widget border #e2e8f0: 
+[PASS] editor.css light #editorDocumentBar: 
+[PASS] editor.css light .app-status-bar: 
+[PASS] editor.css dark body #0b1426 !important: 
+[PASS] editor.css dark #editor-card #171924 !important: 
+[PASS] editor.css dark .article-title-input color #ffffff !important: 
+[PASS] editor.css dark .ql-editor color #ffffff !important: 
+[PASS] editor.css dark #editorDocumentBar color #ffffff: 
+[PASS] editor.css dark .app-status-bar color #a1a7bb: 
+[PASS] editor.html includes forum_social.css: 
+[PASS] editor.html has scDocGradFeedUnified: 
+[PASS] editor.html has logo text group: 
+[PASS] editor.html has #navEditor with class nav-link active: 
+[PASS] editor.html has #btnThemeToggle: 
+[PASS] editor.html has #headerLoginBtn: 
+[PASS] main.js applyTheme setAttribute data-theme: 
+[PASS] main.js applyTheme localStorage ag_theme & sc_theme: 
+[PASS] main.js applyTheme aria-checked true for light: 
+[PASS] main.js applyTheme aria-checked false for dark: 
+[PASS] main.js applyTheme hljs theme link: 
+[PASS] editor.html has Onest font: 
+[PASS] editor.css has font smoothing: 
+[PASS] no legacy fonts declared in editor.html/editor.css: 

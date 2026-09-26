@@ -42,6 +42,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
 html, body {
@@ -54,7 +55,21 @@ html, body {
   line-height: var(--line-height-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+body,
+#editor,
+.ql-editor,
+input,
+textarea,
+select,
+button,
+.article-title-input {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button, input, textarea, select {
@@ -3282,10 +3297,66 @@ body.modal-open {
 }
 
 /* ==========================================================================
-   Dark Theme (CoinMarketCap Midnight Navy & Feed Aesthetic)
+   Theme Adaptations: Light & Dark Theme High-Contrast Rules
    ========================================================================== */
+
+/* Light Theme [data-theme="light"] */
+[data-theme="light"] body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  background-image: none;
+}
+
+[data-theme="light"] #editor-card,
+[data-theme="light"] .editor-card {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .article-title-input {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .ql-editor,
+[data-theme="light"] .ql-editor p,
+[data-theme="light"] .ql-editor h2,
+[data-theme="light"] .ql-editor h3,
+[data-theme="light"] .ql-editor h4,
+[data-theme="light"] .ql-editor ul,
+[data-theme="light"] .ql-editor ol,
+[data-theme="light"] .ql-editor li {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .ql-editor.ql-blank::before {
+  color: #94a3b8 !important;
+}
+
+[data-theme="light"] .sidebar-widget {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] #editorDocumentBar,
+[data-theme="light"] .editor-document-bar {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme="light"] .app-status-bar {
+  background: rgba(255, 255, 255, 0.95);
+  border-top: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+/* Dark Theme [data-theme="dark"] */
 [data-theme="dark"] body {
-  background-color: var(--bg-page);
+  background-color: #0b1426 !important;
+  color: #ffffff !important;
   background-image: 
     radial-gradient(circle at 10% 10%, rgba(56, 97, 251, 0.05) 0%, transparent 40%),
     radial-gradient(circle at 90% 90%, rgba(22, 199, 132, 0.04) 0%, transparent 40%);
@@ -3300,6 +3371,37 @@ body.modal-open {
 }
 
 [data-theme="dark"] #editor-card,
+[data-theme="dark"] .editor-card {
+  background-color: #171924 !important;
+  color: #ffffff !important;
+  border: 1px solid #222531;
+}
+
+[data-theme="dark"] .article-title-input {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .ql-editor,
+[data-theme="dark"] .ql-editor p,
+[data-theme="dark"] .ql-editor h2,
+[data-theme="dark"] .ql-editor h3,
+[data-theme="dark"] .ql-editor h4 {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] #editorDocumentBar,
+[data-theme="dark"] .editor-document-bar {
+  background: rgba(17, 25, 40, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .app-status-bar {
+  background: rgba(17, 25, 40, 0.95);
+  border-top: 1px solid #222531;
+  color: #a1a7bb;
+}
+
 [data-theme="dark"] .sidebar-widget,
 [data-theme="dark"] .modal-card,
 [data-theme="dark"] .pub-modal-card {
@@ -3308,5 +3410,6 @@ body.modal-open {
   border-radius: 16px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
+
 
 

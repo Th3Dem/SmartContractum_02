@@ -84,7 +84,8 @@
       const headerToggleBtn = document.getElementById('btnThemeToggle');
       if (headerToggleBtn) {
         headerToggleBtn.addEventListener('click', () => {
-          this.theme = this.theme === 'dark' ? 'light' : 'dark';
+          const current = document.documentElement.getAttribute('data-theme') || this.theme;
+          this.theme = current === 'dark' ? 'light' : 'dark';
           this.applyTheme(this.theme);
         });
       }
@@ -93,13 +94,15 @@
       const dropdownToggleBtn = document.getElementById('btn-theme-toggle');
       if (dropdownToggleBtn) {
         dropdownToggleBtn.addEventListener('click', () => {
-          this.theme = this.theme === 'dark' ? 'light' : 'dark';
+          const current = document.documentElement.getAttribute('data-theme') || this.theme;
+          this.theme = current === 'dark' ? 'light' : 'dark';
           this.applyTheme(this.theme);
         });
       }
     }
 
     applyTheme(theme) {
+      this.theme = theme;
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('ag_theme', theme);
       localStorage.setItem('sc_theme', theme);
@@ -107,8 +110,13 @@
       // Update header tumbler UI
       const headerToggleBtn = document.getElementById('btnThemeToggle');
       if (headerToggleBtn) {
-        headerToggleBtn.setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
-        headerToggleBtn.setAttribute('title', theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на тёмную тему');
+        if (theme === 'light') {
+          headerToggleBtn.setAttribute('aria-checked', 'true');
+          headerToggleBtn.setAttribute('title', 'Переключить на тёмную тему');
+        } else {
+          headerToggleBtn.setAttribute('aria-checked', 'false');
+          headerToggleBtn.setAttribute('title', 'Переключить на светлую тему');
+        }
       }
 
       // Switch Highlight.js theme

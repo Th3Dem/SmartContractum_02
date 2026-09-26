@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test Suite: Feed Page and Editor Designer Color Palette
-Verification for task-14-feed-page-and-editor-color-palette & task-15-editor-feed-visual-alignment:
+Verification for task-14-feed-page-and-editor-color-palette, task-15-editor-feed-visual-alignment & task-16-fix-editor-visual-and-theme-issues:
   1. Verification that frontend/public/feed.html exists.
   2. 100% Offline-First check: Ensure feed.html, landing_main.css, forum_social.css, hero_constellation.css
      have zero external http/https references to Google Fonts, CDNs, or external scripts.
@@ -22,6 +22,11 @@ Verification for task-14-feed-page-and-editor-color-palette & task-15-editor-fee
      - Document action bar #editorDocumentBar with brand Antigravity Writer, #btn-drafts-modal, #drafts-badge, #save-status, #btn-more-actions.
      - Unified button styles in editor.css (.btn-primary, .btn-next-to-pub/#btn-next-to-settings, secondary .btn/.btn-drafts).
      - Strict Onest font and zero emojis in editor.html and editor.css.
+ 10. Task-16 Editor visual and theme fixes:
+     - High-contrast text tokens in light theme (#0f172a in theme.css and landing_main.css).
+     - Editor header exact feed structure (logo-title with logo-smart & logo-contractum,
+       all 5 nav links with .nav-icon-box and SVG icons, #navEditor with 'nav-link active', link to forum_social.css).
+     - Onest font smoothing (-webkit-font-smoothing: antialiased) and antialiasing (text-rendering: optimizeLegibility).
 """
 
 import os
@@ -433,6 +438,138 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
         for filename, content in [('editor.html', self.editor_html), ('editor.css', self.editor_css)]:
             matches = disallowed_fonts_pattern.findall(content)
             self.assertEqual(len(matches), 0, f"Disallowed legacy font found in {filename}: {matches}")
+
+
+class TestEditorVisualAndThemeIssues(unittest.TestCase):
+    """Test Suite for task-16: Editor visual and theme issues:
+    - High-contrast text tokens in light theme (#0f172a in theme.css and landing_main.css).
+    - Editor header exact feed structure (logo-title with logo-smart & logo-contractum,
+      all 5 nav links with .nav-icon-box and SVG icons, #navEditor with 'nav-link active', link to forum_social.css).
+    - Onest font smoothing (-webkit-font-smoothing: antialiased) and antialiasing (text-rendering: optimizeLegibility).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.editor_html_path = os.path.join(FRONTEND_DIR, 'editor.html')
+        cls.editor_css_path = os.path.join(FRONTEND_DIR, 'css', 'editor.css')
+        cls.theme_css_path = os.path.join(FRONTEND_DIR, 'css', 'theme.css')
+        cls.landing_main_css_path = os.path.join(FRONTEND_DIR, 'css', 'landing_main.css')
+
+        with open(cls.editor_html_path, 'r', encoding='utf-8') as f:
+            cls.editor_html = f.read()
+        with open(cls.editor_css_path, 'r', encoding='utf-8') as f:
+            cls.editor_css = f.read()
+        with open(cls.theme_css_path, 'r', encoding='utf-8') as f:
+            cls.theme_css = f.read()
+        with open(cls.landing_main_css_path, 'r', encoding='utf-8') as f:
+            cls.landing_main_css = f.read()
+
+    def test_light_theme_high_contrast_text_tokens(self):
+        """Verify that theme.css and landing_main.css define high-contrast dark text (#0f172a)
+        for [data-theme="light"], ensuring zero white text on white backgrounds in light mode."""
+        # 1. theme.css [data-theme="light"]
+        theme_light_match = re.search(r'\[data-theme=["\']?light["\']?\]\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(theme_light_match, "[data-theme='light'] block not found in theme.css")
+        theme_light_css = theme_light_match.group(1)
+
+        self.assertTrue(
+            re.search(r'--text-primary:\s*#0f172a\b', theme_light_css),
+            "theme.css must define --text-primary: #0f172a in [data-theme='light'] block"
+        )
+        self.assertNotIn('--text-primary: #ffffff', theme_light_css,
+                         "theme.css must not define --text-primary as #ffffff in light mode")
+        self.assertNotIn('--text-primary: #fff;', theme_light_css,
+                         "theme.css must not define --text-primary as #fff in light mode")
+
+        # 2. landing_main.css [data-theme="light"]
+        landing_light_match = re.search(r'\[data-theme=["\']?light["\']?\]\s*\{([^}]+)\}', self.landing_main_css)
+        self.assertIsNotNone(landing_light_match, "[data-theme='light'] block not found in landing_main.css")
+        landing_light_css = landing_light_match.group(1)
+
+        self.assertTrue(
+            re.search(r'--text-primary:\s*#0f172a\b', landing_light_css),
+            "landing_main.css must define --text-primary: #0f172a in [data-theme='light'] block"
+        )
+        self.assertNotIn('--text-primary: #ffffff', landing_light_css,
+                         "landing_main.css must not define --text-primary as #ffffff in light mode")
+        self.assertNotIn('--text-primary: #fff;', landing_light_css,
+                         "landing_main.css must not define --text-primary as #fff in light mode")
+
+    def test_editor_header_exact_feed_structure(self):
+        """Verify editor.html header contains:
+        * logo-title with logo-smart ('Smart') and logo-contractum ('Contractum').
+        * all 5 navigation links contain .nav-icon-box with SVG icons.
+        * #navEditor has class 'nav-link active'.
+        * link to css/forum_social.css is present."""
+        # Top header container
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(header_match, "appHeader element not found in editor.html")
+        header_content = header_match.group(1)
+
+        # 1. logo-title with logo-smart ("Smart") and logo-contractum ("Contractum")
+        logo_title_pattern = re.compile(
+            r'<span[^>]*class=["\'][^"\']*logo-title[^"\']*["\'][^>]*>\s*'
+            r'<span[^>]*class=["\'][^"\']*logo-smart[^"\']*["\'][^>]*>\s*Smart\s*</span>\s*'
+            r'<span[^>]*class=["\'][^"\']*logo-contractum[^"\']*["\'][^>]*>\s*Contractum\s*</span>\s*'
+            r'</span>',
+            re.DOTALL
+        )
+        self.assertIsNotNone(
+            logo_title_pattern.search(header_content),
+            "logo-title containing logo-smart ('Smart') and logo-contractum ('Contractum') not found in editor header"
+        )
+
+        # 2. all 5 navigation links contain .nav-icon-box with SVG icons
+        nav_match = re.search(r'<nav[^>]*id=["\']headerNav["\'][^>]*>(.*?)</nav>', header_content, re.DOTALL)
+        self.assertIsNotNone(nav_match, "headerNav not found in editor header")
+        nav_content = nav_match.group(1)
+
+        nav_links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav_content, re.DOTALL)
+        self.assertEqual(len(nav_links), 5, f"Expected 5 navigation links in header, got {len(nav_links)}")
+
+        required_nav_names = ['Главная', 'Сообщество', 'Эксперты', 'База знаний', 'Редактор']
+        for i, (link_html, expected_name) in enumerate(zip(nav_links, required_nav_names)):
+            self.assertIn(expected_name, link_html, f"Navigation link {i+1} must contain text '{expected_name}'")
+            self.assertIn('nav-icon-box', link_html, f"Navigation link '{expected_name}' must contain .nav-icon-box")
+            self.assertIn('<svg', link_html, f"Navigation link '{expected_name}' must contain SVG icon inside .nav-icon-box")
+
+        # 3. #navEditor has class "nav-link active"
+        nav_editor_match = re.search(r'<a\b[^>]*id=["\']navEditor["\'][^>]*>', header_content)
+        self.assertIsNotNone(nav_editor_match, "Nav link #navEditor not found in header")
+        nav_editor_tag = nav_editor_match.group(0)
+        class_match = re.search(r'class=["\']([^"\']+)["\']', nav_editor_tag)
+        self.assertIsNotNone(class_match, "#navEditor has no class attribute")
+        classes = class_match.group(1).split()
+        self.assertIn('nav-link', classes, "#navEditor must have class 'nav-link'")
+        self.assertIn('active', classes, "#navEditor must have class 'active'")
+
+        # 4. link to css/forum_social.css is present
+        forum_social_link = re.search(
+            r'<link[^>]*href=["\'](?:css/)?forum_social\.css["\'][^>]*>',
+            self.editor_html
+        )
+        self.assertIsNotNone(forum_social_link, "link to css/forum_social.css not found in editor.html")
+
+    def test_onest_font_smoothing_and_antialiasing(self):
+        """Verify editor.css or editor.html specifies -webkit-font-smoothing: antialiased
+        and text-rendering: optimizeLegibility with Onest font."""
+        # Check -webkit-font-smoothing: antialiased
+        has_antialiased = (
+            bool(re.search(r'-webkit-font-smoothing:\s*antialiased', self.editor_css)) or
+            bool(re.search(r'-webkit-font-smoothing:\s*antialiased', self.editor_html))
+        )
+        self.assertTrue(has_antialiased, "Expected -webkit-font-smoothing: antialiased in editor.css or editor.html")
+
+        # Check text-rendering: optimizeLegibility
+        has_optimize_legibility = (
+            bool(re.search(r'text-rendering:\s*optimizeLegibility', self.editor_css)) or
+            bool(re.search(r'text-rendering:\s*optimizeLegibility', self.editor_html))
+        )
+        self.assertTrue(has_optimize_legibility, "Expected text-rendering: optimizeLegibility in editor.css or editor.html")
+
+        # Check Onest font
+        self.assertIn("'Onest'", self.editor_css, "editor.css must declare 'Onest' font family")
+        self.assertIn("'Onest'", self.editor_html, "editor.html must declare 'Onest' font family")
 
 
 if __name__ == '__main__':
