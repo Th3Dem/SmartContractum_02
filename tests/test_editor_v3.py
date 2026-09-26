@@ -54,13 +54,13 @@ class TestPageLayoutAndDesign(unittest.TestCase):
         self.assertIn('--bg-editor: #171924;', dark_content)
 
     def test_central_block_dimensions(self):
-        """Central block width: 800-880px (recommended 840px), horizontal padding: 40-56px (recommended 48px)."""
+        """Central block width: 900-960px (recommended 940px), horizontal padding: 40-56px (recommended 48px)."""
         # Check variable in theme.css
         width_match = re.search(r'--editor-width:\s*([0-9]+)px', self.theme_css)
         self.assertIsNotNone(width_match)
         width = int(width_match.group(1))
-        self.assertGreaterEqual(width, 800)
-        self.assertLessEqual(width, 880)
+        self.assertGreaterEqual(width, 900)
+        self.assertLessEqual(width, 960)
 
         padding_match = re.search(r'--editor-padding-x:\s*([0-9]+)px', self.theme_css)
         self.assertIsNotNone(padding_match)
@@ -68,17 +68,18 @@ class TestPageLayoutAndDesign(unittest.TestCase):
         self.assertGreaterEqual(padding, 40)
         self.assertLessEqual(padding, 56)
 
-        # Check editor-card style in editor.css
-        self.assertIn('max-width: 840px', self.editor_css)
+        # Check editor central column and card style in editor.css
+        self.assertIn('max-width: 940px', self.editor_css)
         self.assertIn('padding: 48px', self.editor_css)
 
     def test_symmetrical_side_zones_layout(self):
-        """Symmetrical side zones 240-280px in 3-column layout."""
+        """Centered 2-column workgroup layout (editor column 940px + right sidebar 350px)."""
         self.assertIn('.app-main-layout', self.editor_css)
-        self.assertIn('.side-zone-left', self.editor_css)
+        self.assertIn('.editor-workspace-container', self.editor_css)
         self.assertIn('.side-zone-right', self.editor_css)
-        self.assertIn('minmax(240px, 1fr)', self.editor_css)
-        self.assertIn('class="side-zone side-zone-left"', self.html)
+        self.assertIn('max-width: 940px', self.editor_css)
+        self.assertIn('width: 350px', self.editor_css)
+        self.assertNotIn('class="side-zone side-zone-left"', self.html)
         self.assertIn('class="side-zone side-zone-right"', self.html)
 
     def test_document_title_and_editor_left_boundary_alignment(self):
@@ -106,8 +107,8 @@ class TestPersistentToolbarRemovalAndNewBars(unittest.TestCase):
         self.assertNotIn('class="editor-toolbar"', self.html)
 
     def test_compact_top_document_bar(self):
-        """Top bar contains branding, drafts button with badge, autosave indicator, more actions; mode toggle and export menu removed."""
-        self.assertIn('Antigravity Writer', self.html)
+        """Top bar contains drafts button with badge, autosave indicator; Antigravity Writer and more actions removed."""
+        self.assertNotIn('Antigravity Writer', self.html)
         self.assertIn('id="btn-drafts-modal"', self.html)
         self.assertIn('id="drafts-badge"', self.html)
         self.assertIn('id="save-status"', self.html)
@@ -116,8 +117,7 @@ class TestPersistentToolbarRemovalAndNewBars(unittest.TestCase):
         self.assertNotIn('id="mode-toggle"', self.html)
         self.assertNotIn('id="export-dropdown-menu"', self.html)
         self.assertNotIn('id="btn-export-dropdown"', self.html)
-        self.assertIn('id="btn-more-actions"', self.html)
-        self.assertIn('id="btn-theme-toggle"', self.html)
+        self.assertNotIn('id="btn-more-actions"', self.html)
         self.assertIn('id="btn-clear-doc"', self.html)
 
     def test_bottom_status_bar(self):

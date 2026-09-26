@@ -95,7 +95,7 @@
     }
 
     triggerAutosave() {
-      this.setSavingStatus(true);
+      this.setStatus('unsaved');
       if (this.saveDebounceTimer) {
         clearTimeout(this.saveDebounceTimer);
       }
@@ -104,15 +104,32 @@
       }, this.debounceDelay);
     }
 
-    setSavingStatus(isSaving) {
+    setStatus(state) {
       if (!this.statusEl || !this.statusTextEl) return;
-      if (isSaving) {
-        this.statusEl.classList.add('saving');
-        this.statusTextEl.textContent = 'Сохранение...';
-      } else {
-        this.statusEl.classList.remove('saving');
-        this.statusTextEl.textContent = 'Все изменения сохранены';
+      this.statusEl.classList.remove('status-unsaved', 'status-saving', 'status-saved', 'status-error', 'saving');
+      switch (state) {
+        case 'unsaved':
+          this.statusEl.classList.add('status-unsaved');
+          this.statusTextEl.textContent = 'Есть изменения';
+          break;
+        case 'saving':
+          this.statusEl.classList.add('status-saving', 'saving');
+          this.statusTextEl.textContent = 'Сохранение...';
+          break;
+        case 'error':
+          this.statusEl.classList.add('status-error');
+          this.statusTextEl.textContent = 'Ошибка сохранения';
+          break;
+        case 'saved':
+        default:
+          this.statusEl.classList.add('status-saved');
+          this.statusTextEl.textContent = 'Все изменения сохранены';
+          break;
       }
+    }
+
+    setSavingStatus(isSaving) {
+      this.setStatus(isSaving ? 'saving' : 'saved');
     }
 
     /* ==========================================================================
@@ -126,9 +143,11 @@
 
       // Don't save empty blank drafts automatically
       if (!title && !text && isAuto) {
-        this.setSavingStatus(false);
+        this.setStatus('saved');
         return;
       }
+
+      this.setStatus('saving');
 
       const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
       const chars = text.length;
@@ -163,7 +182,7 @@
         }
 
         localStorage.setItem('ag_active_draft_id', this.currentDraftId);
-        this.setSavingStatus(false);
+        this.setStatus('saved');
         this.updateBadge();
 
         if (isManual && window.EditorApp && window.EditorApp.showToast) {
@@ -171,7 +190,7 @@
         }
       } catch (err) {
         console.error('Failed to save draft:', err);
-        this.setSavingStatus(false);
+        this.setStatus('error');
       }
     }
 

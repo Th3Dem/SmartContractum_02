@@ -172,7 +172,7 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertIn('<svg', header_content)
 
     def test_header_navigation_links(self):
-        """Verify navigation links: Главная, Сообщество, Эксперты, База знаний, Редактор in feed.html."""
+        """Verify navigation links: Главная, Сообщество, Редактор in feed.html per user requirement 3."""
         header_match = re.search(r'<header[^>]*class="[^"]*app-header[^"]*"[^>]*>(.*?)</header>', self.feed_html, re.DOTALL)
         self.assertIsNotNone(header_match)
         header_content = header_match.group(1)
@@ -184,13 +184,15 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         required_nav_items = [
             'Главная',
             'Сообщество',
-            'Эксперты',
-            'База знаний',
             'Редактор'
         ]
 
         for item in required_nav_items:
             self.assertIn(item, nav_content, f"Navigation link '{item}' missing in header-nav")
+
+        # Removed from main navigation per user requirement 3
+        self.assertNotIn('Эксперты', nav_content)
+        self.assertNotIn('База знаний', nav_content)
 
     def test_theme_toggle_switch_in_header(self):
         """Verify theme toggle button (#btnThemeToggle) exists with role='switch' and SVG icons."""
@@ -236,13 +238,16 @@ class TestEditorCrossNavigationAndColorPalette(unittest.TestCase):
             cls.theme_css = f.read()
 
     def test_cross_navigation_in_editor(self):
-        """Verify brand link in editor.html has href='feed.html' and title='В ленту публикаций'."""
-        brand_match = re.search(r'<a[^>]*class="brand"[^>]*>(.*?)</a>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(brand_match, "Brand link not found in editor.html")
-        brand_tag = brand_match.group(0)
+        """Verify cross navigation between editor and feed: header has brand logo and nav link to feed.html."""
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(header_match, "appHeader not found in editor.html")
+        header_content = header_match.group(1)
 
-        self.assertIn('href="feed.html"', brand_tag, "Brand link in editor.html must link to feed.html")
-        self.assertIn('title="В ленту публикаций"', brand_tag, "Brand link in editor.html must have title='В ленту публикаций'")
+        # Brand logo exists in header
+        self.assertIn('brand-logo', header_content)
+        # Link to Community/Feed exists in navigation
+        feed_link_match = re.search(r'<a[^>]*href=["\']feed\.html["\'][^>]*>(.*?)Сообщество(.*?)</a>', header_content, re.DOTALL)
+        self.assertIsNotNone(feed_link_match, "Navigation link to feed.html (Сообщество) not found in editor header")
 
     def test_editor_defaults_to_dark_theme(self):
         """Verify editor.html root element defaults to data-theme='dark'."""
@@ -313,28 +318,27 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
             cls.editor_css = f.read()
 
     def test_editor_has_top_navigation_header(self):
-        """Verify editor.html contains the full top header with id='appHeader', brand-logo linking to feed.html,
-        nav link #navEditor with class 'is-active', theme toggle #btnThemeToggle, and login button #headerLoginBtn."""
+        """Verify editor.html contains the full top header with id='appHeader', brand-logo,
+        nav link #navEditor with active class, theme toggle #btnThemeToggle, and login button #headerLoginBtn."""
         # Top sticky header with id="appHeader"
         header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
         self.assertIsNotNone(header_match, "Top header with id='appHeader' not found in editor.html")
         header_content = header_match.group(1)
 
-        # Brand-logo linking to feed.html
+        # Brand-logo in header
         brand_logo_match = re.search(
-            r'<a[^>]*href=["\']feed\.html["\'][^>]*class=["\'][^"\']*brand-logo[^"\']*["\']|'
-            r'<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\'][^>]*href=["\']feed\.html["\']',
+            r'<a[^>]*class=["\'][^"\']*brand-logo[^"\']*["\']',
             header_content
         )
-        self.assertIsNotNone(brand_logo_match, "brand-logo link to feed.html not found in editor top header")
+        self.assertIsNotNone(brand_logo_match, "brand-logo link not found in editor top header")
 
-        # Nav link #navEditor with class "is-active"
+        # Nav link #navEditor with class "is-active" or "active"
         nav_editor_match = re.search(
-            r'<a[^>]*id=["\']navEditor["\'][^>]*class=["\'][^"\']*\bis-active\b[^"\']*["\']|'
-            r'<a[^>]*class=["\'][^"\']*\bis-active\b[^"\']*["\'][^>]*id=["\']navEditor["\']',
+            r'<a[^>]*id=["\']navEditor["\'][^>]*class=["\'][^"\']*\b(?:is-active|active)\b[^"\']*["\']|'
+            r'<a[^>]*class=["\'][^"\']*\b(?:is-active|active)\b[^"\']*["\'][^>]*id=["\']navEditor["\']',
             header_content
         )
-        self.assertIsNotNone(nav_editor_match, "Nav link #navEditor with class 'is-active' not found in editor top header")
+        self.assertIsNotNone(nav_editor_match, "Nav link #navEditor with active class not found in editor top header")
 
         # Theme toggle button #btnThemeToggle
         self.assertIn('id="btnThemeToggle"', header_content, "#btnThemeToggle button not found in editor top header")
@@ -343,16 +347,17 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
         self.assertIn('id="headerLoginBtn"', header_content, "#headerLoginBtn button not found in editor top header")
 
     def test_editor_has_document_action_bar(self):
-        """Verify editor.html has #editorDocumentBar containing brand Antigravity Writer,
-        #btn-drafts-modal, #drafts-badge, #save-status, and #btn-more-actions."""
+        """Verify editor.html has #editorDocumentBar containing #btn-drafts-modal, #drafts-badge,
+        and #save-status; Antigravity Writer and #btn-more-actions are removed."""
         bar_start = self.editor_html.find('id="editorDocumentBar"')
         self.assertNotEqual(bar_start, -1, "#editorDocumentBar not found in editor.html")
         bar_end = self.editor_html.find('class="app-main-layout"', bar_start)
         self.assertNotEqual(bar_end, -1, "app-main-layout boundary not found after editorDocumentBar")
         bar_content = self.editor_html[bar_start:bar_end]
 
-        # Brand Antigravity Writer
-        self.assertIn('Antigravity Writer', bar_content, "Brand 'Antigravity Writer' not found in #editorDocumentBar")
+        # Antigravity Writer removed per requirement 4
+        self.assertNotIn('Antigravity Writer', bar_content, "Antigravity Writer must be removed from #editorDocumentBar")
+        self.assertNotIn('brand-icon', bar_content)
 
         # #btn-drafts-modal
         self.assertIn('id="btn-drafts-modal"', bar_content, "#btn-drafts-modal not found in #editorDocumentBar")
@@ -363,8 +368,8 @@ class TestEditorFeedVisualAlignment(unittest.TestCase):
         # #save-status
         self.assertIn('id="save-status"', bar_content, "#save-status not found in #editorDocumentBar")
 
-        # #btn-more-actions
-        self.assertIn('id="btn-more-actions"', bar_content, "#btn-more-actions not found in #editorDocumentBar")
+        # #btn-more-actions removed per requirement 10
+        self.assertNotIn('id="btn-more-actions"', bar_content, "#btn-more-actions must be removed from #editorDocumentBar")
 
     def test_editor_buttons_design_and_palette(self):
         """Verify editor.css defines the unified button styles:
@@ -525,13 +530,17 @@ class TestEditorVisualAndThemeIssues(unittest.TestCase):
         nav_content = nav_match.group(1)
 
         nav_links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav_content, re.DOTALL)
-        self.assertEqual(len(nav_links), 5, f"Expected 5 navigation links in header, got {len(nav_links)}")
+        self.assertEqual(len(nav_links), 3, f"Expected 3 navigation links in header, got {len(nav_links)}")
 
-        required_nav_names = ['Главная', 'Сообщество', 'Эксперты', 'База знаний', 'Редактор']
+        required_nav_names = ['Главная', 'Сообщество', 'Редактор']
         for i, (link_html, expected_name) in enumerate(zip(nav_links, required_nav_names)):
             self.assertIn(expected_name, link_html, f"Navigation link {i+1} must contain text '{expected_name}'")
             self.assertIn('nav-icon-box', link_html, f"Navigation link '{expected_name}' must contain .nav-icon-box")
             self.assertIn('<svg', link_html, f"Navigation link '{expected_name}' must contain SVG icon inside .nav-icon-box")
+
+        # Removed from navigation per user requirement 3
+        self.assertNotIn('Эксперты', nav_content)
+        self.assertNotIn('База знаний', nav_content)
 
         # 3. #navEditor has class "nav-link active"
         nav_editor_match = re.search(r'<a\b[^>]*id=["\']navEditor["\'][^>]*>', header_content)

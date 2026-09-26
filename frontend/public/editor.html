@@ -39,7 +39,7 @@
     <header class="app-header" id="appHeader">
         <div class="header-container">
             <!-- Brand Logo -->
-            <a href="feed.html" class="brand-logo" aria-label="SmartContractum Главная">
+            <a href="index.html" class="brand-logo" aria-label="SmartContractum Главная">
                 <div class="logo-icon-box" aria-hidden="true">
                     <svg class="smart-contract-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
@@ -63,11 +63,11 @@
                 </div>
             </a>
 
-            <!-- Navigation Links -->
+            <!-- Navigation Links (3 items: Главная, Сообщество, Редактор) -->
             <nav class="header-nav" id="headerNav" aria-label="Основная навигация">
                 <ul class="nav-list">
                     <li class="nav-item">
-                        <a href="feed.html" class="nav-link">
+                        <a href="index.html" class="nav-link">
                             <span class="nav-icon-box">
                                 <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
                                     <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
@@ -84,26 +84,6 @@
                                 </svg>
                             </span>
                             <span class="nav-text">Сообщество</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#experts" class="nav-link">
-                            <span class="nav-icon-box">
-                                <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
-                                </svg>
-                            </span>
-                            <span class="nav-text">Эксперты</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#knowledge-base" class="nav-link" id="navKnowledgeBase">
-                            <span class="nav-icon-box">
-                                <svg class="nav-svg-icon" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"></path>
-                                </svg>
-                            </span>
-                            <span class="nav-text">База знаний</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -154,14 +134,9 @@
         </div>
     </header>
 
-    <!-- Dedicated Document Sub-bar (Antigravity Writer controls) -->
+    <!-- Dedicated Document Sub-bar (Simplified, clean inline status) -->
     <div class="editor-document-bar" id="editorDocumentBar">
       <div class="header-left">
-        <a href="feed.html" class="brand" title="В ленту публикаций">
-          <div class="brand-icon">AG</div>
-          <span class="brand-title">Antigravity Writer</span>
-        </a>
-
         <!-- Drafts Button with Badge -->
         <button id="btn-drafts-modal" class="btn btn-drafts" title="Сохраненные черновики">
           <svg class="btn-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -171,108 +146,19 @@
           <span id="drafts-badge" class="badge">0</span>
         </button>
 
-        <!-- Autosave Indicator -->
+        <!-- Autosave Indicator (Clean text status on panel background) -->
         <div id="save-status" class="save-status" title="Статус автосохранения">
           <span class="save-dot"></span>
           <span id="save-status-text">Все изменения сохранены</span>
         </div>
       </div>
-
-      <div class="header-center"></div>
-
-      <div class="header-right">
-        <!-- More Actions Menu -->
-        <div class="dropdown-wrapper" id="dropdown-more-wrapper">
-          <button type="button" class="btn btn-icon" id="btn-more-actions" title="Дополнительные действия">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="1"></circle>
-              <circle cx="19" cy="12" r="1"></circle>
-              <circle cx="5" cy="12" r="1"></circle>
-            </svg>
-          </button>
-          <div class="dropdown-menu dropdown-menu-right" id="more-dropdown-menu">
-            <button type="button" class="dropdown-item" id="btn-theme-toggle">
-              <span class="dropdown-item-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path>
-                </svg>
-              </span>
-              <span class="dropdown-item-text">
-                <span class="dropdown-item-title">Сменить тему</span>
-                <span class="dropdown-item-desc">Светлая / Темная</span>
-              </span>
-            </button>
-            <button type="button" class="dropdown-item" id="btn-shortcuts-modal">
-              <span class="dropdown-item-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
-                  <line x1="6" y1="8" x2="6" y2="8.01"></line>
-                  <line x1="10" y1="8" x2="10" y2="8.01"></line>
-                  <line x1="14" y1="8" x2="14" y2="8.01"></line>
-                  <line x1="18" y1="8" x2="18" y2="8.01"></line>
-                  <line x1="6" y1="12" x2="6" y2="12.01"></line>
-                  <line x1="10" y1="12" x2="10" y2="12.01"></line>
-                  <line x1="14" y1="12" x2="14" y2="12.01"></line>
-                  <line x1="18" y1="12" x2="18" y2="12.01"></line>
-                  <line x1="7" y1="16" x2="17" y2="16"></line>
-                </svg>
-              </span>
-              <span class="dropdown-item-text">
-                <span class="dropdown-item-title">Горячие клавиши</span>
-                <span class="dropdown-item-desc">Список комбинаций клавиш</span>
-              </span>
-            </button>
-            <div class="dropdown-divider"></div>
-            <button type="button" class="dropdown-item text-danger" id="btn-clear-doc">
-              <span class="dropdown-item-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                  <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
-              </span>
-              <span class="dropdown-item-text">
-                <span class="dropdown-item-title">Очистить статью</span>
-                <span class="dropdown-item-desc">Сбросить весь текст и заголовок</span>
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- Main Workspace (3-column layout with centered editor block) -->
+    <!-- Main Workspace (Centered 2-column layout: Editor + Right Sidebar) -->
     <main class="app-main-layout">
-      <!-- Left Side Zone (Typograph Widget) -->
-      <aside class="side-zone side-zone-left">
-        <div class="sidebar-sticky-wrapper">
-          <!-- Widget: «Типограф» -->
-          <div class="sidebar-widget widget-typograph" id="widget-typograph">
-            <div class="widget-header">
-              <h3 class="widget-title">Типограф</h3>
-            </div>
-            <p class="widget-description">
-              После редактирования улучшает типографику текста: исправляет кавычки, тире и привязывает союзы/предлоги.
-            </p>
-            <button type="button" class="btn btn-typograph" id="btn-typograph">
-              <span>Оттипографить текст</span>
-            </button>
-            <div class="typograph-status" id="typograph-status" style="display: none;">
-              <span class="status-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </span>
-              <span>Текст успешно оттипографилен</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Central Editor Column -->
-      <section class="editor-central-column">
+      <div class="editor-workspace-container">
+        <!-- Central Editor Column -->
+        <section class="editor-central-column">
         <div class="editor-card" id="editor-card">
           <!-- Floating Block Inserter (+) -->
           <div id="block-inserter" class="block-inserter">
@@ -556,13 +442,54 @@
         </div>
       </section>
 
-      <!-- Symmetrical Right Side Zone (Author Assistant Sidebar) -->
-      <aside class="side-zone side-zone-right">
+      <!-- Right Sidebar (3 Cards: 1. Типограф, 2. Памятка автору, 3. Чек-лист публикации) -->
+      <aside class="side-zone side-zone-right" id="editorSidebar">
         <div class="sidebar-sticky-wrapper">
-          <!-- Widget 1: «Памятка автору» -->
+          <!-- Card 1: «Типограф» -->
+          <div class="sidebar-widget widget-typograph" id="widget-typograph">
+            <div class="widget-header">
+              <div class="widget-title-group">
+                <span class="widget-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                    <line x1="9" y1="20" x2="15" y2="20"></line>
+                    <line x1="12" y1="4" x2="12" y2="20"></line>
+                  </svg>
+                </span>
+                <h3 class="widget-title">Типограф</h3>
+              </div>
+            </div>
+            <p class="widget-description">
+              После редактирования улучшает типографику текста: исправляет кавычки, тире и привязывает союзы/предлоги.
+            </p>
+            <button type="button" class="btn btn-typograph" id="btn-typograph">
+              <span>Оттипографить текст</span>
+            </button>
+            <div class="typograph-status" id="typograph-status" style="display: none;">
+              <span class="status-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
+              <span>Текст успешно оттипографилен</span>
+            </div>
+          </div>
+
+          <!-- Card 2: «Памятка автору» -->
           <div class="sidebar-widget widget-author-guide" id="widget-author-guide">
             <div class="widget-header">
-              <h3 class="widget-title">Памятка автору</h3>
+              <div class="widget-title-group">
+                <span class="widget-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </span>
+                <h3 class="widget-title">Памятка автору</h3>
+              </div>
             </div>
             <ul class="guide-tips guide-tips-iconified">
               <li class="guide-tip-item">
@@ -596,10 +523,23 @@
                 </span>
                 <span class="guide-tip-text">Изображения: до 8 МБ в тексте статьи и до 1 МБ для обложки</span>
               </li>
+              <li class="guide-tip-item">
+                <span class="guide-tip-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+                    <line x1="6" y1="8" x2="6" y2="8.01"></line>
+                    <line x1="10" y1="8" x2="10" y2="8.01"></line>
+                    <line x1="14" y1="8" x2="14" y2="8.01"></line>
+                    <line x1="18" y1="8" x2="18" y2="8.01"></line>
+                    <line x1="7" y1="16" x2="17" y2="16"></line>
+                  </svg>
+                </span>
+                <span class="guide-tip-text">Быстрые клавиши: Ctrl+Z отмена, Ctrl+Y повтор, «+» или «/» вставка блока</span>
+              </li>
             </ul>
           </div>
 
-          <!-- Widget 2: «Чек-лист публикации» -->
+          <!-- Card 3: «Чек-лист публикации» -->
           <div class="sidebar-widget widget-checklist" id="widget-checklist">
             <div class="widget-header">
               <div class="widget-title-group">
@@ -638,27 +578,37 @@
           </div>
         </div>
       </aside>
-    </main>
+    </div>
+  </main>
 
-    <!-- Bottom Status Bar -->
-    <footer class="app-status-bar">
-      <div class="status-bar-left">
-        <!-- Compact Undo / Redo controls -->
-        <div class="history-controls">
-          <button type="button" class="status-btn" id="btn-undo" title="Отменить (Ctrl+Z)" aria-label="Отменить">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="1 4 1 10 7 10"></polyline>
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-            </svg>
-          </button>
-          <button type="button" class="status-btn" id="btn-redo" title="Повторить (Ctrl+Y)" aria-label="Повторить">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="23 4 23 10 17 10"></polyline>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-            </svg>
-          </button>
-        </div>
+  <!-- Bottom Status Bar -->
+  <footer class="app-status-bar">
+    <div class="status-bar-left">
+      <!-- Compact Undo / Redo controls + Clear article button -->
+      <div class="history-controls">
+        <button type="button" class="status-btn" id="btn-undo" title="Отменить (Ctrl+Z)" aria-label="Отменить">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+        </button>
+        <button type="button" class="status-btn" id="btn-redo" title="Повторить (Ctrl+Y)" aria-label="Повторить">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+        </button>
+        <span class="status-separator" aria-hidden="true"></span>
+        <button type="button" class="status-btn status-btn-clear" id="btn-clear-doc" title="Очистить статью" aria-label="Очистить статью">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+        </button>
       </div>
+    </div>
 
       <div class="status-bar-right">
         <!-- Live Document Statistics -->

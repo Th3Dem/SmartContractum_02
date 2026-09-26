@@ -194,12 +194,16 @@ code, pre,
 
 [data-theme="light"] .nav-link {
     color: #475569;
+    text-decoration: none !important;
 }
 
 [data-theme="light"] .nav-link:hover,
-[data-theme="light"] .nav-link.active {
+[data-theme="light"] .nav-link:focus-visible,
+[data-theme="light"] .nav-link.active,
+[data-theme="light"] .nav-link.is-active {
     color: #0284c7;
     background: rgba(2, 132, 199, 0.08);
+    text-decoration: none !important;
 }
 
 /* Light Theme: Switch Tumbler to Active/Sun State */

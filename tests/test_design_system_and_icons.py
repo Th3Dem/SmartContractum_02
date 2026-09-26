@@ -97,13 +97,16 @@ class TestDesignSystemAndIcons(unittest.TestCase):
     # 3. SLEEK SVG VECTOR ICONS
     # =========================================================================
     def test_header_svg_icons(self):
-        """Verify header buttons have clean SVG vector icons, and export button is removed."""
-        # Branding
-        brand_match = re.search(r'<a[^>]*class="brand"[^>]*>(.*?)</a>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(brand_match, "Brand logo/link not found")
-        self.assertIn('Antigravity Writer', brand_match.group(1))
+        """Verify header buttons have clean SVG vector icons, Antigravity Writer and more actions removed."""
+        # Main Header Branding: SmartContractum in #appHeader
+        header_match = re.search(r'<header[^>]*id=["\']appHeader["\'][^>]*>(.*?)</header>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(header_match, "appHeader not found")
+        self.assertIn('SmartContractum', header_match.group(1))
 
-        # Drafts button
+        # Antigravity Writer removed from sub-bar per requirement 4
+        self.assertNotIn('Antigravity Writer', self.editor_html)
+
+        # Drafts button in editor document bar
         drafts_btn_match = re.search(r'<button id="btn-drafts-modal"[^>]*>(.*?)</button>', self.editor_html, re.DOTALL)
         self.assertIsNotNone(drafts_btn_match, "btn-drafts-modal not found")
         self.assertIn('<svg', drafts_btn_match.group(1))
@@ -111,16 +114,16 @@ class TestDesignSystemAndIcons(unittest.TestCase):
         # Mode toggle removed from header by user request
         self.assertNotIn('id="mode-toggle"', self.editor_html)
 
-        # More actions button
-        more_btn_match = re.search(r'<button[^>]*id="btn-more-actions"[^>]*>(.*?)</button>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(more_btn_match, "btn-more-actions not found")
-        self.assertIn('<svg', more_btn_match.group(1))
+        # More actions 3-dot dropdown button removed per requirement 10
+        self.assertNotIn('id="btn-more-actions"', self.editor_html)
 
-        # More menu items: Theme, Shortcuts, Clear
-        for item_id in ['btn-theme-toggle', 'btn-shortcuts-modal', 'btn-clear-doc']:
-            item_match = re.search(rf'<button[^>]*id="{item_id}"[^>]*>(.*?)</button>', self.editor_html, re.DOTALL)
-            self.assertIsNotNone(item_match, f"{item_id} not found")
-            self.assertIn('<svg', item_match.group(1), f"Item {item_id} missing SVG icon")
+        # Clear document button moved to status bar with clean SVG icon per requirement 11
+        clear_btn_match = re.search(r'<button[^>]*id="btn-clear-doc"[^>]*>(.*?)</button>', self.editor_html, re.DOTALL)
+        self.assertIsNotNone(clear_btn_match, "btn-clear-doc not found in editor.html")
+        self.assertIn('<svg', clear_btn_match.group(1), "btn-clear-doc missing SVG icon")
+
+        # Global theme toggle in main header
+        self.assertIn('id="btnThemeToggle"', self.editor_html)
 
         # Verify #btn-export-dropdown and #export-dropdown-menu are NOT present
         self.assertNotIn('id="btn-export-dropdown"', self.editor_html)
@@ -165,44 +168,42 @@ class TestDesignSystemAndIcons(unittest.TestCase):
             self.assertIn('stroke-width="2"', icon_content, f"Block '{block_name}' SVG not stroke-width 2")
 
     def test_sidebar_widget_svg_icons(self):
-        """Verify sidebar widgets: #widget-typograph in .side-zone-left without redundant button icon,
-        and #widget-author-guide and #widget-checklist in .side-zone-right with clean SVG icons."""
-        # 1. Left sidebar: Typograph widget
-        left_zone_match = re.search(r'<aside[^>]*class="[^"]*side-zone-left[^"]*"[^>]*>(.*?)</aside>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(left_zone_match, "side-zone-left not found")
-        left_content = left_zone_match.group(1)
-
-        typo_widget_match = re.search(r'<div[^>]*id="widget-typograph"[^>]*>(.*?)</div>\s*</div>', left_content, re.DOTALL)
-        self.assertIsNotNone(typo_widget_match, "widget-typograph not found in side-zone-left")
-        typo_content = typo_widget_match.group(1)
-
-        # Typograph button has NO redundant SVG icon
-        typo_btn_match = re.search(r'<button[^>]*id="btn-typograph"[^>]*>(.*?)</button>', typo_content, re.DOTALL)
-        self.assertIsNotNone(typo_btn_match, "btn-typograph not found")
-        self.assertNotIn('<svg', typo_btn_match.group(1), "btn-typograph should not contain redundant SVG icon")
-
-        # Typograph feedback status has SVG icon
-        self.assertIn('id="typograph-status"', typo_content)
-        self.assertIn('<svg', typo_content)
-
-        # 2. Right sidebar: Author guide and Checklist widgets
+        """Verify sidebar widgets: Typograph, Author Guide, and Checklist in right sidebar with clean SVG icons."""
+        # Right sidebar container
         right_zone_match = re.search(r'<aside[^>]*class="[^"]*side-zone-right[^"]*"[^>]*>(.*?)</aside>', self.editor_html, re.DOTALL)
         self.assertIsNotNone(right_zone_match, "side-zone-right not found")
         right_content = right_zone_match.group(1)
 
-        # Author guide widget: header row has NO icon, list items have clean SVG icons
-        guide_widget_match = re.search(r'<div[^>]*id="widget-author-guide"[^>]*>(.*?)</div>\s*<!-- Widget', right_content, re.DOTALL)
-        self.assertIsNotNone(guide_widget_match, "widget-author-guide not found in side-zone-right")
+        # Order of 3 widgets in right sidebar: Typograph -> Author Guide -> Checklist
+        pos_typo = right_content.find('id="widget-typograph"')
+        pos_guide = right_content.find('id="widget-author-guide"')
+        pos_check = right_content.find('id="widget-checklist"')
+        self.assertTrue(0 <= pos_typo < pos_guide < pos_check, "Widgets must be ordered: Typograph, Author Guide, Checklist")
+
+        # 1. Typograph Widget: has thematic SVG icon in header, no redundant SVG in button, status has SVG
+        typo_widget_match = re.search(r'<div[^>]*id="widget-typograph"[^>]*>(.*?)</div>\s*<!-- Card 2', right_content, re.DOTALL)
+        self.assertIsNotNone(typo_widget_match, "widget-typograph not found in right sidebar")
+        typo_content = typo_widget_match.group(1)
+        self.assertIn('<span class="widget-icon">', typo_content)
+        self.assertIn('<svg', typo_content)
+
+        typo_btn_match = re.search(r'<button[^>]*id="btn-typograph"[^>]*>(.*?)</button>', typo_content, re.DOTALL)
+        self.assertIsNotNone(typo_btn_match, "btn-typograph not found")
+        self.assertNotIn('<svg', typo_btn_match.group(1), "btn-typograph should not contain redundant SVG icon")
+        self.assertIn('id="typograph-status"', typo_content)
+
+        # 2. Author guide widget: header has thematic SVG icon, tips have clean SVG icons
+        guide_widget_match = re.search(r'<div[^>]*id="widget-author-guide"[^>]*>(.*?)</div>\s*<!-- Card 3', right_content, re.DOTALL)
+        self.assertIsNotNone(guide_widget_match, "widget-author-guide not found in right sidebar")
         guide_header_match = re.search(r'<div[^>]*class="[^"]*widget-header[^"]*"[^>]*>(.*?)</div>', guide_widget_match.group(1), re.DOTALL)
         self.assertIsNotNone(guide_header_match, "widget-header not found in widget-author-guide")
-        self.assertNotIn('<svg', guide_header_match.group(1))
-        self.assertNotIn('widget-icon', guide_header_match.group(1))
+        self.assertIn('<svg', guide_header_match.group(1), "widget-author-guide header must have thematic SVG icon")
         tip_svgs = re.findall(r'<span class="guide-tip-icon">\s*<svg[^>]*stroke-width="2"', guide_widget_match.group(1))
-        self.assertEqual(len(tip_svgs), 3, f"Expected 3 tip SVG icons with stroke-width 2, found {len(tip_svgs)}")
+        self.assertEqual(len(tip_svgs), 4, f"Expected 4 tip SVG icons with stroke-width 2, found {len(tip_svgs)}")
 
-        # Checklist widget header with SVG icon
+        # 3. Checklist widget: header with thematic SVG icon
         check_widget_match = re.search(r'<div[^>]*id="widget-checklist"[^>]*>(.*?)</aside>', self.editor_html, re.DOTALL)
-        self.assertIsNotNone(check_widget_match, "widget-checklist not found in side-zone-right")
+        self.assertIsNotNone(check_widget_match, "widget-checklist not found in right sidebar")
         self.assertIn('<span class="widget-icon">', check_widget_match.group(1))
         self.assertIn('<svg', check_widget_match.group(1))
 
