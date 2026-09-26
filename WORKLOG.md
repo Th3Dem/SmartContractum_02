@@ -86,3 +86,4 @@
 [2026-09-26 15:38] | pm_bot | QA_ASSIGN | Передача артефактов на независимый аудит qa_bot (Task: task-11-publication-settings-and-moderation)
 [2026-09-26 15:39] | qa_bot | QA_APPROVED | Независимый аудит настроек публикации, модального окна и сервера очереди модерации успешно завершен, вердикт APPROVED (Task: task-11-publication-settings-and-moderation)
 [2026-09-26 15:39] | pm_bot | TASK_DONE | Разработка и аудит завершены, передача git_bot для фиксации локального коммита (Task: task-11-publication-settings-and-moderation)
+[2026-09-26 15:40] | git_bot | GIT_COMMITTED | Фиксация коммита be5db2a на этапе FINALIZE (Task: task-11-publication-settings-and-moderation)
