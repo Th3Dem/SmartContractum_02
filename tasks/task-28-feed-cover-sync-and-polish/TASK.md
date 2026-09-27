@@ -65,11 +65,11 @@
   8. На серверной стороне (`server.py`) валидируется формат и допустимый размер обложки при приеме на модерацию.
   9. Все unit-тесты проекта успешно проходят (100% PASS).
 
-- **Текущий статус**: IN_GIT
-- **Ответственный исполнитель**: git_bot (Git Operations & CI Watchdog)
-- **Рабочая ветка / копия**: feat/task-28-feed-cover-sync-and-polish
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot (Project Manager & Orchestrator)
+- **Рабочая ветка / копия**: main
 - **Блокер**: нет
-- **Следующий шаг**: Этап FINALIZE — валидация снимка fa73fb268ed5c6b37619e155fc6cecc0ad7ccd6bda964f945e1234cf45b1e83d, атомарная индексация, фиксация коммита и формирование GIT_HANDOVER.md (git_bot)
+- **Следующий шаг**: Задача завершена в полном объеме (Done-Done). Публикация в remote (git push) ожидает подтверждения пользователя.
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-28-feed-cover-sync-and-polish/DEV_HANDOVER.md`
   - QA: `tasks/task-28-feed-cover-sync-and-polish/QA_REVIEW.md`

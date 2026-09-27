@@ -241,3 +241,5 @@
 [2026-09-27 13:38] | pm_bot | QA_ASSIGN | Передача артефактов задачи task-28 на независимый аудит qa_bot (Task: task-28-feed-cover-sync-and-polish)
 [2026-09-27 13:50] | qa_bot | QA_APPROVED | Независимый аудит завершен со статусом APPROVED (238/238 PASS, snapshot fa73fb268ed5c6b37619e155fc6cecc0ad7ccd6bda964f945e1234cf45b1e83d) (Task: task-28-feed-cover-sync-and-polish)
 [2026-09-27 13:51] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация и коммит (Task: task-28-feed-cover-sync-and-polish)
+[2026-09-27 13:51] | git_bot | GIT_COMMITTED | Зафиксирован коммит 5c8fe20 и выполнено слияние feat/task-28-feed-cover-sync-and-polish в main (Task: task-28-feed-cover-sync-and-polish)
+[2026-09-27 13:52] | pm_bot | TASK_DONE | Задача task-28 успешно завершена в статусе Done-Done. Все 238 тестов пройдены (100%) (Task: task-28-feed-cover-sync-and-polish)
