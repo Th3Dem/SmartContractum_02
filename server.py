@@ -42,6 +42,7 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 # Allowed configuration values
 VALID_COMPLEXITIES = {"none", "easy", "medium", "hard"}
 VALID_STATUSES = {"draft", "pending_moderation", "approved", "rejected"}
+VALID_MATERIAL_TYPES = ("article", "post", "news", "question")
 
 
 class CoverValidationResult(tuple):
@@ -245,8 +246,41 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
             );
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON user_subscriptions(user_id);")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS article_likes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(article_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_likes_article_user ON article_likes(article_id, user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_likes_article_id ON article_likes(article_id);")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS article_comments (
+                id TEXT PRIMARY KEY,
+                article_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                author_name TEXT NOT NULL,
+                author_avatar TEXT,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'published',
+                created_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_article_id ON article_comments(article_id);")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_feed_settings (
+                user_id TEXT PRIMARY KEY,
+                material_types TEXT NOT NULL,
+                complexity_levels TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        """)
         seed_approved_articles(conn)
         seed_user_subscriptions(conn)
+        seed_article_comments(conn)
     return conn
 
 
@@ -772,6 +806,49 @@ def seed_user_subscriptions(conn: sqlite3.Connection):
     """, default_subs)
 
 
+def seed_article_comments(conn: sqlite3.Connection):
+    """
+    Seeds 3 demo comments for 'art-01' publication idempotently.
+    """
+    demo_comments = [
+        (
+            "comm-seed-01",
+            "art-01",
+            "reader_01",
+            "Тестовый читатель 1",
+            None,
+            "Было бы полезно увидеть пример обработки ошибки во время исполнения контракта.",
+            "published",
+            "2026-09-26T14:15:00Z"
+        ),
+        (
+            "comm-seed-02",
+            "art-01",
+            "reader_02",
+            "Тестовый читатель 2",
+            None,
+            "Планируется ли отдельный материал о проверке данных оракула?",
+            "published",
+            "2026-09-26T15:30:00Z"
+        ),
+        (
+            "comm-seed-03",
+            "art-01",
+            "reader_03",
+            "Тестовый читатель 3",
+            None,
+            "Спасибо за разбор. Особенно интересен раздел о тестировании.",
+            "published",
+            "2026-09-26T16:45:00Z"
+        )
+    ]
+    conn.executemany("""
+        INSERT OR IGNORE INTO article_comments (
+            id, article_id, user_id, author_name, author_avatar, content, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, demo_comments)
+
+
 def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     """
     Returns a new SQLite connection for the specified database path.
@@ -1002,7 +1079,16 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
             if not isinstance(compl, str) or compl not in VALID_COMPLEXITIES:
                 field_errors["complexity"] = "Недопустимый уровень сложности публикации."
 
-        # 4g. coverImage
+        # 4g. materialType / type
+        raw_mat = pub_settings.get("materialType") or pub_settings.get("type")
+        if raw_mat is not None and raw_mat != "":
+            if not isinstance(raw_mat, str) or raw_mat.strip().lower() not in VALID_MATERIAL_TYPES:
+                field_errors["materialType"] = f"Недопустимый тип материала публикации. Допустимые типы: {', '.join(VALID_MATERIAL_TYPES)}"
+            else:
+                pub_settings["materialType"] = raw_mat.strip().lower()
+                pub_settings["type"] = raw_mat.strip().lower()
+
+        # 4h. coverImage
         cover_image = pub_settings.get("coverImage")
         if cover_image is not None and cover_image != "":
             cov_res = validate_cover_image(cover_image)
@@ -1015,7 +1101,7 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
     if field_errors:
         order = [
             "title", "html", "targetAudience", "topics", "keywords", "description",
-            "format", "complexity", "coverImage", "draftId", "publicationSettings"
+            "format", "complexity", "materialType", "coverImage", "draftId", "publicationSettings"
         ]
         first_key = next((k for k in order if k in field_errors), next(iter(field_errors.keys())))
         error_msg = field_errors[first_key]
@@ -1067,7 +1153,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def get_current_user(self) -> Optional[Dict[str, str]]:
         """
-        Extracts authenticated user from cookies, X-User-Id header, or query params.
+        Extracts authenticated user from cookies, X-User-Id header, Authorization header, or query params.
         """
         cookie_header = self.headers.get("Cookie", "")
         if cookie_header:
@@ -1079,6 +1165,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         x_user = self.headers.get("X-User-Id", "").strip()
         if x_user:
             return {"id": x_user, "name": "Демо Пользователь" if x_user == "user_demo" else x_user}
+
+        auth_header = self.headers.get("Authorization", "").strip()
+        if auth_header:
+            token = auth_header.replace("Bearer ", "").strip()
+            if token:
+                return {"id": token, "name": "Демо Пользователь" if token == "user_demo" else token}
 
         parsed = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(parsed.query)
@@ -1110,6 +1202,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(200, {"success": True, "authenticated": True, "user": user})
             else:
                 self.send_json_response(200, {"success": True, "authenticated": False, "user": None})
+        elif path == "/api/user/feed-settings":
+            self.handle_get_feed_settings()
         elif path == "/api/subscriptions":
             self.handle_get_subscriptions()
         elif path == "/api/subscriptions/entities":
@@ -1118,6 +1212,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_moderation_status(parsed)
         elif path == "/api/moderation/list":
             self.handle_moderation_list()
+        elif path.startswith("/api/articles/") and path.endswith("/comments"):
+            art_id = path[len("/api/articles/"): -len("/comments")].strip("/")
+            self.handle_get_article_comments(art_id)
+        elif path == "/api/comments":
+            query = urllib.parse.parse_qs(parsed.query)
+            art_id = (query.get("articleId", [""])[0] or query.get("article_id", [""])[0] or query.get("id", [""])[0]).strip()
+            self.handle_get_article_comments(art_id)
         elif path == "/api/articles" or path.startswith("/api/articles/"):
             self.handle_articles_api(parsed)
         elif path.startswith("/media/"):
@@ -1140,6 +1241,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_auth_login()
         elif path == "/api/auth/logout":
             self.handle_auth_logout()
+        elif path == "/api/user/feed-settings":
+            self.handle_post_feed_settings()
+        elif path == "/api/likes/toggle":
+            try:
+                cl = int(self.headers.get("Content-Length", 0))
+                b = self.rfile.read(cl).decode("utf-8") if cl > 0 else "{}"
+                p = json.loads(b) if b else {}
+            except Exception:
+                p = {}
+            art_id = p.get("articleId") or p.get("article_id") or ""
+            self.handle_article_like_toggle(art_id)
+        elif path.startswith("/api/articles/") and path.endswith("/like"):
+            art_id = path[len("/api/articles/"): -len("/like")].strip("/")
+            self.handle_article_like_toggle(art_id)
+        elif path.startswith("/api/articles/") and path.endswith("/comments"):
+            art_id = path[len("/api/articles/"): -len("/comments")].strip("/")
+            self.handle_post_article_comment(art_id)
+        elif path == "/api/comments":
+            self.handle_post_article_comment("")
         elif path == "/api/subscriptions/toggle":
             self.handle_subscriptions_toggle()
         elif path == "/api/moderation/submit":
@@ -1348,6 +1468,366 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "authors": list(authors_map.values()),
             "topics": topics_list,
             "tags": sorted(list(tags_map.values()), key=lambda x: x["count"], reverse=True)
+        })
+
+    def handle_get_feed_settings(self):
+        """
+        GET /api/user/feed-settings
+        Returns feed settings for authenticated user, or default settings for guests.
+        """
+        user = self.get_current_user()
+        default_material_types = ["article", "post", "news", "question"]
+        default_complexity_levels = ["all"]
+
+        if not user:
+            self.send_json_response(200, {
+                "success": True,
+                "settings": {
+                    "materialTypes": default_material_types,
+                    "complexityLevels": default_complexity_levels
+                },
+                "materialTypes": default_material_types,
+                "complexityLevels": default_complexity_levels
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT material_types, complexity_levels FROM user_feed_settings WHERE user_id = ?",
+                (user["id"],)
+            )
+            row = cur.fetchone()
+
+        if row:
+            try:
+                m_types = json.loads(row["material_types"])
+            except Exception:
+                m_types = default_material_types
+            try:
+                c_levels = json.loads(row["complexity_levels"])
+            except Exception:
+                c_levels = default_complexity_levels
+        else:
+            m_types = default_material_types
+            c_levels = default_complexity_levels
+
+        self.send_json_response(200, {
+            "success": True,
+            "settings": {
+                "materialTypes": m_types,
+                "complexityLevels": c_levels
+            },
+            "materialTypes": m_types,
+            "complexityLevels": c_levels
+        })
+
+    def handle_post_feed_settings(self):
+        """
+        POST /api/user/feed-settings
+        Saves user feed settings for authenticated user.
+        Body: { "materialTypes": [...], "complexityLevels": [...] }
+        Returns 401 if unauthenticated.
+        Returns 400 if materialTypes is empty ("Выберите хотя бы один тип материала").
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для сохранения настроек ленты необходимо войти",
+                "requireAuth": True
+            })
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+            payload = json.loads(body) if body else {}
+        except Exception as e:
+            self.send_json_response(400, {
+                "success": False,
+                "error": f"Невалидный JSON: {str(e)}"
+            })
+            return
+
+        settings_obj = payload.get("settings") if isinstance(payload.get("settings"), dict) else payload
+
+        material_types = settings_obj.get("materialTypes")
+        if material_types is None:
+            material_types = settings_obj.get("material_types")
+
+        if material_types is None or not isinstance(material_types, list):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Выберите хотя бы один тип материала"
+            })
+            return
+
+        valid_types = []
+        for t in material_types:
+            if isinstance(t, str) and t.strip().lower() in VALID_MATERIAL_TYPES:
+                norm_t = t.strip().lower()
+                if norm_t not in valid_types:
+                    valid_types.append(norm_t)
+
+        if not valid_types:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Выберите хотя бы один тип материала"
+            })
+            return
+
+        complexity_levels = settings_obj.get("complexityLevels")
+        if complexity_levels is None:
+            complexity_levels = settings_obj.get("complexity_levels")
+
+        if complexity_levels is None or not isinstance(complexity_levels, list) or len(complexity_levels) == 0:
+            clean_levels = ["all"]
+        else:
+            clean_levels = []
+            for c in complexity_levels:
+                if isinstance(c, str) and c.strip():
+                    clean_levels.append(c.strip().lower())
+            if not clean_levels:
+                clean_levels = ["all"]
+
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn = self.get_db()
+        with conn:
+            conn.execute("""
+                INSERT INTO user_feed_settings (user_id, material_types, complexity_levels, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    material_types = excluded.material_types,
+                    complexity_levels = excluded.complexity_levels,
+                    updated_at = excluded.updated_at
+            """, (
+                user["id"],
+                json.dumps(valid_types, ensure_ascii=False),
+                json.dumps(clean_levels, ensure_ascii=False),
+                now_iso
+            ))
+
+        self.send_json_response(200, {
+            "success": True,
+            "settings": {
+                "materialTypes": valid_types,
+                "complexityLevels": clean_levels
+            },
+            "materialTypes": valid_types,
+            "complexityLevels": clean_levels
+        })
+
+    def handle_article_like_toggle(self, article_id: str):
+        """
+        POST /api/articles/<id>/like or POST /api/likes/toggle
+        Toggles like for current user on the given article.
+        Requires authentication (401 requireAuth).
+        Returns { success: True, hasLiked: bool, likesCount: int }.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для отметки «Нравится» необходимо войти",
+                "requireAuth": True
+            })
+            return
+
+        if not article_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор статьи"
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
+            art_row = cur.fetchone()
+            if not art_row:
+                self.send_json_response(404, {
+                    "success": False,
+                    "error": "Статья не найдена"
+                })
+                return
+
+            real_art_id = art_row["id"]
+            user_id = user["id"]
+
+            cur.execute("SELECT id FROM article_likes WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+            existing_like = cur.fetchone()
+
+            if existing_like:
+                cur.execute("DELETE FROM article_likes WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+                has_liked = False
+            else:
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute(
+                    "INSERT INTO article_likes (article_id, user_id, created_at) VALUES (?, ?, ?)",
+                    (real_art_id, user_id, now_iso)
+                )
+                has_liked = True
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (real_art_id,))
+            likes_count = cur.fetchone()["cnt"]
+
+        self.send_json_response(200, {
+            "success": True,
+            "hasLiked": has_liked,
+            "likesCount": likes_count,
+            "articleId": real_art_id
+        })
+
+    def handle_get_article_comments(self, article_id: str):
+        """
+        GET /api/articles/<id>/comments
+        Returns list of published comments for the article. Accessible to guests.
+        """
+        if not article_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор статьи"
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
+            art_row = cur.fetchone()
+            real_id = art_row["id"] if art_row else article_id
+
+            cur.execute("""
+                SELECT id, article_id, user_id, author_name, author_avatar, content, created_at
+                FROM article_comments
+                WHERE article_id = ? AND status = 'published'
+                ORDER BY created_at ASC
+            """, (real_id,))
+            rows = cur.fetchall()
+
+        comments = []
+        for r in rows:
+            comments.append({
+                "id": r["id"],
+                "articleId": r["article_id"],
+                "userId": r["user_id"],
+                "authorName": r["author_name"],
+                "authorAvatar": r["author_avatar"] or None,
+                "content": r["content"],
+                "createdAt": r["created_at"]
+            })
+
+        self.send_json_response(200, {
+            "success": True,
+            "comments": comments,
+            "total": len(comments)
+        })
+
+    def handle_post_article_comment(self, article_id: str):
+        """
+        POST /api/articles/<id>/comments
+        Adds a comment to the specified article.
+        Requires authentication (401 requireAuth).
+        Validates content: non-empty, stripped, max 5000 chars. Escapes HTML.
+        Returns newly added comment and updated commentsCount.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для отправки комментария необходимо войти",
+                "requireAuth": True
+            })
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else ""
+            payload = json.loads(body) if body else {}
+        except Exception as e:
+            self.send_json_response(400, {
+                "success": False,
+                "error": f"Невалидный JSON: {str(e)}"
+            })
+            return
+
+        if not article_id:
+            article_id = payload.get("articleId") or payload.get("article_id") or ""
+
+        if not article_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор статьи"
+            })
+            return
+
+        content = payload.get("content")
+        if content is None or not isinstance(content, str) or not content.strip():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Комментарий не может быть пустым"
+            })
+            return
+
+        stripped_content = content.strip()
+        if len(stripped_content) > 5000:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Комментарий не должен превышать 5000 символов"
+            })
+            return
+
+        sanitized_content = html.escape(stripped_content)
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
+            art_row = cur.fetchone()
+            if not art_row:
+                self.send_json_response(404, {
+                    "success": False,
+                    "error": "Статья не найдена"
+                })
+                return
+
+            real_id = art_row["id"]
+            user_id = user["id"]
+            author_name = user.get("name") or (f"Пользователь #{user_id[:6]}" if user_id else "Читатель")
+            author_avatar = user.get("avatar") or None
+
+            comment_id = f"comm_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+            cur.execute("""
+                INSERT INTO article_comments (
+                    id, article_id, user_id, author_name, author_avatar, content, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'published', ?)
+            """, (
+                comment_id, real_id, user_id, author_name, author_avatar,
+                sanitized_content, now_iso
+            ))
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
+            comments_count = cur.fetchone()["cnt"]
+
+        comment_data = {
+            "id": comment_id,
+            "articleId": real_id,
+            "userId": user_id,
+            "authorName": author_name,
+            "authorAvatar": author_avatar,
+            "content": sanitized_content,
+            "createdAt": now_iso
+        }
+
+        self.send_json_response(201, {
+            "success": True,
+            "comment": comment_data,
+            "commentsCount": comments_count
         })
 
     def handle_moderation_submit(self):
@@ -1595,6 +2075,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed_url.path
         if path.startswith("/api/articles/"):
             article_id = path[len("/api/articles/"):].strip()
+            if article_id.endswith("/comments"):
+                self.handle_get_article_comments(article_id[:-len("/comments")].strip("/"))
+                return
             if article_id:
                 self.handle_get_article(article_id)
                 return
@@ -1651,6 +2134,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         topics = settings.get("topics") or []
 
+        user = self.get_current_user()
+        likes_count = 0
+        comments_count = 0
+        has_liked = False
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (row["id"],))
+            likes_count = cur.fetchone()["cnt"]
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (row["id"],))
+            comments_count = cur.fetchone()["cnt"]
+            if user:
+                cur.execute("SELECT 1 FROM article_likes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
+                has_liked = cur.fetchone() is not None
+
+        mat_type = settings.get("materialType") or settings.get("type") or "article"
+
         article_data = {
             "id": row["id"],
             "draftId": row["draft_id"],
@@ -1672,6 +2171,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "keywords": settings.get("keywords") or [],
             "readingTime": reading_time,
             "readingMinutes": reading_minutes,
+            "likesCount": likes_count,
+            "hasLiked": has_liked,
+            "commentsCount": comments_count,
+            "materialType": mat_type,
+            "type": mat_type,
             "html": article_html,
             "delta": delta
         }
@@ -1689,7 +2193,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
           topic: filter by topic ID
           audience: filter by target audience ID
           format: filter by format ID
-          complexity: filter by complexity ID
+          complexity / complexities: filter by complexity ID(s)
+          type / types: filter by material type(s)
           sort: 'newest' (default) or 'oldest'
           period: 'all' (default), 'month', 'week'
           ids: comma-separated list of article IDs (for bookmarks retrieval)
@@ -1703,7 +2208,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         topic_filter = (query.get("topic", [""])[0] or "").strip()
         audience_filter = (query.get("audience", [""])[0] or "").strip()
         format_filter = (query.get("format", [""])[0] or "").strip()
-        complexity_filter = (query.get("complexity", [""])[0] or "").strip()
+        complexity_filter = (query.get("complexities", [""])[0] or query.get("complexity", [""])[0] or "").strip()
+        types_filter = (query.get("types", [""])[0] or query.get("type", [""])[0] or "").strip()
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         period_filter = (query.get("period", ["all"])[0] or "all").strip().lower()
         ids_filter = (query.get("ids", [""])[0] or "").strip()
@@ -1726,6 +2232,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         sub_topics_titles = {}
         sub_tags_titles = {}
 
+        user_types = None
+        user_complexities = None
+
         if tab == "my":
             user = self.get_current_user()
             if not user:
@@ -1744,6 +2253,21 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     (user["id"],)
                 )
                 sub_rows = cur.fetchall()
+
+                cur.execute(
+                    "SELECT material_types, complexity_levels FROM user_feed_settings WHERE user_id = ?",
+                    (user["id"],)
+                )
+                fs_row = cur.fetchone()
+                if fs_row:
+                    try:
+                        user_types = json.loads(fs_row["material_types"])
+                    except Exception:
+                        user_types = None
+                    try:
+                        user_complexities = json.loads(fs_row["complexity_levels"])
+                    except Exception:
+                        user_complexities = None
 
             if not sub_rows:
                 self.send_json_response(200, {
@@ -1773,23 +2297,62 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     sub_tags.add(norm_t)
                     sub_tags_titles[norm_t] = stitle
 
+        # Determine effective types filter
+        if types_filter and types_filter != "all":
+            allowed_types = set([t.strip().lower() for t in types_filter.split(",") if t.strip()])
+        elif tab == "my" and user_types:
+            allowed_types = set([t.strip().lower() for t in user_types if t.strip()])
+        else:
+            allowed_types = None
+
+        if allowed_types and "all" in allowed_types:
+            allowed_types = None
+
+        # Determine effective complexity filter
+        if complexity_filter and complexity_filter != "all":
+            allowed_complexities = set([c.strip().lower() for c in complexity_filter.split(",") if c.strip()])
+        elif tab == "my" and user_complexities:
+            allowed_complexities = set([c.strip().lower() for c in user_complexities if c.strip()])
+        else:
+            allowed_complexities = None
+
+        if allowed_complexities and "all" in allowed_complexities:
+            allowed_complexities = None
+
         conn = self.get_db()
         with conn:
             cur = conn.cursor()
             cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
             rows = cur.fetchall()
 
+            # Pre-fetch counts for likes and comments
+            cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
+            likes_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+            cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' GROUP BY article_id")
+            comments_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+            current_user = self.get_current_user()
+            user_likes = set()
+            if current_user:
+                cur.execute("SELECT article_id FROM article_likes WHERE user_id = ?", (current_user["id"],))
+                user_likes = {r["article_id"] for r in cur.fetchall()}
+
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         topic_counts = {}
         filtered_articles = []
+        seen_article_ids = set()
 
         for row in rows:
+            art_id = row["id"]
+            if art_id in seen_article_ids:
+                continue
+
             try:
                 settings = json.loads(row["publication_settings"]) if row["publication_settings"] else {}
             except Exception:
                 settings = {}
 
-            art_id = row["id"]
             draft_id = row["draft_id"]
             topics = settings.get("topics") or []
             for t in topics:
@@ -1814,6 +2377,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if art_id not in allowed_ids and draft_id not in allowed_ids:
                     continue
 
+            # Material type filtering
+            art_type = (settings.get("materialType") or settings.get("type") or "article").strip().lower()
+            if allowed_types is not None and art_type not in allowed_types:
+                continue
+
+            # Complexity filtering
+            compl = (settings.get("complexity") or "").strip().lower()
+            if allowed_complexities is not None:
+                is_unspecified = compl in ("", "none", "unspecified")
+                if is_unspecified:
+                    if "unspecified" not in allowed_complexities and "none" not in allowed_complexities:
+                        continue
+                else:
+                    if compl not in allowed_complexities:
+                        continue
+
             # Topic filtering
             if topic_filter and topic_filter != "all":
                 if topic_filter not in topics:
@@ -1829,12 +2408,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             fmt = settings.get("format") or ""
             if format_filter and format_filter != "all":
                 if fmt != format_filter:
-                    continue
-
-            # Complexity filtering
-            compl = settings.get("complexity") or ""
-            if complexity_filter and complexity_filter != "all":
-                if compl != complexity_filter:
                     continue
 
             # Author metadata
@@ -1880,6 +2453,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             reading_time, reading_minutes = calculate_reading_time(row["article_html"] or "")
 
+            seen_article_ids.add(art_id)
             filtered_articles.append({
                 "id": row["id"],
                 "draftId": row["draft_id"],
@@ -1900,7 +2474,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "keywords": keywords,
                 "readingTime": reading_time,
                 "readingMinutes": reading_minutes,
-                "subscriptionReason": subscription_reason
+                "subscriptionReason": subscription_reason,
+                "likesCount": likes_counts.get(art_id, 0),
+                "hasLiked": art_id in user_likes,
+                "commentsCount": comments_counts.get(art_id, 0),
+                "materialType": art_type,
+                "type": art_type
             })
 
         if sort_by in ("oldest", "asc"):

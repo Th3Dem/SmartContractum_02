@@ -69,7 +69,15 @@
       badgesHtml += '<span class="meta-badge format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(formatTitle) + '</span>';
     }
 
-    // 3. Complexity Badge
+    // Note: Complexity badge has been moved down to the bottom service row.
+    // Note: "Демонстрационный материал" badge has been completely removed per requirements.
+
+    return badgesHtml;
+  }
+
+  function getComplexityBadgeHtml(item, options) {
+    options = options || {};
+    const isPreview = Boolean(options.isPreview);
     let complexityTitle = '';
     let complexityClass = '';
     if (window.PublicationConfig && item.complexity && item.complexity !== 'none') {
@@ -83,15 +91,11 @@
       complexityClass = item.complexity ? 'complexity-' + item.complexity : '';
     }
     if (complexityTitle) {
-      badgesHtml += '<span class="meta-badge complexity-badge ' + complexityClass + '"' + (isPreview ? ' id="preview-card-badge-complexity"' : '') + '>' + escapeHtml(complexityTitle) + '</span>';
+      return '<span class="meta-badge complexity-badge ' + complexityClass + '"' + (isPreview ? ' id="preview-card-badge-complexity"' : '') + '>' + escapeHtml(complexityTitle) + '</span>';
+    } else if (isPreview) {
+      return '<span class="meta-badge complexity-badge" id="preview-card-badge-complexity" style="display: none;"></span>';
     }
-
-    // 4. Demo Badge
-    if (item.isDemo || (item.id && String(item.id).indexOf('art-0') === 0)) {
-      badgesHtml += '<span class="meta-badge badge-demo">Демонстрационный материал</span>';
-    }
-
-    return badgesHtml;
+    return '';
   }
 
   function renderCardInnerHtml(item, options, isBookmarked) {
@@ -117,21 +121,17 @@
         '</div>';
     }
 
-    // 1. Author and Date
+    // 1. Author (Date removed from author row per task-30 requirements)
     const authorHtml =
       '<div class="card-meta">' +
         '<div class="author-info">' +
           '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + escapeHtml(authorInitials) + '</div>' +
           '<div class="author-details">' +
             '<span class="author-name"' + (isPreview ? ' id="preview-card-author"' : '') + '>' + escapeHtml(authorName) + '</span>' +
-            '<div class="meta-sub-row">' +
-              '<span class="publish-date"' + (isPreview ? ' id="preview-card-date"' : '') + '>' + escapeHtml(dateText) + '</span>' +
-              (cleanRole
-                ? ('<span class="meta-dot"' + (isPreview ? ' id="preview-card-dot"' : '') + '></span>' +
-                   '<span class="author-role"' + (isPreview ? ' id="preview-card-role"' : '') + '>' + escapeHtml(cleanRole) + '</span>')
-                : (isPreview ? '<span class="meta-dot" id="preview-card-dot" style="display: none;"></span><span class="author-role" id="preview-card-role" style="display: none;"></span>' : '')
-              ) +
-            '</div>' +
+            (cleanRole
+              ? ('<div class="meta-sub-row"><span class="author-role"' + (isPreview ? ' id="preview-card-role"' : '') + '>' + escapeHtml(cleanRole) + '</span></div>')
+              : (isPreview ? '<div class="meta-sub-row"><span class="author-role" id="preview-card-role" style="display: none;"></span></div>' : '')
+            ) +
           '</div>' +
         '</div>' +
       '</div>';
@@ -147,7 +147,7 @@
         ) +
       '</' + titleTag + '>';
 
-    // 3. Badges
+    // 3. Badges: Topic & Format only (Complexity moved down, Demo removed)
     const badgesHtml = getBadgesHtml(item, options);
     const badgesContainerHtml =
       '<div class="card-meta-badges' + (isPreview ? ' pub-feed-card-meta' : '') + '"' + (isPreview ? ' id="preview-card-badges"' : '') + (badgesHtml ? '' : ' style="display: none;"') + '>' +
@@ -172,7 +172,7 @@
     const descText = item.description || (isPreview ? 'Краткое описание публикации появится здесь...' : '');
     const leadHtml = '<p class="card-lead' + (isPreview ? ' pub-feed-card-desc' : '') + '"' + (isPreview ? ' id="preview-card-desc"' : '') + '>' + escapeHtml(descText) + '</p>';
 
-    // 6. Keywords
+    // 6. Keywords (#hashtags)
     const tags = Array.isArray(item.keywords) ? item.keywords : [];
     let tagsHtml = '';
     if (tags.length > 0) {
@@ -209,33 +209,117 @@
         tagsHtml +
       '</div>';
 
-    // 7. Footer (Reading time & Bookmark)
+    // 7. Bottom in 2 compact rows:
+    // Row 1: Service info (date, reading time, complexity)
+    const readingTimeText = item.readingTime || (isPreview ? '~1 мин чтения' : '5 мин чтения');
+    const complexityBadgeHtml = getComplexityBadgeHtml(item, options);
+
+    const subInfoHtml =
+      '<div class="card-sub-info card-meta-row-bottom">' +
+        '<span class="publish-date"' + (isPreview ? ' id="preview-card-date"' : '') + '>' + escapeHtml(dateText) + '</span>' +
+        '<span class="meta-dot"></span>' +
+        '<div class="reading-time">' +
+          '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
+          '<span' + (isPreview ? ' class="pub-feed-card-time" id="preview-card-time"' : '') + '>' + escapeHtml(readingTimeText) + '</span>' +
+        '</div>' +
+        (complexityBadgeHtml ? ('<span class="meta-dot"></span>' + complexityBadgeHtml) : '') +
+      '</div>';
+
+    // Row 2: Action row (like with count, comments with count, bookmark, "read more" on the right)
+    const isLiked = typeof options.isLiked === 'function' ? options.isLiked(item.id) : Boolean(item.hasLiked || item.isLiked);
+    const likesCount = item.likesCount !== undefined ? item.likesCount : 0;
+    const commentsCount = item.commentsCount !== undefined ? item.commentsCount : 0;
+    const commentsUrl = isPreview ? '#' : ('article.html?id=' + encodeURIComponent(item.id || '') + '#comments');
+
+    let likeBtnHtml = '';
+    if (isPreview) {
+      likeBtnHtml =
+        '<button type="button" class="btn-card-action btn-card-like" id="preview-card-like" title="Нравится" aria-label="Нравится" disabled>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>' +
+          '</svg>' +
+          '<span class="like-count">0</span>' +
+        '</button>';
+    } else {
+      likeBtnHtml =
+        '<button type="button" class="btn-card-action btn-card-like ' + (isLiked ? 'is-liked' : '') + '" data-id="' + escapeHtml(item.id) + '" title="' + (isLiked ? 'Больше не нравится' : 'Нравится') + '" aria-label="' + (isLiked ? 'Больше не нравится' : 'Нравится') + '">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="' + (isLiked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>' +
+          '</svg>' +
+          '<span class="like-count">' + likesCount + '</span>' +
+        '</button>';
+    }
+
+    let commentsBtnHtml = '';
+    if (isPreview) {
+      commentsBtnHtml =
+        '<button type="button" class="btn-card-action btn-card-comments" id="preview-card-comments" title="Комментарии" aria-label="Комментарии" disabled>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+          '<span class="comments-count">0</span>' +
+        '</button>';
+    } else {
+      commentsBtnHtml =
+        '<a href="' + commentsUrl + '" class="btn-card-action btn-card-comments" title="Перейти к комментариям" aria-label="Комментарии">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+          '<span class="comments-count">' + commentsCount + '</span>' +
+        '</a>';
+    }
+
     const bookmarkTooltip = isBookmarked ? 'Убрать из сохраненного' : 'Сохранить статью';
     let bookmarkHtml = '';
     if (isPreview) {
       bookmarkHtml =
-        '<button type="button" class="btn-card-bookmark" id="preview-card-bookmark" title="Сохранить статью" aria-label="Сохранить статью" disabled>' +
-          '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить статью" aria-label="Сохранить статью" disabled>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
         '</button>';
     } else {
       bookmarkHtml =
-        '<button type="button" class="btn-card-bookmark ' + (isBookmarked ? 'is-bookmarked' : '') + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkTooltip + '">' +
-          '<svg width="17" height="17" viewBox="0 0 24 24" fill="' + (isBookmarked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<button type="button" class="btn-card-action btn-card-bookmark ' + (isBookmarked ? 'is-bookmarked' : '') + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkTooltip + '">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="' + (isBookmarked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
         '</button>';
     }
 
-    const readingTimeText = item.readingTime || (isPreview ? '~1 мин чтения' : '5 мин чтения');
+    let readMoreHtml = '';
+    if (isPreview) {
+      readMoreHtml =
+        '<span class="card-read-more btn-read-more" style="opacity: 0.7;">' +
+          '<span>Читать далее</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<line x1="5" y1="12" x2="19" y2="12"></line>' +
+            '<polyline points="12 5 19 12 12 19"></polyline>' +
+          '</svg>' +
+        '</span>';
+    } else {
+      readMoreHtml =
+        '<a href="' + articleUrl + '" class="card-read-more btn-read-more" title="Читать публикацию полностью">' +
+          '<span>Читать далее</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<line x1="5" y1="12" x2="19" y2="12"></line>' +
+            '<polyline points="12 5 19 12 12 19"></polyline>' +
+          '</svg>' +
+        '</a>';
+    }
+
     const footerHtml =
       '<footer class="card-footer">' +
-        '<div class="reading-time">' +
-          '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
-          '<span' + (isPreview ? ' class="pub-feed-card-time" id="preview-card-time"' : '') + '>' + escapeHtml(readingTimeText) + '</span>' +
+        '<div class="card-actions-row card-footer-actions">' +
+          '<div class="card-footer-left">' +
+            likeBtnHtml +
+            commentsBtnHtml +
+            bookmarkHtml +
+          '</div>' +
+          '<div class="card-footer-right">' +
+            readMoreHtml +
+          '</div>' +
         '</div>' +
-        bookmarkHtml +
       '</footer>';
 
     return subscriptionBadgeHtml +
@@ -245,6 +329,7 @@
       coverHtml +
       leadHtml +
       tagsContainerHtml +
+      subInfoHtml +
       footerHtml;
   }
 
@@ -280,6 +365,46 @@
         });
       }
 
+      const readMoreLink = card.querySelector('.card-read-more');
+      if (readMoreLink) {
+        readMoreLink.addEventListener('click', function () {
+          try {
+            sessionStorage.setItem('sc_feed_scroll', String(window.scrollY || window.pageYOffset || 0));
+          } catch (e) {}
+        });
+      }
+
+      const commentsLink = card.querySelector('.btn-card-comments');
+      if (commentsLink) {
+        commentsLink.addEventListener('click', function () {
+          try {
+            sessionStorage.setItem('sc_feed_scroll', String(window.scrollY || window.pageYOffset || 0));
+          } catch (e) {}
+        });
+      }
+
+      const likeBtn = card.querySelector('.btn-card-like');
+      if (likeBtn) {
+        likeBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof options.onLikeToggle === 'function') {
+            options.onLikeToggle(item.id, likeBtn, item);
+          }
+        });
+      }
+
+      const bookmarkBtn = card.querySelector('.btn-card-bookmark');
+      if (bookmarkBtn) {
+        bookmarkBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof options.onBookmarkToggle === 'function') {
+            options.onBookmarkToggle(item.id, bookmarkBtn, item);
+          }
+        });
+      }
+
       const expandBtn = card.querySelector('.tag-expand-btn');
       if (expandBtn) {
         expandBtn.addEventListener('click', function (e) {
@@ -303,6 +428,7 @@
     escapeHtml: escapeHtml,
     cleanString: cleanString,
     getBadgesHtml: getBadgesHtml,
+    getComplexityBadgeHtml: getComplexityBadgeHtml,
     renderCardInnerHtml: renderCardInnerHtml,
     createCardElement: createCardElement
   };

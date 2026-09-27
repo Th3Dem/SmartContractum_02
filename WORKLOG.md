@@ -254,3 +254,13 @@
 [2026-09-27 14:41] | git_bot | GIT_COMMITTED | Зафиксирован коммит 7ea7115 на ветке feat/task-29-feed-cover-fullwidth-and-media-storage и выполнено слияние в main (Task: task-29-feed-cover-fullwidth-and-media-storage)
 [2026-09-27 14:42] | pm_bot | TASK_DONE | Задача task-29 успешно завершена в статусе Done-Done. Все 244 теста пройдены (100%) (Task: task-29-feed-cover-fullwidth-and-media-storage)
 [2026-09-27 14:46] | git_bot | GIT_PUSH | Выполнен git push в origin/main и origin/feat/task-29-feed-cover-fullwidth-and-media-storage на основании прямого указания пользователя (Task: task-29-feed-cover-fullwidth-and-media-storage)
+[2026-09-27 15:23] | pm_bot | TASK_INIT | Инициализация перестройки второй панели ленты, персонализации, обновления карточек, переходов к статьям и системы комментариев (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 15:24] | git_bot | GIT_PREPARE | Создана и переключена рабочая ветка feat/task-30-feed-subnav-personalization-card-comments (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 15:25] | pm_bot | DEV_ASSIGN | Назначение комплексной задачи разработки dev_bot (Frontend: перестройка второй панели, настройки ленты, обновление карточек, комментарии на article.html) и py_bot (Backend: лайки, комментарии, настройки пользователя, тесты) (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 15:54] | dev_bot | DEV_COMPLETE | Реализована вторая панель ленты (#feedSubnavBar), панель настроек ленты (#feedSettingsDrawer), обновление карточки в card.js (2-строчный футер, удаление демо-метки), лайки и комментарии на article.html (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 15:55] | py_bot | DEV_COMPLETE | Реализованы таблицы article_likes, article_comments, user_feed_settings, сидинг 3 комментариев art-01, эндпоинты /api/articles/<id>/comments, /api/articles/<id>/like, /api/user/feed-settings, персональная фильтрация в /api/articles (tab=my), 252/252 тестов PASS (100%), DEV_HANDOVER сформирован со статусом READY_FOR_QA (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 17:34] | pm_bot | QA_ASSIGN | Передача артефактов задачи task-30 на независимый аудит qa_bot (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 17:38] | qa_bot | QA_APPROVED | Независимый аудит второй панели, персонализации, карточек и комментариев завершен со статусом APPROVED (252/252 PASS, snapshot cd3ad5f40b6c294e2dd75a046c047a981b4257b09c705949da6ffdb6dae95a6c) (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 17:40] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация и коммит (Task: task-30-feed-subnav-personalization-card-comments)
+
+

@@ -38,6 +38,7 @@
       this.keywords = []; // array of keyword strings (1-10)
       this.format = 'not_specified'; // format id or 'not_specified'
       this.complexity = 'none'; // 'none' | 'easy' | 'medium' | 'hard'
+      this.materialType = 'article'; // 'article' | 'post' | 'news' | 'question'
       this.description = ''; // plain text 50-500 chars
       this.isDescriptionCustom = false;
       this.coverDataUrl = null; // cropped 780x440 data URL
@@ -108,7 +109,10 @@
       this.complexityOptionsEl = document.getElementById('pub-complexity-options');
       this.complexityDescEl = document.getElementById('pub-complexity-desc');
 
-      // Section 6: Feed Display & Cover
+      // Section 6: Material Type
+      this.materialTypeOptionsEl = document.getElementById('pub-material-type-options');
+
+      // Section 7: Feed Display & Cover
       this.coverDropzone = document.getElementById('pub-cover-dropzone');
       this.coverFileInput = document.getElementById('pub-cover-input');
       this.coverPreviewWrapper = document.getElementById('pub-cover-preview-wrapper');
@@ -149,6 +153,8 @@
       this.cardPreviewTags = document.getElementById('preview-card-tags');
       this.cardPreviewTime = document.getElementById('preview-card-time');
       this.cardPreviewBookmark = document.getElementById('preview-card-bookmark');
+      this.cardPreviewLike = document.getElementById('preview-card-like');
+      this.cardPreviewComments = document.getElementById('preview-card-comments');
     }
 
     bindEvents() {
@@ -221,7 +227,19 @@
         });
       }
 
-      // Section 6: Cover upload & dropzone
+      // Section 6: Material Type change
+      if (this.materialTypeOptionsEl) {
+        this.materialTypeOptionsEl.addEventListener('click', (e) => {
+          const btn = e.target.closest('.pub-segment-btn');
+          if (!btn) return;
+          const type = btn.getAttribute('data-type') || btn.getAttribute('data-material-type');
+          if (type) {
+            this.setMaterialType(type);
+          }
+        });
+      }
+
+      // Section 7: Cover upload & dropzone
       if (this.coverFileInput) {
         this.coverFileInput.addEventListener('change', (e) => {
           if (e.target.files && e.target.files[0]) {
@@ -500,6 +518,7 @@
       this.renderKeywords();
       this.renderFormats();
       this.renderComplexities();
+      this.renderMaterialTypes();
       this.renderCoverUI();
       this.renderDescription();
     }
@@ -881,7 +900,28 @@
     }
 
     /* ==========================================================================
-       Section 6: Cover Image & Canvas Cropper (39:22 / 780x440)
+       Section 6: Material Type (article, post, news, question)
+       ========================================================================== */
+    renderMaterialTypes() {
+      if (!this.materialTypeOptionsEl) return;
+      this.materialTypeOptionsEl.querySelectorAll('.pub-segment-btn').forEach(btn => {
+        const type = btn.getAttribute('data-type') || btn.getAttribute('data-material-type');
+        if (type === this.materialType) {
+          btn.classList.add('is-active');
+        } else {
+          btn.classList.remove('is-active');
+        }
+      });
+    }
+
+    setMaterialType(type) {
+      this.materialType = type || 'article';
+      this.renderMaterialTypes();
+      this.updateCardPreview();
+    }
+
+    /* ==========================================================================
+       Section 7: Cover Image & Canvas Cropper (39:22 / 780x440)
        ========================================================================== */
     saveCoverBackup() {
       this.previousCoverState = {
@@ -1254,10 +1294,15 @@
           topic: (this.topics && this.topics.length > 0) ? this.topics[0] : null,
           format: (this.format && this.format !== 'not_specified' && this.format !== 'none') ? this.format : null,
           complexity: (this.complexity && this.complexity !== 'none') ? this.complexity : null,
+          materialType: this.materialType || 'article',
+          type: this.materialType || 'article',
           coverImage: this.coverDataUrl || null,
           description: rawDesc || 'Краткое описание публикации появится здесь...',
           keywords: this.keywords || [],
-          readingTime: `~${minutes} мин чтения`
+          readingTime: `~${minutes} мин чтения`,
+          likesCount: 0,
+          hasLiked: false,
+          commentsCount: 0
         };
 
         this.cardPreview.innerHTML = window.SmartContractumCard.renderCardInnerHtml(previewItem, { isPreview: true });
@@ -1277,6 +1322,9 @@
         this.cardPreviewDesc = document.getElementById('preview-card-desc');
         this.cardPreviewTags = document.getElementById('preview-card-tags');
         this.cardPreviewTime = document.getElementById('preview-card-time');
+        this.cardPreviewBookmark = document.getElementById('preview-card-bookmark');
+        this.cardPreviewLike = document.getElementById('preview-card-like');
+        this.cardPreviewComments = document.getElementById('preview-card-comments');
         return;
       }
 
@@ -1423,6 +1471,8 @@
         keywords: [...this.keywords],
         format: (this.format === 'not_specified' || !this.format) ? null : this.format,
         complexity: this.complexity || 'none',
+        materialType: this.materialType || 'article',
+        type: this.materialType || 'article',
         description: this.description,
         isDescriptionCustom: this.isDescriptionCustom,
         coverDataUrl: this.coverDataUrl,
@@ -1444,6 +1494,7 @@
       this.keywords = Array.isArray(settings.keywords) ? [...settings.keywords] : [];
       this.format = settings.format || 'not_specified';
       this.complexity = settings.complexity || 'none';
+      this.materialType = settings.materialType || settings.type || 'article';
       this.description = typeof settings.description === 'string' ? settings.description : '';
       this.isDescriptionCustom = Boolean(settings.isDescriptionCustom || (settings.description && settings.description.length > 0));
       this.coverDataUrl = settings.coverDataUrl || null;
@@ -1479,6 +1530,7 @@
       this.keywords = [];
       this.format = 'not_specified';
       this.complexity = 'none';
+      this.materialType = 'article';
       this.description = '';
       this.isDescriptionCustom = false;
       this.coverDataUrl = null;

@@ -2448,6 +2448,458 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         self.assertNotIn('.pub-feed-card-cover::after', self.editor_css)
 
 
+class TestTask30PersonalizationAndComments(unittest.TestCase):
+    """
+    Test suite for task-30-feed-subnav-personalization-card-comments:
+    1. Database schema initialization: article_likes, article_comments, user_feed_settings.
+    2. Idempotent seeding of 3 demo comments for art-01.
+    3. GET /api/articles/<id>/comments returns comments list and total count.
+    4. POST /api/articles/<id>/comments validates input (empty, max 5000 chars), escapes HTML, requires auth.
+    5. Likes toggle: 1 like per user, increment/decrement, state sync.
+    6. User feed settings GET/POST: saves materialTypes and complexityLevels, rejects empty materialTypes.
+    7. Feed filtering: types/type, complexities/complexity (including unspecified).
+    8. 'My feed' (tab=my): matches subscriptions (OR), deduplicates, respects personal settings, empty states.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'task30_test.db')
+        cls.media_dir = os.path.join(cls.temp_dir, 'media')
+
+        cls.server = server.create_server(
+            host="127.0.0.1",
+            port=0,
+            db_path=cls.db_path,
+            directory=FRONTEND_DIR,
+            media_dir=cls.media_dir
+        )
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def _get_json(self, path: str, headers: Optional[dict] = None) -> Tuple[int, dict]:
+        req = urllib.request.Request(f"{self.base_url}{path}", headers=headers or {})
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                return resp.status, data
+        except urllib.error.HTTPError as e:
+            try:
+                data = json.loads(e.read().decode('utf-8'))
+            except Exception:
+                data = {"error": str(e)}
+            return e.code, data
+
+    def _post_json(self, path: str, payload: dict, headers: Optional[dict] = None) -> Tuple[int, dict]:
+        h = {"Content-Type": "application/json"}
+        if headers:
+            h.update(headers)
+        data_bytes = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(f"{self.base_url}{path}", data=data_bytes, headers=h)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                return resp.status, data
+        except urllib.error.HTTPError as e:
+            try:
+                data = json.loads(e.read().decode('utf-8'))
+            except Exception:
+                data = {"error": str(e)}
+            return e.code, data
+
+    def test_01_db_initialization_tables_and_indexes(self):
+        """Verify article_likes, article_comments, and user_feed_settings tables and indexes exist."""
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = {row["name"] for row in cur.fetchall()}
+
+            self.assertIn("article_likes", tables, "article_likes table must exist")
+            self.assertIn("article_comments", tables, "article_comments table must exist")
+            self.assertIn("user_feed_settings", tables, "user_feed_settings table must exist")
+
+            # Check article_likes columns
+            cur.execute("PRAGMA table_info(article_likes)")
+            likes_cols = {r["name"]: r for r in cur.fetchall()}
+            for col in ("id", "article_id", "user_id", "created_at"):
+                self.assertIn(col, likes_cols)
+
+            # Check article_comments columns
+            cur.execute("PRAGMA table_info(article_comments)")
+            comm_cols = {r["name"]: r for r in cur.fetchall()}
+            for col in ("id", "article_id", "user_id", "author_name", "author_avatar", "content", "status", "created_at"):
+                self.assertIn(col, comm_cols)
+
+            # Check user_feed_settings columns
+            cur.execute("PRAGMA table_info(user_feed_settings)")
+            fs_cols = {r["name"]: r for r in cur.fetchall()}
+            for col in ("user_id", "material_types", "complexity_levels", "updated_at"):
+                self.assertIn(col, fs_cols)
+
+            # Check indexes
+            cur.execute("SELECT name FROM sqlite_master WHERE type='index'")
+            indexes = {row["name"] for row in cur.fetchall()}
+            self.assertIn("idx_likes_article_user", indexes)
+            self.assertIn("idx_comments_article_id", indexes)
+
+    def test_02_idempotent_seeding_comments_for_art01(self):
+        """Verify 3 demo comments are seeded for art-01 and seeding is idempotent without duplicates."""
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT author_name, content, status FROM article_comments WHERE article_id = 'art-01' ORDER BY created_at ASC")
+            rows = cur.fetchall()
+
+        self.assertEqual(len(rows), 3, "Exactly 3 demo comments must be seeded for art-01")
+        expected_contents = [
+            "Было бы полезно увидеть пример обработки ошибки во время исполнения контракта.",
+            "Планируется ли отдельный материал о проверке данных оракула?",
+            "Спасибо за разбор. Особенно интересен раздел о тестировании."
+        ]
+        expected_authors = ["Тестовый читатель 1", "Тестовый читатель 2", "Тестовый читатель 3"]
+
+        actual_contents = [r["content"] for r in rows]
+        actual_authors = [r["author_name"] for r in rows]
+
+        self.assertEqual(actual_contents, expected_contents)
+        self.assertEqual(actual_authors, expected_authors)
+        for r in rows:
+            self.assertEqual(r["status"], "published")
+
+        # Test idempotency: re-run seeding
+        with conn:
+            server.seed_article_comments(conn)
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = 'art-01'")
+            cnt = cur.fetchone()["cnt"]
+            self.assertEqual(cnt, 3, "Re-running seed_article_comments must be idempotent (no duplicates)")
+
+    def test_03_get_article_comments_endpoint(self):
+        """Verify GET /api/articles/<id>/comments returns comments list, total count, and works for guests."""
+        status, data = self._get_json("/api/articles/art-01/comments")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data.get("total"), 3)
+        self.assertEqual(len(data.get("comments", [])), 3)
+
+        first = data["comments"][0]
+        self.assertEqual(first["articleId"], "art-01")
+        self.assertEqual(first["authorName"], "Тестовый читатель 1")
+        self.assertIn("обработки ошибки", first["content"])
+        self.assertIn("createdAt", first)
+
+        # Non-existent article returns empty list
+        status_empty, data_empty = self._get_json("/api/articles/non_existent_art/comments")
+        self.assertEqual(status_empty, 200)
+        self.assertEqual(data_empty.get("total"), 0)
+        self.assertEqual(data_empty.get("comments"), [])
+
+    def test_04_post_article_comments_endpoint(self):
+        """Verify POST /api/articles/<id>/comments enforces auth, validates length, escapes HTML, increments count."""
+        # 1. Unauthenticated guest -> 401 requireAuth
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": "Неавторизованный комментарий"})
+        self.assertEqual(status, 401)
+        self.assertTrue(data.get("requireAuth"))
+
+        # 2. Authenticated user with empty content -> 400
+        auth_headers = {"Cookie": "sc_session=test_user_c"}
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": ""}, headers=auth_headers)
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+        # 3. Whitespace only -> 400
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": "    \n\t  "}, headers=auth_headers)
+        self.assertEqual(status, 400)
+
+        # 4. Over 5000 characters -> 400
+        long_content = "А" * 5001
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": long_content}, headers=auth_headers)
+        self.assertEqual(status, 400)
+        self.assertIn("5000", data.get("error", ""))
+
+        # 5. Valid content with HTML tags -> 201, HTML escaped, commentsCount updated
+        raw_text = "Тестовый комментарий <script>alert('xss')</script> & <b>важный текст</b>"
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": raw_text}, headers=auth_headers)
+        self.assertEqual(status, 201)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data.get("commentsCount"), 4)
+
+        comment = data["comment"]
+        self.assertNotIn("<script>", comment["content"])
+        self.assertIn("&lt;script&gt;", comment["content"])
+        self.assertIn("&amp;", comment["content"])
+        self.assertEqual(comment["articleId"], "art-01")
+
+        # 6. Check GET /api/articles/art-01/comments reflects new total
+        status_get, data_get = self._get_json("/api/articles/art-01/comments")
+        self.assertEqual(status_get, 200)
+        self.assertEqual(data_get["total"], 4)
+
+    def test_05_likes_toggle_uniqueness_and_sync(self):
+        """Verify like toggle, 1 like per user constraint, counter sync in single view and list view."""
+        # 1. Guest -> 401 requireAuth
+        status, data = self._post_json("/api/articles/art-02/like", {})
+        self.assertEqual(status, 401)
+        self.assertTrue(data.get("requireAuth"))
+
+        # 2. User 1 likes art-02 -> ON (likesCount = 1)
+        u1_headers = {"Cookie": "sc_session=user_alice"}
+        status, data = self._post_json("/api/articles/art-02/like", {}, headers=u1_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("hasLiked"))
+        self.assertEqual(data.get("likesCount"), 1)
+
+        # 3. User 1 likes art-02 again -> OFF (likesCount = 0)
+        status, data = self._post_json("/api/articles/art-02/like", {}, headers=u1_headers)
+        self.assertEqual(status, 200)
+        self.assertFalse(data.get("hasLiked"))
+        self.assertEqual(data.get("likesCount"), 0)
+
+        # 4. User 1 likes art-02 via /api/likes/toggle -> ON (likesCount = 1)
+        status, data = self._post_json("/api/likes/toggle", {"articleId": "art-02"}, headers=u1_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("hasLiked"))
+        self.assertEqual(data.get("likesCount"), 1)
+
+        # 5. User 2 likes art-02 -> ON (likesCount = 2)
+        u2_headers = {"Cookie": "sc_session=user_bob"}
+        status, data = self._post_json("/api/articles/art-02/like", {}, headers=u2_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("hasLiked"))
+        self.assertEqual(data.get("likesCount"), 2)
+
+        # 6. Single article GET /api/articles/art-02 reflects correct state for each user
+        # User 1 hasLiked = True
+        status, data1 = self._get_json("/api/articles/art-02", headers=u1_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(data1["article"]["likesCount"], 2)
+        self.assertTrue(data1["article"]["hasLiked"])
+
+        # User 3 hasLiked = False
+        u3_headers = {"Cookie": "sc_session=user_charlie"}
+        status, data3 = self._get_json("/api/articles/art-02", headers=u3_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(data3["article"]["likesCount"], 2)
+        self.assertFalse(data3["article"]["hasLiked"])
+
+        # 7. Feed list GET /api/articles contains likesCount and hasLiked
+        status_list, list_data = self._get_json("/api/articles", headers=u1_headers)
+        self.assertEqual(status_list, 200)
+        art2 = next(a for a in list_data["articles"] if a["id"] == "art-02")
+        self.assertEqual(art2["likesCount"], 2)
+        self.assertTrue(art2["hasLiked"])
+        self.assertIn("commentsCount", art2)
+
+    def test_06_user_feed_settings_get_post_validation(self):
+        """Verify GET/POST /api/user/feed-settings, validation against empty types, and persistence."""
+        # 1. Guest GET returns default 4 types and 'all' complexity
+        status, data = self._get_json("/api/user/feed-settings")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["materialTypes"], ["article", "post", "news", "question"])
+        self.assertEqual(data["complexityLevels"], ["all"])
+
+        # 2. Guest POST -> 401
+        status, data = self._post_json("/api/user/feed-settings", {"materialTypes": ["post"]})
+        self.assertEqual(status, 401)
+        self.assertTrue(data.get("requireAuth"))
+
+        # 3. Authenticated POST with empty materialTypes -> 400
+        user_headers = {"Cookie": "sc_session=user_feed_tester"}
+        status, data = self._post_json("/api/user/feed-settings", {"materialTypes": []}, headers=user_headers)
+        self.assertEqual(status, 400)
+        self.assertIn("Выберите хотя бы один тип материала", data.get("error", ""))
+
+        # 4. Authenticated POST with all invalid types -> 400
+        status, data = self._post_json("/api/user/feed-settings", {"materialTypes": ["invalid_one", "unknown_two"]}, headers=user_headers)
+        self.assertEqual(status, 400)
+        self.assertIn("Выберите хотя бы один тип материала", data.get("error", ""))
+
+        # 5. Authenticated POST with valid preferences -> 200
+        payload = {
+            "materialTypes": ["post", "news"],
+            "complexityLevels": ["hard", "medium"]
+        }
+        status, data = self._post_json("/api/user/feed-settings", payload, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data["materialTypes"], ["post", "news"])
+        self.assertEqual(data["complexityLevels"], ["hard", "medium"])
+
+        # 6. Subsequent GET returns saved settings
+        status, data_saved = self._get_json("/api/user/feed-settings", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(data_saved["materialTypes"], ["post", "news"])
+        self.assertEqual(data_saved["complexityLevels"], ["hard", "medium"])
+
+    def test_07_feed_filtering_by_types_and_complexities(self):
+        """Verify GET /api/articles filters by material types and complexity levels (including unspecified)."""
+        # Insert test publications with diverse types and complexities
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            # Post - easy
+            conn.execute("""
+                INSERT OR REPLACE INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, article_delta, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'art-t30-post', 'draft-t30-post', 'Тестовый пост разработчика', 'author_p', 'approved',
+                    ?, '<p>Содержание тестового поста для проверки фильтрации материалов.</p>',
+                    NULL, 'idem_post_1', 'hash_p1', '2026-09-25T10:00:00Z', '2026-09-25T10:00:00Z'
+                )
+            """, (json.dumps({
+                "materialType": "post",
+                "complexity": "easy",
+                "topics": ["smart-contracts-development"],
+                "keywords": ["пост", "фильтр"],
+                "description": "Описание поста длиной более пятидесяти символов для корректной фильтрации."
+            }, ensure_ascii=False),))
+
+            # News - unspecified complexity
+            conn.execute("""
+                INSERT OR REPLACE INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, article_delta, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'art-t30-news', 'draft-t30-news', 'Срочная новость экосистемы', 'author_n', 'approved',
+                    ?, '<p>Содержание срочной новости экосистемы блокчейн-платформы.</p>',
+                    NULL, 'idem_news_1', 'hash_n1', '2026-09-25T11:00:00Z', '2026-09-25T11:00:00Z'
+                )
+            """, (json.dumps({
+                "materialType": "news",
+                "complexity": None,
+                "topics": ["standards-and-protocols"],
+                "keywords": ["новость", "релиз"],
+                "description": "Описание новости длиной более пятидесяти символов для корректной фильтрации."
+            }, ensure_ascii=False),))
+
+            # Question - medium complexity
+            conn.execute("""
+                INSERT OR REPLACE INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, article_delta, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'art-t30-quest', 'draft-t30-quest', 'Вопрос по оптимизации газа', 'author_q', 'approved',
+                    ?, '<p>Вопрос сообщества по поводу снижения потребления газа в циклах смарт-контракта.</p>',
+                    NULL, 'idem_quest_1', 'hash_q1', '2026-09-25T12:00:00Z', '2026-09-25T12:00:00Z'
+                )
+            """, (json.dumps({
+                "materialType": "question",
+                "complexity": "medium",
+                "topics": ["smart-contracts-development"],
+                "keywords": ["вопрос", "газ"],
+                "description": "Описание вопроса сообщества длиной более пятидесяти символов для проверки."
+            }, ensure_ascii=False),))
+
+        # 1. Filter by types: post,news
+        status, data = self._get_json("/api/articles?types=post,news")
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(data["total"], 2)
+        returned_types = {a["materialType"] for a in data["articles"]}
+        self.assertTrue(returned_types.issubset({"post", "news"}))
+        ids = {a["id"] for a in data["articles"]}
+        self.assertIn("art-t30-post", ids)
+        self.assertIn("art-t30-news", ids)
+        self.assertNotIn("art-t30-quest", ids)
+
+        # 2. Filter by type: question
+        status, data_q = self._get_json("/api/articles?type=question")
+        self.assertEqual(status, 200)
+        for a in data_q["articles"]:
+            self.assertEqual(a["materialType"], "question")
+
+        # 3. Filter by complexity: easy,unspecified
+        status, data_comp = self._get_json("/api/articles?complexities=easy,unspecified")
+        self.assertEqual(status, 200)
+        ids_comp = {a["id"] for a in data_comp["articles"]}
+        self.assertIn("art-t30-post", ids_comp)  # easy
+        self.assertIn("art-t30-news", ids_comp)  # unspecified
+        self.assertNotIn("art-01", ids_comp)     # hard
+        self.assertNotIn("art-02", ids_comp)     # hard
+
+        # 4. Filter by complexity: hard
+        status, data_hard = self._get_json("/api/articles?complexity=hard")
+        self.assertEqual(status, 200)
+        for a in data_hard["articles"]:
+            self.assertEqual(a["complexity"], "hard")
+
+    def test_08_my_feed_subscriptions_deduplication_and_empty_states(self):
+        """Verify tab=my requires auth, matches subscriptions (OR), deduplicates, respects settings, handles empty states."""
+        # 1. Guest -> 401 requireAuth
+        status, data = self._get_json("/api/articles?tab=my")
+        self.assertEqual(status, 401)
+        self.assertTrue(data.get("requireAuth"))
+
+        # 2. User with 0 subscriptions -> total=0, noSubscriptions=True
+        status, data = self._get_json("/api/articles?tab=my", headers={"Cookie": "sc_session=user_without_subs"})
+        self.assertEqual(status, 200)
+        self.assertEqual(data.get("total"), 0)
+        self.assertEqual(data.get("articles"), [])
+        self.assertTrue(data.get("noSubscriptions"))
+
+        # 3. User subscribed to multiple entities matching art-01 (author + topic + tag)
+        user_id = "user_multi_match"
+        user_headers = {"Cookie": f"sc_session={user_id}"}
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            conn.execute("DELETE FROM user_subscriptions WHERE user_id = ?", (user_id,))
+            conn.executemany("""
+                INSERT INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, [
+                (user_id, "author", "author_smirnov", "Алексей Смирнов", "2026-09-26T12:00:00Z"),
+                (user_id, "topic", "digital-ruble-payments", "Цифровой рубль и платежи", "2026-09-26T12:00:00Z"),
+                (user_id, "tag", "цифровой рубль", "Цифровой рубль", "2026-09-26T12:00:00Z"),
+            ])
+
+        status, data = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertFalse(data.get("noSubscriptions"))
+        self.assertGreaterEqual(data.get("total"), 1)
+
+        # Deduplication check: art-01 appears exactly ONCE despite matching author, topic, and tag
+        art01_matches = [a for a in data["articles"] if a["id"] == "art-01"]
+        self.assertEqual(len(art01_matches), 1, "Article matching multiple subscriptions must be deduplicated to exactly 1")
+        self.assertTrue(art01_matches[0].get("subscriptionReason"))
+
+        # 4. Personal feed settings in tab=my: restrict to 'news' only
+        # User has subscriptions, but none match the saved feed settings
+        post_status, _ = self._post_json(
+            "/api/user/feed-settings",
+            {"materialTypes": ["news"], "complexityLevels": ["all"]},
+            headers=user_headers
+        )
+        self.assertEqual(post_status, 200)
+
+        status_filtered, data_filtered = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status_filtered, 200)
+        # Empty state: has subscriptions, but 0 matching articles for selected material types
+        self.assertEqual(data_filtered.get("total"), 0)
+        self.assertEqual(data_filtered.get("articles"), [])
+        self.assertFalse(data_filtered.get("noSubscriptions"), "User HAS subscriptions, so noSubscriptions must be False")
+
+        # 5. Restore feed settings to include 'article'
+        self._post_json(
+            "/api/user/feed-settings",
+            {"materialTypes": ["article", "post", "news", "question"], "complexityLevels": ["all"]},
+            headers=user_headers
+        )
+        status_restored, data_restored = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status_restored, 200)
+        self.assertGreaterEqual(data_restored.get("total"), 1)
+        self.assertIn("art-01", [a["id"] for a in data_restored["articles"]])
+
+
 if __name__ == '__main__':
     unittest.main()
 

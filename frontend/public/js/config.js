@@ -172,6 +172,22 @@
     FEED_MAX_WIDTH: '100%'
   };
 
+  const MATERIAL_TYPES = [
+    { id: 'article', title: 'Статьи', singular: 'Статья' },
+    { id: 'post', title: 'Посты', singular: 'Пост' },
+    { id: 'news', title: 'Новости', singular: 'Новость' },
+    { id: 'question', title: 'Вопросы', singular: 'Вопрос' }
+  ];
+  MATERIAL_TYPES.article = 'Статьи';
+  MATERIAL_TYPES.post = 'Посты';
+  MATERIAL_TYPES.news = 'Новости';
+  MATERIAL_TYPES.question = 'Вопросы';
+
+  const DEFAULT_FEED_SETTINGS = {
+    materialTypes: ['article', 'post', 'news', 'question'],
+    complexityLevels: ['all']
+  };
+
   const LIMITS = {
     KEYWORDS_MIN: 1,
     KEYWORDS_MAX: 10,
@@ -190,8 +206,14 @@
     TOPICS,
     FORMATS,
     COMPLEXITIES,
+    MATERIAL_TYPES,
+    DEFAULT_FEED_SETTINGS,
     LIMITS,
     COVER,
+
+    getMaterialTypeById(id) {
+      return MATERIAL_TYPES.find(m => m.id === id) || null;
+    },
 
     getAudienceById(id) {
       return AUDIENCES.find(a => a.id === id) || null;
@@ -211,5 +233,7 @@
   };
 
   window.PublicationConfig = PublicationConfig;
+  window.MATERIAL_TYPES = MATERIAL_TYPES;
+  window.DEFAULT_FEED_SETTINGS = DEFAULT_FEED_SETTINGS;
 
 })(window);

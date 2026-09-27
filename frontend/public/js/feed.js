@@ -149,7 +149,11 @@
     articles: [],
     topicCounts: {},
     isLoading: false,
-    noSubscriptions: false
+    noSubscriptions: false,
+    feedSettings: {
+      materialTypes: ['article', 'post', 'news', 'question'],
+      complexityLevels: ['all']
+    }
   };
 
   let currentUser = null;
@@ -164,6 +168,15 @@
     state.complexity = params.get('complexity') || 'all';
     state.period = params.get('period') || 'all';
     state.sort = params.get('sort') || 'newest';
+
+    const typesParam = params.get('types');
+    if (typesParam) {
+      state.feedSettings.materialTypes = typesParam.split(',').filter(Boolean);
+    }
+    const compLevelsParam = params.get('complexityLevels');
+    if (compLevelsParam) {
+      state.feedSettings.complexityLevels = compLevelsParam.split(',').filter(Boolean);
+    }
 
     const tabParam = (params.get('tab') || '').toLowerCase();
     const savedParam = params.get('saved');
@@ -241,6 +254,13 @@
     if (state.period && state.period !== 'all') params.set('period', state.period);
     if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
 
+    if (state.feedSettings && state.feedSettings.materialTypes && state.feedSettings.materialTypes.length < 4) {
+      params.set('types', state.feedSettings.materialTypes.join(','));
+    }
+    if (state.feedSettings && state.feedSettings.complexityLevels && (state.feedSettings.complexityLevels.indexOf('all') === -1 || state.feedSettings.complexityLevels.length > 1)) {
+      params.set('complexityLevels', state.feedSettings.complexityLevels.join(','));
+    }
+
     const queryString = params.toString();
     const newURL = window.location.pathname + (queryString ? '?' + queryString : '');
 
@@ -298,6 +318,10 @@
     const manageSubsBtn = document.getElementById('btnManageSubscriptions');
     if (manageSubsBtn) {
       manageSubsBtn.style.display = (state.tab === 'my' && user) ? 'inline-flex' : 'none';
+    }
+
+    if (user) {
+      loadFeedSettings();
     }
   }
 
@@ -400,27 +424,42 @@
   }
 
   // --------------------------------------------------------------------------
-  // 5. Sub-Nav Bar (Second Level Menu)
+  // 5. Sub-Nav Bar & Feed Settings Panel
   // --------------------------------------------------------------------------
+  let settingsSubsData = { authors: [], topics: [], tags: [] };
+  let activeSettingsSubsType = 'author';
+
   function initSubnavTabs() {
     const tabAll = document.getElementById('tabFeedAll');
     const tabMy = document.getElementById('tabFeedMy');
     const tabSaved = document.getElementById('feedSavedTab');
+    const btnFeedSettings = document.getElementById('btnFeedSettingsToggle');
+
+    if (btnFeedSettings) {
+      btnFeedSettings.addEventListener('click', function () {
+        toggleFeedSettingsPanel();
+      });
+    }
 
     if (tabAll) {
       tabAll.addEventListener('click', function () {
         switchTab('all');
       });
     }
+
     if (tabMy) {
       tabMy.addEventListener('click', function () {
-        if (!currentUser) {
+        if (state.tab === 'my') {
+          showToast('Возврат ко всем публикациям');
+          switchTab('all');
+        } else if (!currentUser) {
           openAuthModal('my');
         } else {
           switchTab('my');
         }
       });
     }
+
     if (tabSaved) {
       tabSaved.addEventListener('click', function () {
         if (!currentUser) {
@@ -452,6 +491,8 @@
     const tabAll = document.getElementById('tabFeedAll');
     const tabMy = document.getElementById('tabFeedMy');
     const tabSaved = document.getElementById('feedSavedTab');
+    const btnSettings = document.getElementById('btnFeedSettingsToggle');
+    const panel = document.getElementById('feedSettingsPanel');
 
     if (tabAll) {
       const isAll = state.tab === 'all';
@@ -467,6 +508,357 @@
       const isSaved = state.tab === 'saved';
       tabSaved.classList.toggle('active', isSaved);
       tabSaved.setAttribute('aria-selected', isSaved ? 'true' : 'false');
+    }
+    if (btnSettings && panel) {
+      const isOpen = panel.style.display !== 'none';
+      btnSettings.classList.toggle('active', isOpen);
+      btnSettings.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+  }
+
+  function openFeedSettingsPanel() {
+    const panel = document.getElementById('feedSettingsPanel');
+    const toggleBtn = document.getElementById('btnFeedSettingsToggle');
+    const filtersModal = document.getElementById('feedFiltersModal');
+
+    // Mutual exclusion with filters modal
+    if (filtersModal && filtersModal.style.display !== 'none') {
+      filtersModal.style.display = 'none';
+    }
+
+    if (panel) {
+      panel.style.display = 'block';
+    }
+    if (toggleBtn) {
+      toggleBtn.classList.add('active');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    syncFeedSettingsCheckboxes();
+    loadFeedSettingsSubs();
+  }
+
+  function closeFeedSettingsPanel(isSaved) {
+    const panel = document.getElementById('feedSettingsPanel');
+    const toggleBtn = document.getElementById('btnFeedSettingsToggle');
+
+    if (panel) {
+      panel.style.display = 'none';
+    }
+    if (toggleBtn) {
+      toggleBtn.classList.remove('active');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+    if (!isSaved) {
+      syncFeedSettingsCheckboxes();
+    }
+  }
+
+  function toggleFeedSettingsPanel() {
+    const panel = document.getElementById('feedSettingsPanel');
+    if (panel && panel.style.display !== 'none') {
+      closeFeedSettingsPanel(false);
+    } else {
+      openFeedSettingsPanel();
+    }
+  }
+
+  function syncFeedSettingsCheckboxes() {
+    const types = (state.feedSettings && state.feedSettings.materialTypes) || ['article', 'post', 'news', 'question'];
+    const typeInputs = document.querySelectorAll('input[name="feedMaterialType"]');
+    typeInputs.forEach(function (inp) {
+      inp.checked = (types.indexOf(inp.value) !== -1);
+    });
+    validateMaterialTypes();
+
+    const compLevels = (state.feedSettings && state.feedSettings.complexityLevels) || ['all'];
+    const compAll = document.getElementById('feedCompAll');
+    const specificCompInputs = document.querySelectorAll('input[name="feedComplexityLevel"]:not(#feedCompAll)');
+
+    if (compLevels.indexOf('all') !== -1 || compLevels.length === 0) {
+      if (compAll) compAll.checked = true;
+      specificCompInputs.forEach(function (inp) { inp.checked = false; });
+    } else {
+      if (compAll) compAll.checked = false;
+      specificCompInputs.forEach(function (inp) {
+        inp.checked = (compLevels.indexOf(inp.value) !== -1);
+      });
+    }
+  }
+
+  function validateMaterialTypes() {
+    const checked = document.querySelectorAll('input[name="feedMaterialType"]:checked');
+    const err = document.getElementById('feedMaterialTypesError');
+    const saveBtn = document.getElementById('btnSaveFeedSettings');
+    const isValid = (checked.length > 0);
+
+    if (err) {
+      err.style.display = isValid ? 'none' : 'block';
+    }
+    if (saveBtn) {
+      saveBtn.disabled = !isValid;
+    }
+    return isValid;
+  }
+
+  function loadFeedSettings(callback) {
+    fetch('/api/user/feed-settings')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          const settings = data.settings || data;
+          if (Array.isArray(settings.materialTypes) && settings.materialTypes.length > 0) {
+            state.feedSettings.materialTypes = settings.materialTypes;
+          }
+          if (Array.isArray(settings.complexityLevels) && settings.complexityLevels.length > 0) {
+            state.feedSettings.complexityLevels = settings.complexityLevels;
+          }
+          syncFeedSettingsCheckboxes();
+        }
+        if (callback) callback();
+      })
+      .catch(function () {
+        if (callback) callback();
+      });
+  }
+
+  function loadFeedSettingsSubs() {
+    fetch('/api/subscriptions/entities')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          settingsSubsData.authors = data.authors || [];
+          settingsSubsData.topics = data.topics || [];
+          settingsSubsData.tags = data.tags || [];
+
+          subsData.authors = data.authors || [];
+          subsData.topics = data.topics || [];
+          subsData.tags = data.tags || [];
+
+          const aCount = document.getElementById('feedSettingsSubsAuthorsCount');
+          const tCount = document.getElementById('feedSettingsSubsTopicsCount');
+          const tgCount = document.getElementById('feedSettingsSubsTagsCount');
+          if (aCount) aCount.textContent = settingsSubsData.authors.length;
+          if (tCount) tCount.textContent = settingsSubsData.topics.length;
+          if (tgCount) tgCount.textContent = settingsSubsData.tags.length;
+
+          const modalACount = document.getElementById('subsAuthorsCount');
+          const modalTCount = document.getElementById('subsTopicsCount');
+          const modalTgCount = document.getElementById('subsTagsCount');
+          if (modalACount) modalACount.textContent = subsData.authors.length;
+          if (modalTCount) modalTCount.textContent = subsData.topics.length;
+          if (modalTgCount) modalTgCount.textContent = subsData.tags.length;
+
+          renderFeedSettingsSubsList();
+        }
+      })
+      .catch(function (err) {
+        console.error('Failed to load settings subscriptions:', err);
+      });
+  }
+
+  function renderFeedSettingsSubsList() {
+    const container = document.getElementById('feedSettingsSubsList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const searchInput = document.getElementById('feedSettingsSubsSearch');
+    const q = (searchInput ? searchInput.value.trim().toLowerCase() : '');
+
+    let list = [];
+    if (activeSettingsSubsType === 'author') list = settingsSubsData.authors;
+    else if (activeSettingsSubsType === 'topic') list = settingsSubsData.topics;
+    else if (activeSettingsSubsType === 'tag') list = settingsSubsData.tags;
+
+    if (q) {
+      list = list.filter(function (item) {
+        return (item.title && item.title.toLowerCase().indexOf(q) !== -1) ||
+               (item.role && item.role.toLowerCase().indexOf(q) !== -1);
+      });
+    }
+
+    if (list.length === 0) {
+      container.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.88rem;">Ничего не найдено</div>';
+      return;
+    }
+
+    list.forEach(function (item) {
+      const el = document.createElement('div');
+      el.className = 'subs-item';
+      const subText = item.role || (item.count !== undefined ? (item.count + ' публикаций') : '');
+      const isSub = Boolean(item.isSubscribed);
+
+      el.innerHTML =
+        '<div class="subs-item-info">' +
+          '<span class="subs-item-title">' + escapeHtml(item.title) + '</span>' +
+          (subText ? '<span class="subs-item-sub">' + escapeHtml(subText) + '</span>' : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-secondary subs-toggle-btn ' + (isSub ? 'is-subscribed' : '') + '" data-id="' + escapeHtml(item.id) + '">' +
+          (isSub ? 'Вы подписаны' : 'Подписаться') +
+        '</button>';
+
+      const btn = el.querySelector('.subs-toggle-btn');
+      btn.addEventListener('click', function () {
+        toggleSubscription(activeSettingsSubsType, item.id, item.title, btn, item);
+      });
+
+      container.appendChild(el);
+    });
+  }
+
+  function initFeedSettingsPanel() {
+    const closeBtn = document.getElementById('btnCloseFeedSettings');
+    const cancelBtn = document.getElementById('btnCancelFeedSettings');
+    const saveBtn = document.getElementById('btnSaveFeedSettings');
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        closeFeedSettingsPanel(false);
+      });
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        closeFeedSettingsPanel(false);
+      });
+    }
+
+    // Material type checkboxes
+    const typeInputs = document.querySelectorAll('input[name="feedMaterialType"]');
+    typeInputs.forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        validateMaterialTypes();
+      });
+    });
+
+    // Complexity checkboxes
+    const compAll = document.getElementById('feedCompAll');
+    const specificCompInputs = document.querySelectorAll('input[name="feedComplexityLevel"]:not(#feedCompAll)');
+
+    if (compAll) {
+      compAll.addEventListener('change', function () {
+        if (compAll.checked) {
+          specificCompInputs.forEach(function (inp) { inp.checked = false; });
+        } else {
+          const anySpecificChecked = Array.from(specificCompInputs).some(function (inp) { return inp.checked; });
+          if (!anySpecificChecked) {
+            compAll.checked = true;
+          }
+        }
+      });
+    }
+
+    specificCompInputs.forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        if (inp.checked) {
+          if (compAll) compAll.checked = false;
+        } else {
+          const anySpecificChecked = Array.from(specificCompInputs).some(function (i) { return i.checked; });
+          if (!anySpecificChecked && compAll) {
+            compAll.checked = true;
+          }
+        }
+      });
+    });
+
+    // Subscriptions tabs
+    const tabAuthors = document.getElementById('tabFeedSettingsSubsAuthors');
+    const tabTopics = document.getElementById('tabFeedSettingsSubsTopics');
+    const tabTags = document.getElementById('tabFeedSettingsSubsTags');
+
+    if (tabAuthors) {
+      tabAuthors.addEventListener('click', function () {
+        activeSettingsSubsType = 'author';
+        tabAuthors.classList.add('active'); tabAuthors.setAttribute('aria-selected', 'true');
+        if (tabTopics) { tabTopics.classList.remove('active'); tabTopics.setAttribute('aria-selected', 'false'); }
+        if (tabTags) { tabTags.classList.remove('active'); tabTags.setAttribute('aria-selected', 'false'); }
+        renderFeedSettingsSubsList();
+      });
+    }
+    if (tabTopics) {
+      tabTopics.addEventListener('click', function () {
+        activeSettingsSubsType = 'topic';
+        tabTopics.classList.add('active'); tabTopics.setAttribute('aria-selected', 'true');
+        if (tabAuthors) { tabAuthors.classList.remove('active'); tabAuthors.setAttribute('aria-selected', 'false'); }
+        if (tabTags) { tabTags.classList.remove('active'); tabTags.setAttribute('aria-selected', 'false'); }
+        renderFeedSettingsSubsList();
+      });
+    }
+    if (tabTags) {
+      tabTags.addEventListener('click', function () {
+        activeSettingsSubsType = 'tag';
+        tabTags.classList.add('active'); tabTags.setAttribute('aria-selected', 'true');
+        if (tabAuthors) { tabAuthors.classList.remove('active'); tabAuthors.setAttribute('aria-selected', 'false'); }
+        if (tabTopics) { tabTopics.classList.remove('active'); tabTopics.setAttribute('aria-selected', 'false'); }
+        renderFeedSettingsSubsList();
+      });
+    }
+
+    const searchInput = document.getElementById('feedSettingsSubsSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        renderFeedSettingsSubsList();
+      });
+    }
+
+    // Save button
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () {
+        if (!validateMaterialTypes()) return;
+
+        const checkedTypes = Array.from(document.querySelectorAll('input[name="feedMaterialType"]:checked')).map(function (inp) {
+          return inp.value;
+        });
+
+        let selectedComp = [];
+        if (compAll && compAll.checked) {
+          selectedComp = ['all'];
+        } else {
+          selectedComp = Array.from(document.querySelectorAll('input[name="feedComplexityLevel"]:checked')).map(function (inp) {
+            return inp.value;
+          });
+          if (selectedComp.length === 0) selectedComp = ['all'];
+        }
+
+        if (currentUser) {
+          saveBtn.disabled = true;
+          fetch('/api/user/feed-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              materialTypes: checkedTypes,
+              complexityLevels: selectedComp
+            })
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              saveBtn.disabled = false;
+              if (data && data.success) {
+                state.feedSettings.materialTypes = checkedTypes;
+                state.feedSettings.complexityLevels = selectedComp;
+                closeFeedSettingsPanel(true);
+                showToast('Настройки ленты сохранены');
+                syncURL(false);
+                fetchFeed(true);
+              } else {
+                showToast(data.error || 'Не удалось сохранить настройки');
+              }
+            })
+            .catch(function (err) {
+              saveBtn.disabled = false;
+              console.error('Failed to save feed settings:', err);
+              showToast('Ошибка при сохранении настроек');
+            });
+        } else {
+          // Guest mode
+          state.feedSettings.materialTypes = checkedTypes;
+          state.feedSettings.complexityLevels = selectedComp;
+          closeFeedSettingsPanel(true);
+          showToast('Настройки сохранены для текущей сессии');
+          syncURL(false);
+          fetchFeed(true);
+        }
+      });
     }
   }
 
@@ -498,24 +890,56 @@
       if (state.format) formatSelect.value = state.format;
     }
 
-    // Search input & clear button
+    // Search input, clear button, expandable group & submit button
     const searchInput = document.getElementById('feedSearchInput');
     const clearBtn = document.getElementById('feedSearchClearBtn');
+    const searchGroup = document.getElementById('feedSearchGroup');
+    const searchSubmitBtn = document.getElementById('btnFeedSearchSubmit');
+
+    let debounceTimer = null;
+
+    function triggerSearch(val) {
+      clearTimeout(debounceTimer);
+      state.search = (val !== undefined ? val : (searchInput ? searchInput.value.trim() : ''));
+      state.offset = 0;
+      syncURL(false);
+      fetchFeed(true);
+    }
+
+    if (searchGroup && searchInput) {
+      searchInput.addEventListener('focus', function () {
+        searchGroup.classList.add('is-expanded');
+      });
+      searchInput.addEventListener('blur', function () {
+        if (!searchInput.value.trim()) {
+          searchGroup.classList.remove('is-expanded');
+        }
+      });
+      if (searchInput.value.trim()) {
+        searchGroup.classList.add('is-expanded');
+      }
+    }
+
+    if (searchSubmitBtn && searchInput) {
+      searchSubmitBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        triggerSearch(searchInput.value.trim());
+      });
+    }
 
     if (searchInput) {
-      let debounceTimer = null;
       searchInput.addEventListener('input', function () {
         const val = searchInput.value.trim();
         if (clearBtn) {
           clearBtn.style.display = searchInput.value ? 'inline-flex' : 'none';
         }
+        if (searchGroup) {
+          if (val) searchGroup.classList.add('is-expanded');
+        }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function () {
           if (state.search !== val) {
-            state.search = val;
-            state.offset = 0;
-            syncURL(false);
-            fetchFeed(true);
+            triggerSearch(val);
           }
         }, 350);
       });
@@ -523,12 +947,7 @@
       searchInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          clearTimeout(debounceTimer);
-          const val = searchInput.value.trim();
-          state.search = val;
-          state.offset = 0;
-          syncURL(false);
-          fetchFeed(true);
+          triggerSearch(searchInput.value.trim());
         }
       });
     }
@@ -537,10 +956,10 @@
       clearBtn.addEventListener('click', function () {
         searchInput.value = '';
         clearBtn.style.display = 'none';
-        state.search = '';
-        state.offset = 0;
-        syncURL(false);
-        fetchFeed(true);
+        if (searchGroup) {
+          searchGroup.classList.remove('is-expanded');
+        }
+        triggerSearch('');
         searchInput.focus();
       });
     }
@@ -783,6 +1202,7 @@
 
     if (openBtn && modal) {
       openBtn.addEventListener('click', function () {
+        closeFeedSettingsPanel(false);
         modal.style.display = 'flex';
         updateModalFiltersState();
       });
@@ -800,10 +1220,12 @@
       });
     }
 
-    // Escape key closes modal
+    // Escape key closes modals and settings panel
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         if (modal && modal.style.display !== 'none') modal.style.display = 'none';
+        const settingsPanel = document.getElementById('feedSettingsPanel');
+        if (settingsPanel && settingsPanel.style.display !== 'none') closeFeedSettingsPanel(false);
         const subsModal = document.getElementById('subscriptionsModal');
         if (subsModal && subsModal.style.display !== 'none') {
           subsModal.style.display = 'none';
@@ -1103,6 +1525,12 @@
     if (state.complexity && state.complexity !== 'all') params.set('complexity', state.complexity);
     if (state.period && state.period !== 'all') params.set('period', state.period);
     if (state.sort) params.set('sort', state.sort);
+    if (state.feedSettings && state.feedSettings.materialTypes && state.feedSettings.materialTypes.length < 4) {
+      params.set('types', state.feedSettings.materialTypes.join(','));
+    }
+    if (state.feedSettings && state.feedSettings.complexityLevels && (state.feedSettings.complexityLevels.indexOf('all') === -1 || state.feedSettings.complexityLevels.length > 1)) {
+      params.set('complexityLevels', state.feedSettings.complexityLevels.join(','));
+    }
     params.set('limit', String(state.limit));
     params.set('offset', String(state.offset));
 
@@ -1326,12 +1754,21 @@
               '</svg>' +
             '</div>' +
             '<h3 class="empty-state-title">У вас пока нет подписок</h3>' +
-            '<p class="empty-state-desc">Подпишитесь на интересных авторов, ключевые темы или теги, чтобы формировать персональную ленту материалов.</p>' +
-            '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyChooseSubs">' +
-              '<span>Выбрать темы и авторов</span>' +
-            '</button>' +
+            '<p class="empty-state-desc">Подпишитесь на авторов, темы или хэштеги, чтобы собрать свою ленту.</p>' +
+            '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
+              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyOpenSettings">' +
+                '<span>Настроить ленту</span>' +
+              '</button>' +
+              '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyChooseSubs">' +
+                '<span>Выбрать темы и авторов</span>' +
+              '</button>' +
+            '</div>' +
           '</div>';
 
+        const openSettingsBtn = document.getElementById('btnEmptyOpenSettings');
+        if (openSettingsBtn) {
+          openSettingsBtn.addEventListener('click', openFeedSettingsPanel);
+        }
         const chooseBtn = document.getElementById('btnEmptyChooseSubs');
         if (chooseBtn) {
           chooseBtn.addEventListener('click', openSubscriptionsModal);
@@ -1348,15 +1785,26 @@
               '</svg>' +
             '</div>' +
             '<h3 class="empty-state-title">В вашей ленте пока нет новых публикаций</h3>' +
-            '<p class="empty-state-desc">Попробуйте расширить круг подписок или сбросить активные фильтры.</p>' +
-            '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyManageSubs">' +
-              '<span>Управление подписками</span>' +
-            '</button>' +
+            '<p class="empty-state-desc">Попробуйте расширить круг подписок, изменить настройки ленты или перейти ко всем публикациям.</p>' +
+            '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
+              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyOpenSettings">' +
+                '<span>Настроить ленту</span>' +
+              '</button>' +
+              '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyAllFeed">' +
+                '<span>Все публикации</span>' +
+              '</button>' +
+            '</div>' +
           '</div>';
 
-        const manageBtn = document.getElementById('btnEmptyManageSubs');
-        if (manageBtn) {
-          manageBtn.addEventListener('click', openSubscriptionsModal);
+        const openSettingsBtn = document.getElementById('btnEmptyOpenSettings');
+        if (openSettingsBtn) {
+          openSettingsBtn.addEventListener('click', openFeedSettingsPanel);
+        }
+        const allFeedBtn = document.getElementById('btnEmptyAllFeed');
+        if (allFeedBtn) {
+          allFeedBtn.addEventListener('click', function () {
+            switchTab('all');
+          });
         }
         return;
       }
@@ -1414,12 +1862,106 @@
   }
 
   // --------------------------------------------------------------------------
-  // 10. Article Card Generator (Accurate Tokens, Click Isolation)
+  // 10. Article Card Generator & Likes Interaction
   // --------------------------------------------------------------------------
+  function toggleArticleLike(articleId, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Войдите, чтобы поставить лайк');
+      return;
+    }
+
+    const currentLiked = btn.classList.contains('is-liked');
+    const newLiked = !currentLiked;
+    const countEl = btn.querySelector('.like-count');
+    const currentCount = parseInt(countEl ? countEl.textContent : '0', 10) || 0;
+    const optimisticCount = newLiked ? (currentCount + 1) : Math.max(0, currentCount - 1);
+
+    // Optimistic UI update
+    btn.classList.toggle('is-liked', newLiked);
+    btn.setAttribute('aria-pressed', newLiked ? 'true' : 'false');
+    btn.title = newLiked ? 'Больше не нравится' : 'Нравится';
+    if (countEl) countEl.textContent = optimisticCount;
+    if (item) {
+      item.hasLiked = newLiked;
+      item.likesCount = optimisticCount;
+    }
+
+    fetch('/api/articles/' + encodeURIComponent(articleId) + '/like', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          const finalLiked = Boolean(data.hasLiked);
+          btn.classList.toggle('is-liked', finalLiked);
+          btn.setAttribute('aria-pressed', finalLiked ? 'true' : 'false');
+          btn.title = finalLiked ? 'Больше не нравится' : 'Нравится';
+          if (countEl) countEl.textContent = data.likesCount;
+          if (item) {
+            item.hasLiked = finalLiked;
+            item.likesCount = data.likesCount;
+          }
+        } else {
+          // Rollback
+          btn.classList.toggle('is-liked', currentLiked);
+          btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+          btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+          if (countEl) countEl.textContent = currentCount;
+          if (item) {
+            item.hasLiked = currentLiked;
+            item.likesCount = currentCount;
+          }
+          showToast(data.error || 'Ошибка при сохранении отметки');
+        }
+      })
+      .catch(function (err) {
+        if (err.message !== 'AUTH_REQUIRED') {
+          // Rollback
+          btn.classList.toggle('is-liked', currentLiked);
+          btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+          btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+          if (countEl) countEl.textContent = currentCount;
+          if (item) {
+            item.hasLiked = currentLiked;
+            item.likesCount = currentCount;
+          }
+          showToast('Не удалось обновить отметку');
+        }
+      });
+  }
+
   function createCardElement(item) {
     if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
       return window.SmartContractumCard.createCardElement(item, {
-        isBookmarked: isBookmarked
+        isBookmarked: isBookmarked,
+        onLikeToggle: toggleArticleLike,
+        onBookmarkToggle: function (id, btn) {
+          const active = toggleBookmark(id);
+          btn.classList.toggle('is-bookmarked', active);
+          const svg = btn.querySelector('svg');
+          if (svg) svg.setAttribute('fill', active ? 'currentColor' : 'none');
+          const newTooltip = active ? 'Убрать из сохраненного' : 'Сохранить статью';
+          btn.title = newTooltip;
+          btn.setAttribute('aria-label', newTooltip);
+          if (state.savedOnly && !active) {
+            const cardEl = btn.closest('.feed-card');
+            if (cardEl) cardEl.remove();
+            state.articles = state.articles.filter(function (a) { return a.id !== id; });
+            state.total = Math.max(0, state.total - 1);
+            updateResultsCount();
+            if (state.articles.length === 0) {
+              renderEmptyState();
+            }
+          }
+        }
       });
     }
 
@@ -1821,6 +2363,7 @@
     updateSavedCounter();
     initControls();
     initSubnavTabs();
+    initFeedSettingsPanel();
     initFiltersModal();
     initSubscriptionsModal();
     initAuthControls();

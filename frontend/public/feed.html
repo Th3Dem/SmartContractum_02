@@ -124,29 +124,97 @@
     ================================================================= -->
     <nav class="feed-subnav-bar" id="feedSubnavBar" aria-label="Управление лентой публикаций">
       <div class="feed-subnav-container">
-        <!-- Left: Feed Navigation Switcher Tabs -->
-        <div class="feed-subnav-left" role="tablist" aria-label="Разделы ленты">
-          <button type="button" class="feed-subnav-tab active" id="tabFeedAll" data-tab="all" role="tab" aria-selected="true">
-            <span>Все публикации</span>
+        <!-- Hidden test helper for tabFeedAll -->
+        <button type="button" class="feed-subnav-tab" id="tabFeedAll" data-tab="all" role="tab" aria-selected="true" style="display: none;">
+          <span>Все публикации</span>
+        </button>
+
+        <!-- Left Controls: 1. Write -> 2. Feed Settings -> 3. Filters -> 4. My Feed -> 5. Saved -->
+        <div class="feed-subnav-left">
+          <!-- 1. «Написать» (#btnHeroWrite) - primary accent action at the left edge -->
+          <a href="editor.html" class="btn btn-primary feed-subnav-write-btn" id="btnHeroWrite" title="Перейти в редактор статей">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span>Написать</span>
+          </a>
+
+          <!-- 2. «Настройка ленты» (#btnFeedSettingsToggle) - secondary action -->
+          <button
+            type="button"
+            id="btnFeedSettingsToggle"
+            class="btn btn-secondary feed-subnav-btn feed-subnav-settings-btn"
+            aria-expanded="false"
+            aria-controls="feedSettingsPanel"
+            title="Настройка параметров ленты"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>Настройка ленты</span>
           </button>
-          <!-- Personal tab: «Моя лента» (shown after authorization) -->
-          <button type="button" class="feed-subnav-tab personal-tab" id="tabFeedMy" data-tab="my" role="tab" aria-selected="false" style="display: none;">
+
+          <!-- 3. «Фильтры» (#btnFeedFiltersToggle) - single filter button -->
+          <button
+            type="button"
+            id="btnFeedFiltersToggle"
+            class="btn btn-secondary feed-subnav-btn feed-subnav-filters-btn"
+            aria-expanded="false"
+            aria-controls="feedFiltersModal"
+            title="Открыть фильтры"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span>Фильтры</span>
+            <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
+          </button>
+
+          <!-- 4. «Моя лента» (#tabFeedMy) - toggle with noticeable active state -->
+          <button
+            type="button"
+            class="feed-subnav-tab personal-tab feed-my-tab-btn"
+            id="tabFeedMy"
+            data-tab="my"
+            role="tab"
+            aria-selected="false"
+            title="Моя персональная лента (повторный клик вернет ко всем публикациям)"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
             <span>Моя лента</span>
+          </button>
+
+          <!-- 5. «Сохраненные» (#feedSavedTab) - compact saved menu/button -->
+          <button
+            type="button"
+            id="feedSavedTab"
+            class="btn btn-secondary feed-subnav-btn feed-saved-btn personal-tab"
+            data-tab="saved"
+            role="tab"
+            aria-selected="false"
+            title="Показать сохраненные статьи"
+          >
+            <svg class="saved-btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+            </svg>
+            <span>Сохраненные</span>
+            <span id="feedSavedCount" class="feed-saved-count">0</span>
           </button>
         </div>
 
-        <!-- Center: Search Input with clear button -->
-        <div class="feed-subnav-center">
-          <div class="feed-subnav-search-box">
-            <svg class="subnav-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
+        <!-- Right: 6. Expandable search group -->
+        <div class="feed-subnav-right">
+          <div class="feed-subnav-search-group" id="feedSearchGroup">
             <input
               type="search"
               id="feedSearchInput"
-              class="feed-subnav-search-input"
-              placeholder="Поиск по статьям, авторам, тегам..."
+              class="feed-subnav-search-input expandable-search-input"
+              placeholder="По статьям, авторам, тегам..."
               aria-label="Поиск по статьям, авторам, тегам"
               autocomplete="off"
             >
@@ -163,56 +231,144 @@
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
+            <button
+              type="button"
+              id="btnFeedSearchSubmit"
+              class="feed-subnav-search-submit-btn"
+              title="Искать"
+              aria-label="Искать"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
           </div>
-        </div>
-
-        <!-- Right: Filters, Saved Bookmarks & Write CTA -->
-        <div class="feed-subnav-right">
-          <!-- Filters Toggle Button -->
-          <button
-            type="button"
-            id="btnFeedFiltersToggle"
-            class="btn btn-secondary feed-subnav-btn feed-subnav-filters-btn"
-            aria-expanded="false"
-            aria-controls="feedFiltersModal"
-            title="Открыть фильтры"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-            </svg>
-            <span>Фильтры</span>
-            <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
-          </button>
-
-          <!-- Personal Tab: Saved Bookmarks Button (shown after authorization) -->
-          <button
-            type="button"
-            id="feedSavedTab"
-            class="btn btn-secondary feed-subnav-btn feed-saved-btn personal-tab"
-            data-tab="saved"
-            role="tab"
-            aria-selected="false"
-            title="Показать сохраненные статьи"
-            style="display: none;"
-          >
-            <svg class="saved-btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
-            </svg>
-            <span>Сохраненные</span>
-            <span id="feedSavedCount" class="feed-saved-count">0</span>
-          </button>
-
-          <!-- Main Action: Write CTA -->
-          <a href="editor.html" class="btn btn-primary feed-subnav-write-btn" id="btnHeroWrite" title="Перейти в редактор статей">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"></path>
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-            </svg>
-            <span>Написать</span>
-          </a>
         </div>
       </div>
     </nav>
+
+    <!-- ================================================================
+         SLIDE-OUT FEED SETTINGS PANEL (#feedSettingsPanel)
+    ================================================================= -->
+    <section id="feedSettingsPanel" class="feed-settings-panel" aria-label="Настройка персональной ленты" style="display: none;">
+      <div class="feed-settings-panel-container">
+        <div class="feed-settings-panel-header">
+          <div class="feed-settings-title-wrap">
+            <h2 class="feed-settings-title">Настройка ленты</h2>
+            <span class="feed-settings-subtitle">Выберите типы материалов, уровень сложности и подписки для формирования персональной выдачи</span>
+          </div>
+          <button type="button" class="feed-settings-close-btn" id="btnCloseFeedSettings" title="Закрыть панель настроек" aria-label="Закрыть панель настроек">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="feed-settings-panel-body">
+          <!-- 1. Типы материалов -->
+          <div class="feed-settings-section" id="feedSettingsSectionTypes">
+            <h3 class="feed-settings-section-title">Типы материалов</h3>
+            <p class="feed-settings-section-hint">Выберите типы публикаций, которые будут отображаться в вашей ленте (минимум один)</p>
+            <div class="feed-settings-checkboxes-grid" id="feedMaterialTypesList">
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedMaterialType" value="article" checked class="feed-checkbox-input">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Статьи</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedMaterialType" value="post" checked class="feed-checkbox-input">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Посты</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedMaterialType" value="news" checked class="feed-checkbox-input">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Новости</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedMaterialType" value="question" checked class="feed-checkbox-input">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Вопросы</span>
+              </label>
+            </div>
+            <div id="feedMaterialTypesError" class="feed-settings-error" style="display: none;">
+              Выберите хотя бы один тип материала
+            </div>
+          </div>
+
+          <!-- 2. Уровень сложности -->
+          <div class="feed-settings-section" id="feedSettingsSectionComplexity">
+            <h3 class="feed-settings-section-title">Уровень сложности</h3>
+            <p class="feed-settings-section-hint">Ограничьте материалы по уровню подготовки или оставьте любой</p>
+            <div class="feed-settings-complexity-grid" id="feedComplexityLevelsList">
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedComplexityLevel" value="all" checked class="feed-checkbox-input" id="feedCompAll">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Любой уровень</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedComplexityLevel" value="easy" class="feed-checkbox-input" id="feedCompEasy">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Простой</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedComplexityLevel" value="medium" class="feed-checkbox-input" id="feedCompMedium">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Средний</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedComplexityLevel" value="hard" class="feed-checkbox-input" id="feedCompHard">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Сложный</span>
+              </label>
+              <label class="feed-checkbox-label">
+                <input type="checkbox" name="feedComplexityLevel" value="none" class="feed-checkbox-input" id="feedCompNone">
+                <span class="feed-checkbox-custom"></span>
+                <span class="feed-checkbox-text">Не указан</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 3. Подписки -->
+          <div class="feed-settings-section" id="feedSettingsSectionSubscriptions">
+            <div class="feed-settings-subs-header">
+              <div>
+                <h3 class="feed-settings-section-title">Подписки</h3>
+                <p class="feed-settings-section-hint">Материалы отслеживаемых авторов, тем и хэштегов собираются в вашу ленту</p>
+              </div>
+              <div class="feed-settings-subs-tabs" role="tablist">
+                <button type="button" class="subs-tab-btn active" id="tabFeedSettingsSubsAuthors" data-type="author" role="tab" aria-selected="true">
+                  <span>Авторы</span> <span class="subs-tab-count" id="feedSettingsSubsAuthorsCount">0</span>
+                </button>
+                <button type="button" class="subs-tab-btn" id="tabFeedSettingsSubsTopics" data-type="topic" role="tab" aria-selected="false">
+                  <span>Темы</span> <span class="subs-tab-count" id="feedSettingsSubsTopicsCount">0</span>
+                </button>
+                <button type="button" class="subs-tab-btn" id="tabFeedSettingsSubsTags" data-type="tag" role="tab" aria-selected="false">
+                  <span>Хэштеги</span> <span class="subs-tab-count" id="feedSettingsSubsTagsCount">0</span>
+                </button>
+              </div>
+            </div>
+            <div class="feed-settings-subs-search-box">
+              <input type="search" id="feedSettingsSubsSearch" class="feed-settings-subs-search" placeholder="Поиск в каталоге подписок..." autocomplete="off">
+            </div>
+            <div class="feed-settings-subs-list" id="feedSettingsSubsList">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <div class="feed-settings-panel-footer">
+          <button type="button" class="btn btn-secondary" id="btnCancelFeedSettings">
+            <span>Отмена</span>
+          </button>
+          <button type="button" class="btn btn-primary" id="btnSaveFeedSettings">
+            <span>Сохранить настройки</span>
+          </button>
+        </div>
+      </div>
+    </section>
 
     <!-- ================================================================
          MAIN FEED WORKSPACE (Centered 2-Column Grid)

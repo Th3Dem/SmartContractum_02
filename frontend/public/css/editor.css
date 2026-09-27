@@ -3507,7 +3507,24 @@ body.modal-open {
   font-family: var(--font-sans);
 }
 
-/* 7. Footer */
+/* 7. Bottom in 2 rows: Row 1 (Service Info) & Row 2 (Actions Footer) */
+.pub-feed-card .card-sub-info,
+.pub-feed-card .card-meta-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.pub-feed-card .card-sub-info .publish-date {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
 .pub-feed-card-footer,
 .pub-feed-card .card-footer {
   display: flex;
@@ -3518,6 +3535,40 @@ body.modal-open {
   margin-top: auto;
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.pub-feed-card .card-actions-row,
+.pub-feed-card .card-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.pub-feed-card .card-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pub-feed-card .card-footer-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.pub-feed-card .btn-card-action {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  cursor: default;
 }
 
 .pub-feed-card .reading-time {
@@ -3555,6 +3606,17 @@ body.modal-open {
   align-items: center;
   justify-content: center;
   cursor: default;
+}
+
+.pub-feed-card .card-read-more,
+.pub-feed-card .btn-read-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-color);
+  font-family: var(--font-sans);
 }
 
 /* Feedback & Messages */
