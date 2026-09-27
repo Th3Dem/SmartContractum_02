@@ -28,6 +28,7 @@ Key test requirements:
  10. Editor visual alignment and theme fixes from task-15 & task-16.
 """
 
+import base64
 import json
 import os
 import re
@@ -1381,11 +1382,12 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
         self.assertNotIn('btn-primary btn-widget-write', self.feed_html)
 
     def test_no_fictitious_titles_in_codebase(self):
-        """Verify 'Главный архитектор ПКСК' is removed and demo articles are labelled (демо)."""
+        """Verify 'Главный архитектор ПКСК' is removed and demo articles do not have duplicate (демо) in titles/roles."""
         self.assertNotIn('Главный архитектор ПКСК', self.server_py)
         self.assertNotIn('Главный архитектор ПКСК', self.feed_js)
         self.assertNotIn('Главный архитектор ПКСК', self.article_js)
-        self.assertIn('(демо)', self.server_py)
+        self.assertNotIn('(демо)', self.server_py)
+        self.assertNotIn('Архитектор решений (демо)', self.feed_js)
 
     def test_bookmark_tooltips(self):
         """Verify bookmark buttons have tooltips 'Сохранить статью' and 'Убрать из сохраненного'."""
@@ -1674,6 +1676,144 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
             for art in demo_data.get("articles", []):
                 self.assertIsNotNone(art.get("subscriptionReason"))
                 self.assertTrue(art["subscriptionReason"].startswith("Вы подписаны"))
+
+
+class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
+    """Test suite for task-27: Feed visual regressions, write CTA, cover loading, sidebar topics, demo badges."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'feed.html'), 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'feed.css'), 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+            cls.server_py = f.read()
+
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'task27_test.db')
+
+        cls.server = server.create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR)
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def test_write_cta_button_in_subnav_and_styles(self):
+        """Verify the 'Написать' CTA button in subnav is fully visible, styled, and not an empty rectangle."""
+        # 1. Markup in feed.html has button with text and SVG icon
+        self.assertIn('id="btnHeroWrite"', self.feed_html)
+        self.assertIn('feed-subnav-write-btn', self.feed_html)
+        self.assertIn('>Написать<', self.feed_html)
+        self.assertIn('<svg width="16" height="16" viewBox="0 0 24 24"', self.feed_html)
+
+        # 2. feed.css styling has solid/gradient background and white text, no reliance on missing var
+        self.assertIn('.feed-subnav-write-btn', self.feed_css)
+        self.assertIn('background: linear-gradient(135deg, #3861fb 0%, #2563eb 100%)', self.feed_css)
+        self.assertIn('color: #ffffff', self.feed_css)
+        self.assertIn('.feed-subnav-write-btn:hover', self.feed_css)
+        self.assertIn('.feed-subnav-write-btn:active', self.feed_css)
+        self.assertIn('.feed-subnav-write-btn:focus-visible', self.feed_css)
+
+        # 3. Light theme support
+        self.assertIn('[data-theme="light"] .feed-subnav-write-btn', self.feed_css)
+
+    def test_cover_image_container_and_offline_base64_data_uris(self):
+        """Verify cover container has 780/440 aspect-ratio, loading shimmer, error handling, and offline base64 data URIs."""
+        # 1. CSS rules for card-cover-container
+        self.assertIn('.card-cover-container', self.feed_css)
+        self.assertIn('max-width: 780px;', self.feed_css)
+        self.assertIn('aspect-ratio: 780 / 440;', self.feed_css)
+        self.assertIn('.card-cover-container.is-loading', self.feed_css)
+        self.assertIn('.card-cover-container.is-loaded', self.feed_css)
+        self.assertIn('.card-cover-container.is-error', self.feed_css)
+        self.assertIn('display: none !important;', self.feed_css)
+
+        # 2. feed.js cover handling: onerror removes container, onload marks loaded
+        self.assertIn('card-cover-container', self.feed_js)
+        self.assertIn(r"closest(\'.card-cover-container\')", self.feed_js)
+        self.assertIn('remove()', self.feed_js)
+
+        # 3. Seed articles in server.py and FALLBACK_ARTICLES in feed.js use base64 data URIs
+        for art in server.APPROVED_SEED_ARTICLES:
+            cov = art["publication_settings"].get("coverImage", "")
+            self.assertTrue(cov.startswith("data:image/svg+xml;base64,"), f"Article {art['id']} must use base64 data URI")
+            # Verify base64 decodes cleanly
+            raw_b64 = cov.split(",", 1)[1]
+            decoded = base64.b64decode(raw_b64).decode("utf-8")
+            self.assertTrue(decoded.startswith("<svg"))
+            self.assertTrue(decoded.endswith("</svg>"))
+
+        self.assertNotIn('images.unsplash.com', self.feed_js)
+        self.assertIn('data:image/svg+xml;base64,', self.feed_js)
+
+    def test_sidebar_topics_widget_styling_and_descending_sort(self):
+        """Verify sidebar topics widget has row layout, left-aligned title, counter pill, and count-descending sort."""
+        # 1. CSS rules for row layout and counter pill
+        self.assertIn('.widget-topic-row', self.feed_css)
+        self.assertIn('.widget-topic-chip', self.feed_css)
+        self.assertIn('justify-content: space-between', self.feed_css)
+        self.assertIn('.widget-topic-title', self.feed_css)
+        self.assertIn('.widget-topic-count', self.feed_css)
+        self.assertIn('.widget-topic-row.is-active', self.feed_css)
+
+        # 2. feed.js sorts by count descending then title Russian locale
+        self.assertIn('function renderSidebarTopics(topicCounts)', self.feed_js)
+        self.assertIn('countB - countA', self.feed_js)
+        self.assertIn('localeCompare', self.feed_js)
+        self.assertIn('btnToggleAllSidebarTopics', self.feed_js)
+
+    def test_header_and_subnav_container_alignment(self):
+        """Verify .feed-subnav-container and .feed-main-container align with .header-container at max-width 1360px."""
+        self.assertIn('.feed-subnav-container', self.feed_css)
+        self.assertIn('max-width: 1360px', self.feed_css)
+        self.assertIn('.feed-main-container', self.feed_css)
+        self.assertIn('padding: 20px 24px 60px 24px', self.feed_css)
+
+    def test_demo_badge_and_clean_metadata(self):
+        """Verify demo articles have no (демо) in titles/roles, but display badge-demo in card metadata."""
+        # 1. Server seed articles have isDemo: True and clean titles/roles
+        for art in server.APPROVED_SEED_ARTICLES:
+            self.assertTrue(art["publication_settings"].get("isDemo"), f"Article {art['id']} must have isDemo: True")
+            self.assertNotIn('(демо)', art["title"])
+            self.assertNotIn('(демо)', art["publication_settings"]["authorRole"])
+
+        # 2. feed.js creates .badge-demo for demo articles
+        self.assertIn('badge-demo', self.feed_js)
+        self.assertIn('Демонстрационный материал', self.feed_js)
+        self.assertIn('.badge-demo', self.feed_css)
+
+        # 3. feed.html widget-create-card has concise text
+        self.assertIn('Опубликуйте разбор, инструкцию или кейс о коммерческих смарт-контрактах', self.feed_html)
+
+    def test_author_search_in_api(self):
+        """Verify GET /api/articles?search=... searches by author name and author role."""
+        req_author = urllib.request.Request(f"{self.base_url}/api/articles?search=%D0%A1%D0%BC%D0%B8%D1%80%D0%BD%D0%BE%D0%B2")
+        with urllib.request.urlopen(req_author) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(data.get("success"))
+            self.assertEqual(data.get("total"), 1)
+            self.assertEqual(data["articles"][0]["author"], "Алексей Смирнов")
+            self.assertTrue(data["articles"][0]["isDemo"])
+
+        req_role = urllib.request.Request(f"{self.base_url}/api/articles?search=%D0%B0%D1%83%D0%B4%D0%B8%D1%82%D0%BE%D1%80")
+        with urllib.request.urlopen(req_role) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(data.get("success"))
+            self.assertGreaterEqual(data.get("total"), 1)
+            authors = [a["author"] for a in data["articles"]]
+            self.assertIn("Екатерина Романова", authors)
 
 
 if __name__ == '__main__':

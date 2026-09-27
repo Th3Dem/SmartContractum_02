@@ -1194,10 +1194,11 @@
     if (state.search) {
       const q = state.search.toLowerCase();
       items = items.filter(function (a) {
-        return (
-          a.title.toLowerCase().indexOf(q) !== -1 ||
-          (a.description && a.description.toLowerCase().indexOf(q) !== -1)
-        );
+        const author = a.author || '';
+        const role = a.authorRole || '';
+        const kws = Array.isArray(a.keywords) ? a.keywords.join(' ') : '';
+        const haystack = (a.title + ' ' + author + ' ' + role + ' ' + (a.description || '') + ' ' + kws).toLowerCase();
+        return haystack.indexOf(q) !== -1;
       });
     }
 
@@ -1459,7 +1460,7 @@
       }
     }
 
-    // Badges HTML in uniform order: Topic, Format, Complexity
+    // Badges HTML in uniform order: Topic, Format, Complexity, Demo
     let badgesHtml = '';
     if (topicTitle) {
       badgesHtml += '<span class="meta-badge topic-badge">' + escapeHtml(topicTitle) + '</span>';
@@ -1470,6 +1471,13 @@
     if (complexityTitle) {
       badgesHtml += '<span class="meta-badge complexity-badge ' + complexityClass + '">' + escapeHtml(complexityTitle) + '</span>';
     }
+    if (item.isDemo || (item.id && String(item.id).indexOf('art-0') === 0)) {
+      badgesHtml += '<span class="meta-badge badge-demo">Демонстрационный материал</span>';
+    }
+
+    // Clean titles and author roles from any redundant "(демо)" suffix
+    const cleanTitle = (item.title || '').replace(/\s*\((демо|demo)\)\s*/gi, '').trim();
+    const cleanRole = (item.authorRole || '').replace(/\s*\((демо|demo)\)\s*/gi, '').trim();
 
     // Tags HTML: Up to 3 tags directly, rest revealed on clicking "+N еще" / "Свернуть"
     const tags = Array.isArray(item.keywords) ? item.keywords : [];
@@ -1498,12 +1506,14 @@
       tagsHtml += '</span>';
     }
 
-    // Cover Image HTML (780:440 aspect-ratio container)
+    // Cover Image HTML (780:440 aspect-ratio container with loading, loaded, and error states)
     let coverHtml = '';
     if (item.coverImage) {
       coverHtml =
-        '<div class="card-cover-container">' +
-          '<img class="card-cover-img" src="' + item.coverImage + '" alt="' + escapeHtml(item.title) + '" loading="lazy">' +
+        '<div class="card-cover-container is-loading">' +
+          '<img class="card-cover-img" src="' + escapeHtml(item.coverImage) + '" alt="' + escapeHtml(cleanTitle) + '" loading="lazy" ' +
+            'onload="this.parentElement.classList.remove(\'is-loading\'); this.parentElement.classList.add(\'is-loaded\');" ' +
+            'onerror="var c=this.closest(\'.card-cover-container\'); if(c) c.remove();">' +
         '</div>';
     }
 
@@ -1520,13 +1530,13 @@
             '<span class="author-name">' + escapeHtml(item.author || 'Автор платформы') + '</span>' +
             '<div class="meta-sub-row">' +
               '<span class="publish-date">' + escapeHtml(item.date || 'Недавно') + '</span>' +
-              (item.authorRole ? '<span class="meta-dot"></span><span class="author-role">' + escapeHtml(item.authorRole) + '</span>' : '') +
+              (cleanRole ? '<span class="meta-dot"></span><span class="author-role">' + escapeHtml(cleanRole) + '</span>' : '') +
             '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
       '<h2 class="card-title">' +
-        '<a href="' + articleUrl + '">' + escapeHtml(item.title) + '</a>' +
+        '<a href="' + articleUrl + '">' + escapeHtml(cleanTitle) + '</a>' +
       '</h2>' +
       (badgesHtml ? '<div class="card-meta-badges">' + badgesHtml + '</div>' : '') +
       coverHtml +
@@ -1627,6 +1637,8 @@
   // --------------------------------------------------------------------------
   // 11. Sidebar Widgets Management
   // --------------------------------------------------------------------------
+  let isSidebarTopicsExpanded = false;
+
   function renderSidebarTopics(topicCounts) {
     const listEl = document.getElementById('widgetTopicsList');
     if (!listEl) return;
@@ -1635,21 +1647,31 @@
       return;
     }
 
-    listEl.innerHTML = '';
     const topics = window.PublicationConfig.TOPICS;
     const initialVisible = 6;
-    let isExpanded = false;
+
+    // Sort: descending by publication count, then alphabetical by title in Russian
+    const sortedTopics = topics.slice().sort(function (a, b) {
+      const countA = (topicCounts && typeof topicCounts[a.id] === 'number') ? topicCounts[a.id] : 0;
+      const countB = (topicCounts && typeof topicCounts[b.id] === 'number') ? topicCounts[b.id] : 0;
+      if (countB !== countA) {
+        return countB - countA;
+      }
+      return (a.title || '').localeCompare(b.title || '', 'ru');
+    });
 
     function renderItems() {
       listEl.innerHTML = '';
-      const visible = isExpanded ? topics : topics.slice(0, initialVisible);
+      const visible = isSidebarTopicsExpanded ? sortedTopics : sortedTopics.slice(0, initialVisible);
 
       visible.forEach(function (t) {
-        const count = (topicCounts && topicCounts[t.id]) ? topicCounts[t.id] : 0;
+        const count = (topicCounts && typeof topicCounts[t.id] === 'number') ? topicCounts[t.id] : 0;
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'widget-topic-chip';
+        const isActive = (state.topic === t.id);
+        btn.className = 'widget-topic-row widget-topic-chip' + (isActive ? ' is-active' : '');
         btn.setAttribute('data-topic', t.id);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         btn.title = t.title;
 
         btn.innerHTML =
@@ -1657,7 +1679,11 @@
           '<span class="widget-topic-count">' + count + '</span>';
 
         btn.addEventListener('click', function () {
-          state.topic = t.id;
+          if (state.topic === t.id) {
+            state.topic = 'all';
+          } else {
+            state.topic = t.id;
+          }
           state.savedOnly = false;
           state.offset = 0;
           updateModalFiltersState();
@@ -1668,14 +1694,14 @@
         listEl.appendChild(btn);
       });
 
-      if (topics.length > initialVisible) {
+      if (sortedTopics.length > initialVisible) {
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
         toggleBtn.className = 'widget-topics-toggle-btn';
         toggleBtn.id = 'btnToggleAllSidebarTopics';
-        toggleBtn.textContent = isExpanded ? 'Свернуть' : 'Показать все (' + topics.length + ')';
+        toggleBtn.textContent = isSidebarTopicsExpanded ? 'Свернуть' : 'Показать все (' + sortedTopics.length + ')';
         toggleBtn.addEventListener('click', function () {
-          isExpanded = !isExpanded;
+          isSidebarTopicsExpanded = !isSidebarTopicsExpanded;
           renderItems();
         });
         listEl.appendChild(toggleBtn);
@@ -1691,10 +1717,10 @@
   const FALLBACK_ARTICLES = [
     {
       id: 'art-01',
-      title: 'Интеграция смарт-контрактов с платформой Цифрового рубля Банка России (демо)',
+      title: 'Интеграция смарт-контрактов с платформой Цифрового рубля Банка России',
       description: 'Архитектурный обзор и практический кейс интеграции децентрализованных коммерческих смарт-контрактов с двухуровневой платформой Цифрового рубля.',
       author: 'Алексей Смирнов',
-      authorRole: 'Архитектор смарт-контрактов (демо)',
+      authorRole: 'Архитектор решений',
       authorInitials: 'АС',
       date: '26 сентября 2026',
       readingTime: '8 мин',
@@ -1704,15 +1730,16 @@
       targetAudience: 'architects-developers',
       format: 'article',
       complexity: 'hard',
+      isDemo: true,
       keywords: ['Цифровой рубль', 'Банк России', 'ПКСК', 'Смарт-контракты', 'Атомарные расчеты'],
-      coverImage: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=780&q=80'
+      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDYwYzE4Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGUxZTM4Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNjM2NmYxIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmcxKSIvPjxjaXJjbGUgY3g9IjYyMCIgY3k9IjE4MCIgcj0iMTYwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoNTYsMTg5LDI0OCwwLjE1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iNjIwIiBjeT0iMTgwIiByPSIxMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSg5OSwxMDIsMjQxLDAuMikiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtZGFzaGFycmF5PSI4IDYiLz48Y2lyY2xlIGN4PSI2MjAiIGN5PSIxODAiIHI9IjYwIiBmaWxsPSJyZ2JhKDU2LDE4OSwyNDgsMC4wOCkiLz48cmVjdCB4PSI2NCIgeT0iNjQiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzIiIHJ4PSIxNiIgZmlsbD0icmdiYSg1NiwxODksMjQ4LDAuMTIpIiBzdHJva2U9InJnYmEoNTYsMTg5LDI0OCwwLjMpIi8+PHRleHQgeD0iODQiIHk9Ijg1IiBmaWxsPSIjMzhiZGY4IiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiIGZvbnQtd2VpZ2h0PSI3MDAiIGxldHRlci1zcGFjaW5nPSIxIj7QptCY0KTQoNCe0JLQntCZINCg0KPQkdCb0Kw8L3RleHQ+PHRleHQgeD0iNjQiIHk9IjE2MCIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM0IiBmb250LXdlaWdodD0iODAwIj7QmNC90YLQtdCz0YDQsNGG0LjRjyDRgdC80LDRgNGCLdC60L7QvdGC0YDQsNC60YLQvtCyPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSIyMDIiIGZpbGw9IiM5NGEzYjgiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzNCIgZm9udC13ZWlnaHQ9IjgwMCI+0YEg0L/Qu9Cw0YLRhNC+0YDQvNC+0Lkg0JHQsNC90LrQsCDQoNC+0YHRgdC40Lg8L3RleHQ+PGxpbmUgeDE9IjY0IiB5MT0iMjM2IiB4Mj0iMzgwIiB5Mj0iMjM2IiBzdHJva2U9InVybCgjYWNjMSkiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHRleHQgeD0iNjQiIHk9IjI3NCIgZmlsbD0iI2NiZDVlMSIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2Ij7QkNGA0YXQuNGC0LXQutGC0YPRgNCwINGI0LvRjtC30LAg4oCiINCU0LLRg9GF0YTQsNC30L3Ri9C5INC60L7QvNC80LjRgiAyUEMg4oCiINCT0J7QodCiINCgIDM0LjEwLTIwMTI8L3RleHQ+PC9zdmc+'
     },
     {
       id: 'art-02',
-      title: 'Практическое руководство по аудиту информационной безопасности смарт-контрактов (демо)',
+      title: 'Практическое руководство по аудиту информационной безопасности смарт-контрактов',
       description: 'Исчерпывающая методология проведения статического и динамического аудита безопасности смарт-контрактов в соответствии с требованиями ГОСТ Р 57580.',
       author: 'Екатерина Романова',
-      authorRole: 'Ведущий аудитор смарт-контрактов (демо)',
+      authorRole: 'Ведущий аудитор безопасности',
       authorInitials: 'ЕР',
       date: '25 сентября 2026',
       readingTime: '12 мин',
@@ -1722,15 +1749,16 @@
       targetAudience: 'security-auditors',
       format: 'guide',
       complexity: 'medium',
+      isDemo: true,
       keywords: ['Аудит ИБ', 'ГОСТ Р 57580', 'Уязвимости', 'Reentrancy', 'Формальная верификация'],
-      coverImage: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=780&q=80'
+      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDYwZjE0Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGQyMjIwIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTBiOTgxIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmcyKSIvPjxwYXRoIGQ9Ik02MDAgOTAgTDcxMCAxNDAgTDcxMCAyNzAgTDYwMCAzNTAgTDQ5MCAyNzAgTDQ5MCAxNDAgWiIgZmlsbD0icmdiYSgxNiwxODUsMTI5LDAuMDYpIiBzdHJva2U9InJnYmEoMTYsMTg1LDEyOSwwLjMpIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNjAwIDEzMCBMNjcwIDE2NSBMNjcwIDI0NSBMNjAwIDI5NSBMNTMwIDI0NSBMNTMwIDE2NSBaIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoNTYsMTg5LDI0OCwwLjI1KSIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1kYXNoYXJyYXk9IjYgNCIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjE0MCIgaGVpZ2h0PSIzMiIgcng9IjE2IiBmaWxsPSJyZ2JhKDE2LDE4NSwxMjksMC4xMikiIHN0cm9rZT0icmdiYSgxNiwxODUsMTI5LDAuMykiLz48dGV4dCB4PSI4NCIgeT0iODUiIGZpbGw9IiMxMGI5ODEiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9IjEiPtCR0JXQl9Ce0J/QkNCh0J3QntCh0KLQrDwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMTYwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtCQ0YPQtNC40YIg0YHQvNCw0YDRgi3QutC+0L3RgtGA0LDQutGC0L7QsjwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMjAyIiBmaWxsPSIjOTRhM2I4IiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtC/0L4g0YHRgtCw0L3QtNCw0YDRgtGDINCT0J7QodCiINCgIDU3NTgwPC90ZXh0PjxsaW5lIHgxPSI2NCIgeTE9IjIzNiIgeDI9IjM4MCIgeTI9IjIzNiIgc3Ryb2tlPSJ1cmwoI2FjYzIpIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjx0ZXh0IHg9IjY0IiB5PSIyNzQiIGZpbGw9IiNjYmQ1ZTEiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNiI+0J/RgNC10LLQtdC90YLQuNCy0L3Ri9C5INCw0L3QsNC70LjQtyDigKIgUmVlbnRyYW5jeUd1YXJkIOKAoiDQpNC+0YDQvNCw0LvRjNC90LDRjyDQstC10YDQuNGE0LjQutCw0YbQuNGPPC90ZXh0Pjwvc3ZnPg=='
     },
     {
       id: 'art-03',
-      title: 'Правовая квалификация смарт-контрактов и комплаенс ЦФА в РФ (демо)',
+      title: 'Правовая квалификация смарт-контрактов и комплаенс ЦФА в РФ',
       description: 'Анализ актуальной судебной практики, регуляторных требований Федерального закона № 259-ФЗ и правового статуса самоисполняемых соглашений.',
       author: 'Илья Мельников',
-      authorRole: 'Советник по правовым вопросам ЦФА (демо)',
+      authorRole: 'Советник по правовым вопросам ЦФА',
       authorInitials: 'ИМ',
       date: '24 сентября 2026',
       readingTime: '6 мин',
@@ -1740,15 +1768,16 @@
       targetAudience: 'lawyers-compliance',
       format: 'analytics',
       complexity: 'easy',
+      isDemo: true,
       keywords: ['Право', 'Комплаенс', 'ГК РФ', 'Цифровые права', 'ЦФА'],
-      coverImage: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=780&q=80'
+      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzMiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTAwYzFlIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWExNTMyIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzMiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjYTg1NWY3Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNjM2NmYxIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmczKSIvPjxwYXRoIGQ9Ik01NTAgMTIwIEw2NzAgMTIwIEw2MTAgMjAwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgxNjgsODUsMjQ3LDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPjxsaW5lIHgxPSI2MTAiIHkxPSI4MCIgeDI9IjYxMCIgeTI9IjMwMCIgc3Ryb2tlPSJyZ2JhKDE2OCw4NSwyNDcsMC4yKSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iNjQiIHk9IjY0IiB3aWR0aD0iMTgwIiBoZWlnaHQ9IjMyIiByeD0iMTYiIGZpbGw9InJnYmEoMTY4LDg1LDI0NywwLjEyKSIgc3Ryb2tlPSJyZ2JhKDE2OCw4NSwyNDcsMC4zKSIvPjx0ZXh0IHg9Ijg0IiB5PSI4NSIgZmlsbD0iI2MwODRmYyIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIiBmb250LXdlaWdodD0iNzAwIiBsZXR0ZXItc3BhY2luZz0iMSI+0J/QoNCQ0JLQniDQmCDQmtCe0JzQn9Cb0JDQldCd0KE8L3RleHQ+PHRleHQgeD0iNjQiIHk9IjE2MCIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM0IiBmb250LXdlaWdodD0iODAwIj7Qn9GA0LDQstC+0LLQsNGPINC60LLQsNC70LjRhNC40LrQsNGG0LjRjzwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMjAyIiBmaWxsPSIjOTRhM2I4IiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtGB0LzQsNGA0YIt0LrQvtC90YLRgNCw0LrRgtC+0LIg0LIg0KDQpDwvdGV4dD48bGluZSB4MT0iNjQiIHkxPSIyMzYiIHgyPSIzODAiIHkyPSIyMzYiIHN0cm9rZT0idXJsKCNhY2MzKSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48dGV4dCB4PSI2NCIgeT0iMjc0IiBmaWxsPSIjY2JkNWUxIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiPtCh0YLQsNGC0YzRjyAzMDkg0JPQmiDQoNCkIOKAoiDQptCk0JAgKDI1OS3QpNCXKSDigKIg0JDRgNCx0LjRgtGA0LDQttC90LDRjyDQv9GA0LDQutGC0LjQutCwPC90ZXh0Pjwvc3ZnPg=='
     },
     {
       id: 'art-04',
-      title: 'Архитектура надежных оракулов данных для распределенных реестров (демо)',
+      title: 'Архитектура надежных оракулов данных для распределенных реестров',
       description: 'Проектирование децентрализованной поставки рыночных данных, валютных курсов и фактов исполнения внешних обязательств в защищенные реестры.',
       author: 'Виктор Нестеров',
-      authorRole: 'Разработчик оракулов и шлюзов (демо)',
+      authorRole: 'Инженер распределенных систем',
       authorInitials: 'ВН',
       date: '23 сентября 2026',
       readingTime: '10 мин',
@@ -1758,8 +1787,9 @@
       targetAudience: 'architects-developers',
       format: 'case',
       complexity: 'hard',
+      isDemo: true,
       keywords: ['Оракулы', 'Внешние данные', 'API', 'Консенсус', 'ЦФА'],
-      coverImage: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=780&q=80'
+      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzQiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGMxNDFlIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMTMyNzNhIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzQiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZjU5ZTBiIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmc0KSIvPjxjaXJjbGUgY3g9IjYyMCIgY3k9IjE4MCIgcj0iMTMwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjQ1LDE1OCwxMSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxjaXJjbGUgY3g9IjU2MCIgY3k9IjE1MCIgcj0iMTQiIGZpbGw9IiNmNTllMGIiLz48Y2lyY2xlIGN4PSI2NzAiIGN5PSIxMzAiIHI9IjEwIiBmaWxsPSIjMzhiZGY4Ii8+PGNpcmNsZSBjeD0iNjQwIiBjeT0iMjQwIiByPSIxMiIgZmlsbD0iIzEwYjk4MSIvPjxsaW5lIHgxPSI1NjAiIHkxPSIxNTAiIHgyPSI2NzAiIHkyPSIxMzAiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxsaW5lIHgxPSI2NzAiIHkxPSIxMzAiIHgyPSI2NDAiIHkyPSIyNDAiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxsaW5lIHgxPSI2NDAiIHkxPSIyNDAiIHgyPSI1NjAiIHkyPSIxNTAiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjE2MCIgaGVpZ2h0PSIzMiIgcng9IjE2IiBmaWxsPSJyZ2JhKDI0NSwxNTgsMTEsMC4xMikiIHN0cm9rZT0icmdiYSgyNDUsMTU4LDExLDAuMykiLz48dGV4dCB4PSI4NCIgeT0iODUiIGZpbGw9IiNmYmJmMjQiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9IjEiPtCe0KDQkNCa0KPQm9CrINCYINCU0JDQndCd0KvQlTwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMTYwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtCf0L7RgdGC0LDQstC60LAg0LLQvdC10YjQvdC40YUg0LTQsNC90L3Ri9GFPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSIyMDIiIGZpbGw9IiM5NGEzYjgiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzNCIgZm9udC13ZWlnaHQ9IjgwMCI+0LTQu9GPINC60L7RgNC/0L7RgNCw0YLQuNCy0L3Ri9GFINGA0LXQtdGB0YLRgNC+0LI8L3RleHQ+PGxpbmUgeDE9IjY0IiB5MT0iMjM2IiB4Mj0iMzgwIiB5Mj0iMjM2IiBzdHJva2U9InVybCgjYWNjNCkiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHRleHQgeD0iNjQiIHk9IjI3NCIgZmlsbD0iI2NiZDVlMSIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2Ij5CRlQt0LrQstC+0YDRg9C8IOKAoiDQkNCz0YDQtdCz0LDRhtC40Y8g0LzQtdC00LjQsNC90Ysg4oCiINCX0LDRidC40YLQsCDQvtGCINGB0LPQvtCy0L7RgNCwPC90ZXh0Pjwvc3ZnPg=='
     }
   ];
 

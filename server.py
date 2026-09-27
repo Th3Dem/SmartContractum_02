@@ -14,6 +14,7 @@ Provides:
 """
 
 import argparse
+import base64
 import datetime
 import hashlib
 import html
@@ -234,6 +235,12 @@ def calculate_reading_time(html_content: str) -> Tuple[str, int]:
     return f"{minutes} мин", minutes
 
 
+def make_svg_data_uri(svg_markup: str) -> str:
+    """Returns valid offline-first base64 data URI for SVG markup."""
+    b64 = base64.b64encode(svg_markup.strip().encode("utf-8")).decode("ascii")
+    return f"data:image/svg+xml;base64,{b64}"
+
+
 APPROVED_SEED_ARTICLES = [
     {
         "id": "art-01",
@@ -244,14 +251,15 @@ APPROVED_SEED_ARTICLES = [
         "publication_settings": {
             "author": "Алексей Смирнов",
             "authorInitials": "АС",
-            "authorRole": "Архитектор решений (демо)",
+            "authorRole": "Архитектор решений",
             "targetAudience": "architects-integrators",
             "topics": ["digital-ruble-payments", "pksc-architecture", "smart-contracts-development"],
             "keywords": ["Цифровой рубль", "Банк России", "ПКСК", "Смарт-контракты", "Атомарные расчеты"],
             "description": "Архитектурный анализ взаимодействия шлюзов ПКСК с платформой цифрового рубля: моделирование атомарных транзакций, двухфазный коммит и валидация криптографических подписей по ГОСТ Р 34.12-2015.",
             "format": "tutorial",
             "complexity": "hard",
-            "coverImage": 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23060c18"/><stop offset="100%" stop-color="%230e1e38"/></linearGradient><linearGradient id="acc1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="%2338bdf8"/><stop offset="100%" stop-color="%236366f1"/></linearGradient></defs><rect width="780" height="440" fill="url(%23bg1)"/><circle cx="620" cy="180" r="160" fill="none" stroke="rgba(56,189,248,0.15)" stroke-width="2"/><circle cx="620" cy="180" r="110" fill="none" stroke="rgba(99,102,241,0.2)" stroke-width="1.5" stroke-dasharray="8 6"/><circle cx="620" cy="180" r="60" fill="rgba(56,189,248,0.08)"/><rect x="64" y="64" width="160" height="32" rx="16" fill="rgba(56,189,248,0.12)" stroke="rgba(56,189,248,0.3)"/><text x="84" y="85" fill="%2338bdf8" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ЦИФРОВОЙ РУБЛЬ</text><text x="64" y="160" fill="%23ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Интеграция смарт-контрактов</text><text x="64" y="202" fill="%2394a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">с платформой Банка России</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(%23acc1)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="%23cbd5e1" font-family="Onest, sans-serif" font-size="16">Архитектура шлюза • Двухфазный коммит 2PC • ГОСТ Р 34.10-2012</text></svg>'
+            "isDemo": True,
+            "coverImage": make_svg_data_uri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#060c18"/><stop offset="100%" stop-color="#0e1e38"/></linearGradient><linearGradient id="acc1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs><rect width="780" height="440" fill="url(#bg1)"/><circle cx="620" cy="180" r="160" fill="none" stroke="rgba(56,189,248,0.15)" stroke-width="2"/><circle cx="620" cy="180" r="110" fill="none" stroke="rgba(99,102,241,0.2)" stroke-width="1.5" stroke-dasharray="8 6"/><circle cx="620" cy="180" r="60" fill="rgba(56,189,248,0.08)"/><rect x="64" y="64" width="160" height="32" rx="16" fill="rgba(56,189,248,0.12)" stroke="rgba(56,189,248,0.3)"/><text x="84" y="85" fill="#38bdf8" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ЦИФРОВОЙ РУБЛЬ</text><text x="64" y="160" fill="#ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Интеграция смарт-контрактов</text><text x="64" y="202" fill="#94a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">с платформой Банка России</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(#acc1)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="#cbd5e1" font-family="Onest, sans-serif" font-size="16">Архитектура шлюза • Двухфазный коммит 2PC • ГОСТ Р 34.10-2012</text></svg>')
         },
         "article_html": """<h2>Нормативный контекст и архитектурный контур</h2>
 <p>В рамках реализации положений Федерального закона № 259-ФЗ «О цифровых финансовых активах» и пилотного проекта Банка России по внедрению платформы цифрового рубля возникает практическая необходимость взаимодействия смарт-контрактов децентрализованных сетей (ПКСК) с централизованным контуром регулятора.</p>
@@ -370,14 +378,15 @@ contract DigitalRubleSettlementGateway {
         "publication_settings": {
             "author": "Екатерина Романова",
             "authorInitials": "ЕР",
-            "authorRole": "Ведущий аудитор безопасности (демо)",
+            "authorRole": "Ведущий аудитор безопасности",
             "targetAudience": "security-auditors",
             "topics": ["information-security", "audit-and-verification", "smart-contracts-development"],
             "keywords": ["Аудит ИБ", "ГОСТ Р 57580", "Уязвимости", "Reentrancy", "Формальная верификация"],
             "description": "Разбор критических векторов атак на корпоративные распределенные реестры: повторный вход (reentrancy), ошибки управления доступом и методы автоматизированного аудита исходного кода.",
             "format": "review",
             "complexity": "hard",
-            "coverImage": 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23060f14"/><stop offset="100%" stop-color="%230d2220"/></linearGradient><linearGradient id="acc2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="%2310b981"/><stop offset="100%" stop-color="%2338bdf8"/></linearGradient></defs><rect width="780" height="440" fill="url(%23bg2)"/><path d="M600 90 L710 140 L710 270 L600 350 L490 270 L490 140 Z" fill="rgba(16,185,129,0.06)" stroke="rgba(16,185,129,0.3)" stroke-width="2"/><path d="M600 130 L670 165 L670 245 L600 295 L530 245 L530 165 Z" fill="none" stroke="rgba(56,189,248,0.25)" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="64" y="64" width="140" height="32" rx="16" fill="rgba(16,185,129,0.12)" stroke="rgba(16,185,129,0.3)"/><text x="84" y="85" fill="%2310b981" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">БЕЗОПАСНОСТЬ</text><text x="64" y="160" fill="%23ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Аудит смарт-контрактов</text><text x="64" y="202" fill="%2394a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">по стандарту ГОСТ Р 57580</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(%23acc2)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="%23cbd5e1" font-family="Onest, sans-serif" font-size="16">Превентивный анализ • ReentrancyGuard • Формальная верификация</text></svg>'
+            "isDemo": True,
+            "coverImage": make_svg_data_uri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#060f14"/><stop offset="100%" stop-color="#0d2220"/></linearGradient><linearGradient id="acc2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient></defs><rect width="780" height="440" fill="url(#bg2)"/><path d="M600 90 L710 140 L710 270 L600 350 L490 270 L490 140 Z" fill="rgba(16,185,129,0.06)" stroke="rgba(16,185,129,0.3)" stroke-width="2"/><path d="M600 130 L670 165 L670 245 L600 295 L530 245 L530 165 Z" fill="none" stroke="rgba(56,189,248,0.25)" stroke-width="1.5" stroke-dasharray="6 4"/><rect x="64" y="64" width="140" height="32" rx="16" fill="rgba(16,185,129,0.12)" stroke="rgba(16,185,129,0.3)"/><text x="84" y="85" fill="#10b981" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">БЕЗОПАСНОСТЬ</text><text x="64" y="160" fill="#ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Аудит смарт-контрактов</text><text x="64" y="202" fill="#94a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">по стандарту ГОСТ Р 57580</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(#acc2)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="#cbd5e1" font-family="Onest, sans-serif" font-size="16">Превентивный анализ • ReentrancyGuard • Формальная верификация</text></svg>')
         },
         "article_html": """<h2>Нормативные требования ГОСТ Р 57580 к смарт-контрактам</h2>
 <p>Стандарт ГОСТ Р 57580.1-2017 устанавливает базовый состав организационных и технических мер защиты информации в финансовых организациях РФ. При развертывании смарт-контрактов в распределенных реестрах критически важно обеспечить контроль целостности программной логики и неизменяемость аудиторского следа.</p>
@@ -484,14 +493,15 @@ contract SecureVault is ReentrancyGuard {
         "publication_settings": {
             "author": "Илья Мельников",
             "authorInitials": "ИМ",
-            "authorRole": "Советник по LegalTech и комплаенсу (демо)",
+            "authorRole": "Советник по LegalTech и комплаенсу",
             "targetAudience": "legal-compliance",
             "topics": ["law-and-compliance", "business-logic-deals"],
             "keywords": ["Право", "Комплаенс", "ГК РФ", "Цифровые права", "ЦФА"],
             "description": "Практика применения статьи 309 ГК РФ к автоматизированному исполнению обязательств: самоисполняемые сделки, цифровые права (ЦФА) и особенности арбитражного доказывания.",
             "format": "analytics",
             "complexity": "medium",
-            "coverImage": 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23100c1e"/><stop offset="100%" stop-color="%231a1532"/></linearGradient><linearGradient id="acc3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="%23a855f7"/><stop offset="100%" stop-color="%236366f1"/></linearGradient></defs><rect width="780" height="440" fill="url(%23bg3)"/><path d="M550 120 L670 120 L610 200 Z" fill="none" stroke="rgba(168,85,247,0.3)" stroke-width="2"/><line x1="610" y1="80" x2="610" y2="300" stroke="rgba(168,85,247,0.2)" stroke-width="3"/><rect x="64" y="64" width="180" height="32" rx="16" fill="rgba(168,85,247,0.12)" stroke="rgba(168,85,247,0.3)"/><text x="84" y="85" fill="%23c084fc" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ПРАВО И КОМПЛАЕНС</text><text x="64" y="160" fill="%23ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Правовая квалификация</text><text x="64" y="202" fill="%2394a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">смарт-контрактов в РФ</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(%23acc3)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="%23cbd5e1" font-family="Onest, sans-serif" font-size="16">Статья 309 ГК РФ • ЦФА (259-ФЗ) • Арбитражная практика</text></svg>'
+            "isDemo": True,
+            "coverImage": make_svg_data_uri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#100c1e"/><stop offset="100%" stop-color="#1a1532"/></linearGradient><linearGradient id="acc3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs><rect width="780" height="440" fill="url(#bg3)"/><path d="M550 120 L670 120 L610 200 Z" fill="none" stroke="rgba(168,85,247,0.3)" stroke-width="2"/><line x1="610" y1="80" x2="610" y2="300" stroke="rgba(168,85,247,0.2)" stroke-width="3"/><rect x="64" y="64" width="180" height="32" rx="16" fill="rgba(168,85,247,0.12)" stroke="rgba(168,85,247,0.3)"/><text x="84" y="85" fill="#c084fc" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ПРАВО И КОМПЛАЕНС</text><text x="64" y="160" fill="#ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Правовая квалификация</text><text x="64" y="202" fill="#94a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">смарт-контрактов в РФ</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(#acc3)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="#cbd5e1" font-family="Onest, sans-serif" font-size="16">Статья 309 ГК РФ • ЦФА (259-ФЗ) • Арбитражная практика</text></svg>')
         },
         "article_html": """<h2>Правовая природа самоисполняемых обязательств</h2>
 <p>С принятием Федерального закона № 34-ФЗ в Гражданский кодекс РФ была внесена норма части второй статьи 309 ГК РФ, прямо закрепляющая возможность автоматизированного исполнения сделок с использованием информационных технологий.</p>
@@ -567,14 +577,15 @@ contract SecureVault is ReentrancyGuard {
         "publication_settings": {
             "author": "Виктор Нестеров",
             "authorInitials": "ВН",
-            "authorRole": "Инженер распределенных систем (демо)",
+            "authorRole": "Инженер распределенных систем",
             "targetAudience": "data-oracles",
             "topics": ["oracles-and-data", "integrations-and-api"],
             "keywords": ["Оракулы", "Внешние данные", "API", "Консенсус", "ЦФА"],
             "description": "Пошаговое проектирование отказоустойчивой сети поставщиков котировок и внешних юридически значимых событий для корпоративных смарт-контрактов без единой точки отказа.",
             "format": "case-study",
             "complexity": "medium",
-            "coverImage": 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%230c141e"/><stop offset="100%" stop-color="%2313273a"/></linearGradient><linearGradient id="acc4" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="%23f59e0b"/><stop offset="100%" stop-color="%2338bdf8"/></linearGradient></defs><rect width="780" height="440" fill="url(%23bg4)"/><circle cx="620" cy="180" r="130" fill="none" stroke="rgba(245,158,11,0.2)" stroke-width="1.5"/><circle cx="560" cy="150" r="14" fill="%23f59e0b"/><circle cx="670" cy="130" r="10" fill="%2338bdf8"/><circle cx="640" cy="240" r="12" fill="%2310b981"/><line x1="560" y1="150" x2="670" y2="130" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><line x1="670" y1="130" x2="640" y2="240" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><line x1="640" y1="240" x2="560" y2="150" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><rect x="64" y="64" width="160" height="32" rx="16" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.3)"/><text x="84" y="85" fill="%23fbbf24" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ОРАКУЛЫ И ДАННЫЕ</text><text x="64" y="160" fill="%23ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Поставка внешних данных</text><text x="64" y="202" fill="%2394a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">для корпоративных реестров</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(%23acc4)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="%23cbd5e1" font-family="Onest, sans-serif" font-size="16">BFT-кворум • Агрегация медианы • Защита от сговора</text></svg>'
+            "isDemo": True,
+            "coverImage": make_svg_data_uri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0c141e"/><stop offset="100%" stop-color="#13273a"/></linearGradient><linearGradient id="acc4" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient></defs><rect width="780" height="440" fill="url(#bg4)"/><circle cx="620" cy="180" r="130" fill="none" stroke="rgba(245,158,11,0.2)" stroke-width="1.5"/><circle cx="560" cy="150" r="14" fill="#f59e0b"/><circle cx="670" cy="130" r="10" fill="#38bdf8"/><circle cx="640" cy="240" r="12" fill="#10b981"/><line x1="560" y1="150" x2="670" y2="130" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><line x1="670" y1="130" x2="640" y2="240" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><line x1="640" y1="240" x2="560" y2="150" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><rect x="64" y="64" width="160" height="32" rx="16" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.3)"/><text x="84" y="85" fill="#fbbf24" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ОРАКУЛЫ И ДАННЫЕ</text><text x="64" y="160" fill="#ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Поставка внешних данных</text><text x="64" y="202" fill="#94a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">для корпоративных реестров</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(#acc4)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="#cbd5e1" font-family="Onest, sans-serif" font-size="16">BFT-кворум • Агрегация медианы • Защита от сговора</text></svg>')
         },
         "article_html": """<h2>Проблема оракулов в изолированных реестрах</h2>
 <p>Смарт-контракты исполняются в детерминированной виртуальной среде и не имеют прямого сетевого доступа к внешним HTTP/REST API. Для фиксации событий реального мира (котировки драгоценных металлов, статусы доставки грузов, курсы валют) требуются специализированные узлы — децентрализованные оракулы.</p>
@@ -678,23 +689,23 @@ contract OracleDataAggregator {
 
 def seed_approved_articles(conn: sqlite3.Connection):
     """
-    Seeds approved articles into moderation_submissions if no approved articles exist.
+    Seeds approved articles into moderation_submissions or updates seed articles
+    to ensure valid offline-first base64 cover images and clean demo metadata.
     """
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) AS cnt FROM moderation_submissions WHERE status = 'approved'")
-    row = cur.fetchone()
-    if row and row["cnt"] > 0:
-        return
-
     for item in APPROVED_SEED_ARTICLES:
         settings_str = json.dumps(item["publication_settings"], ensure_ascii=False)
         hash_val = compute_snapshot_hash(item["title"], item["article_html"], item["publication_settings"])
         conn.execute("""
-            INSERT OR IGNORE INTO moderation_submissions (
+            INSERT INTO moderation_submissions (
                 id, draft_id, title, author_id, status, publication_settings,
                 article_html, article_delta, idempotency_key, snapshot_hash,
                 created_at, updated_at
             ) VALUES (?, ?, ?, ?, 'approved', ?, ?, NULL, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                publication_settings = excluded.publication_settings,
+                article_html = excluded.article_html,
+                snapshot_hash = excluded.snapshot_hash
         """, (
             item["id"], item["draft_id"], item["title"], item["author_id"],
             settings_str, item["article_html"], f"seed_{item['id']}",
@@ -1499,6 +1510,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "updatedAt": row["updated_at"],
             "description": settings.get("description") or "",
             "coverImage": settings.get("coverImage") or None,
+            "isDemo": bool(settings.get("isDemo") or row["id"].startswith("art-0")),
             "topics": topics,
             "topic": topics[0] if topics else "",
             "targetAudience": settings.get("targetAudience") or None,
@@ -1672,18 +1684,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if compl != complexity_filter:
                     continue
 
-            # Search query filtering
-            title = row["title"] or ""
-            desc = settings.get("description") or ""
-            keywords = settings.get("keywords") or []
-            article_text = extract_article_text(row["article_html"] or "")
-
-            if search_query:
-                search_haystack = f"{title} {desc} {' '.join(keywords)} {article_text}".lower()
-                words = search_query.split()
-                if not all(w in search_haystack for w in words):
-                    continue
-
+            # Author metadata
             author_name = settings.get("author") or (
                 "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
             )
@@ -1691,6 +1692,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
             )
             author_role = settings.get("authorRole") or ""
+
+            # Search query filtering across title, author, role, description, keywords and body
+            title = row["title"] or ""
+            desc = settings.get("description") or ""
+            keywords = settings.get("keywords") or []
+            article_text = extract_article_text(row["article_html"] or "")
+
+            if search_query:
+                search_haystack = f"{title} {author_name} {author_role} {desc} {' '.join(keywords)} {article_text}".lower()
+                words = search_query.split()
+                if not all(w in search_haystack for w in words):
+                    continue
 
             # Check subscription filter for "my" feed
             subscription_reason = None
@@ -1725,6 +1738,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "createdAt": row["created_at"],
                 "description": desc,
                 "coverImage": settings.get("coverImage") or None,
+                "isDemo": bool(settings.get("isDemo") or row["id"].startswith("art-0")),
                 "topics": topics,
                 "topic": topics[0] if topics else "",
                 "targetAudience": target_audience,
