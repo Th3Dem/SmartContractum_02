@@ -251,3 +251,5 @@
 [2026-09-27 14:32] | pm_bot | QA_ASSIGN | Передача артефактов задачи task-29 на независимый аудит qa_bot (Task: task-29-feed-cover-fullwidth-and-media-storage)
 [2026-09-27 14:37] | qa_bot | QA_APPROVED | Независимый аудит завершен со статусом APPROVED (244/244 PASS, snapshot aa73b71d56dd6dc4d94966ea57ecc82c2cf1d11b3b563847beb9ad5c215c9843) (Task: task-29-feed-cover-fullwidth-and-media-storage)
 [2026-09-27 14:38] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация, коммит и слияние в main (Task: task-29-feed-cover-fullwidth-and-media-storage)
+[2026-09-27 14:41] | git_bot | GIT_COMMITTED | Зафиксирован коммит 7ea7115 на ветке feat/task-29-feed-cover-fullwidth-and-media-storage и выполнено слияние в main (Task: task-29-feed-cover-fullwidth-and-media-storage)
+[2026-09-27 14:42] | pm_bot | TASK_DONE | Задача task-29 успешно завершена в статусе Done-Done. Все 244 теста пройдены (100%) (Task: task-29-feed-cover-fullwidth-and-media-storage)
