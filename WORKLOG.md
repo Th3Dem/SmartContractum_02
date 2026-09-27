@@ -253,3 +253,4 @@
 [2026-09-27 14:38] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация, коммит и слияние в main (Task: task-29-feed-cover-fullwidth-and-media-storage)
 [2026-09-27 14:41] | git_bot | GIT_COMMITTED | Зафиксирован коммит 7ea7115 на ветке feat/task-29-feed-cover-fullwidth-and-media-storage и выполнено слияние в main (Task: task-29-feed-cover-fullwidth-and-media-storage)
 [2026-09-27 14:42] | pm_bot | TASK_DONE | Задача task-29 успешно завершена в статусе Done-Done. Все 244 теста пройдены (100%) (Task: task-29-feed-cover-fullwidth-and-media-storage)
+[2026-09-27 14:46] | git_bot | GIT_PUSH | Выполнен git push в origin/main и origin/feat/task-29-feed-cover-fullwidth-and-media-storage на основании прямого указания пользователя (Task: task-29-feed-cover-fullwidth-and-media-storage)

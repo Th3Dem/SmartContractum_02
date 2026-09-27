@@ -1,6 +1,6 @@
 # Git Handover: task-29-feed-cover-fullwidth-and-media-storage
 
-## Статус: LOCALLY_VERIFIED / MERGED
+## Статус: LOCALLY_VERIFIED / MERGED / PUBLISHED
 
 - **Хеш коммита (Commit Hash)**: `7ea7115353bc7b44db8f02f911466ce7bbc1103f`
 - **Короткий хеш**: `7ea7115`
