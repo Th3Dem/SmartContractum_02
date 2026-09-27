@@ -191,8 +191,16 @@
       complexitySelect.value = state.complexity;
     }
 
+    updatePeriodVisibility();
     updateTopicButtonsState();
     updateFilterBadge();
+  }
+
+  function updatePeriodVisibility() {
+    const wrap = document.getElementById('feedPeriodSelectWrap');
+    if (!wrap) return;
+    const showPeriod = state.sort !== 'newest';
+    wrap.style.display = showPeriod ? 'inline-block' : 'none';
   }
 
   function syncURL(replace) {
@@ -327,6 +335,24 @@
       sortSelect.addEventListener('change', function () {
         state.sort = sortSelect.value;
         state.offset = 0;
+        updatePeriodVisibility();
+        syncURL(false);
+        fetchFeed(true);
+      });
+    }
+
+    // Saved Bookmarks Button in Toolbar
+    const savedTabBtn = document.getElementById('feedSavedTab');
+    if (savedTabBtn) {
+      savedTabBtn.addEventListener('click', function () {
+        state.savedOnly = !state.savedOnly;
+        if (state.savedOnly) {
+          state.topic = 'saved';
+        } else {
+          state.topic = 'all';
+        }
+        state.offset = 0;
+        updateTopicButtonsState();
         syncURL(false);
         fetchFeed(true);
       });
@@ -479,6 +505,7 @@
     state.format = 'all';
     state.complexity = 'all';
     state.period = 'all';
+    state.sort = 'newest';
     state.savedOnly = false;
     state.offset = 0;
 
@@ -488,6 +515,9 @@
       searchInput.value = '';
       if (clearBtn) clearBtn.style.display = 'none';
     }
+
+    const sortSelect = document.getElementById('feedSortSelect');
+    if (sortSelect) sortSelect.value = 'newest';
 
     const periodSelect = document.getElementById('feedPeriodSelect');
     if (periodSelect) periodSelect.value = 'all';
@@ -501,6 +531,7 @@
     const complexitySelect = document.getElementById('feedComplexitySelect');
     if (complexitySelect) complexitySelect.value = 'all';
 
+    updatePeriodVisibility();
     updateTopicButtonsState();
     syncURL(false);
     fetchFeed(true);
@@ -511,17 +542,18 @@
     buttons.forEach(function (btn) {
       if (btn.id === 'feedMoreTopicsBtn') return;
 
-      if (btn.id === 'feedSavedTab') {
-        const isSaved = state.savedOnly;
-        btn.classList.toggle('active', isSaved);
-        btn.setAttribute('aria-selected', isSaved ? 'true' : 'false');
-      } else {
-        const btnTopic = btn.getAttribute('data-topic');
-        const isActive = !state.savedOnly && btnTopic === state.topic;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      }
+      const btnTopic = btn.getAttribute('data-topic');
+      const isActive = !state.savedOnly && btnTopic === state.topic;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
+
+    const savedBtn = document.getElementById('feedSavedTab');
+    if (savedBtn) {
+      const isSaved = state.savedOnly;
+      savedBtn.classList.toggle('active', isSaved);
+      savedBtn.setAttribute('aria-selected', isSaved ? 'true' : 'false');
+    }
 
     const moreBtn = document.getElementById('feedMoreTopicsBtn');
     const dropdownItems = document.querySelectorAll('.feed-dropdown-item');
@@ -759,7 +791,9 @@
           if (isInitial) {
             state.articles = data.articles || [];
           } else {
-            state.articles = state.articles.concat(data.articles || []);
+            const existingIds = new Set(state.articles.map(function (a) { return a.id; }));
+            const incoming = (data.articles || []).filter(function (a) { return !existingIds.has(a.id); });
+            state.articles = state.articles.concat(incoming);
           }
           state.total = data.total || 0;
           state.hasMore = Boolean(data.hasMore);
@@ -865,16 +899,41 @@
       return;
     }
 
-    // Render cards
-    state.articles.forEach(function (item, index) {
-      // If not initial, only append newly loaded items
-      if (!isInitial && index < state.offset) return;
-
-      const card = createCardElement(item);
-      container.appendChild(card);
-    });
+    // Render cards avoiding DOM duplicates
+    if (isInitial) {
+      state.articles.forEach(function (item) {
+        container.appendChild(createCardElement(item));
+      });
+    } else {
+      const existingDomIds = new Set(
+        Array.from(container.querySelectorAll('.feed-card')).map(function (c) {
+          return c.getAttribute('data-id');
+        })
+      );
+      state.articles.forEach(function (item) {
+        if (!existingDomIds.has(item.id)) {
+          container.appendChild(createCardElement(item));
+        }
+      });
+    }
 
     updatePaginationControls();
+
+    // Scroll restoration after returning from full article reading
+    if (isInitial) {
+      try {
+        const savedScroll = sessionStorage.getItem('sc_feed_scroll');
+        if (savedScroll !== null) {
+          sessionStorage.removeItem('sc_feed_scroll');
+          const scrollY = parseInt(savedScroll, 10);
+          if (!isNaN(scrollY) && scrollY > 0) {
+            requestAnimationFrame(function () {
+              window.scrollTo({ top: scrollY, behavior: 'instant' });
+            });
+          }
+        }
+      } catch (e) {}
+    }
   }
 
   function updatePaginationControls() {
@@ -950,14 +1009,14 @@
 
     const articleUrl = 'article.html?id=' + encodeURIComponent(item.id);
 
-    // Topic Title & Badge
+    // 1. Topic Title & Badge
     let topicTitle = '';
     if (window.PublicationConfig && item.topic) {
       const t = window.PublicationConfig.getTopicById(item.topic);
       if (t) topicTitle = t.title;
     }
 
-    // Format & Complexity Titles
+    // 2. Format & Complexity Titles (Uniform order: Topic -> Format -> Complexity)
     let formatTitle = '';
     if (window.PublicationConfig && item.format) {
       const f = window.PublicationConfig.getFormatById(item.format);
@@ -974,7 +1033,7 @@
       }
     }
 
-    // Badges HTML
+    // Badges HTML in uniform order: Topic, Format, Complexity
     let badgesHtml = '';
     if (topicTitle) {
       badgesHtml += '<span class="meta-badge topic-badge">' + escapeHtml(topicTitle) + '</span>';
@@ -986,12 +1045,12 @@
       badgesHtml += '<span class="meta-badge complexity-badge ' + complexityClass + '">' + escapeHtml(complexityTitle) + '</span>';
     }
 
-    // Tags HTML: Up to 3-4 tags directly, rest via "+N"
+    // Tags HTML: Up to 4 tags directly, rest revealed on clicking "еще N"
     const tags = Array.isArray(item.keywords) ? item.keywords : [];
     const maxVisibleTags = 4;
     let tagsHtml = '';
     const visibleTags = tags.slice(0, maxVisibleTags);
-    const hiddenCount = tags.length - maxVisibleTags;
+    const hiddenTags = tags.slice(maxVisibleTags);
 
     visibleTags.forEach(function (tag) {
       tagsHtml +=
@@ -1000,8 +1059,17 @@
         '</button>';
     });
 
-    if (hiddenCount > 0) {
-      tagsHtml += '<span class="tag-chip-more">еще ' + hiddenCount + '</span>';
+    if (hiddenTags.length > 0) {
+      tagsHtml +=
+        '<button type="button" class="tag-chip-more" title="Показать остальные ключевые слова" aria-expanded="false">еще ' + hiddenTags.length + '</button>' +
+        '<span class="hidden-tags-wrap" style="display: none;">';
+      hiddenTags.forEach(function (tag) {
+        tagsHtml +=
+          '<button type="button" class="tag-chip" data-tag="' + escapeHtml(tag) + '">' +
+            '#' + escapeHtml(tag) +
+          '</button>';
+      });
+      tagsHtml += '</span>';
     }
 
     // Cover Image HTML (Only if present!)
@@ -1015,6 +1083,7 @@
 
     // Bookmark State
     const bookmarked = isBookmarked(item.id);
+    const bookmarkTooltip = bookmarked ? 'Убрать из сохраненного' : 'Сохранить статью';
 
     card.innerHTML =
       '<div class="card-meta">' +
@@ -1028,11 +1097,11 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="card-meta-badges">' + badgesHtml + '</div>' +
       '</div>' +
       '<h2 class="card-title">' +
         '<a href="' + articleUrl + '">' + escapeHtml(item.title) + '</a>' +
       '</h2>' +
+      (badgesHtml ? '<div class="card-meta-badges">' + badgesHtml + '</div>' : '') +
       coverHtml +
       '<p class="card-lead">' + escapeHtml(item.description || '') + '</p>' +
       (tagsHtml ? '<div class="card-tags">' + tagsHtml + '</div>' : '') +
@@ -1041,18 +1110,28 @@
           '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
           '<span>' + escapeHtml(item.readingTime || '5 мин') + ' чтения</span>' +
         '</div>' +
-        '<button type="button" class="btn-card-bookmark ' + (bookmarked ? 'is-bookmarked' : '') + '" id="btn-bookmark" title="' + (bookmarked ? 'Удалить из закладок' : 'Сохранить в закладки') + '" aria-label="Закладка">' +
-          '<svg width="17" height="17" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<button type="button" class="btn-card-bookmark ' + (bookmarked ? 'is-bookmarked' : '') + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkTooltip + '">' +
+          '<svg width="17" height="17" viewBox="0 0 24 24" fill="' + (bookmarked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
         '</button>' +
       '</footer>';
 
-    // Click isolation: clicking author, tags, bookmark button must not open the article!
+    // Click isolation: clicking author must not open the article!
     const authorEl = card.querySelector('.author-info');
     if (authorEl) {
       authorEl.addEventListener('click', function (e) {
         e.stopPropagation();
+      });
+    }
+
+    // Save scroll position when navigating to article
+    const titleLink = card.querySelector('.card-title a');
+    if (titleLink) {
+      titleLink.addEventListener('click', function () {
+        try {
+          sessionStorage.setItem('sc_feed_scroll', String(window.scrollY || window.pageYOffset || 0));
+        } catch (e) {}
       });
     }
 
@@ -1063,7 +1142,11 @@
         e.stopPropagation();
         const active = toggleBookmark(item.id);
         bookmarkBtn.classList.toggle('is-bookmarked', active);
-        bookmarkBtn.title = active ? 'Удалить из закладок' : 'Сохранить в закладки';
+        const svg = bookmarkBtn.querySelector('svg');
+        if (svg) svg.setAttribute('fill', active ? 'currentColor' : 'none');
+        const newTooltip = active ? 'Убрать из сохраненного' : 'Сохранить статью';
+        bookmarkBtn.title = newTooltip;
+        bookmarkBtn.setAttribute('aria-label', newTooltip);
         if (state.savedOnly && !active) {
           // If in saved mode and item unbookmarked, remove card smoothly
           card.remove();
@@ -1074,6 +1157,20 @@
             renderEmptyState();
           }
         }
+      });
+    }
+
+    // Expand hidden tags on "еще N" click
+    const moreTagsBtn = card.querySelector('.tag-chip-more');
+    const hiddenTagsWrap = card.querySelector('.hidden-tags-wrap');
+    if (moreTagsBtn && hiddenTagsWrap) {
+      moreTagsBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        hiddenTagsWrap.style.display = 'inline-flex';
+        hiddenTagsWrap.style.gap = '6px';
+        hiddenTagsWrap.style.flexWrap = 'wrap';
+        moreTagsBtn.remove();
       });
     }
 
@@ -1107,16 +1204,31 @@
     if (!listEl || !window.PublicationConfig || !Array.isArray(window.PublicationConfig.TOPICS)) return;
 
     listEl.innerHTML = '';
-    window.PublicationConfig.TOPICS.forEach(function (topic) {
+    const topics = window.PublicationConfig.TOPICS.slice();
+
+    // Prioritize topics with published articles, then original catalog order
+    topics.sort(function (a, b) {
+      const countA = (topicCounts && topicCounts[a.id]) || 0;
+      const countB = (topicCounts && topicCounts[b.id]) || 0;
+      if (countB !== countA) return countB - countA;
+      return 0;
+    });
+
+    const INITIAL_VISIBLE = 7;
+    const initialTopics = topics.slice(0, INITIAL_VISIBLE);
+    const remainingTopics = topics.slice(INITIAL_VISIBLE);
+
+    function createTopicRow(topic) {
       const count = (topicCounts && topicCounts[topic.id]) || 0;
       const isSelected = !state.savedOnly && state.topic === topic.id;
 
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'widget-topic-row ' + (isSelected ? 'is-active' : '');
+      row.setAttribute('data-topic-id', topic.id);
       row.innerHTML =
         '<span class="widget-topic-title">' + escapeHtml(topic.title) + '</span>' +
-        '<span class="widget-topic-count">' + count + '</span>';
+        '<span class="widget-topic-count" title="Количество опубликованных статей" aria-label="Количество опубликованных статей: ' + count + '">' + count + '</span>';
 
       row.addEventListener('click', function () {
         if (state.topic === topic.id && !state.savedOnly) {
@@ -1130,9 +1242,42 @@
         syncURL(false);
         fetchFeed(true);
       });
+      return row;
+    }
 
-      listEl.appendChild(row);
+    initialTopics.forEach(function (topic) {
+      listEl.appendChild(createTopicRow(topic));
     });
+
+    if (remainingTopics.length > 0) {
+      const remainingWrap = document.createElement('div');
+      remainingWrap.className = 'widget-remaining-topics';
+      remainingWrap.style.display = 'none';
+      remainingWrap.style.flexDirection = 'column';
+      remainingWrap.style.gap = '4px';
+      remainingWrap.style.width = '100%';
+
+      remainingTopics.forEach(function (topic) {
+        remainingWrap.appendChild(createTopicRow(topic));
+      });
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'widget-topics-toggle-btn';
+      toggleBtn.id = 'btnToggleAllSidebarTopics';
+      toggleBtn.textContent = 'Все темы (' + topics.length + ')';
+      toggleBtn.setAttribute('aria-expanded', 'false');
+
+      toggleBtn.addEventListener('click', function () {
+        const isExpanded = remainingWrap.style.display !== 'none';
+        remainingWrap.style.display = isExpanded ? 'none' : 'flex';
+        toggleBtn.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+        toggleBtn.textContent = isExpanded ? 'Все темы (' + topics.length + ')' : 'Свернуть темы';
+      });
+
+      listEl.appendChild(remainingWrap);
+      listEl.appendChild(toggleBtn);
+    }
   }
 
   function escapeHtml(str) {
@@ -1155,7 +1300,7 @@
       description: 'Архитектурный анализ взаимодействия шлюзов ПКСК с платформой цифрового рубля: моделирование атомарных транзакций, двухфазный коммит и валидация криптографических подписей по ГОСТ Р 34.12-2015.',
       author: 'Алексей Смирнов',
       authorInitials: 'АС',
-      authorRole: 'Главный архитектор ПКСК',
+      authorRole: 'Архитектор решений (демо)',
       date: '26 сентября 2026',
       topics: ['digital-ruble-payments', 'pksc-architecture', 'smart-contracts-development'],
       topic: 'digital-ruble-payments',
@@ -1171,7 +1316,7 @@
       description: 'Разбор критических векторов атак на корпоративные распределенные реестры: повторный вход (reentrancy), ошибки управления доступом и методы автоматизированного аудита исходного кода.',
       author: 'Екатерина Романова',
       authorInitials: 'ЕР',
-      authorRole: 'Ведущий аудитор безопасности смарт-контрактов',
+      authorRole: 'Ведущий аудитор безопасности (демо)',
       date: '25 сентября 2026',
       topics: ['information-security', 'audit-and-verification', 'smart-contracts-development'],
       topic: 'information-security',
@@ -1187,7 +1332,7 @@
       description: 'Практика применения статьи 309 ГК РФ к автоматизированному исполнению обязательств: самоисполняемые сделки, цифровые права (ЦФА) и особенности арбитражного доказывания.',
       author: 'Илья Мельников',
       authorInitials: 'ИМ',
-      authorRole: 'Советник по LegalTech и комплаенсу',
+      authorRole: 'Советник по LegalTech и комплаенсу (демо)',
       date: '24 сентября 2026',
       topics: ['law-and-compliance', 'business-logic-deals'],
       topic: 'law-and-compliance',
@@ -1203,7 +1348,7 @@
       description: 'Пошаговое проектирование отказоустойчивой сети поставщиков котировок и внешних юридически значимых событий для корпоративных смарт-контрактов без единой точки отказа.',
       author: 'Виктор Нестеров',
       authorInitials: 'ВН',
-      authorRole: 'Инженер распределенных систем',
+      authorRole: 'Инженер распределенных систем (демо)',
       date: '22 сентября 2026',
       topics: ['oracles-and-data', 'integrations-and-api'],
       topic: 'oracles-and-data',

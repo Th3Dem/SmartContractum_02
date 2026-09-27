@@ -212,7 +212,7 @@ APPROVED_SEED_ARTICLES = [
         "publication_settings": {
             "author": "Алексей Смирнов",
             "authorInitials": "АС",
-            "authorRole": "Главный архитектор ПКСК",
+            "authorRole": "Архитектор решений (демо)",
             "targetAudience": "architects-integrators",
             "topics": ["digital-ruble-payments", "pksc-architecture", "smart-contracts-development"],
             "keywords": ["Цифровой рубль", "Банк России", "ПКСК", "Смарт-контракты", "Атомарные расчеты"],
@@ -338,7 +338,7 @@ contract DigitalRubleSettlementGateway {
         "publication_settings": {
             "author": "Екатерина Романова",
             "authorInitials": "ЕР",
-            "authorRole": "Ведущий аудитор безопасности смарт-контрактов",
+            "authorRole": "Ведущий аудитор безопасности (демо)",
             "targetAudience": "security-auditors",
             "topics": ["information-security", "audit-and-verification", "smart-contracts-development"],
             "keywords": ["Аудит ИБ", "ГОСТ Р 57580", "Уязвимости", "Reentrancy", "Формальная верификация"],
@@ -452,7 +452,7 @@ contract SecureVault is ReentrancyGuard {
         "publication_settings": {
             "author": "Илья Мельников",
             "authorInitials": "ИМ",
-            "authorRole": "Советник по LegalTech и комплаенсу",
+            "authorRole": "Советник по LegalTech и комплаенсу (демо)",
             "targetAudience": "legal-compliance",
             "topics": ["law-and-compliance", "business-logic-deals"],
             "keywords": ["Право", "Комплаенс", "ГК РФ", "Цифровые права", "ЦФА"],
@@ -535,7 +535,7 @@ contract SecureVault is ReentrancyGuard {
         "publication_settings": {
             "author": "Виктор Нестеров",
             "authorInitials": "ВН",
-            "authorRole": "Инженер распределенных систем",
+            "authorRole": "Инженер распределенных систем (демо)",
             "targetAudience": "data-oracles",
             "topics": ["oracles-and-data", "integrations-and-api"],
             "keywords": ["Оракулы", "Внешние данные", "API", "Консенсус", "ЦФА"],

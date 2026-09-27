@@ -1329,5 +1329,85 @@ class TestArticlesApiEndpoints(unittest.TestCase):
         self.assertFalse(detail_data.get("success"))
 
 
+class TestFeedRefinementsAndPolish(unittest.TestCase):
+    """Test Suite for task-25: Feed refinements, layout compactness, calm badges, and sidebar polish."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'feed.html'), 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'feed.css'), 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'article.js'), 'r', encoding='utf-8') as f:
+            cls.article_js = f.read()
+        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+            cls.server_py = f.read()
+
+    def test_saved_tab_moved_to_toolbar_actions(self):
+        """Verify #feedSavedTab is in .feed-toolbar-actions, separating bookmarks from thematic topic filters."""
+        toolbar_match = re.search(r'<div class="feed-toolbar-actions">(.*?)</div>\s*</div>\s*<!-- Main Topics Bar', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(toolbar_match, ".feed-toolbar-actions container not found")
+        toolbar_content = toolbar_match.group(1)
+        self.assertIn('id="feedSavedTab"', toolbar_content, "#feedSavedTab must be located within .feed-toolbar-actions")
+
+        # Must not be inside .feed-topics-bar
+        topics_bar_match = re.search(r'<div class="feed-topics-bar feed-filter-bar"[^>]*>(.*?)</div>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(topics_bar_match)
+        self.assertNotIn('id="feedSavedTab"', topics_bar_match.group(1), "#feedSavedTab must not be inside .feed-topics-bar")
+
+    def test_feed_period_select_wrap_initial_hidden(self):
+        """Verify #feedPeriodSelectWrap exists and is hidden by default when sort is newest."""
+        self.assertIn('id="feedPeriodSelectWrap"', self.feed_html)
+        self.assertIn('updatePeriodVisibility', self.feed_js)
+
+    def test_calm_metadata_badges_no_red_hard_complexity(self):
+        """Verify complexity 'hard' badge does not use red/error colors and uses calm neutral styling."""
+        hard_match = re.search(r'\.meta-badge\.complexity-hard\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(hard_match, ".meta-badge.complexity-hard rule not found in feed.css")
+        rules = hard_match.group(1)
+        disallowed_reds = ['#ef4444', '#f87171', '#dc2626', '#b91c1c', 'rgb(239, 68, 68)', 'rgba(239, 68, 68', 'red']
+        for red in disallowed_reds:
+            self.assertNotIn(red, rules.lower(), f"Red color '{red}' must not be used for complexity-hard badge")
+
+    def test_sidebar_topics_widget_subtitle_and_structure(self):
+        """Verify sidebar topics widget has subtitle 'Количество опубликованных статей' and toggle button logic."""
+        self.assertIn('Количество опубликованных статей', self.feed_html)
+        self.assertIn('btnToggleAllSidebarTopics', self.feed_js)
+        self.assertIn('widget-topic-title', self.feed_css)
+        self.assertIn('widget-topic-count', self.feed_css)
+
+    def test_sidebar_experience_widget_secondary_button(self):
+        """Verify 'Поделитесь опытом' widget uses .btn-secondary and concise copy."""
+        self.assertIn('btn-secondary btn-widget-write', self.feed_html)
+        self.assertNotIn('btn-primary btn-widget-write', self.feed_html)
+
+    def test_no_fictitious_titles_in_codebase(self):
+        """Verify 'Главный архитектор ПКСК' is removed and demo articles are labelled (демо)."""
+        self.assertNotIn('Главный архитектор ПКСК', self.server_py)
+        self.assertNotIn('Главный архитектор ПКСК', self.feed_js)
+        self.assertNotIn('Главный архитектор ПКСК', self.article_js)
+        self.assertIn('(демо)', self.server_py)
+
+    def test_bookmark_tooltips(self):
+        """Verify bookmark buttons have tooltips 'Сохранить статью' and 'Убрать из сохраненного'."""
+        self.assertIn('Сохранить статью', self.feed_js)
+        self.assertIn('Убрать из сохраненного', self.feed_js)
+
+    def test_card_hierarchy_badges_below_title(self):
+        """Verify in feed.js that .card-meta contains author-info, and .card-meta-badges is below .card-title."""
+        card_gen_match = re.search(r'function createCardElement\(item\)\s*\{([\s\S]*?)\n  \}', self.feed_js)
+        self.assertIsNotNone(card_gen_match, "createCardElement function not found")
+        fn_code = card_gen_match.group(1)
+        self.assertIn('<div class="card-meta">', fn_code)
+        self.assertIn('<h2 class="card-title">', fn_code)
+        self.assertIn('<div class="card-meta-badges">', fn_code)
+
+        title_pos = fn_code.find('<h2 class="card-title">')
+        badges_pos = fn_code.find('<div class="card-meta-badges">')
+        self.assertTrue(0 < title_pos < badges_pos, ".card-meta-badges must be rendered under .card-title")
+
+
 if __name__ == '__main__':
     unittest.main()

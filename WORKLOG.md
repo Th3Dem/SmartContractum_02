@@ -227,6 +227,8 @@
 [2026-09-27 01:41] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: фиксация коммита и слияние в main (Task: task-24-feed-redesign-and-article-reading)
 [2026-09-27 01:43] | git_bot | GIT_COMMITTED | Зафиксирован коммит 841d8e1 и выполнено слияние feat/task-24-feed-redesign-and-article-reading в main (Task: task-24-feed-redesign-and-article-reading)
 [2026-09-27 01:43] | pm_bot | TASK_DONE | Задача task-24 успешно завершена в статусе Done-Done. Все 208 тестов пройдены (100%) (Task: task-24-feed-redesign-and-article-reading)
+[2026-09-27 11:08] | pm_bot | TASK_INIT | [FAST-TRACK] Инициализация точечной доработки ленты публикаций (перенос «Сохраненных», уплотнение, перестройка карточек, темы и демо-данные) (Task: task-25-feed-refinements-and-polish)
+[2026-09-27 11:16] | pm_bot | TASK_DONE | [FAST-TRACK] Точечная доработка и полировка ленты завершена: перенос «Сохраненных», компактная компоновка, карточки с бейджами под заголовком, нейтральный бейдж сложности, ровный список тем с пагинацией, очистка демо-данных от вымышленных должностей, все 216 тестов успешно пройдены (100% PASS) (Task: task-25-feed-refinements-and-polish)
 
 
 

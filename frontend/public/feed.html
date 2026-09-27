@@ -177,21 +177,20 @@
               </button>
             </div>
 
-            <!-- Toolbar: Results Counter + Sorting + Filters Toggle -->
+            <!-- Toolbar: Results Counter + Saved + Sorting + Filters Toggle -->
             <div class="feed-toolbar-row">
               <div class="feed-results-info">
                 <span id="feedResultsCount" class="feed-results-count" aria-live="polite">Загрузка статей...</span>
               </div>
               <div class="feed-toolbar-actions">
-                <!-- Period Select -->
-                <div class="feed-select-wrap">
-                  <label for="feedPeriodSelect" class="visually-hidden">Период</label>
-                  <select id="feedPeriodSelect" class="feed-select" title="Выбор периода">
-                    <option value="all">За все время</option>
-                    <option value="month">За месяц</option>
-                    <option value="week">За неделю</option>
-                  </select>
-                </div>
+                <!-- Saved Bookmarks Filter Button -->
+                <button type="button" id="feedSavedTab" class="feed-filter-btn feed-saved-btn" data-topic="saved" role="tab" aria-selected="false" title="Показать сохраненные статьи">
+                  <svg class="saved-btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+                  </svg>
+                  <span>Сохраненные</span>
+                  <span id="feedSavedCount" class="feed-saved-count">0</span>
+                </button>
 
                 <!-- Sort Order Select -->
                 <div class="feed-select-wrap">
@@ -199,6 +198,16 @@
                   <select id="feedSortSelect" class="feed-select" title="Сортировка статей">
                     <option value="newest">Сначала новые</option>
                     <option value="oldest">Сначала старые</option>
+                  </select>
+                </div>
+
+                <!-- Period Select (Shown only when relevant) -->
+                <div class="feed-select-wrap" id="feedPeriodSelectWrap" style="display: none;">
+                  <label for="feedPeriodSelect" class="visually-hidden">Период</label>
+                  <select id="feedPeriodSelect" class="feed-select" title="Выбор периода">
+                    <option value="all">За все время</option>
+                    <option value="month">За месяц</option>
+                    <option value="week">За неделю</option>
                   </select>
                 </div>
 
@@ -211,7 +220,7 @@
                   aria-controls="feedFiltersPanel"
                   title="Открыть дополнительные фильтры"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                   </svg>
                   <span>Фильтры</span>
@@ -220,7 +229,7 @@
               </div>
             </div>
 
-            <!-- Main Topics Bar (Standard Config TOPICS, No Fake Topics) -->
+            <!-- Main Topics Bar (Thematic Filters Only) -->
             <div class="feed-topics-bar feed-filter-bar" role="tablist" aria-label="Темы публикаций">
               <button type="button" class="feed-filter-btn active" data-topic="all" role="tab" aria-selected="true">Все темы</button>
               <button type="button" class="feed-filter-btn" data-topic="smart-contracts-development" role="tab" aria-selected="false">Разработка</button>
@@ -248,15 +257,6 @@
                   <button type="button" class="feed-dropdown-item" data-topic="business-cases-adoption" role="menuitem">Бизнес-сценарии и внедрение</button>
                 </div>
               </div>
-
-              <!-- Saved Bookmarks Filter Tab -->
-              <button type="button" id="feedSavedTab" class="feed-filter-btn feed-saved-btn" data-topic="saved" role="tab" aria-selected="false" title="Показать сохраненные статьи">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
-                </svg>
-                <span>Сохраненные</span>
-                <span id="feedSavedCount" class="feed-saved-count">0</span>
-              </button>
             </div>
 
             <!-- Additional Filters Drawer / Expandable Panel -->
@@ -337,8 +337,8 @@
               <span>Поделитесь опытом</span>
             </div>
             <div class="widget-body">
-              <p>Опубликуйте разбор, инструкцию или кейс о смарт-контрактах с инженерами и практиками распределенных реестров.</p>
-              <a href="editor.html" class="btn btn-primary btn-widget-write">Написать статью</a>
+              <p>Делитесь практическим опытом разработки, аудита и внедрения смарт-контрактов в распределенных реестрах.</p>
+              <a href="editor.html" class="btn btn-secondary btn-widget-write">Написать статью</a>
             </div>
           </div>
 
@@ -354,6 +354,7 @@
               <span>Темы</span>
             </div>
             <div class="widget-body">
+              <div class="widget-subtitle">Количество опубликованных статей</div>
               <div id="widgetTopicsList" class="widget-topics-list widget-tags-cloud">
                 <!-- Dynamically populated with real topic counts by feed.js -->
               </div>
