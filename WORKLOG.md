@@ -282,6 +282,8 @@
 [2026-09-28 01:23] | pm_bot | QA_ASSIGN | Передача артефактов задачи task-32 на независимый аудит qa_bot (Task: task-32-feed-settings-ux-polish)
 [2026-09-28 01:24] | qa_bot | QA_APPROVED | Независимый аудит UX-полировки панелей настроек и фильтров ленты завершен со статусом APPROVED (268/268 PASS, snapshot 838d365858a0b04b3cdcdbf74d890756aac70694f9a21b3f16a05ef5937f6c1d) (Task: task-32-feed-settings-ux-polish)
 [2026-09-28 01:25] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация, коммит и слияние в main (Task: task-32-feed-settings-ux-polish)
+[2026-09-28 01:26] | git_bot | GIT_COMMITTED | Зафиксирован коммит b97e891 (feat) и 3691e26 (docs), выполнено слияние feat/task-32-feed-settings-ux-polish в main (Task: task-32-feed-settings-ux-polish)
+[2026-09-28 01:26] | pm_bot | TASK_DONE | Задача task-32 успешно завершена в статусе Done-Done. Все 268 тестов пройдены (100% PASS) (Task: task-32-feed-settings-ux-polish)
 
 
 
