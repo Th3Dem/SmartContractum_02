@@ -1,7 +1,7 @@
 /**
  * SmartContractum Feed Page - Native Modular JavaScript
  * 100% Offline-First, Zero Emojis, Clean Performance
- * Production-ready search, filters, topic navigation, and bookmarks.
+ * Production-ready search, filters, topic navigation, bookmarks, and subscriptions.
  */
 
 (function () {
@@ -99,7 +99,7 @@
     if (counterEl) {
       const count = getBookmarks().length;
       counterEl.textContent = count;
-      counterEl.style.display = count > 0 ? 'inline-block' : 'inline-block';
+      counterEl.style.display = 'inline-block';
     }
   }
 
@@ -119,6 +119,16 @@
     }, 2800);
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // --------------------------------------------------------------------------
   // 3. State Management & URL Synchronization
   // --------------------------------------------------------------------------
@@ -130,6 +140,7 @@
     complexity: 'all',
     period: 'all',
     sort: 'newest',
+    tab: 'all', // 'all' | 'my' | 'saved'
     savedOnly: false,
     limit: 10,
     offset: 0,
@@ -137,8 +148,12 @@
     hasMore: false,
     articles: [],
     topicCounts: {},
-    isLoading: false
+    isLoading: false,
+    noSubscriptions: false
   };
+
+  let currentUser = null;
+  let pendingTabAfterAuth = null;
 
   function parseURLParams() {
     const params = new URLSearchParams(window.location.search);
@@ -150,10 +165,18 @@
     state.period = params.get('period') || 'all';
     state.sort = params.get('sort') || 'newest';
 
+    const tabParam = (params.get('tab') || '').toLowerCase();
     const savedParam = params.get('saved');
-    state.savedOnly = savedParam === '1' || savedParam === 'true' || state.topic === 'saved';
-    if (state.savedOnly) {
-      state.topic = 'saved';
+
+    if (tabParam === 'my') {
+      state.tab = 'my';
+      state.savedOnly = false;
+    } else if (tabParam === 'saved' || savedParam === '1' || savedParam === 'true' || state.topic === 'saved') {
+      state.tab = 'saved';
+      state.savedOnly = true;
+    } else {
+      state.tab = 'all';
+      state.savedOnly = false;
     }
 
     // Sync input controls with URL state
@@ -192,7 +215,7 @@
     }
 
     updatePeriodVisibility();
-    updateTopicButtonsState();
+    updateSubnavTabsUI();
     updateFilterBadge();
   }
 
@@ -205,10 +228,11 @@
 
   function syncURL(replace) {
     const params = new URLSearchParams();
+    if (state.tab && state.tab !== 'all') {
+      params.set('tab', state.tab);
+    }
     if (state.search) params.set('search', state.search);
-    if (state.savedOnly) {
-      params.set('saved', '1');
-    } else if (state.topic && state.topic !== 'all') {
+    if (!state.savedOnly && state.topic && state.topic !== 'all') {
       params.set('topic', state.topic);
     }
     if (state.audience && state.audience !== 'all') params.set('audience', state.audience);
@@ -234,7 +258,220 @@
   }
 
   // --------------------------------------------------------------------------
-  // 4. UI Controls Initialization
+  // 4. Auth & User Profile Management
+  // --------------------------------------------------------------------------
+  function checkAuthStatus(callback) {
+    fetch('/api/auth/status')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.authenticated && data.user) {
+          setAuthState(data.user);
+        } else {
+          setAuthState(null);
+        }
+        if (callback) callback();
+      })
+      .catch(function () {
+        setAuthState(null);
+        if (callback) callback();
+      });
+  }
+
+  function setAuthState(user) {
+    currentUser = user;
+    const personalElements = document.querySelectorAll('.personal-tab');
+    personalElements.forEach(function (el) {
+      el.style.display = user ? 'inline-flex' : 'none';
+    });
+
+    const userLabel = document.getElementById('headerUserLabel');
+    const loginBtn = document.getElementById('headerLoginBtn');
+    if (userLabel) {
+      userLabel.textContent = user ? user.name : 'Вход';
+    }
+    if (loginBtn) {
+      loginBtn.title = user
+        ? 'Вы вошли как ' + user.name + ' (нажмите для выхода)'
+        : 'Войти в личный кабинет';
+    }
+
+    const manageSubsBtn = document.getElementById('btnManageSubscriptions');
+    if (manageSubsBtn) {
+      manageSubsBtn.style.display = (state.tab === 'my' && user) ? 'inline-flex' : 'none';
+    }
+  }
+
+  function openAuthModal(targetTab) {
+    pendingTabAfterAuth = targetTab || null;
+    const modal = document.getElementById('authModal');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeAuthModal() {
+    const modal = document.getElementById('authModal');
+    if (modal) modal.style.display = 'none';
+    pendingTabAfterAuth = null;
+  }
+
+  function initAuthControls() {
+    const loginBtn = document.getElementById('headerLoginBtn');
+    if (loginBtn) {
+      loginBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (currentUser) {
+          if (confirm('Вы вошли как «' + currentUser.name + '». Выйти из профиля?')) {
+            fetch('/api/auth/logout', { method: 'POST' })
+              .then(function (res) { return res.json(); })
+              .then(function () {
+                setAuthState(null);
+                if (state.tab === 'my' || state.tab === 'saved') {
+                  switchTab('all');
+                }
+                showToast('Вы вышли из системы');
+              });
+          }
+        } else {
+          openAuthModal();
+        }
+      });
+    }
+
+    const closeBtn = document.getElementById('btnCloseAuthModal');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeAuthModal);
+    }
+
+    const authModal = document.getElementById('authModal');
+    if (authModal) {
+      authModal.addEventListener('click', function (e) {
+        if (e.target === authModal) closeAuthModal();
+      });
+    }
+
+    const demoLoginBtn = document.getElementById('btnAuthLoginDemo');
+    if (demoLoginBtn) {
+      demoLoginBtn.addEventListener('click', function () {
+        fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: 'user_demo', name: 'Демо Пользователь' })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && data.success && data.user) {
+              setAuthState(data.user);
+              closeAuthModal();
+              showToast('Вход выполнен: ' + data.user.name);
+              if (pendingTabAfterAuth) {
+                switchTab(pendingTabAfterAuth);
+              } else {
+                fetchFeed(true);
+              }
+            }
+          });
+      });
+    }
+
+    const customSubmitBtn = document.getElementById('btnAuthLoginSubmit');
+    if (customSubmitBtn) {
+      customSubmitBtn.addEventListener('click', function () {
+        const inp = document.getElementById('authUserIdInput');
+        const val = (inp ? inp.value.trim() : '') || 'user_demo';
+        fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: val, name: val })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && data.success && data.user) {
+              setAuthState(data.user);
+              closeAuthModal();
+              showToast('Вход выполнен: ' + data.user.name);
+              if (pendingTabAfterAuth) {
+                switchTab(pendingTabAfterAuth);
+              } else {
+                fetchFeed(true);
+              }
+            }
+          });
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. Sub-Nav Bar (Second Level Menu)
+  // --------------------------------------------------------------------------
+  function initSubnavTabs() {
+    const tabAll = document.getElementById('tabFeedAll');
+    const tabMy = document.getElementById('tabFeedMy');
+    const tabSaved = document.getElementById('feedSavedTab');
+
+    if (tabAll) {
+      tabAll.addEventListener('click', function () {
+        switchTab('all');
+      });
+    }
+    if (tabMy) {
+      tabMy.addEventListener('click', function () {
+        if (!currentUser) {
+          openAuthModal('my');
+        } else {
+          switchTab('my');
+        }
+      });
+    }
+    if (tabSaved) {
+      tabSaved.addEventListener('click', function () {
+        if (!currentUser) {
+          openAuthModal('saved');
+        } else {
+          switchTab('saved');
+        }
+      });
+    }
+  }
+
+  function switchTab(tabName) {
+    state.tab = tabName;
+    state.savedOnly = (tabName === 'saved');
+    state.offset = 0;
+
+    updateSubnavTabsUI();
+
+    const manageSubsBtn = document.getElementById('btnManageSubscriptions');
+    if (manageSubsBtn) {
+      manageSubsBtn.style.display = (tabName === 'my' && currentUser) ? 'inline-flex' : 'none';
+    }
+
+    syncURL(false);
+    fetchFeed(true);
+  }
+
+  function updateSubnavTabsUI() {
+    const tabAll = document.getElementById('tabFeedAll');
+    const tabMy = document.getElementById('tabFeedMy');
+    const tabSaved = document.getElementById('feedSavedTab');
+
+    if (tabAll) {
+      const isAll = state.tab === 'all';
+      tabAll.classList.toggle('active', isAll);
+      tabAll.setAttribute('aria-selected', isAll ? 'true' : 'false');
+    }
+    if (tabMy) {
+      const isMy = state.tab === 'my';
+      tabMy.classList.toggle('active', isMy);
+      tabMy.setAttribute('aria-selected', isMy ? 'true' : 'false');
+    }
+    if (tabSaved) {
+      const isSaved = state.tab === 'saved';
+      tabSaved.classList.toggle('active', isSaved);
+      tabSaved.setAttribute('aria-selected', isSaved ? 'true' : 'false');
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 6. UI Controls Initialization
   // --------------------------------------------------------------------------
   function initControls() {
     // Populate Audience select from PublicationConfig
@@ -263,7 +500,6 @@
 
     // Search input & clear button
     const searchInput = document.getElementById('feedSearchInput');
-    const searchBtn = document.getElementById('feedSearchBtn');
     const clearBtn = document.getElementById('feedSearchClearBtn');
 
     if (searchInput) {
@@ -294,16 +530,6 @@
           syncURL(false);
           fetchFeed(true);
         }
-      });
-    }
-
-    if (searchBtn && searchInput) {
-      searchBtn.addEventListener('click', function () {
-        const val = searchInput.value.trim();
-        state.search = val;
-        state.offset = 0;
-        syncURL(false);
-        fetchFeed(true);
       });
     }
 
@@ -341,161 +567,20 @@
       });
     }
 
-    // Saved Bookmarks Button in Toolbar
-    const savedTabBtn = document.getElementById('feedSavedTab');
-    if (savedTabBtn) {
-      savedTabBtn.addEventListener('click', function () {
-        state.savedOnly = !state.savedOnly;
-        if (state.savedOnly) {
-          state.topic = 'saved';
-        } else {
-          state.topic = 'all';
-        }
-        state.offset = 0;
-        updateTopicButtonsState();
-        syncURL(false);
-        fetchFeed(true);
-      });
-    }
-
-    // Additional Filters Panel Toggle
-    const filtersToggleBtn = document.getElementById('btnFeedFiltersToggle');
-    const filtersPanel = document.getElementById('feedFiltersPanel');
-    if (filtersToggleBtn && filtersPanel) {
-      filtersToggleBtn.addEventListener('click', function () {
-        const isOpen = filtersPanel.style.display !== 'none';
-        filtersPanel.style.display = isOpen ? 'none' : 'flex';
-        filtersToggleBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-        filtersToggleBtn.classList.toggle('is-active', !isOpen);
-      });
-    }
-
-    // Additional Filters dropdown changes
-    if (audienceSelect) {
-      audienceSelect.addEventListener('change', function () {
-        state.audience = audienceSelect.value;
-        state.offset = 0;
-        syncURL(false);
-        fetchFeed(true);
-      });
-    }
-
-    if (formatSelect) {
-      formatSelect.addEventListener('change', function () {
-        state.format = formatSelect.value;
-        state.offset = 0;
-        syncURL(false);
-        fetchFeed(true);
-      });
-    }
-
-    const complexitySelect = document.getElementById('feedComplexitySelect');
-    if (complexitySelect) {
-      complexitySelect.addEventListener('change', function () {
-        state.complexity = complexitySelect.value;
-        state.offset = 0;
-        syncURL(false);
-        fetchFeed(true);
-      });
-    }
-
-    const resetFiltersBtn = document.getElementById('feedResetFiltersBtn');
-    if (resetFiltersBtn) {
-      resetFiltersBtn.addEventListener('click', function () {
-        if (audienceSelect) audienceSelect.value = 'all';
-        if (formatSelect) formatSelect.value = 'all';
-        if (complexitySelect) complexitySelect.value = 'all';
-        state.audience = 'all';
-        state.format = 'all';
-        state.complexity = 'all';
-        state.offset = 0;
-        syncURL(false);
-        fetchFeed(true);
-      });
-    }
-
-    // Topics Bar Buttons
-    const topicsBar = document.querySelector('.feed-topics-bar');
-    if (topicsBar) {
-      topicsBar.addEventListener('click', function (e) {
-        const topicBtn = e.target.closest('.feed-filter-btn');
-        if (!topicBtn || topicBtn.id === 'feedMoreTopicsBtn') return;
-
-        if (topicBtn.id === 'feedSavedTab') {
-          state.savedOnly = true;
-          state.topic = 'saved';
-        } else {
-          const topic = topicBtn.getAttribute('data-topic');
-          if (topic) {
-            state.topic = topic;
-            state.savedOnly = false;
-          }
-        }
-        state.offset = 0;
-        updateTopicButtonsState();
-        syncURL(false);
-        fetchFeed(true);
-      });
-    }
-
-    // More Topics Dropdown
-    const moreBtn = document.getElementById('feedMoreTopicsBtn');
-    const dropdown = document.getElementById('feedTopicsDropdown');
-    if (moreBtn && dropdown) {
-      moreBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const isOpen = dropdown.style.display !== 'none';
-        dropdown.style.display = isOpen ? 'none' : 'flex';
-        moreBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-      });
-
-      dropdown.addEventListener('click', function (e) {
-        const item = e.target.closest('.feed-dropdown-item');
-        if (item) {
-          const topic = item.getAttribute('data-topic');
-          if (topic) {
-            state.topic = topic;
-            state.savedOnly = false;
-            state.offset = 0;
-            dropdown.style.display = 'none';
-            moreBtn.setAttribute('aria-expanded', 'false');
-            updateTopicButtonsState();
-            syncURL(false);
-            fetchFeed(true);
-          }
-        }
-      });
-
-      document.addEventListener('click', function (e) {
-        if (!e.target.closest('.feed-more-topics-wrap')) {
-          dropdown.style.display = 'none';
-          moreBtn.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
-
-    // Active Chips Reset All Button
+    // Reset All Filters button on chips bar
     const resetAllBtn = document.getElementById('feedResetAllBtn');
     if (resetAllBtn) {
       resetAllBtn.addEventListener('click', resetAllFilters);
     }
 
-    // Load More Button
+    // Load More pagination button
     const loadMoreBtn = document.getElementById('feedLoadMoreBtn');
     if (loadMoreBtn) {
       loadMoreBtn.addEventListener('click', function () {
-        if (!state.isLoading && state.hasMore) {
-          state.offset += state.limit;
-          fetchFeed(false);
-        }
+        state.offset += state.limit;
+        fetchFeed(false);
       });
     }
-
-    // History popstate
-    window.addEventListener('popstate', function () {
-      parseURLParams();
-      fetchFeed(true);
-    });
   }
 
   function resetAllFilters() {
@@ -506,7 +591,6 @@
     state.complexity = 'all';
     state.period = 'all';
     state.sort = 'newest';
-    state.savedOnly = false;
     state.offset = 0;
 
     const searchInput = document.getElementById('feedSearchInput');
@@ -532,47 +616,14 @@
     if (complexitySelect) complexitySelect.value = 'all';
 
     updatePeriodVisibility();
-    updateTopicButtonsState();
+    updateModalFiltersState();
     syncURL(false);
     fetchFeed(true);
   }
 
-  function updateTopicButtonsState() {
-    const buttons = document.querySelectorAll('.feed-topics-bar .feed-filter-btn');
-    buttons.forEach(function (btn) {
-      if (btn.id === 'feedMoreTopicsBtn') return;
-
-      const btnTopic = btn.getAttribute('data-topic');
-      const isActive = !state.savedOnly && btnTopic === state.topic;
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-
-    const savedBtn = document.getElementById('feedSavedTab');
-    if (savedBtn) {
-      const isSaved = state.savedOnly;
-      savedBtn.classList.toggle('active', isSaved);
-      savedBtn.setAttribute('aria-selected', isSaved ? 'true' : 'false');
-    }
-
-    const moreBtn = document.getElementById('feedMoreTopicsBtn');
-    const dropdownItems = document.querySelectorAll('.feed-dropdown-item');
-    let isDropdownTopicActive = false;
-
-    dropdownItems.forEach(function (item) {
-      const topic = item.getAttribute('data-topic');
-      const isActive = !state.savedOnly && topic === state.topic;
-      item.classList.toggle('active', isActive);
-      if (isActive) isDropdownTopicActive = true;
-    });
-
-    if (moreBtn) {
-      moreBtn.classList.toggle('active', isDropdownTopicActive);
-    }
-  }
-
   function updateFilterBadge() {
     let count = 0;
+    if (state.topic && state.topic !== 'all') count++;
     if (state.audience && state.audience !== 'all') count++;
     if (state.format && state.format !== 'all') count++;
     if (state.complexity && state.complexity !== 'all') count++;
@@ -598,13 +649,14 @@
 
     if (state.search) {
       chips.push({
+        id: 'search',
         label: 'Поиск: "' + state.search + '"',
         remove: function () {
           state.search = '';
-          const input = document.getElementById('feedSearchInput');
-          if (input) input.value = '';
-          const clear = document.getElementById('feedSearchClearBtn');
-          if (clear) clear.style.display = 'none';
+          const inp = document.getElementById('feedSearchInput');
+          const clr = document.getElementById('feedSearchClearBtn');
+          if (inp) inp.value = '';
+          if (clr) clr.style.display = 'none';
           state.offset = 0;
           syncURL(false);
           fetchFeed(true);
@@ -612,26 +664,19 @@
       });
     }
 
-    if (state.savedOnly) {
+    if (!state.savedOnly && state.topic && state.topic !== 'all') {
+      let topicName = state.topic;
+      if (window.PublicationConfig) {
+        const t = window.PublicationConfig.getTopicById(state.topic);
+        if (t) topicName = t.title;
+      }
       chips.push({
-        label: 'Сохраненные',
-        remove: function () {
-          state.savedOnly = false;
-          state.topic = 'all';
-          state.offset = 0;
-          updateTopicButtonsState();
-          syncURL(false);
-          fetchFeed(true);
-        }
-      });
-    } else if (state.topic && state.topic !== 'all') {
-      const topicObj = window.PublicationConfig && window.PublicationConfig.getTopicById(state.topic);
-      chips.push({
-        label: 'Тема: ' + (topicObj ? topicObj.title : state.topic),
+        id: 'topic',
+        label: 'Тема: ' + topicName,
         remove: function () {
           state.topic = 'all';
           state.offset = 0;
-          updateTopicButtonsState();
+          updateModalFiltersState();
           syncURL(false);
           fetchFeed(true);
         }
@@ -639,9 +684,14 @@
     }
 
     if (state.audience && state.audience !== 'all') {
-      const audObj = window.PublicationConfig && window.PublicationConfig.getAudienceById(state.audience);
+      let audName = state.audience;
+      if (window.PublicationConfig) {
+        const a = window.PublicationConfig.getAudienceById(state.audience);
+        if (a) audName = a.title;
+      }
       chips.push({
-        label: 'Аудитория: ' + (audObj ? audObj.title : state.audience),
+        id: 'audience',
+        label: 'Аудитория: ' + audName,
         remove: function () {
           state.audience = 'all';
           const sel = document.getElementById('feedAudienceSelect');
@@ -654,9 +704,14 @@
     }
 
     if (state.format && state.format !== 'all') {
-      const fmtObj = window.PublicationConfig && window.PublicationConfig.getFormatById(state.format);
+      let fmtName = state.format;
+      if (window.PublicationConfig) {
+        const f = window.PublicationConfig.getFormatById(state.format);
+        if (f) fmtName = f.title;
+      }
       chips.push({
-        label: 'Формат: ' + (fmtObj ? fmtObj.title : state.format),
+        id: 'format',
+        label: 'Формат: ' + fmtName,
         remove: function () {
           state.format = 'all';
           const sel = document.getElementById('feedFormatSelect');
@@ -669,27 +724,17 @@
     }
 
     if (state.complexity && state.complexity !== 'all') {
-      const compObj = window.PublicationConfig && window.PublicationConfig.getComplexityById(state.complexity);
+      let compName = state.complexity;
+      if (window.PublicationConfig) {
+        const c = window.PublicationConfig.getComplexityById(state.complexity);
+        if (c) compName = c.title;
+      }
       chips.push({
-        label: 'Сложность: ' + (compObj ? compObj.title : state.complexity),
+        id: 'complexity',
+        label: 'Сложность: ' + compName,
         remove: function () {
           state.complexity = 'all';
           const sel = document.getElementById('feedComplexitySelect');
-          if (sel) sel.value = 'all';
-          state.offset = 0;
-          syncURL(false);
-          fetchFeed(true);
-        }
-      });
-    }
-
-    if (state.period && state.period !== 'all') {
-      const periodLabel = state.period === 'week' ? 'За неделю' : 'За месяц';
-      chips.push({
-        label: 'Период: ' + periodLabel,
-        remove: function () {
-          state.period = 'all';
-          const sel = document.getElementById('feedPeriodSelect');
           if (sel) sel.value = 'all';
           state.offset = 0;
           syncURL(false);
@@ -705,24 +750,318 @@
 
     bar.style.display = 'flex';
     chips.forEach(function (chip) {
-      const chipEl = document.createElement('span');
+      const chipEl = document.createElement('div');
       chipEl.className = 'active-chip';
       chipEl.innerHTML =
-        '<span>' + escapeHtml(chip.label) + '</span>' +
+        '<span class="chip-label">' + escapeHtml(chip.label) + '</span>' +
         '<button type="button" class="chip-remove-btn" title="Удалить фильтр" aria-label="Удалить фильтр">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<line x1="18" y1="6" x2="6" y2="18"></line>' +
             '<line x1="6" y1="6" x2="18" y2="18"></line>' +
           '</svg>' +
         '</button>';
 
-      chipEl.querySelector('.chip-remove-btn').addEventListener('click', chip.remove);
+      chipEl.querySelector('.chip-remove-btn').addEventListener('click', function (e) {
+        e.stopPropagation();
+        chip.remove();
+      });
+
       list.appendChild(chipEl);
     });
   }
 
   // --------------------------------------------------------------------------
-  // 5. Data Fetching & Rendering
+  // 7. Unified Filters Modal
+  // --------------------------------------------------------------------------
+  function initFiltersModal() {
+    const openBtn = document.getElementById('btnFeedFiltersToggle');
+    const closeBtn = document.getElementById('btnCloseFiltersModal');
+    const modal = document.getElementById('feedFiltersModal');
+    const applyBtn = document.getElementById('btnApplyFilters');
+    const resetBtn = document.getElementById('feedResetFiltersBtn');
+    const topicSearchInput = document.getElementById('filterTopicSearchInput');
+
+    if (openBtn && modal) {
+      openBtn.addEventListener('click', function () {
+        modal.style.display = 'flex';
+        updateModalFiltersState();
+      });
+    }
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener('click', function () {
+        modal.style.display = 'none';
+      });
+    }
+
+    if (modal) {
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) modal.style.display = 'none';
+      });
+    }
+
+    // Escape key closes modal
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        if (modal && modal.style.display !== 'none') modal.style.display = 'none';
+        const subsModal = document.getElementById('subscriptionsModal');
+        if (subsModal && subsModal.style.display !== 'none') {
+          subsModal.style.display = 'none';
+          if (state.tab === 'my') fetchFeed(true);
+        }
+        const authModal = document.getElementById('authModal');
+        if (authModal && authModal.style.display !== 'none') authModal.style.display = 'none';
+      }
+    });
+
+    // Topic search filter inside modal
+    if (topicSearchInput) {
+      topicSearchInput.addEventListener('input', function () {
+        const q = topicSearchInput.value.trim().toLowerCase();
+        const btns = document.querySelectorAll('#modalTopicsFilterBar .feed-filter-btn');
+        btns.forEach(function (btn) {
+          if (!q || btn.getAttribute('data-topic') === 'all') {
+            btn.style.display = 'inline-flex';
+          } else {
+            const text = btn.textContent.toLowerCase();
+            btn.style.display = text.indexOf(q) !== -1 ? 'inline-flex' : 'none';
+          }
+        });
+      });
+    }
+
+    // Topic button selection inside modal
+    const topicsBar = document.getElementById('modalTopicsFilterBar');
+    if (topicsBar) {
+      topicsBar.addEventListener('click', function (e) {
+        const btn = e.target.closest('.feed-filter-btn');
+        if (!btn) return;
+        document.querySelectorAll('#modalTopicsFilterBar .feed-filter-btn').forEach(function (b) {
+          const isActive = (b === btn);
+          b.classList.toggle('active', isActive);
+          b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+      });
+    }
+
+    if (applyBtn) {
+      applyBtn.addEventListener('click', function () {
+        const activeTopicBtn = document.querySelector('#modalTopicsFilterBar .feed-filter-btn.active');
+        state.topic = activeTopicBtn ? (activeTopicBtn.getAttribute('data-topic') || 'all') : 'all';
+
+        const aud = document.getElementById('feedAudienceSelect');
+        if (aud) state.audience = aud.value;
+
+        const fmt = document.getElementById('feedFormatSelect');
+        if (fmt) state.format = fmt.value;
+
+        const comp = document.getElementById('feedComplexitySelect');
+        if (comp) state.complexity = comp.value;
+
+        state.offset = 0;
+        modal.style.display = 'none';
+        syncURL(false);
+        fetchFeed(true);
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        state.topic = 'all';
+        state.audience = 'all';
+        state.format = 'all';
+        state.complexity = 'all';
+        state.offset = 0;
+        updateModalFiltersState();
+        modal.style.display = 'none';
+        syncURL(false);
+        fetchFeed(true);
+      });
+    }
+  }
+
+  function updateModalFiltersState() {
+    document.querySelectorAll('#modalTopicsFilterBar .feed-filter-btn').forEach(function (btn) {
+      const isActive = btn.getAttribute('data-topic') === state.topic;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    const aud = document.getElementById('feedAudienceSelect');
+    if (aud) aud.value = state.audience || 'all';
+
+    const fmt = document.getElementById('feedFormatSelect');
+    if (fmt) fmt.value = state.format || 'all';
+
+    const comp = document.getElementById('feedComplexitySelect');
+    if (comp) comp.value = state.complexity || 'all';
+  }
+
+  // --------------------------------------------------------------------------
+  // 8. Subscriptions Management Modal
+  // --------------------------------------------------------------------------
+  let subsData = { authors: [], topics: [], tags: [] };
+  let activeSubsType = 'author';
+
+  function initSubscriptionsModal() {
+    const manageBtn = document.getElementById('btnManageSubscriptions');
+    const closeBtn = document.getElementById('btnCloseSubsModal');
+    const modal = document.getElementById('subscriptionsModal');
+    const searchInput = document.getElementById('subsSearchInput');
+
+    if (manageBtn && modal) {
+      manageBtn.addEventListener('click', openSubscriptionsModal);
+    }
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener('click', function () {
+        modal.style.display = 'none';
+        if (state.tab === 'my') fetchFeed(true);
+      });
+    }
+
+    if (modal) {
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          modal.style.display = 'none';
+          if (state.tab === 'my') fetchFeed(true);
+        }
+      });
+    }
+
+    // Tabs
+    const tabAuthors = document.getElementById('tabSubsAuthors');
+    const tabTopics = document.getElementById('tabSubsTopics');
+    const tabTags = document.getElementById('tabSubsTags');
+
+    if (tabAuthors) tabAuthors.addEventListener('click', function () { switchSubsTab('author'); });
+    if (tabTopics) tabTopics.addEventListener('click', function () { switchSubsTab('topic'); });
+    if (tabTags) tabTags.addEventListener('click', function () { switchSubsTab('tag'); });
+
+    if (searchInput) {
+      searchInput.addEventListener('input', renderSubsList);
+    }
+  }
+
+  function openSubscriptionsModal() {
+    const modal = document.getElementById('subscriptionsModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    fetch('/api/subscriptions/entities')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          subsData.authors = data.authors || [];
+          subsData.topics = data.topics || [];
+          subsData.tags = data.tags || [];
+
+          const aCount = document.getElementById('subsAuthorsCount');
+          const tCount = document.getElementById('subsTopicsCount');
+          const tgCount = document.getElementById('subsTagsCount');
+          if (aCount) aCount.textContent = subsData.authors.length;
+          if (tCount) tCount.textContent = subsData.topics.length;
+          if (tgCount) tgCount.textContent = subsData.tags.length;
+
+          renderSubsList();
+        }
+      })
+      .catch(function (err) {
+        console.error('Failed to load subscriptions entities:', err);
+      });
+  }
+
+  function switchSubsTab(type) {
+    activeSubsType = type;
+    const tabAuthors = document.getElementById('tabSubsAuthors');
+    const tabTopics = document.getElementById('tabSubsTopics');
+    const tabTags = document.getElementById('tabSubsTags');
+
+    if (tabAuthors) tabAuthors.classList.toggle('active', type === 'author');
+    if (tabTopics) tabTopics.classList.toggle('active', type === 'topic');
+    if (tabTags) tabTags.classList.toggle('active', type === 'tag');
+
+    const searchInput = document.getElementById('subsSearchInput');
+    if (searchInput) searchInput.value = '';
+    renderSubsList();
+  }
+
+  function renderSubsList() {
+    const container = document.getElementById('subsListContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const searchInput = document.getElementById('subsSearchInput');
+    const q = (searchInput ? searchInput.value.trim().toLowerCase() : '');
+
+    let list = [];
+    if (activeSubsType === 'author') list = subsData.authors;
+    else if (activeSubsType === 'topic') list = subsData.topics;
+    else if (activeSubsType === 'tag') list = subsData.tags;
+
+    if (q) {
+      list = list.filter(function (item) {
+        return (item.title && item.title.toLowerCase().indexOf(q) !== -1) ||
+               (item.role && item.role.toLowerCase().indexOf(q) !== -1);
+      });
+    }
+
+    if (list.length === 0) {
+      container.innerHTML = '<div style="text-align: center; padding: 28px; color: var(--text-muted); font-size: 0.88rem;">Ничего не найдено</div>';
+      return;
+    }
+
+    list.forEach(function (item) {
+      const el = document.createElement('div');
+      el.className = 'subs-item';
+      const subText = item.role || (item.count !== undefined ? (item.count + ' публикаций') : '');
+      const isSub = Boolean(item.isSubscribed);
+
+      el.innerHTML =
+        '<div class="subs-item-info">' +
+          '<span class="subs-item-title">' + escapeHtml(item.title) + '</span>' +
+          (subText ? '<span class="subs-item-sub">' + escapeHtml(subText) + '</span>' : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-secondary subs-toggle-btn ' + (isSub ? 'is-subscribed' : '') + '" data-id="' + escapeHtml(item.id) + '">' +
+          (isSub ? 'Вы подписаны' : 'Подписаться') +
+        '</button>';
+
+      const btn = el.querySelector('.subs-toggle-btn');
+      btn.addEventListener('click', function () {
+        toggleSubscription(activeSubsType, item.id, item.title, btn, item);
+      });
+
+      container.appendChild(el);
+    });
+  }
+
+  function toggleSubscription(targetType, targetId, targetTitle, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      return;
+    }
+
+    fetch('/api/subscriptions/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetType: targetType, targetId: targetId, targetTitle: targetTitle })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          item.isSubscribed = data.subscribed;
+          btn.classList.toggle('is-subscribed', data.subscribed);
+          btn.textContent = data.subscribed ? 'Вы подписаны' : 'Подписаться';
+          showToast(data.subscribed ? 'Вы подписались на «' + targetTitle + '»' : 'Вы отписались от «' + targetTitle + '»');
+        }
+      })
+      .catch(function (err) {
+        console.error('Failed to toggle subscription:', err);
+      });
+  }
+
+  // --------------------------------------------------------------------------
+  // 9. Data Fetching & Rendering
   // --------------------------------------------------------------------------
   function renderSkeletons() {
     const container = document.getElementById('feedCardsContainer');
@@ -754,6 +1093,7 @@
 
     // Build API query
     const params = new URLSearchParams();
+    params.set('tab', state.tab);
     if (state.search) params.set('search', state.search);
     if (!state.savedOnly && state.topic && state.topic !== 'all') {
       params.set('topic', state.topic);
@@ -782,12 +1122,18 @@
 
     fetch('/api/articles?' + params.toString())
       .then(function (res) {
+        if (res.status === 401 && state.tab === 'my') {
+          state.isLoading = false;
+          openAuthModal('my');
+          throw new Error('AUTH_REQUIRED');
+        }
         if (!res.ok) throw new Error('API status: ' + res.status);
         return res.json();
       })
       .then(function (data) {
         state.isLoading = false;
         if (data && data.success) {
+          state.noSubscriptions = Boolean(data.noSubscriptions);
           if (isInitial) {
             state.articles = data.articles || [];
           } else {
@@ -810,6 +1156,7 @@
       })
       .catch(function (err) {
         state.isLoading = false;
+        if (err.message === 'AUTH_REQUIRED') return;
         // Offline / file protocol fallback: provide fallback data
         handleOfflineFallback(isInitial);
       });
@@ -831,7 +1178,14 @@
 
     let items = FALLBACK_ARTICLES.slice();
 
-    if (state.topic && state.topic !== 'all') {
+    if (state.tab === 'my') {
+      items = items.filter(function (a) {
+        return a.topics && a.topics.indexOf('smart-contracts-development') !== -1;
+      });
+      items.forEach(function (a) {
+        a.subscriptionReason = 'Вы подписаны на тему «Разработка смарт-контрактов»';
+      });
+    } else if (state.topic && state.topic !== 'all') {
       items = items.filter(function (a) {
         return a.topics && a.topics.indexOf(state.topic) !== -1;
       });
@@ -865,8 +1219,13 @@
     const el = document.getElementById('feedResultsCount');
     if (!el) return;
 
-    if (state.savedOnly) {
+    if (state.tab === 'saved') {
       el.textContent = 'Сохраненных публикаций: ' + state.total;
+      return;
+    }
+
+    if (state.tab === 'my') {
+      el.textContent = 'В персональной ленте: ' + state.total;
       return;
     }
 
@@ -953,7 +1312,56 @@
     const container = document.getElementById('feedCardsContainer');
     if (!container) return;
 
-    const isSaved = state.savedOnly;
+    if (state.tab === 'my') {
+      if (state.noSubscriptions) {
+        container.innerHTML =
+          '<div class="my-feed-empty-state">' +
+            '<div class="empty-state-icon-box">' +
+              '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>' +
+                '<circle cx="8.5" cy="7" r="4"></circle>' +
+                '<line x1="20" y1="8" x2="20" y2="14"></line>' +
+                '<line x1="23" y1="11" x2="17" y2="11"></line>' +
+              '</svg>' +
+            '</div>' +
+            '<h3 class="empty-state-title">У вас пока нет подписок</h3>' +
+            '<p class="empty-state-desc">Подпишитесь на интересных авторов, ключевые темы или теги, чтобы формировать персональную ленту материалов.</p>' +
+            '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyChooseSubs">' +
+              '<span>Выбрать темы и авторов</span>' +
+            '</button>' +
+          '</div>';
+
+        const chooseBtn = document.getElementById('btnEmptyChooseSubs');
+        if (chooseBtn) {
+          chooseBtn.addEventListener('click', openSubscriptionsModal);
+        }
+        return;
+      } else {
+        container.innerHTML =
+          '<div class="my-feed-empty-state">' +
+            '<div class="empty-state-icon-box">' +
+              '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<circle cx="12" cy="12" r="10"></circle>' +
+                '<line x1="12" y1="8" x2="12" y2="12"></line>' +
+                '<line x1="12" y1="16" x2="12.01" y2="16"></line>' +
+              '</svg>' +
+            '</div>' +
+            '<h3 class="empty-state-title">В вашей ленте пока нет новых публикаций</h3>' +
+            '<p class="empty-state-desc">Попробуйте расширить круг подписок или сбросить активные фильтры.</p>' +
+            '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyManageSubs">' +
+              '<span>Управление подписками</span>' +
+            '</button>' +
+          '</div>';
+
+        const manageBtn = document.getElementById('btnEmptyManageSubs');
+        if (manageBtn) {
+          manageBtn.addEventListener('click', openSubscriptionsModal);
+        }
+        return;
+      }
+    }
+
+    const isSaved = state.tab === 'saved';
     const title = isSaved ? 'Нет сохраненных публикаций' : 'Ничего не найдено';
     const desc = isSaved
       ? 'Вы еще не добавили ни одной статьи в закладки. Нажмите на иконку закладки на любой публикации в ленте, чтобы сохранить ее.'
@@ -975,7 +1383,13 @@
 
     const btn = document.getElementById('feedEmptyResetBtn');
     if (btn) {
-      btn.addEventListener('click', resetAllFilters);
+      btn.addEventListener('click', function () {
+        if (isSaved) {
+          switchTab('all');
+        } else {
+          resetAllFilters();
+        }
+      });
     }
   }
 
@@ -999,7 +1413,7 @@
   }
 
   // --------------------------------------------------------------------------
-  // 6. Article Card Generator (Accurate Tokens, Click Isolation)
+  // 10. Article Card Generator (Accurate Tokens, Click Isolation)
   // --------------------------------------------------------------------------
   function createCardElement(item) {
     const card = document.createElement('article');
@@ -1008,6 +1422,18 @@
     card.setAttribute('data-topic', item.topic || '');
 
     const articleUrl = 'article.html?id=' + encodeURIComponent(item.id);
+
+    // Subscription Reason Badge
+    let subscriptionBadgeHtml = '';
+    if (item.subscriptionReason) {
+      subscriptionBadgeHtml =
+        '<div class="card-subscription-badge">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+          '<span>' + escapeHtml(item.subscriptionReason) + '</span>' +
+        '</div>';
+    }
 
     // 1. Topic Title & Badge
     let topicTitle = '';
@@ -1045,9 +1471,9 @@
       badgesHtml += '<span class="meta-badge complexity-badge ' + complexityClass + '">' + escapeHtml(complexityTitle) + '</span>';
     }
 
-    // Tags HTML: Up to 4 tags directly, rest revealed on clicking "еще N"
+    // Tags HTML: Up to 3 tags directly, rest revealed on clicking "+N еще" / "Свернуть"
     const tags = Array.isArray(item.keywords) ? item.keywords : [];
-    const maxVisibleTags = 4;
+    const maxVisibleTags = 3;
     let tagsHtml = '';
     const visibleTags = tags.slice(0, maxVisibleTags);
     const hiddenTags = tags.slice(maxVisibleTags);
@@ -1061,8 +1487,8 @@
 
     if (hiddenTags.length > 0) {
       tagsHtml +=
-        '<button type="button" class="tag-chip-more" title="Показать остальные ключевые слова" aria-expanded="false">еще ' + hiddenTags.length + '</button>' +
-        '<span class="hidden-tags-wrap" style="display: none;">';
+        '<button type="button" class="tag-expand-btn" aria-expanded="false">+' + hiddenTags.length + ' еще</button>' +
+        '<span class="extra-tags" style="display: none;">';
       hiddenTags.forEach(function (tag) {
         tagsHtml +=
           '<button type="button" class="tag-chip" data-tag="' + escapeHtml(tag) + '">' +
@@ -1072,7 +1498,7 @@
       tagsHtml += '</span>';
     }
 
-    // Cover Image HTML (Only if present!)
+    // Cover Image HTML (780:440 aspect-ratio container)
     let coverHtml = '';
     if (item.coverImage) {
       coverHtml =
@@ -1086,6 +1512,7 @@
     const bookmarkTooltip = bookmarked ? 'Убрать из сохраненного' : 'Сохранить статью';
 
     card.innerHTML =
+      subscriptionBadgeHtml +
       '<div class="card-meta">' +
         '<div class="author-info">' +
           '<div class="author-avatar">' + escapeHtml(item.authorInitials || 'SC') + '</div>' +
@@ -1148,7 +1575,6 @@
         bookmarkBtn.title = newTooltip;
         bookmarkBtn.setAttribute('aria-label', newTooltip);
         if (state.savedOnly && !active) {
-          // If in saved mode and item unbookmarked, remove card smoothly
           card.remove();
           state.articles = state.articles.filter(function (a) { return a.id !== item.id; });
           state.total = Math.max(0, state.total - 1);
@@ -1160,17 +1586,19 @@
       });
     }
 
-    // Expand hidden tags on "еще N" click
-    const moreTagsBtn = card.querySelector('.tag-chip-more');
-    const hiddenTagsWrap = card.querySelector('.hidden-tags-wrap');
-    if (moreTagsBtn && hiddenTagsWrap) {
-      moreTagsBtn.addEventListener('click', function (e) {
+    // Expand / collapse tags on "+N еще" click
+    const tagExpandBtn = card.querySelector('.tag-expand-btn');
+    const extraTags = card.querySelector('.extra-tags');
+    if (tagExpandBtn && extraTags) {
+      tagExpandBtn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        hiddenTagsWrap.style.display = 'inline-flex';
-        hiddenTagsWrap.style.gap = '6px';
-        hiddenTagsWrap.style.flexWrap = 'wrap';
-        moreTagsBtn.remove();
+        const isExpanded = extraTags.style.display !== 'none';
+        extraTags.style.display = isExpanded ? 'none' : 'inline-flex';
+        extraTags.style.gap = '6px';
+        extraTags.style.flexWrap = 'wrap';
+        tagExpandBtn.textContent = isExpanded ? '+' + hiddenTags.length + ' еще' : 'Свернуть';
+        tagExpandBtn.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
       });
     }
 
@@ -1183,8 +1611,8 @@
         if (tag) {
           state.search = tag;
           const searchInput = document.getElementById('feedSearchInput');
-          if (searchInput) searchInput.value = tag;
           const clearBtn = document.getElementById('feedSearchClearBtn');
+          if (searchInput) searchInput.value = tag;
           if (clearBtn) clearBtn.style.display = 'inline-flex';
           state.offset = 0;
           syncURL(false);
@@ -1197,178 +1625,165 @@
   }
 
   // --------------------------------------------------------------------------
-  // 7. Sidebar Widgets Management
+  // 11. Sidebar Widgets Management
   // --------------------------------------------------------------------------
   function renderSidebarTopics(topicCounts) {
     const listEl = document.getElementById('widgetTopicsList');
-    if (!listEl || !window.PublicationConfig || !Array.isArray(window.PublicationConfig.TOPICS)) return;
+    if (!listEl) return;
+
+    if (!window.PublicationConfig || !Array.isArray(window.PublicationConfig.TOPICS)) {
+      return;
+    }
 
     listEl.innerHTML = '';
-    const topics = window.PublicationConfig.TOPICS.slice();
+    const topics = window.PublicationConfig.TOPICS;
+    const initialVisible = 6;
+    let isExpanded = false;
 
-    // Prioritize topics with published articles, then original catalog order
-    topics.sort(function (a, b) {
-      const countA = (topicCounts && topicCounts[a.id]) || 0;
-      const countB = (topicCounts && topicCounts[b.id]) || 0;
-      if (countB !== countA) return countB - countA;
-      return 0;
-    });
+    function renderItems() {
+      listEl.innerHTML = '';
+      const visible = isExpanded ? topics : topics.slice(0, initialVisible);
 
-    const INITIAL_VISIBLE = 7;
-    const initialTopics = topics.slice(0, INITIAL_VISIBLE);
-    const remainingTopics = topics.slice(INITIAL_VISIBLE);
+      visible.forEach(function (t) {
+        const count = (topicCounts && topicCounts[t.id]) ? topicCounts[t.id] : 0;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'widget-topic-chip';
+        btn.setAttribute('data-topic', t.id);
+        btn.title = t.title;
 
-    function createTopicRow(topic) {
-      const count = (topicCounts && topicCounts[topic.id]) || 0;
-      const isSelected = !state.savedOnly && state.topic === topic.id;
+        btn.innerHTML =
+          '<span class="widget-topic-title">' + escapeHtml(t.title) + '</span>' +
+          '<span class="widget-topic-count">' + count + '</span>';
 
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'widget-topic-row ' + (isSelected ? 'is-active' : '');
-      row.setAttribute('data-topic-id', topic.id);
-      row.innerHTML =
-        '<span class="widget-topic-title">' + escapeHtml(topic.title) + '</span>' +
-        '<span class="widget-topic-count" title="Количество опубликованных статей" aria-label="Количество опубликованных статей: ' + count + '">' + count + '</span>';
-
-      row.addEventListener('click', function () {
-        if (state.topic === topic.id && !state.savedOnly) {
-          state.topic = 'all';
-        } else {
-          state.topic = topic.id;
+        btn.addEventListener('click', function () {
+          state.topic = t.id;
           state.savedOnly = false;
-        }
-        state.offset = 0;
-        updateTopicButtonsState();
-        syncURL(false);
-        fetchFeed(true);
+          state.offset = 0;
+          updateModalFiltersState();
+          syncURL(false);
+          fetchFeed(true);
+        });
+
+        listEl.appendChild(btn);
       });
-      return row;
+
+      if (topics.length > initialVisible) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'widget-topics-toggle-btn';
+        toggleBtn.id = 'btnToggleAllSidebarTopics';
+        toggleBtn.textContent = isExpanded ? 'Свернуть' : 'Показать все (' + topics.length + ')';
+        toggleBtn.addEventListener('click', function () {
+          isExpanded = !isExpanded;
+          renderItems();
+        });
+        listEl.appendChild(toggleBtn);
+      }
     }
 
-    initialTopics.forEach(function (topic) {
-      listEl.appendChild(createTopicRow(topic));
-    });
-
-    if (remainingTopics.length > 0) {
-      const remainingWrap = document.createElement('div');
-      remainingWrap.className = 'widget-remaining-topics';
-      remainingWrap.style.display = 'none';
-      remainingWrap.style.flexDirection = 'column';
-      remainingWrap.style.gap = '4px';
-      remainingWrap.style.width = '100%';
-
-      remainingTopics.forEach(function (topic) {
-        remainingWrap.appendChild(createTopicRow(topic));
-      });
-
-      const toggleBtn = document.createElement('button');
-      toggleBtn.type = 'button';
-      toggleBtn.className = 'widget-topics-toggle-btn';
-      toggleBtn.id = 'btnToggleAllSidebarTopics';
-      toggleBtn.textContent = 'Все темы (' + topics.length + ')';
-      toggleBtn.setAttribute('aria-expanded', 'false');
-
-      toggleBtn.addEventListener('click', function () {
-        const isExpanded = remainingWrap.style.display !== 'none';
-        remainingWrap.style.display = isExpanded ? 'none' : 'flex';
-        toggleBtn.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
-        toggleBtn.textContent = isExpanded ? 'Все темы (' + topics.length + ')' : 'Свернуть темы';
-      });
-
-      listEl.appendChild(remainingWrap);
-      listEl.appendChild(toggleBtn);
-    }
-  }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    renderItems();
   }
 
   // --------------------------------------------------------------------------
-  // 8. Offline Fallback Seed Articles
+  // 12. Offline Fallback Seed Articles
   // --------------------------------------------------------------------------
   const FALLBACK_ARTICLES = [
     {
       id: 'art-01',
-      title: 'Интеграция смарт-контрактов с платформой цифрового рубля Банка России',
-      description: 'Архитектурный анализ взаимодействия шлюзов ПКСК с платформой цифрового рубля: моделирование атомарных транзакций, двухфазный коммит и валидация криптографических подписей по ГОСТ Р 34.12-2015.',
+      title: 'Интеграция смарт-контрактов с платформой Цифрового рубля Банка России (демо)',
+      description: 'Архитектурный обзор и практический кейс интеграции децентрализованных коммерческих смарт-контрактов с двухуровневой платформой Цифрового рубля.',
       author: 'Алексей Смирнов',
+      authorRole: 'Архитектор смарт-контрактов (демо)',
       authorInitials: 'АС',
-      authorRole: 'Архитектор решений (демо)',
       date: '26 сентября 2026',
-      topics: ['digital-ruble-payments', 'pksc-architecture', 'smart-contracts-development'],
-      topic: 'digital-ruble-payments',
-      targetAudience: 'architects-integrators',
-      format: 'tutorial',
+      readingTime: '8 мин',
+      readingMinutes: 8,
+      topic: 'smart-contracts-development',
+      topics: ['smart-contracts-development', 'digital-ruble-payments', 'pksc-architecture'],
+      targetAudience: 'architects-developers',
+      format: 'article',
       complexity: 'hard',
-      readingTime: '5 мин',
-      keywords: ['Цифровой рубль', 'Банк России', 'ПКСК', 'Смарт-контракты', 'Атомарные расчеты']
+      keywords: ['Цифровой рубль', 'Банк России', 'ПКСК', 'Смарт-контракты', 'Атомарные расчеты'],
+      coverImage: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=780&q=80'
     },
     {
       id: 'art-02',
-      title: 'Аудит безопасности смарт-контрактов по ГОСТ Р 57580: типичные уязвимости и превентивный анализ',
-      description: 'Разбор критических векторов атак на корпоративные распределенные реестры: повторный вход (reentrancy), ошибки управления доступом и методы автоматизированного аудита исходного кода.',
+      title: 'Практическое руководство по аудиту информационной безопасности смарт-контрактов (демо)',
+      description: 'Исчерпывающая методология проведения статического и динамического аудита безопасности смарт-контрактов в соответствии с требованиями ГОСТ Р 57580.',
       author: 'Екатерина Романова',
+      authorRole: 'Ведущий аудитор смарт-контрактов (демо)',
       authorInitials: 'ЕР',
-      authorRole: 'Ведущий аудитор безопасности (демо)',
       date: '25 сентября 2026',
-      topics: ['information-security', 'audit-and-verification', 'smart-contracts-development'],
+      readingTime: '12 мин',
+      readingMinutes: 12,
       topic: 'information-security',
+      topics: ['information-security', 'audit-and-verification', 'testing-and-quality'],
       targetAudience: 'security-auditors',
-      format: 'review',
-      complexity: 'hard',
-      readingTime: '6 мин',
-      keywords: ['Аудит ИБ', 'ГОСТ Р 57580', 'Уязвимости', 'Reentrancy', 'Формальная верификация']
+      format: 'guide',
+      complexity: 'medium',
+      keywords: ['Аудит ИБ', 'ГОСТ Р 57580', 'Уязвимости', 'Reentrancy', 'Формальная верификация'],
+      coverImage: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=780&q=80'
     },
     {
       id: 'art-03',
-      title: 'Правовая квалификация смарт-контрактов и комплаенс сделок в российском праве',
-      description: 'Практика применения статьи 309 ГК РФ к автоматизированному исполнению обязательств: самоисполняемые сделки, цифровые права (ЦФА) и особенности арбитражного доказывания.',
+      title: 'Правовая квалификация смарт-контрактов и комплаенс ЦФА в РФ (демо)',
+      description: 'Анализ актуальной судебной практики, регуляторных требований Федерального закона № 259-ФЗ и правового статуса самоисполняемых соглашений.',
       author: 'Илья Мельников',
+      authorRole: 'Советник по правовым вопросам ЦФА (демо)',
       authorInitials: 'ИМ',
-      authorRole: 'Советник по LegalTech и комплаенсу (демо)',
       date: '24 сентября 2026',
-      topics: ['law-and-compliance', 'business-logic-deals'],
+      readingTime: '6 мин',
+      readingMinutes: 6,
       topic: 'law-and-compliance',
-      targetAudience: 'legal-compliance',
+      topics: ['law-and-compliance', 'business-cases-adoption'],
+      targetAudience: 'lawyers-compliance',
       format: 'analytics',
-      complexity: 'medium',
-      readingTime: '5 мин',
-      keywords: ['Право', 'Комплаенс', 'ГК РФ', 'Цифровые права', 'ЦФА']
+      complexity: 'easy',
+      keywords: ['Право', 'Комплаенс', 'ГК РФ', 'Цифровые права', 'ЦФА'],
+      coverImage: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=780&q=80'
     },
     {
       id: 'art-04',
-      title: 'Поставка доверенных внешних данных: проектирование децентрализованных оракулов',
-      description: 'Пошаговое проектирование отказоустойчивой сети поставщиков котировок и внешних юридически значимых событий для корпоративных смарт-контрактов без единой точки отказа.',
+      title: 'Архитектура надежных оракулов данных для распределенных реестров (демо)',
+      description: 'Проектирование децентрализованной поставки рыночных данных, валютных курсов и фактов исполнения внешних обязательств в защищенные реестры.',
       author: 'Виктор Нестеров',
+      authorRole: 'Разработчик оракулов и шлюзов (демо)',
       authorInitials: 'ВН',
-      authorRole: 'Инженер распределенных систем (демо)',
-      date: '22 сентября 2026',
-      topics: ['oracles-and-data', 'integrations-and-api'],
+      date: '23 сентября 2026',
+      readingTime: '10 мин',
+      readingMinutes: 10,
       topic: 'oracles-and-data',
-      targetAudience: 'data-oracles',
-      format: 'case-study',
-      complexity: 'medium',
-      readingTime: '5 мин',
-      keywords: ['Оракулы', 'Внешние данные', 'API', 'Консенсус', 'ЦФА']
+      topics: ['oracles-and-data', 'integrations-and-api'],
+      targetAudience: 'architects-developers',
+      format: 'case',
+      complexity: 'hard',
+      keywords: ['Оракулы', 'Внешние данные', 'API', 'Консенсус', 'ЦФА'],
+      coverImage: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=780&q=80'
     }
   ];
 
   // --------------------------------------------------------------------------
-  // 9. DOM Ready Entry Point
+  // 13. DOM Ready Entry Point
   // --------------------------------------------------------------------------
   document.addEventListener('DOMContentLoaded', function () {
     initTheme();
     updateSavedCounter();
-    parseURLParams();
     initControls();
-    renderActiveChips();
-    fetchFeed(true);
+    initSubnavTabs();
+    initFiltersModal();
+    initSubscriptionsModal();
+    initAuthControls();
+
+    checkAuthStatus(function () {
+      parseURLParams();
+      fetchFeed(true);
+    });
+
+    window.addEventListener('popstate', function () {
+      parseURLParams();
+      fetchFeed(true);
+    });
   });
+
 })();

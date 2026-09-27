@@ -402,6 +402,66 @@
       }
     }
 
+    // Author Subscription Button Wiring
+    const subBtn = document.getElementById('btnSubscribeAuthor');
+    if (subBtn && article.author) {
+      const authorId = article.authorId || article.author;
+      const authorTitle = article.author;
+      subBtn.style.display = 'inline-flex';
+
+      function updateSubBtn(isSub) {
+        subBtn.classList.toggle('is-subscribed', isSub);
+        const txt = subBtn.querySelector('.subscribe-text');
+        if (txt) txt.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
+        subBtn.title = isSub ? 'Отписаться от автора' : 'Подписаться на автора';
+      }
+
+      fetch('/api/subscriptions')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success && data.subscriptions && Array.isArray(data.subscriptions.authors)) {
+            const isSub = data.subscriptions.authors.some(function (a) {
+              return a.id === authorId || a.title === authorTitle;
+            });
+            updateSubBtn(isSub);
+          }
+        })
+        .catch(function () {});
+
+      subBtn.addEventListener('click', function () {
+        fetch('/api/subscriptions/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetType: 'author', targetId: authorId, targetTitle: authorTitle })
+        })
+        .then(function (res) {
+          if (res.status === 401) {
+            showToast('Для подписки на автора необходимо войти в систему');
+            return null;
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          if (data && data.success) {
+            updateSubBtn(data.subscribed);
+            showToast(data.subscribed ? 'Вы подписались на автора ' + authorTitle : 'Вы отписались от автора ' + authorTitle);
+          }
+        })
+        .catch(function () {});
+      });
+    }
+
+    // Sync header auth label
+    fetch('/api/auth/status')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.authenticated && data.user) {
+          const lbl = document.getElementById('headerUserLabel');
+          if (lbl) lbl.textContent = data.user.name;
+        }
+      })
+      .catch(function () {});
+
     const dateEl = document.getElementById('articlePublishDate');
     if (dateEl) dateEl.textContent = article.date || 'Недавно';
 

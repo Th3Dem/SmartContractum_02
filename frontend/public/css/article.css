@@ -169,6 +169,32 @@
   color: var(--text-muted);
 }
 
+.btn-author-subscribe {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-sm);
+  margin-left: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-author-subscribe.is-subscribed {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.btn-author-subscribe.is-subscribed:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
 .article-meta-side {
   display: flex;
   align-items: center;

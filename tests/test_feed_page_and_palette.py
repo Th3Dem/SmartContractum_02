@@ -1345,17 +1345,14 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
         with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
             cls.server_py = f.read()
 
-    def test_saved_tab_moved_to_toolbar_actions(self):
-        """Verify #feedSavedTab is in .feed-toolbar-actions, separating bookmarks from thematic topic filters."""
-        toolbar_match = re.search(r'<div class="feed-toolbar-actions">(.*?)</div>\s*</div>\s*<!-- Main Topics Bar', self.feed_html, re.DOTALL)
-        self.assertIsNotNone(toolbar_match, ".feed-toolbar-actions container not found")
-        toolbar_content = toolbar_match.group(1)
-        self.assertIn('id="feedSavedTab"', toolbar_content, "#feedSavedTab must be located within .feed-toolbar-actions")
-
-        # Must not be inside .feed-topics-bar
-        topics_bar_match = re.search(r'<div class="feed-topics-bar feed-filter-bar"[^>]*>(.*?)</div>', self.feed_html, re.DOTALL)
-        self.assertIsNotNone(topics_bar_match)
-        self.assertNotIn('id="feedSavedTab"', topics_bar_match.group(1), "#feedSavedTab must not be inside .feed-topics-bar")
+    def test_saved_tab_in_subnav(self):
+        """Verify #feedSavedTab is located in #feedSubnavBar for task-26."""
+        subnav_match = re.search(r'<nav class="feed-subnav-bar" id="feedSubnavBar"[^>]*>(.*?)</nav>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(subnav_match, "#feedSubnavBar container not found")
+        subnav_content = subnav_match.group(1)
+        self.assertIn('id="feedSavedTab"', subnav_content, "#feedSavedTab must be located within #feedSubnavBar")
+        self.assertIn('id="tabFeedAll"', subnav_content, "#tabFeedAll must be located within #feedSubnavBar")
+        self.assertIn('id="tabFeedMy"', subnav_content, "#tabFeedMy must be located within #feedSubnavBar")
 
     def test_feed_period_select_wrap_initial_hidden(self):
         """Verify #feedPeriodSelectWrap exists and is hidden by default when sort is newest."""
@@ -1409,5 +1406,276 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
         self.assertTrue(0 < title_pos < badges_pos, ".card-meta-badges must be rendered under .card-title")
 
 
+class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
+    """Comprehensive test suite for task-26: Second level menu, sticky scroll, subscriptions, and My Feed."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'feed.html'), 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'feed.css'), 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'article.html'), 'r', encoding='utf-8') as f:
+            cls.article_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'article.js'), 'r', encoding='utf-8') as f:
+            cls.article_js = f.read()
+        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+            cls.server_py = f.read()
+
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'task26_test.db')
+
+        cls.server = server.create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR)
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def test_subnav_bar_markup_under_header(self):
+        """Verify #feedSubnavBar is placed directly under #appHeader with all required controls."""
+        header_end = self.feed_html.find('</header>')
+        subnav_start = self.feed_html.find('<nav class="feed-subnav-bar" id="feedSubnavBar"')
+        self.assertTrue(0 < header_end < subnav_start, "#feedSubnavBar must appear directly under #appHeader")
+
+        # Controls in subnav
+        self.assertIn('id="tabFeedAll"', self.feed_html)
+        self.assertIn('id="tabFeedMy"', self.feed_html)
+        self.assertIn('id="feedSearchInput"', self.feed_html)
+        self.assertIn('id="btnFeedFiltersToggle"', self.feed_html)
+        self.assertIn('id="feedSavedTab"', self.feed_html)
+        self.assertIn('id="btnHeroWrite"', self.feed_html)
+
+        # Personal tabs have .personal-tab class
+        self.assertIn('feed-subnav-tab personal-tab', self.feed_html)
+        self.assertIn('feed-saved-btn personal-tab', self.feed_html)
+
+    def test_subnav_bar_css_sticky_and_opaque(self):
+        """Verify .feed-subnav-bar in feed.css has position: sticky, top: 56px, and opaque backgrounds."""
+        subnav_rule = re.search(r'\.feed-subnav-bar\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(subnav_rule, ".feed-subnav-bar rule not found in feed.css")
+        rules = subnav_rule.group(1)
+        self.assertIn('position: sticky', rules)
+        self.assertIn('top: 56px', rules)
+        self.assertIn('z-index: 99', rules)
+        self.assertIn('background-color: #0b1329', rules)
+
+        light_subnav = re.search(r'\[data-theme="light"\]\s*\.feed-subnav-bar\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(light_subnav, "[data-theme='light'] .feed-subnav-bar rule not found in feed.css")
+        self.assertIn('background-color: #ffffff', light_subnav.group(1))
+
+    def test_direct_toolbar_and_no_duplicate_controls(self):
+        """Verify direct toolbar above articles and removal of duplicate controls block."""
+        self.assertIn('id="feedDirectToolbar"', self.feed_html)
+        self.assertIn('id="feedResultsCount"', self.feed_html)
+        self.assertIn('id="feedSortSelect"', self.feed_html)
+        self.assertIn('id="btnManageSubscriptions"', self.feed_html)
+
+        # Old hero card and controls section are not in feed.html
+        self.assertNotIn('feed-hero-card', self.feed_html)
+        self.assertNotIn('feed-controls-section', self.feed_html)
+
+    def test_modals_markup_in_feed_html(self):
+        """Verify Unified Filters Modal, Subscriptions Modal, and Auth Modal in feed.html."""
+        # 1. Filters Modal
+        self.assertIn('id="feedFiltersModal"', self.feed_html)
+        self.assertIn('id="filterTopicSearchInput"', self.feed_html)
+        self.assertIn('id="modalTopicsFilterBar"', self.feed_html)
+        self.assertIn('id="feedAudienceSelect"', self.feed_html)
+        self.assertIn('id="feedFormatSelect"', self.feed_html)
+        self.assertIn('id="feedComplexitySelect"', self.feed_html)
+        self.assertIn('id="btnApplyFilters"', self.feed_html)
+        self.assertIn('id="feedResetFiltersBtn"', self.feed_html)
+
+        # 2. Subscriptions Modal
+        self.assertIn('id="subscriptionsModal"', self.feed_html)
+        self.assertIn('id="tabSubsAuthors"', self.feed_html)
+        self.assertIn('id="tabSubsTopics"', self.feed_html)
+        self.assertIn('id="tabSubsTags"', self.feed_html)
+        self.assertIn('id="subsSearchInput"', self.feed_html)
+        self.assertIn('id="subsListContainer"', self.feed_html)
+
+        # 3. Auth Modal
+        self.assertIn('id="authModal"', self.feed_html)
+        self.assertIn('id="btnAuthLoginDemo"', self.feed_html)
+        self.assertIn('id="authUserIdInput"', self.feed_html)
+        self.assertIn('id="btnAuthLoginSubmit"', self.feed_html)
+
+    def test_card_scroll_margin_and_cover_aspect_ratio(self):
+        """Verify .feed-card has scroll-margin-top: 130px and cover container has 780/440 aspect ratio."""
+        card_match = re.search(r'\.feed-card\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(card_match)
+        self.assertIn('scroll-margin-top: 130px', card_match.group(1))
+
+        cover_match = re.search(r'\.card-cover-container\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(cover_match)
+        self.assertIn('aspect-ratio: 780 / 440', cover_match.group(1))
+
+    def test_no_dashed_borders_in_feed_css(self):
+        """Verify no dashed borders exist in feed.css (empty state and sidebar toggle use solid borders)."""
+        self.assertNotIn('border: 1px dashed', self.feed_css)
+        self.assertNotIn('dashed', self.feed_css)
+
+    def test_article_page_author_subscribe_element(self):
+        """Verify article.html contains #btnSubscribeAuthor and article.js binds subscription logic."""
+        self.assertIn('id="btnSubscribeAuthor"', self.article_html)
+        self.assertIn('btn-author-subscribe', self.article_html)
+        self.assertIn('/api/subscriptions', self.article_js)
+        self.assertIn('/api/subscriptions/toggle', self.article_js)
+
+    def test_api_auth_lifecycle(self):
+        """Verify GET /api/auth/status, POST /api/auth/login, and POST /api/auth/logout."""
+        # 1. Status without cookie
+        req = urllib.request.Request(f"{self.base_url}/api/auth/status")
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(data.get("success"))
+            self.assertFalse(data.get("authenticated"))
+
+        # 2. Login as demo user
+        login_payload = json.dumps({"userId": "test_user_01", "name": "Тестовый Пользователь"}).encode('utf-8')
+        login_req = urllib.request.Request(
+            f"{self.base_url}/api/auth/login",
+            data=login_payload,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(login_req) as resp:
+            login_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(login_data.get("success"))
+            self.assertTrue(login_data.get("authenticated"))
+            self.assertEqual(login_data["user"]["id"], "test_user_01")
+            cookie_header = resp.headers.get("Set-Cookie")
+            self.assertIsNotNone(cookie_header)
+            self.assertIn("sc_session=test_user_01", cookie_header)
+
+        # 3. Status with cookie
+        status_req = urllib.request.Request(
+            f"{self.base_url}/api/auth/status",
+            headers={"Cookie": "sc_session=test_user_01"}
+        )
+        with urllib.request.urlopen(status_req) as resp:
+            status_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(status_data.get("authenticated"))
+            self.assertEqual(status_data["user"]["id"], "test_user_01")
+
+        # 4. Logout
+        logout_req = urllib.request.Request(
+            f"{self.base_url}/api/auth/logout",
+            data=b"{}",
+            headers={"Content-Type": "application/json", "Cookie": "sc_session=test_user_01"}
+        )
+        with urllib.request.urlopen(logout_req) as resp:
+            logout_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(logout_data.get("success"))
+            self.assertFalse(logout_data.get("authenticated"))
+
+    def test_api_subscriptions_and_tag_normalization(self):
+        """Verify GET /api/subscriptions, POST /api/subscriptions/toggle with normalization, and entities catalog."""
+        # 1. Unauthenticated toggle returns 401
+        toggle_payload = json.dumps({"targetType": "topic", "targetId": "smart-contracts-development"}).encode('utf-8')
+        toggle_req = urllib.request.Request(
+            f"{self.base_url}/api/subscriptions/toggle",
+            data=toggle_payload,
+            headers={"Content-Type": "application/json"}
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(toggle_req)
+        self.assertEqual(ctx.exception.code, 401)
+
+        # 2. Toggle topic subscription for user_sub_test
+        auth_header = {"Cookie": "sc_session=user_sub_test", "Content-Type": "application/json"}
+        toggle_req2 = urllib.request.Request(
+            f"{self.base_url}/api/subscriptions/toggle",
+            data=json.dumps({"targetType": "topic", "targetId": "smart-contracts-development", "targetTitle": "Разработка смарт-контрактов"}).encode('utf-8'),
+            headers=auth_header
+        )
+        with urllib.request.urlopen(toggle_req2) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(data.get("success"))
+            self.assertTrue(data.get("subscribed"))
+
+        # 3. Toggle tag subscription with dirty input (leading #, extra spaces, mixed case)
+        toggle_tag_req = urllib.request.Request(
+            f"{self.base_url}/api/subscriptions/toggle",
+            data=json.dumps({"targetType": "tag", "targetId": "   #Цифровой   Рубль  ", "targetTitle": "#Цифровой  рубль"}).encode('utf-8'),
+            headers=auth_header
+        )
+        with urllib.request.urlopen(toggle_tag_req) as resp:
+            tag_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(tag_data.get("success"))
+            self.assertTrue(tag_data.get("subscribed"))
+            self.assertEqual(tag_data.get("targetId"), "цифровой рубль")
+
+        # 4. GET /api/subscriptions returns both
+        subs_req = urllib.request.Request(
+            f"{self.base_url}/api/subscriptions",
+            headers={"Cookie": "sc_session=user_sub_test"}
+        )
+        with urllib.request.urlopen(subs_req) as resp:
+            subs_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(subs_data.get("success"))
+            self.assertEqual(len(subs_data["subscriptions"]["topics"]), 1)
+            self.assertEqual(len(subs_data["subscriptions"]["tags"]), 1)
+            self.assertEqual(subs_data["subscriptions"]["tags"][0]["id"], "цифровой рубль")
+
+        # 5. GET /api/subscriptions/entities returns catalog with isSubscribed flags
+        ent_req = urllib.request.Request(
+            f"{self.base_url}/api/subscriptions/entities",
+            headers={"Cookie": "sc_session=user_sub_test"}
+        )
+        with urllib.request.urlopen(ent_req) as resp:
+            ent_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(ent_data.get("success"))
+            self.assertIn("authors", ent_data)
+            self.assertIn("topics", ent_data)
+            self.assertIn("tags", ent_data)
+            sub_topic = next((t for t in ent_data["topics"] if t["id"] == "smart-contracts-development"), None)
+            self.assertIsNotNone(sub_topic)
+            self.assertTrue(sub_topic.get("isSubscribed"))
+
+    def test_api_my_feed_access_control_and_reason_attachment(self):
+        """Verify GET /api/articles?tab=my requires auth and returns articles with subscriptionReason."""
+        # 1. Unauthenticated tab=my returns 401
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(f"{self.base_url}/api/articles?tab=my")
+        self.assertEqual(ctx.exception.code, 401)
+
+        # 2. Authenticated user with 0 subscriptions returns noSubscriptions: True
+        zero_user_req = urllib.request.Request(
+            f"{self.base_url}/api/articles?tab=my",
+            headers={"Cookie": "sc_session=user_zero_subs"}
+        )
+        with urllib.request.urlopen(zero_user_req) as resp:
+            zero_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(zero_data.get("success"))
+            self.assertEqual(zero_data.get("total"), 0)
+            self.assertTrue(zero_data.get("noSubscriptions"))
+
+        # 3. user_demo has seeded subscriptions and returns matched articles with subscriptionReason
+        demo_req = urllib.request.Request(
+            f"{self.base_url}/api/articles?tab=my",
+            headers={"Cookie": "sc_session=user_demo"}
+        )
+        with urllib.request.urlopen(demo_req) as resp:
+            demo_data = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(demo_data.get("success"))
+            self.assertGreater(demo_data.get("total"), 0)
+            self.assertFalse(demo_data.get("noSubscriptions"))
+            for art in demo_data.get("articles", []):
+                self.assertIsNotNone(art.get("subscriptionReason"))
+                self.assertTrue(art["subscriptionReason"].startswith("Вы подписаны"))
+
+
 if __name__ == '__main__':
     unittest.main()
+

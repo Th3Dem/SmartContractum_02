@@ -146,6 +146,25 @@ def compute_snapshot_hash(title: str, article_html: str, publication_settings: A
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+STANDARD_TOPICS = [
+    ("pksc-architecture", "Архитектура и развитие ПКСК"),
+    ("smart-contracts-development", "Разработка смарт-контрактов"),
+    ("business-logic-deals", "Бизнес-логика и моделирование сделок"),
+    ("testing-and-quality", "Тестирование и качество"),
+    ("information-security", "Информационная безопасность"),
+    ("audit-and-verification", "Аудит и проверка смарт-контрактов"),
+    ("law-and-compliance", "Право и комплаенс"),
+    ("digital-ruble-payments", "Цифровой рубль и платежи"),
+    ("oracles-and-data", "Оракулы и поставка данных"),
+    ("integrations-and-api", "Интеграции и API"),
+    ("infrastructure-and-nodes", "Инфраструктура и узлы"),
+    ("analytics-and-monitoring", "Аналитика и мониторинг"),
+    ("standards-and-protocols", "Стандарты и протоколы"),
+    ("business-cases-adoption", "Бизнес-сценарии и внедрение"),
+]
+TOPICS_TITLE_MAP = dict(STANDARD_TOPICS)
+
+
 def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
     """
     Initializes the SQLite database and ensures the moderation_submissions table exists.
@@ -175,7 +194,20 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_draft_id ON moderation_submissions(draft_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_status ON moderation_submissions(status);")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_title TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, target_type, target_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON user_subscriptions(user_id);")
         seed_approved_articles(conn)
+        seed_user_subscriptions(conn)
     return conn
 
 
@@ -670,6 +702,26 @@ def seed_approved_articles(conn: sqlite3.Connection):
         ))
 
 
+def seed_user_subscriptions(conn: sqlite3.Connection):
+    """
+    Seeds default subscriptions for user_demo if none exist.
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE user_id = 'user_demo'")
+    row = cur.fetchone()
+    if row and row["cnt"] > 0:
+        return
+
+    default_subs = [
+        ("user_demo", "topic", "smart-contracts-development", "Разработка смарт-контрактов", "2026-09-26T12:00:00Z"),
+        ("user_demo", "author", "author_smirnov", "Алексей Смирнов", "2026-09-26T12:00:00Z"),
+        ("user_demo", "tag", "цифровой рубль", "Цифровой рубль", "2026-09-26T12:00:00Z"),
+    ]
+    conn.executemany("""
+        INSERT OR IGNORE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, default_subs)
+
 
 def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     """
@@ -838,16 +890,43 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
     def send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Idempotency-Key, X-User-Id")
+        self.send_header("Access-Control-Allow-Credentials", "true")
 
-    def send_json_response(self, status_code: int, data: dict):
+    def send_json_response(self, status_code: int, data: dict, extra_headers: Optional[List[Tuple[str, str]]] = None):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
+        if extra_headers:
+            for hk, hv in extra_headers:
+                self.send_header(hk, hv)
         self.send_cors_headers()
         self.end_headers()
         self.wfile.write(payload)
+
+    def get_current_user(self) -> Optional[Dict[str, str]]:
+        """
+        Extracts authenticated user from cookies, X-User-Id header, or query params.
+        """
+        cookie_header = self.headers.get("Cookie", "")
+        if cookie_header:
+            cookies = urllib.parse.parse_qsl(cookie_header.replace("; ", "&"))
+            for k, v in cookies:
+                if k == "sc_session" and v:
+                    return {"id": v, "name": "Демо Пользователь" if v == "user_demo" else v}
+
+        x_user = self.headers.get("X-User-Id", "").strip()
+        if x_user:
+            return {"id": x_user, "name": "Демо Пользователь" if x_user == "user_demo" else x_user}
+
+        parsed = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(parsed.query)
+        u_param = (qs.get("userId", [""])[0] or qs.get("authUser", [""])[0]).strip()
+        if u_param:
+            return {"id": u_param, "name": "Демо Пользователь" if u_param == "user_demo" else u_param}
+
+        return None
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -865,6 +944,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "status": "ok",
                 "server": "Antigravity Moderation Server"
             })
+        elif path == "/api/auth/status":
+            user = self.get_current_user()
+            if user:
+                self.send_json_response(200, {"success": True, "authenticated": True, "user": user})
+            else:
+                self.send_json_response(200, {"success": True, "authenticated": False, "user": None})
+        elif path == "/api/subscriptions":
+            self.handle_get_subscriptions()
+        elif path == "/api/subscriptions/entities":
+            self.handle_get_subscription_entities()
         elif path == "/api/moderation/status":
             self.handle_moderation_status(parsed)
         elif path == "/api/moderation/list":
@@ -885,7 +974,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        if path == "/api/moderation/submit":
+        if path == "/api/auth/login":
+            self.handle_auth_login()
+        elif path == "/api/auth/logout":
+            self.handle_auth_logout()
+        elif path == "/api/subscriptions/toggle":
+            self.handle_subscriptions_toggle()
+        elif path == "/api/moderation/submit":
             self.handle_moderation_submit()
         elif path.startswith("/api/"):
             self.send_json_response(404, {
@@ -897,6 +992,199 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": False,
                 "error": "Method Not Allowed"
             })
+
+    def handle_auth_login(self):
+        """POST /api/auth/login sets sc_session cookie and returns user."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
+            data = json.loads(body) if body else {}
+        except Exception:
+            data = {}
+
+        user_id = (data.get("userId") or "user_demo").strip()
+        user_name = (data.get("name") or ("Демо Пользователь" if user_id == "user_demo" else user_id)).strip()
+        user = {"id": user_id, "name": user_name}
+
+        self.send_json_response(200, {
+            "success": True,
+            "authenticated": True,
+            "user": user
+        }, extra_headers=[("Set-Cookie", f"sc_session={user_id}; Path=/; SameSite=Lax")])
+
+    def handle_auth_logout(self):
+        """POST /api/auth/logout clears sc_session cookie."""
+        self.send_json_response(200, {
+            "success": True,
+            "authenticated": False
+        }, extra_headers=[("Set-Cookie", "sc_session=; Path=/; Max-Age=0; SameSite=Lax")])
+
+    def handle_get_subscriptions(self):
+        """GET /api/subscriptions returns user's active subscriptions."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT target_type, target_id, target_title, created_at 
+                FROM user_subscriptions WHERE user_id = ? ORDER BY id ASC
+            """, (user["id"],))
+            rows = cur.fetchall()
+
+        subs = {"authors": [], "topics": [], "tags": []}
+        for r in rows:
+            t = r["target_type"]
+            entry = {"id": r["target_id"], "title": r["target_title"], "createdAt": r["created_at"]}
+            if t == "author":
+                subs["authors"].append(entry)
+            elif t == "topic":
+                subs["topics"].append(entry)
+            elif t == "tag":
+                subs["tags"].append(entry)
+
+        self.send_json_response(200, {
+            "success": True,
+            "user": user,
+            "subscriptions": subs
+        })
+
+    def handle_subscriptions_toggle(self):
+        """POST /api/subscriptions/toggle toggles subscription state."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8")
+            data = json.loads(body) if body else {}
+        except Exception as e:
+            self.send_json_response(400, {"success": False, "error": f"Invalid JSON payload: {e}"})
+            return
+
+        target_type = (data.get("targetType") or "").strip().lower()
+        raw_id = (data.get("targetId") or "").strip()
+        raw_title = (data.get("targetTitle") or "").strip()
+
+        if target_type not in ("author", "topic", "tag"):
+            self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', or 'tag'"})
+            return
+
+        if not raw_id:
+            self.send_json_response(400, {"success": False, "error": "targetId is required"})
+            return
+
+        # Normalize tag ID (lowercase, trim extra spaces, remove #)
+        if target_type == "tag":
+            normalized_id = normalize_keyword(raw_id).lstrip('#').strip().lower()
+            title = normalize_keyword(raw_title or raw_id).lstrip('#').strip()
+        else:
+            normalized_id = raw_id
+            title = raw_title or raw_id
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id FROM user_subscriptions 
+                WHERE user_id = ? AND target_type = ? AND target_id = ?
+            """, (user["id"], target_type, normalized_id))
+            row = cur.fetchone()
+
+            if row:
+                cur.execute("DELETE FROM user_subscriptions WHERE id = ?", (row["id"],))
+                subscribed = False
+            else:
+                now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute("""
+                    INSERT INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user["id"], target_type, normalized_id, title, now_str))
+                subscribed = True
+
+        self.send_json_response(200, {
+            "success": True,
+            "subscribed": subscribed,
+            "targetType": target_type,
+            "targetId": normalized_id,
+            "targetTitle": title
+        })
+
+    def handle_get_subscription_entities(self):
+        """GET /api/subscriptions/entities returns catalog of entities available for subscription."""
+        user = self.get_current_user()
+        user_subs = set()
+        conn = self.get_db()
+        with conn:
+            if user:
+                cur = conn.cursor()
+                cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                for r in cur.fetchall():
+                    user_subs.add((r["target_type"], r["target_id"]))
+
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
+            rows = cur.fetchall()
+
+        authors_map = {}
+        tags_map = {}
+        topics_counts = {}
+
+        for row in rows:
+            try:
+                settings = json.loads(row["publication_settings"]) if row["publication_settings"] else {}
+            except Exception:
+                settings = {}
+
+            author_id = row["author_id"]
+            author_name = settings.get("author") or "Автор платформы"
+            author_role = settings.get("authorRole") or ""
+            if author_id not in authors_map:
+                authors_map[author_id] = {
+                    "id": author_id,
+                    "title": author_name,
+                    "role": author_role,
+                    "count": 0,
+                    "isSubscribed": ("author", author_id) in user_subs
+                }
+            authors_map[author_id]["count"] += 1
+
+            for t in settings.get("topics") or []:
+                topics_counts[t] = topics_counts.get(t, 0) + 1
+
+            for k in settings.get("keywords") or []:
+                norm_tag = normalize_keyword(k).lstrip('#').strip().lower()
+                display_tag = normalize_keyword(k).lstrip('#').strip()
+                if norm_tag:
+                    if norm_tag not in tags_map:
+                        tags_map[norm_tag] = {
+                            "id": norm_tag,
+                            "title": display_tag,
+                            "count": 0,
+                            "isSubscribed": ("tag", norm_tag) in user_subs
+                        }
+                    tags_map[norm_tag]["count"] += 1
+
+        topics_list = []
+        for tid, tname in STANDARD_TOPICS:
+            topics_list.append({
+                "id": tid,
+                "title": tname,
+                "count": topics_counts.get(tid, 0),
+                "isSubscribed": ("topic", tid) in user_subs
+            })
+
+        self.send_json_response(200, {
+            "success": True,
+            "authors": list(authors_map.values()),
+            "topics": topics_list,
+            "tags": sorted(list(tags_map.values()), key=lambda x: x["count"], reverse=True)
+        })
 
     def handle_moderation_submit(self):
         """
@@ -1245,6 +1533,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Returns only approved articles.
         """
         query = urllib.parse.parse_qs(parsed_url.query)
+        tab = (query.get("tab", ["all"])[0] or "all").strip().lower()
         search_query = (query.get("search", [""])[0] or "").strip().lower()
         topic_filter = (query.get("topic", [""])[0] or "").strip()
         audience_filter = (query.get("audience", [""])[0] or "").strip()
@@ -1265,6 +1554,59 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             offset = 0
 
         allowed_ids = set([x.strip() for x in ids_filter.split(",") if x.strip()]) if ids_filter else None
+
+        sub_authors = set()
+        sub_topics = set()
+        sub_tags = set()
+        sub_topics_titles = {}
+        sub_tags_titles = {}
+
+        if tab == "my":
+            user = self.get_current_user()
+            if not user:
+                self.send_json_response(401, {
+                    "success": False,
+                    "error": "Для просмотра персональной ленты необходимо войти",
+                    "requireAuth": True
+                })
+                return
+
+            conn = self.get_db()
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT target_type, target_id, target_title FROM user_subscriptions WHERE user_id = ?",
+                    (user["id"],)
+                )
+                sub_rows = cur.fetchall()
+
+            if not sub_rows:
+                self.send_json_response(200, {
+                    "success": True,
+                    "articles": [],
+                    "total": 0,
+                    "limit": limit,
+                    "offset": offset,
+                    "hasMore": False,
+                    "topicCounts": {},
+                    "tab": "my",
+                    "noSubscriptions": True
+                })
+                return
+
+            for sr in sub_rows:
+                stype = sr["target_type"]
+                sid = sr["target_id"]
+                stitle = sr["target_title"]
+                if stype == "author":
+                    sub_authors.add(sid)
+                elif stype == "topic":
+                    sub_topics.add(sid)
+                    sub_topics_titles[sid] = stitle
+                elif stype == "tag":
+                    norm_t = normalize_keyword(sid).lstrip('#').strip().lower()
+                    sub_tags.add(norm_t)
+                    sub_tags_titles[norm_t] = stitle
 
         conn = self.get_db()
         with conn:
@@ -1342,7 +1684,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if not all(w in search_haystack for w in words):
                     continue
 
-            reading_time, reading_minutes = calculate_reading_time(row["article_html"] or "")
             author_name = settings.get("author") or (
                 "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
             )
@@ -1350,6 +1691,28 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
             )
             author_role = settings.get("authorRole") or ""
+
+            # Check subscription filter for "my" feed
+            subscription_reason = None
+            if tab == "my":
+                if row["author_id"] in sub_authors or author_name in sub_authors:
+                    subscription_reason = f"Вы подписаны на автора {author_name}"
+                else:
+                    matched_topic = next((t for t in topics if t in sub_topics), None)
+                    if matched_topic:
+                        topic_title = sub_topics_titles.get(matched_topic) or TOPICS_TITLE_MAP.get(matched_topic, matched_topic)
+                        subscription_reason = f"Вы подписаны на тему «{topic_title}»"
+                    else:
+                        norm_kws = [normalize_keyword(k).lstrip('#').strip().lower() for k in keywords]
+                        matched_tag = next((nk for nk in norm_kws if nk in sub_tags), None)
+                        if matched_tag:
+                            tag_title = sub_tags_titles.get(matched_tag) or matched_tag
+                            subscription_reason = f"Вы подписаны на #{tag_title}"
+
+                if not subscription_reason:
+                    continue
+
+            reading_time, reading_minutes = calculate_reading_time(row["article_html"] or "")
 
             filtered_articles.append({
                 "id": row["id"],
@@ -1369,7 +1732,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "complexity": compl,
                 "keywords": keywords,
                 "readingTime": reading_time,
-                "readingMinutes": reading_minutes
+                "readingMinutes": reading_minutes,
+                "subscriptionReason": subscription_reason
             })
 
         if sort_by in ("oldest", "asc"):
@@ -1386,7 +1750,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "limit": limit,
             "offset": offset,
             "hasMore": has_more,
-            "topicCounts": topic_counts
+            "topicCounts": topic_counts,
+            "tab": tab,
+            "noSubscriptions": False
         })
 
 
