@@ -1233,6 +1233,53 @@
        Live Card Preview (Uniform 7-Step Feed Card Order)
        ========================================================================== */
     updateCardPreview() {
+      if (window.SmartContractumCard && typeof window.SmartContractumCard.renderCardInnerHtml === 'function' && this.cardPreview) {
+        const authorName = (window.currentUser && window.currentUser.name) ||
+          (window.EditorApp && window.EditorApp.authorName) ||
+          'Автор платформы';
+        const authorRole = (window.currentUser && window.currentUser.role) || '';
+        const authorInitials = authorName.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'АП';
+        const rawTitle = this.titleInput ? this.titleInput.value.trim() : '';
+        const rawDesc = this.description ? this.description.trim() : '';
+        const text = this.editor ? this.editor.getText().trim() : '';
+        const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+        const minutes = Math.max(1, Math.ceil(words / 200));
+
+        const previewItem = {
+          title: rawTitle || 'Заголовок публикации',
+          author: authorName,
+          authorRole: authorRole,
+          authorInitials: authorInitials,
+          date: 'Недавно',
+          topic: (this.topics && this.topics.length > 0) ? this.topics[0] : null,
+          format: (this.format && this.format !== 'not_specified' && this.format !== 'none') ? this.format : null,
+          complexity: (this.complexity && this.complexity !== 'none') ? this.complexity : null,
+          coverImage: this.coverDataUrl || null,
+          description: rawDesc || 'Краткое описание публикации появится здесь...',
+          keywords: this.keywords || [],
+          readingTime: `~${minutes} мин чтения`
+        };
+
+        this.cardPreview.innerHTML = window.SmartContractumCard.renderCardInnerHtml(previewItem, { isPreview: true });
+
+        // Update cached references
+        this.cardPreviewAvatar = document.getElementById('preview-card-avatar');
+        this.cardPreviewAuthor = document.getElementById('preview-card-author');
+        this.cardPreviewDate = document.getElementById('preview-card-date');
+        this.cardPreviewDot = document.getElementById('preview-card-dot');
+        this.cardPreviewRole = document.getElementById('preview-card-role');
+        this.cardPreviewTitle = document.getElementById('preview-card-title');
+        this.cardPreviewBadges = document.getElementById('preview-card-badges');
+        this.cardPreviewBadgeTopic = document.getElementById('preview-card-badge-topic');
+        this.cardPreviewBadgeFormat = document.getElementById('preview-card-badge-format');
+        this.cardPreviewBadgeComplexity = document.getElementById('preview-card-badge-complexity');
+        this.cardPreviewCover = document.getElementById('preview-card-cover');
+        this.cardPreviewDesc = document.getElementById('preview-card-desc');
+        this.cardPreviewTags = document.getElementById('preview-card-tags');
+        this.cardPreviewTime = document.getElementById('preview-card-time');
+        return;
+      }
+
       // 1. Author and Date
       const authorName = (window.currentUser && window.currentUser.name) ||
         (window.EditorApp && window.EditorApp.authorName) ||

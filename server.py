@@ -29,15 +29,53 @@ import urllib.parse
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import image_decoder
+
 # Base paths
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_PUBLIC_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 DEFAULT_DB_PATH = os.path.join(DATA_DIR, "moderation.db")
+MEDIA_DIR = os.path.join(DATA_DIR, "media")
+os.makedirs(MEDIA_DIR, exist_ok=True)
 
 # Allowed configuration values
 VALID_COMPLEXITIES = {"none", "easy", "medium", "hard"}
 VALID_STATUSES = {"draft", "pending_moderation", "approved", "rejected"}
+
+
+class CoverValidationResult(tuple):
+    """
+    Validation result that unpacks as (is_valid, error_msg) for full backward compatibility,
+    while also exposing .is_valid, .error_msg, .saved_url, .meta, .image_bytes.
+    """
+    def __new__(cls, is_valid: bool, error_msg: Optional[str] = None, saved_url: Optional[str] = None, meta: Optional[dict] = None, image_bytes: Optional[bytes] = None):
+        return super().__new__(cls, (is_valid, error_msg))
+
+    def __init__(self, is_valid: bool, error_msg: Optional[str] = None, saved_url: Optional[str] = None, meta: Optional[dict] = None, image_bytes: Optional[bytes] = None):
+        self.is_valid = is_valid
+        self.error_msg = error_msg
+        self.saved_url = saved_url
+        self.meta = meta or {}
+        self.image_bytes = image_bytes
+
+
+def save_media_file(data: bytes, ext: str, media_dir: Optional[str] = None) -> str:
+    """
+    Saves image data to disk in media_dir/<sha256>.<ext> and returns /media/<sha256>.<ext>.
+    """
+    target_dir = media_dir or MEDIA_DIR
+    os.makedirs(target_dir, exist_ok=True)
+    clean_ext = ext.lstrip(".").lower()
+    if clean_ext == "jpeg":
+        clean_ext = "jpg"
+    file_hash = hashlib.sha256(data).hexdigest()[:32]
+    filename = f"{file_hash}.{clean_ext}"
+    filepath = os.path.join(target_dir, filename)
+    if not os.path.exists(filepath):
+        with open(filepath, "wb") as f:
+            f.write(data)
+    return f"/media/{filename}"
 
 
 def is_valid_id(value: Any) -> bool:
@@ -769,7 +807,7 @@ COVER_DATA_URI_PATTERN = re.compile(
 )
 
 
-def validate_cover_image(cover_image: Any) -> Tuple[bool, Optional[str]]:
+def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = None) -> CoverValidationResult:
     """
     Validates publication cover image:
     - Field is optional (None, empty string or whitespace-only is valid).
@@ -778,38 +816,59 @@ def validate_cover_image(cover_image: Any) -> Tuple[bool, Optional[str]]:
     - Schemes supported:
         * Relative path: /media/...
         * Data URI: data:image/(jpeg|jpg|png|webp|gif|svg+xml);base64,...
-    - Base64 decodability and magic bytes:
-        * JPEG: starts with \xff\xd8\xff
-        * PNG: starts with \x89PNG
-        * WebP: starts with RIFF and bytes 8..12 are WEBP
-        * GIF: starts with GIF87a or GIF89a
-        * SVG: contains <svg
-    Returns (is_valid, error_message).
+    - Deep validation via image_decoder.decode_and_validate_image:
+        * PNG: signature, IHDR, IDAT, IEND, zlib decompression.
+        * JPEG: SOI, SOF, APP1 EXIF orientation, EOI end marker.
+        * GIF: GIF87a/GIF89a, screen descriptor, static first frame check, trailer.
+        * WebP: RIFF, WEBP, VP8/VP8L/VP8X, static frame check.
+        * SVG: <svg tag and viewBox.
+        * Pixel bomb protection: rejects images exceeding 25 million pixels.
+    - Storage:
+        * Decoded binary image is automatically stored to data/media/<sha256>.<ext>.
+        * Returns CoverValidationResult (unpacks as (is_valid, error_msg)).
     """
     if cover_image is None or cover_image == "":
-        return True, None
+        return CoverValidationResult(True, None, saved_url=None)
 
     if not isinstance(cover_image, str):
-        return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+        return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
     stripped = cover_image.strip()
     if not stripped:
-        return True, None
+        return CoverValidationResult(True, None, saved_url=None)
 
     if stripped.startswith("/media/"):
         if ".." in stripped or len(stripped) > 500:
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+            return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
         if not re.match(r"^/media/[a-zA-Z0-9_\-\./]+$", stripped):
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
-        return True, None
+            return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
+
+        media_root = target_media_dir or MEDIA_DIR
+        rel_path = stripped[len("/media/"):].lstrip("/")
+        full_path = os.path.abspath(os.path.join(media_root, rel_path))
+        if not full_path.startswith(os.path.abspath(media_root)):
+            return CoverValidationResult(False, "Недопустимый путь к медиафайлу.")
+
+        if os.path.isfile(full_path):
+            try:
+                with open(full_path, "rb") as f:
+                    file_bytes = f.read()
+                ok, err, meta = image_decoder.decode_and_validate_image(file_bytes)
+                if not ok:
+                    return CoverValidationResult(False, err or "Обложка повреждена или не может быть декодирована.")
+                return CoverValidationResult(True, None, saved_url=stripped, meta=meta, image_bytes=file_bytes)
+            except Exception as e:
+                return CoverValidationResult(False, f"Ошибка чтения медиафайла: {str(e)}")
+
+        return CoverValidationResult(True, None, saved_url=stripped)
 
     if stripped.startswith("data:image/"):
         if len(stripped) > MAX_COVER_BASE64_CHARS:
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+            return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
         match = COVER_DATA_URI_PATTERN.match(stripped)
         if not match:
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+            return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
         mime_sub = match.group(1).lower()
         b64_str = match.group(2).strip()
@@ -817,34 +876,23 @@ def validate_cover_image(cover_image: Any) -> Tuple[bool, Optional[str]]:
         try:
             decoded = base64.b64decode(b64_str, validate=True)
         except Exception:
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+            return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
         if len(decoded) == 0 or len(decoded) > MAX_COVER_DECODED_BYTES:
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+            return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
-        is_valid_magic = False
-        if mime_sub in ("jpeg", "jpg"):
-            if len(decoded) >= 3 and decoded[:3] == b"\xff\xd8\xff":
-                is_valid_magic = True
-        elif mime_sub == "png":
-            if len(decoded) >= 4 and decoded[:4] == b"\x89PNG":
-                is_valid_magic = True
-        elif mime_sub == "webp":
-            if len(decoded) >= 12 and decoded[:4] == b"RIFF" and decoded[8:12] == b"WEBP":
-                is_valid_magic = True
-        elif mime_sub == "gif":
-            if len(decoded) >= 6 and (decoded[:6] == b"GIF87a" or decoded[:6] == b"GIF89a"):
-                is_valid_magic = True
-        elif mime_sub == "svg+xml":
-            if b"<svg" in decoded[:4096].lower():
-                is_valid_magic = True
+        # Deep decoding and verification via image_decoder
+        ok, err, meta = image_decoder.decode_and_validate_image(decoded)
+        if not ok:
+            return CoverValidationResult(False, err or "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
-        if not is_valid_magic:
-            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+        ext = meta.get("format", "jpg")
+        media_root = target_media_dir or MEDIA_DIR
+        saved_url = save_media_file(decoded, ext, media_dir=media_root)
 
-        return True, None
+        return CoverValidationResult(True, None, saved_url=saved_url, meta=meta, image_bytes=decoded)
 
-    return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+    return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
 
 def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict[str, str]]:
@@ -957,9 +1005,12 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
         # 4g. coverImage
         cover_image = pub_settings.get("coverImage")
         if cover_image is not None and cover_image != "":
-            is_cov_valid, cov_err = validate_cover_image(cover_image)
+            cov_res = validate_cover_image(cover_image)
+            is_cov_valid, cov_err = cov_res[0], cov_res[1]
             if not is_cov_valid:
                 field_errors["coverImage"] = cov_err or "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+            elif cov_res.saved_url and cov_res.saved_url.startswith("/media/"):
+                pub_settings["coverImage"] = cov_res.saved_url
 
     if field_errors:
         order = [
@@ -1069,6 +1120,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_moderation_list()
         elif path == "/api/articles" or path.startswith("/api/articles/"):
             self.handle_articles_api(parsed)
+        elif path.startswith("/media/"):
+            self.handle_serve_media(parsed)
         elif path.startswith("/api/"):
             self.send_json_response(404, {
                 "success": False,
@@ -1091,6 +1144,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_subscriptions_toggle()
         elif path == "/api/moderation/submit":
             self.handle_moderation_submit()
+        elif path == "/api/media/upload":
+            self.handle_media_upload()
         elif path.startswith("/api/"):
             self.send_json_response(404, {
                 "success": False,
@@ -1867,17 +1922,121 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "noSubscriptions": False
         })
 
+    def handle_serve_media(self, parsed_url):
+        """
+        GET /media/<filename>
+        Serves stored media files with strict path-traversal prevention,
+        proper Content-Type header, and long-term caching headers.
+        """
+        media_root = getattr(self.server, "media_dir", MEDIA_DIR)
+        rel_path = parsed_url.path[len("/media/"):].lstrip("/")
+        if not rel_path or ".." in rel_path:
+            self.send_json_response(400, {"success": False, "error": "Invalid media path"})
+            return
+
+        full_path = os.path.abspath(os.path.join(media_root, rel_path))
+        if not full_path.startswith(os.path.abspath(media_root)):
+            self.send_json_response(403, {"success": False, "error": "Access denied"})
+            return
+
+        if not os.path.isfile(full_path):
+            self.send_json_response(404, {"success": False, "error": "Media not found"})
+            return
+
+        ext = os.path.splitext(full_path)[1].lower()
+        mime_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".svg": "image/svg+xml"
+        }
+        content_type = mime_types.get(ext, "application/octet-stream")
+
+        try:
+            with open(full_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(content)
+        except Exception as e:
+            self.send_json_response(500, {"success": False, "error": f"Failed to read media: {str(e)}"})
+
+    def handle_media_upload(self):
+        """
+        POST /api/media/upload
+        Accepts:
+          - JSON: { "image": "data:image/..." } or { "coverImage": "..." }
+          - Raw binary image bytes
+        Validates via image_decoder and saves to data/media/<hash>.<ext>.
+        Returns { success: True, url: "/media/...", meta: { ... } }
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            content_length = 0
+
+        if content_length <= 0:
+            self.send_json_response(400, {"success": False, "error": "Пустое тело запроса"})
+            return
+
+        content_type = self.headers.get("Content-Type", "")
+        raw_body = self.rfile.read(content_length)
+
+        media_root = getattr(self.server, "media_dir", MEDIA_DIR)
+
+        if "application/json" in content_type:
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+                image_val = payload.get("image") or payload.get("coverImage") or payload.get("file")
+                if not image_val or not isinstance(image_val, str):
+                    self.send_json_response(400, {"success": False, "error": "Поле image должно содержать Data URI или base64"})
+                    return
+                res = validate_cover_image(image_val, target_media_dir=media_root)
+                if not res.is_valid:
+                    self.send_json_response(400, {"success": False, "error": res.error_msg})
+                    return
+                self.send_json_response(200, {
+                    "success": True,
+                    "url": res.saved_url,
+                    "meta": res.meta
+                })
+                return
+            except Exception as e:
+                self.send_json_response(400, {"success": False, "error": f"Ошибка обработки JSON: {str(e)}"})
+                return
+
+        # Direct binary image upload
+        ok, err, meta = image_decoder.decode_and_validate_image(raw_body)
+        if not ok:
+            self.send_json_response(400, {"success": False, "error": err or "Невалидный формат изображения"})
+            return
+
+        ext = meta.get("format", "jpg")
+        saved_url = save_media_file(raw_body, ext, media_dir=media_root)
+        self.send_json_response(200, {
+            "success": True,
+            "url": saved_url,
+            "meta": meta
+        })
 
 
-def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, directory: Optional[str] = None) -> http.server.ThreadingHTTPServer:
+def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, directory: Optional[str] = None, media_dir: Optional[str] = None) -> http.server.ThreadingHTTPServer:
     """
-    Creates and returns a ThreadingHTTPServer instance with initialized database.
+    Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
     init_db(db_path)
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, ModerationRequestHandler)
     httpd.db_path = db_path or os.environ.get("MODERATION_DB_PATH", DEFAULT_DB_PATH)
     httpd.directory = directory or FRONTEND_PUBLIC_DIR
+    httpd.media_dir = media_dir or os.environ.get("MEDIA_DIR", MEDIA_DIR)
+    os.makedirs(httpd.media_dir, exist_ok=True)
     return httpd
 
 

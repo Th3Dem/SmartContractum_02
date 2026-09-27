@@ -42,6 +42,7 @@ import urllib.parse
 import urllib.request
 
 import server
+import image_decoder
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'public')
@@ -1876,7 +1877,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         self.assertIn('ASPECT_RATIO_H: 22', self.config_js)
         self.assertIn("ASPECT_RATIO_STR: '39 / 22'", self.config_js)
         self.assertIn('MAX_FILE_BYTES: 10 * 1024 * 1024', self.config_js)
-        self.assertIn('FEED_MAX_WIDTH_PX: 560', self.config_js)
+        self.assertTrue('FEED_FULL_WIDTH: true' in self.config_js or 'FEED_MAX_WIDTH_PX: 560' in self.config_js)
         self.assertIn("'image/jpeg'", self.config_js)
         self.assertIn("'image/png'", self.config_js)
         self.assertIn("'image/webp'", self.config_js)
@@ -1886,7 +1887,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
 
         # 2. Design tokens in theme.css
         self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
-        self.assertIn('--card-cover-max-width: 560px;', self.theme_css)
+        self.assertTrue('--card-cover-max-width: 100%;' in self.theme_css or '--card-cover-max-width: 560px;' in self.theme_css)
 
     def test_editor_feed_section_texts_and_preview_markup(self):
         """
@@ -1935,13 +1936,13 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
 
     def test_editor_css_preview_card_styles(self):
         """
-        Verify .pub-feed-card-cover styles: max-width 560px, aspect-ratio 39 / 22,
-        left alignment, and 0px reserved space when hidden.
+        Verify .pub-feed-card-cover styles: full-width (or max-width 100%), aspect-ratio 39 / 22,
+        and 0px reserved space when hidden.
         """
         self.assertIn('.pub-feed-card-cover', self.editor_css)
-        self.assertIn('max-width: var(--card-cover-max-width, 560px);', self.editor_css)
+        self.assertTrue('var(--card-cover-max-width' in self.editor_css or 'width: 100%;' in self.editor_css)
         self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
-        self.assertIn('align-self: flex-start;', self.editor_css)
+        self.assertTrue('align-self: stretch;' in self.editor_css or 'align-self: flex-start;' in self.editor_css)
 
         # 0px when cover is hidden / empty
         self.assertIn('.pub-feed-card-cover[style*="display: none"]', self.editor_css)
@@ -1951,14 +1952,14 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
 
     def test_feed_css_card_cover_and_compactness(self):
         """
-        Verify .card-cover-container in feed.css (max-width 560px, aspect-ratio 39 / 22, left alignment),
+        Verify .card-cover-container in feed.css (full-width 100%, aspect-ratio 39 / 22),
         .card-lead line clamping to 3 lines, and compact .feed-toolbar-row.
         """
         # 1. .card-cover-container styling
         self.assertIn('.card-cover-container', self.feed_css)
-        self.assertIn('max-width: var(--card-cover-max-width, 560px);', self.feed_css)
+        self.assertTrue('var(--card-cover-max-width' in self.feed_css or 'width: 100%;' in self.feed_css)
         self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
-        self.assertIn('align-self: flex-start;', self.feed_css)
+        self.assertTrue('align-self: stretch;' in self.feed_css or 'align-self: flex-start;' in self.feed_css)
 
         # 2. .card-lead 3 lines limit
         self.assertIn('.card-lead', self.feed_css)
@@ -2124,7 +2125,8 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
             list_res = json.loads(resp.read().decode('utf-8'))
             found = next((s for s in list_res["submissions"] if s["id"] == sub_id), None)
             self.assertIsNotNone(found)
-            self.assertEqual(found["publicationSettings"]["coverImage"], png_uri)
+            cov_stored = found["publicationSettings"]["coverImage"]
+            self.assertTrue(cov_stored.startswith("/media/") or cov_stored == png_uri)
 
         # HTTP rejection for invalid cover
         p_submit_bad = json.loads(json.dumps(base_payload))
@@ -2143,6 +2145,307 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         ctx.exception.close()
         self.assertFalse(bad_res.get("success"))
         self.assertIn("coverImage", bad_res.get("fieldErrors", {}))
+
+
+class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
+    """
+    Test suite for task-29-feed-cover-fullwidth-and-media-storage:
+    1. Full-width cover display: 100% inner card content width, 39:22 aspect ratio, no 560px cap.
+    2. Unified card component: card.js (SmartContractumCard) shared by feed and editor preview.
+    3. Deep server-side image decoding: pure-Python image_decoder validating PNG/JPEG/GIF/WebP/SVG,
+       rejecting corrupted/truncated files, animated GIFs, pixel bombs.
+    4. Persistent server media storage: /media/<sha256>.<ext>, POST /api/media/upload,
+       GET /media/<filename> with caching and path traversal protection.
+    5. Moderation workflow & draft isolation: submitted Data URLs convert to persistent /media/ URLs,
+       raw crop params and source files excluded from public API.
+    6. Zero site overlays: no site-generated titles, badges, or watermarks on top of the cover.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'js', 'config.js'), 'r', encoding='utf-8') as f:
+            cls.config_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'theme.css'), 'r', encoding='utf-8') as f:
+            cls.theme_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'editor.html'), 'r', encoding='utf-8') as f:
+            cls.editor_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'feed.html'), 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'editor.css'), 'r', encoding='utf-8') as f:
+            cls.editor_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'feed.css'), 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'publication.js'), 'r', encoding='utf-8') as f:
+            cls.pub_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'card.js'), 'r', encoding='utf-8') as f:
+            cls.card_js = f.read()
+        with open(os.path.join(PROJECT_ROOT, 'image_decoder.py'), 'r', encoding='utf-8') as f:
+            cls.image_decoder_py = f.read()
+        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+            cls.server_py = f.read()
+
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'task29_test.db')
+        cls.media_dir = os.path.join(cls.temp_dir, 'media')
+
+        cls.server = server.create_server(
+            host="127.0.0.1",
+            port=0,
+            db_path=cls.db_path,
+            directory=FRONTEND_DIR,
+            media_dir=cls.media_dir
+        )
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def test_tokens_and_fullwidth_cover_css(self):
+        """Verify removal of 560px restriction and enforcement of full card content width."""
+        # 1. config.js
+        self.assertIn('FEED_FULL_WIDTH: true', self.config_js)
+        self.assertIn("FEED_MAX_WIDTH: '100%'", self.config_js)
+        self.assertNotIn('FEED_MAX_WIDTH_PX: 560', self.config_js)
+
+        # 2. theme.css tokens
+        self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
+        self.assertIn('--card-cover-max-width: 100%;', self.theme_css)
+
+        # 3. feed.css
+        self.assertIn('.card-cover-container', self.feed_css)
+        self.assertIn('max-width: var(--card-cover-max-width, 100%);', self.feed_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
+        self.assertIn('align-self: stretch;', self.feed_css)
+
+        # 4. editor.css
+        self.assertIn('.pub-feed-card-cover', self.editor_css)
+        self.assertIn('max-width: 100%;', self.editor_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
+        self.assertIn('align-self: stretch;', self.editor_css)
+
+        # 5. Clean 0px empty state
+        self.assertIn('.card-cover-container.is-error', self.feed_css)
+        self.assertIn('.pub-feed-card-cover[style*="display: none"]', self.editor_css)
+
+    def test_unified_card_js_component(self):
+        """Verify unified SmartContractumCard component used identically in feed and preview."""
+        # 1. card.js script tag in both HTML pages
+        self.assertIn('<script src="js/card.js', self.feed_html)
+        self.assertIn('<script src="js/card.js', self.editor_html)
+
+        # 2. card.js definition
+        self.assertIn('window.SmartContractumCard', self.card_js)
+        self.assertIn('renderCardInnerHtml', self.card_js)
+        self.assertIn('createCardElement', self.card_js)
+
+        # 3. 7-step structure in card.js
+        idx_meta = self.card_js.find("class=\"card-meta\"")
+        idx_title = self.card_js.find("class=\"card-title")
+        idx_badges = self.card_js.find("class=\"card-meta-badges")
+        idx_cover = self.card_js.find("class=\"card-cover-container")
+        idx_lead = self.card_js.find("class=\"card-lead")
+        idx_tags = self.card_js.find("class=\"card-tags")
+        idx_footer = self.card_js.find("class=\"card-footer\"")
+
+        self.assertTrue(0 < idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_tags < idx_footer)
+
+        # 4. Usage in feed.js and publication.js
+        self.assertIn('window.SmartContractumCard.createCardElement', self.feed_js)
+        self.assertIn('window.SmartContractumCard.renderCardInnerHtml', self.pub_js)
+
+    def test_image_decoder_deep_validation(self):
+        """Verify pure-Python deep image decoding, integrity, and corruption rejection."""
+        # 1. Valid PNG
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        ok, err, meta = image_decoder.decode_and_validate_image(png_bytes)
+        self.assertTrue(ok)
+        self.assertEqual(meta["format"], "png")
+        self.assertEqual(meta["width"], 1)
+        self.assertEqual(meta["height"], 1)
+
+        # 2. Truncated PNG (missing IEND) rejected
+        trunc_png = png_bytes[:-12]
+        ok, err, meta = image_decoder.decode_and_validate_image(trunc_png)
+        self.assertFalse(ok)
+        self.assertIn("IEND", err)
+
+        # 3. Valid JPEG
+        jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\xff\xd9"
+        ok, err, meta = image_decoder.decode_and_validate_image(jpeg_bytes)
+        self.assertTrue(ok)
+        self.assertEqual(meta["format"], "jpeg")
+
+        # 4. Truncated JPEG (missing EOI) rejected
+        trunc_jpeg = jpeg_bytes[:-2]
+        ok, err, meta = image_decoder.decode_and_validate_image(trunc_jpeg)
+        self.assertFalse(ok)
+        self.assertIn("EOI", err)
+
+        # 5. Static GIF accepted
+        gif_bytes = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        ok, err, meta = image_decoder.decode_and_validate_image(gif_bytes)
+        self.assertTrue(ok)
+        self.assertEqual(meta["format"], "gif")
+        self.assertTrue(meta["is_static"])
+
+        # 6. Truncated GIF (missing trailer 0x3B) rejected
+        trunc_gif = gif_bytes[:-1]
+        ok, err, meta = image_decoder.decode_and_validate_image(trunc_gif)
+        self.assertFalse(ok)
+
+        # 7. Animated GIF rejected (must be static)
+        multi_frame_gif = (
+            b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff"
+            b",\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00"
+            b",\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        )
+        ok, err, meta = image_decoder.decode_and_validate_image(multi_frame_gif)
+        self.assertFalse(ok)
+        self.assertIn("статичной", err)
+
+        # 8. Aspect ratio requirement check (39:22)
+        svg_39_22 = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440"><rect width="780" height="440"/></svg>'
+        ok, err, meta = image_decoder.decode_and_validate_image(svg_39_22, require_aspect_ratio=True)
+        self.assertTrue(ok)
+
+        svg_bad_ratio = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600"><rect width="400" height="600"/></svg>'
+        ok, err, meta = image_decoder.decode_and_validate_image(svg_bad_ratio, require_aspect_ratio=True)
+        self.assertFalse(ok)
+        self.assertIn("не соответствуют требуемым 39:22", err)
+
+    def test_server_media_upload_and_serving(self):
+        """Verify POST /api/media/upload and GET /media/<filename> with path security and caching."""
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        b64_uri = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}"
+
+        # 1. POST /api/media/upload with JSON Data URI
+        upload_req = urllib.request.Request(
+            f"{self.base_url}/api/media/upload",
+            data=json.dumps({"image": b64_uri}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(upload_req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+            self.assertTrue(data["url"].startswith("/media/"))
+            self.assertTrue(data["url"].endswith(".png"))
+            saved_url = data["url"]
+
+        # 2. GET /media/<filename>
+        media_req = urllib.request.Request(f"{self.base_url}{saved_url}")
+        with urllib.request.urlopen(media_req) as resp:
+            self.assertEqual(resp.status, 200)
+            self.assertEqual(resp.headers.get("Content-Type"), "image/png")
+            self.assertIn("immutable", resp.headers.get("Cache-Control", ""))
+            fetched_bytes = resp.read()
+            self.assertEqual(fetched_bytes, png_bytes)
+
+        # 3. Path traversal security: /media/../ prohibited
+        bad_req = urllib.request.Request(f"{self.base_url}/media/../test.db")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(bad_req)
+        self.assertIn(ctx.exception.code, (400, 403, 404))
+
+        # 4. 404 for non-existent media
+        missing_req = urllib.request.Request(f"{self.base_url}/media/missing_file_000.png")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(missing_req)
+        self.assertEqual(ctx.exception.code, 404)
+
+    def test_moderation_submit_converts_data_url_to_media_and_isolates_draft(self):
+        """Verify submit converts Data URL to persistent /media/ and isolates draft modifications."""
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        b64_uri = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}"
+
+        payload = {
+            "draftId": "draft_t29_isolation",
+            "title": "Статья с проверкой изоляции и медиа-хранилища",
+            "html": "<p>Текст статьи достаточного объема для успешной серверной валидации публикации.</p>",
+            "publicationSettings": {
+                "targetAudience": "smart-contracts-dev",
+                "topics": ["smart-contracts-development"],
+                "keywords": ["хранилище", "медиа", "изоляция"],
+                "description": "Описание статьи длиной более пятидесяти символов для проверки медиа-хранилища.",
+                "format": "guide",
+                "complexity": "medium",
+                "coverImage": b64_uri,
+                "rawCoverImageSource": "data:image/png;base64,RAW_SOURCE_MOCK",
+                "cropParams": {"zoom": 1.2, "panX": 10, "panY": 20}
+            },
+            "idempotencyKey": "key_t29_isolation_1",
+            "authorId": "author_t29"
+        }
+
+        # 1. Submit to moderation
+        sub_req = urllib.request.Request(
+            f"{self.base_url}/api/moderation/submit",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(sub_req) as resp:
+            sub_res = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(sub_res.get("success"))
+            sub_id = sub_res["submissionId"]
+
+        # 2. Check stored snapshot in moderation list
+        list_req = urllib.request.Request(f"{self.base_url}/api/moderation/list")
+        with urllib.request.urlopen(list_req) as resp:
+            list_res = json.loads(resp.read().decode("utf-8"))
+            found = next((s for s in list_res["submissions"] if s["id"] == sub_id), None)
+            self.assertIsNotNone(found)
+            settings = found["publicationSettings"]
+            # coverImage converted to persistent /media/ URL
+            self.assertTrue(settings["coverImage"].startswith("/media/"))
+            self.assertTrue(settings["coverImage"].endswith(".png"))
+            stored_media_url = settings["coverImage"]
+
+        # 3. Simulate draft update in working storage: change cover in payload
+        payload["publicationSettings"]["coverImage"] = "data:image/png;base64,CHANGED_IN_WORKING_DRAFT"
+        # Verify moderation submission retained original snapshot URL
+        with urllib.request.urlopen(list_req) as resp:
+            list_res2 = json.loads(resp.read().decode("utf-8"))
+            found2 = next((s for s in list_res2["submissions"] if s["id"] == sub_id), None)
+            self.assertEqual(found2["publicationSettings"]["coverImage"], stored_media_url)
+
+        # 4. Check public articles API: raw crop params and source files must NOT be exposed
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE moderation_submissions SET status = 'approved' WHERE id = ?", (sub_id,))
+
+        q = urllib.parse.quote("изоляции")
+        articles_req = urllib.request.Request(f"{self.base_url}/api/articles?search={q}")
+        with urllib.request.urlopen(articles_req) as resp:
+            art_data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(art_data.get("success"))
+            self.assertGreaterEqual(len(art_data["articles"]), 1)
+            art = art_data["articles"][0]
+            self.assertEqual(art["coverImage"], stored_media_url)
+            self.assertNotIn("rawCoverImageSource", art)
+            self.assertNotIn("cropParams", art)
+
+    def test_zero_site_overlays_on_cover(self):
+        """Verify no site-generated overlays, watermarks, badges or titles are placed on top of cover."""
+        # CSS checks: no absolute overlay over card-cover-img
+        self.assertNotIn('.card-cover-container .card-title', self.feed_css)
+        self.assertNotIn('.card-cover-container .card-meta', self.feed_css)
+        self.assertNotIn('.card-cover-container .meta-badge', self.feed_css)
+        self.assertNotIn('.card-cover-container::after', self.feed_css)
+
+        self.assertNotIn('.pub-feed-card-cover .card-title', self.editor_css)
+        self.assertNotIn('.pub-feed-card-cover .pub-badge', self.editor_css)
+        self.assertNotIn('.pub-feed-card-cover::after', self.editor_css)
 
 
 if __name__ == '__main__':

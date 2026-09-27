@@ -1055,17 +1055,17 @@
   color: var(--accent-color);
 }
 
-/* Card Cover Image (Reserved 39:22 aspect-ratio) */
+/* Card Cover Image (Full width 100%, 39:22 aspect-ratio) */
 .card-cover-container {
   width: 100%;
   max-width: 780px;
-  max-width: var(--card-cover-max-width, 560px);
+  max-width: var(--card-cover-max-width, 100%);
   aspect-ratio: 780 / 440;
   aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);
-  align-self: flex-start;
+  align-self: stretch;
   border-radius: var(--radius-md);
   overflow: hidden;
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   background: var(--bg-surface);
   position: relative;
   transition: opacity var(--transition-fast);

@@ -1417,6 +1417,12 @@
   // 10. Article Card Generator (Accurate Tokens, Click Isolation)
   // --------------------------------------------------------------------------
   function createCardElement(item) {
+    if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
+      return window.SmartContractumCard.createCardElement(item, {
+        isBookmarked: isBookmarked
+      });
+    }
+
     const card = document.createElement('article');
     card.className = 'feed-card';
     card.setAttribute('data-id', item.id);

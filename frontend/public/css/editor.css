@@ -3266,7 +3266,7 @@ body.modal-open {
 
 .pub-feed-card {
   width: 100%;
-  max-width: var(--card-cover-max-width, 560px);
+  max-width: 100%;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -3433,12 +3433,12 @@ body.modal-open {
 .pub-feed-card-cover,
 .pub-feed-card .card-cover-container {
   width: 100%;
-  max-width: var(--card-cover-max-width, 560px);
+  max-width: 100%;
   aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);
-  align-self: flex-start;
+  align-self: stretch;
   overflow: hidden;
   border-radius: var(--radius-md);
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   background: var(--bg-surface);
   position: relative;
   box-sizing: border-box;
