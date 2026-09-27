@@ -62,5 +62,9 @@ Verification: Approved by qa_bot (Diff snapshot hash: aa73b71d56dd6dc4d94966ea57
 ---
 
 ## 4. Публикация и удаленные операции (Push / PR / Deploy)
-- **Статус `git push`**: **НЕ ВЫПОЛНЯЛСЯ** (PENDING_USER_APPROVAL).
-- **Примечание**: В строгом соответствии с границами полномочий и Hard Constraints регламента (`.agents/git_bot.md`, `.agents/workflow.md`), публикация в удаленный репозиторий (`git push origin main`) и деплой выполняются **исключительно при наличии прямого согласия пользователя**. Локальная фиксация коммита и локальное слияние ветки такого разрешения не предоставляют.
+- **Статус `git push`**: **ВЫПОЛНЕН (COMPLETED)**
+- **Основание**: Прямое явное разрешение пользователя («git push»).
+- **Опубликованные ветки**:
+  - `main -> origin/main` (`0935b13..36937b1`)
+  - `feat/task-29-feed-cover-fullwidth-and-media-storage -> origin/feat/task-29-feed-cover-fullwidth-and-media-storage` (создана удаленная ветка)
+- **Удаленный репозиторий**: `git@github.com:Th3Dem/SmartContractum_02.git`
