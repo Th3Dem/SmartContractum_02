@@ -108,11 +108,11 @@
   13. 100% unit- и интеграционных тестов проходят успешно (100% PASS).
   14. Стандарты Onest, 100% Offline-First, Zero Emojis строго соблюдены.
 
-- **Текущий статус**: IN_GIT
-- **Ответственный исполнитель**: git_bot
-- **Рабочая ветка / копия**: feat/task-31-feed-settings-and-filters-unification
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
+- **Рабочая ветка / копия**: main (feat/task-31-feed-settings-and-filters-unification влита через FF-merge)
 - **Блокер**: нет
-- **Следующий шаг**: Этап FINALIZE: проверка снимка diff (хеш 4b0e5ed4c48e01f9a9d841bb83a4b633f7e6048cf6253b1771672aaa409b6d7d), атомарная индексация файлов задачи и локальный коммит на ветке feat/task-31-feed-settings-and-filters-unification
+- **Следующий шаг**: Задача успешно завершена в статусе Done-Done. Ожидание указаний пользователя (запрос на push в origin или постановка следующей задачи).
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-31-feed-settings-and-filters-unification/DEV_HANDOVER.md`
   - QA: `tasks/task-31-feed-settings-and-filters-unification/QA_REVIEW.md`

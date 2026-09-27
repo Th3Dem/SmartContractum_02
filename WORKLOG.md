@@ -272,6 +272,9 @@
 [2026-09-27 18:49] | pm_bot | QA_ASSIGN | Передача артефактов задачи task-31 на независимый аудит qa_bot (Task: task-31-feed-settings-and-filters-unification)
 [2026-09-27 18:51] | qa_bot | QA_APPROVED | Независимый аудит согласованных панелей настроек и фильтров, подписок, исключений и пагинации каталогов завершен со статусом APPROVED (259/259 PASS, snapshot 4b0e5ed4c48e01f9a9d841bb83a4b633f7e6048cf6253b1771672aaa409b6d7d) (Task: task-31-feed-settings-and-filters-unification)
 [2026-09-27 18:54] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация и коммит (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:56] | git_bot | GIT_COMMITTED | Зафиксирован коммит 831afbb на ветке feat/task-31-feed-settings-and-filters-unification и выполнен локальный Fast-Forward слияние в main (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:57] | pm_bot | TASK_DONE | Задача task-31 успешно завершена в статусе Done-Done. Все 259 тестов пройдены (100%) (Task: task-31-feed-settings-and-filters-unification)
+
 
 
 
