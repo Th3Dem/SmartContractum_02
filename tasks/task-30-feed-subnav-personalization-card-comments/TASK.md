@@ -113,11 +113,11 @@
   14. 100% unit- и интеграционных тестов проекта проходят успешно (100% PASS).
   15. Стандарты Onest, 100% Offline-First, Zero Emojis строго соблюдены.
 
-- **Текущий статус**: IN_GIT
-- **Ответственный исполнитель**: git_bot
-- **Рабочая ветка / копия**: feat/task-30-feed-subnav-personalization-card-comments
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
+- **Рабочая ветка / копия**: main (feat/task-30-feed-subnav-personalization-card-comments влита через FF-merge)
 - **Блокер**: нет
-- **Следующий шаг**: Этап FINALIZE: проверка снимка diff (хеш cd3ad5f40b6c294e2dd75a046c047a981b4257b09c705949da6ffdb6dae95a6c), атомарная индексация файлов задачи и локальный коммит на ветке feat/task-30-feed-subnav-personalization-card-comments
+- **Следующий шаг**: Задача успешно завершена в статусе Done-Done. Ожидание указаний пользователя (запрос на push в origin или постановка следующей задачи).
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-30-feed-subnav-personalization-card-comments/DEV_HANDOVER.md`
   - QA: `tasks/task-30-feed-subnav-personalization-card-comments/QA_REVIEW.md`
