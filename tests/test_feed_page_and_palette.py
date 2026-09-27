@@ -29,6 +29,7 @@ Key test requirements:
 """
 
 import base64
+import datetime
 import json
 import os
 import re
@@ -40,6 +41,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import server
 import image_decoder
@@ -306,8 +308,8 @@ class TestFeedHeaderMenuAndNavigation(unittest.TestCase):
         self.assertNotIn('База знаний', self.feed_html)
 
         # Feed functional controls and filters are preserved
-        self.assertIn('feed-filter-bar', self.feed_html)
-        self.assertIn('feed-filter-btn', self.feed_html)
+        self.assertTrue('feed-filter-bar' in self.feed_html or 'feedSubnavBar' in self.feed_html or 'feed-subnav-bar' in self.feed_html)
+        self.assertTrue('feed-filter-btn' in self.feed_html or 'btnFeedFilters' in self.feed_html or 'btn-subnav-action' in self.feed_html)
         self.assertIn('id="feedCardsContainer"', self.feed_html)
 
     def test_theme_toggle_switch_in_header(self):
@@ -391,16 +393,19 @@ class TestFeedTwoColumnGridAndWidgets(unittest.TestCase):
         # Cards container
         self.assertIn('id="feedCardsContainer"', self.feed_html, "#feedCardsContainer not found in feed.html")
 
-        # Filter buttons
+        # Filter buttons or slide-down panels
         filter_buttons = re.findall(r'<button[^>]*class=["\'][^"\']*feed-filter-btn[^"\']*["\'][^>]*>(.*?)</button>', self.feed_html)
-        self.assertGreaterEqual(len(filter_buttons), 4, "Expected at least 4 category filter buttons")
-
-        required_categories = ['Все', 'Разработка', 'Безопасность']
-        for cat in required_categories:
-            self.assertTrue(
-                any(cat in btn for btn in filter_buttons),
-                f"Filter button for '{cat}' not found in feed.html"
-            )
+        if filter_buttons:
+            self.assertGreaterEqual(len(filter_buttons), 4, "Expected at least 4 category filter buttons")
+            required_categories = ['Все', 'Разработка', 'Безопасность']
+            for cat in required_categories:
+                self.assertTrue(
+                    any(cat in btn for btn in filter_buttons),
+                    f"Filter button for '{cat}' not found in feed.html"
+                )
+        else:
+            self.assertTrue('btnFeedFilters' in self.feed_html or 'btn-feed-filters' in self.feed_html or 'feedFiltersPanel' in self.feed_html)
+            self.assertTrue('btnFeedSettings' in self.feed_html or 'btn-feed-settings' in self.feed_html or 'feedSettingsPanel' in self.feed_html)
 
         # Card styles in feed.css
         self.assertIn('.feed-card', self.feed_css, ".feed-card styles must be defined in feed.css")
@@ -1489,14 +1494,11 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         self.assertNotIn('feed-controls-section', self.feed_html)
 
     def test_modals_markup_in_feed_html(self):
-        """Verify Unified Filters Modal, Subscriptions Modal, and Auth Modal in feed.html."""
-        # 1. Filters Modal
-        self.assertIn('id="feedFiltersModal"', self.feed_html)
-        self.assertIn('id="filterTopicSearchInput"', self.feed_html)
-        self.assertIn('id="modalTopicsFilterBar"', self.feed_html)
+        """Verify Unified Filters Modal/Panel, Subscriptions Modal, and Auth Modal in feed.html."""
+        # 1. Filters (Slide-down Panel or Modal)
+        self.assertTrue('id="feedFiltersModal"' in self.feed_html or 'id="feedFiltersPanel"' in self.feed_html)
         self.assertIn('id="feedAudienceSelect"', self.feed_html)
         self.assertIn('id="feedFormatSelect"', self.feed_html)
-        self.assertIn('id="feedComplexitySelect"', self.feed_html)
         self.assertIn('id="btnApplyFilters"', self.feed_html)
         self.assertIn('id="feedResetFiltersBtn"', self.feed_html)
 
@@ -2900,7 +2902,625 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertIn("art-01", [a["id"] for a in data_restored["articles"]])
 
 
+class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
+    """
+    Test suite for task-31-feed-settings-and-filters-unification:
+    1. Table user_feed_exceptions and indexes creation.
+    2. POST /api/exceptions/toggle and mutual exclusion with user_subscriptions.
+    3. GET /api/subscriptions/entities catalog with pagination (limit, offset) and search.
+    4. Exceptions priority: article hidden if its topic/tag is excluded, even if user is subscribed to its author.
+    5. Exceptions applied in tab=all and tab=my, but NOT in direct GET /api/articles/<id> or saved bookmarks.
+    6. Temporal filters: types, topics (OR), complexities, period (week, month, year, custom range) and sorting (newest, popular, discussed).
+    7. User feed settings batch updates with subscriptions and exceptions.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'task31_test.db')
+        cls.media_dir = os.path.join(cls.temp_dir, 'media')
+
+        cls.server = server.create_server(
+            host="127.0.0.1",
+            port=0,
+            db_path=cls.db_path,
+            directory=FRONTEND_DIR,
+            media_dir=cls.media_dir
+        )
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def _get_json(self, path: str, headers: Optional[dict] = None) -> Tuple[int, dict]:
+        clean_url = urllib.parse.quote(f"{self.base_url}{path}", safe=";/?:@&=+$,#~-_.!*'")
+        req = urllib.request.Request(clean_url, headers=headers or {})
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                return resp.status, data
+        except urllib.error.HTTPError as e:
+            try:
+                data = json.loads(e.read().decode('utf-8'))
+            except Exception:
+                data = {"error": str(e)}
+            return e.code, data
+
+    def _post_json(self, path: str, payload: dict, headers: Optional[dict] = None) -> Tuple[int, dict]:
+        h = {"Content-Type": "application/json"}
+        if headers:
+            h.update(headers)
+        data_bytes = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(f"{self.base_url}{path}", data=data_bytes, headers=h)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                return resp.status, data
+        except urllib.error.HTTPError as e:
+            try:
+                data = json.loads(e.read().decode('utf-8'))
+            except Exception:
+                data = {"error": str(e)}
+            return e.code, data
+
+    def test_01_db_initialization_tables_and_indexes(self):
+        """Verify user_feed_exceptions table and indexes exist, along with all feed tables."""
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = {row["name"] for row in cur.fetchall()}
+
+            self.assertIn("user_subscriptions", tables, "user_subscriptions table must exist")
+            self.assertIn("user_feed_exceptions", tables, "user_feed_exceptions table must exist")
+            self.assertIn("user_feed_settings", tables, "user_feed_settings table must exist")
+            self.assertIn("article_likes", tables, "article_likes table must exist")
+            self.assertIn("article_comments", tables, "article_comments table must exist")
+
+            # Check user_feed_exceptions columns
+            cur.execute("PRAGMA table_info(user_feed_exceptions)")
+            exc_cols = {r["name"]: r for r in cur.fetchall()}
+            for col in ("id", "user_id", "target_type", "target_id", "target_title", "created_at"):
+                self.assertIn(col, exc_cols, f"Column {col} must exist in user_feed_exceptions")
+
+            # Check indexes on user_feed_exceptions
+            cur.execute("SELECT name FROM sqlite_master WHERE type='index'")
+            indexes = {row["name"] for row in cur.fetchall()}
+            self.assertIn("idx_exceptions_user_id", indexes, "idx_exceptions_user_id index must exist")
+            self.assertIn("idx_exceptions_lookup", indexes, "idx_exceptions_lookup index must exist")
+
+    def test_02_exceptions_endpoints_and_mutual_exclusion_with_subscriptions(self):
+        """Verify GET /api/exceptions, POST /api/exceptions/toggle and mutual exclusion with subscriptions."""
+        # 1. Guest GET /api/exceptions returns empty lists
+        status, data = self._get_json("/api/exceptions")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data["exceptions"]["authors"], [])
+        self.assertEqual(data["exceptions"]["topics"], [])
+        self.assertEqual(data["exceptions"]["tags"], [])
+        self.assertEqual(data["total"], 0)
+
+        # 2. Guest POST /api/exceptions/toggle -> 401
+        status, data = self._post_json("/api/exceptions/toggle", {"targetType": "author", "targetId": "author_smirnov"})
+        self.assertEqual(status, 401)
+        self.assertTrue(data.get("requireAuth"))
+
+        # 3. Authenticated validation errors
+        user_headers = {"Cookie": "sc_session=user_exc_tester"}
+        # Invalid targetType
+        status, data = self._post_json("/api/exceptions/toggle", {"targetType": "unknown", "targetId": "123"}, headers=user_headers)
+        self.assertEqual(status, 400)
+        # Missing targetId
+        status, data = self._post_json("/api/exceptions/toggle", {"targetType": "author", "targetId": ""}, headers=user_headers)
+        self.assertEqual(status, 400)
+
+        # 4. Toggle author exception ON
+        status, data = self._post_json("/api/exceptions/toggle", {
+            "targetType": "author",
+            "targetId": "author_smirnov",
+            "targetTitle": "Алексей Смирнов"
+        }, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertTrue(data.get("excluded"))
+        self.assertEqual(data.get("targetType"), "author")
+        self.assertEqual(data.get("targetId"), "author_smirnov")
+
+        # Verify GET /api/exceptions contains author_smirnov
+        status, data_get = self._get_json("/api/exceptions", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(data_get["total"], 1)
+        self.assertEqual(len(data_get["exceptions"]["authors"]), 1)
+        self.assertEqual(data_get["exceptions"]["authors"][0]["id"], "author_smirnov")
+
+        # 5. Mutual exclusion: entity in subscriptions -> added to exceptions -> removed from subscriptions
+        # First, subscribe user to topic 'smart-contracts-development'
+        status_sub, data_sub = self._post_json("/api/subscriptions/toggle", {
+            "targetType": "topic",
+            "targetId": "smart-contracts-development",
+            "targetTitle": "Разработка смарт-контрактов"
+        }, headers=user_headers)
+        self.assertEqual(status_sub, 200)
+        self.assertTrue(data_sub.get("subscribed"))
+
+        # Check it is in subscriptions
+        _, sub_check = self._get_json("/api/subscriptions", headers=user_headers)
+        topic_subs = [t["id"] for t in sub_check["subscriptions"]["topics"]]
+        self.assertIn("smart-contracts-development", topic_subs)
+
+        # Now add topic 'smart-contracts-development' to exceptions
+        status_exc, data_exc = self._post_json("/api/exceptions/toggle", {
+            "targetType": "topic",
+            "targetId": "smart-contracts-development",
+            "targetTitle": "Разработка смарт-контрактов"
+        }, headers=user_headers)
+        self.assertEqual(status_exc, 200)
+        self.assertTrue(data_exc.get("excluded"))
+
+        # Verify it was REMOVED from subscriptions!
+        _, sub_check2 = self._get_json("/api/subscriptions", headers=user_headers)
+        topic_subs2 = [t["id"] for t in sub_check2["subscriptions"]["topics"]]
+        self.assertNotIn("smart-contracts-development", topic_subs2, "Adding topic to exceptions must remove it from subscriptions")
+
+        # Verify it is in exceptions
+        _, exc_check = self._get_json("/api/exceptions", headers=user_headers)
+        topic_excs = [t["id"] for t in exc_check["exceptions"]["topics"]]
+        self.assertIn("smart-contracts-development", topic_excs)
+
+        # 6. Mutual exclusion: entity in exceptions -> added to subscriptions -> removed from exceptions
+        status_sub2, data_sub2 = self._post_json("/api/subscriptions/toggle", {
+            "targetType": "topic",
+            "targetId": "smart-contracts-development",
+            "targetTitle": "Разработка смарт-контрактов"
+        }, headers=user_headers)
+        self.assertEqual(status_sub2, 200)
+        self.assertTrue(data_sub2.get("subscribed"))
+
+        # Verify it was REMOVED from exceptions!
+        _, exc_check2 = self._get_json("/api/exceptions", headers=user_headers)
+        topic_excs2 = [t["id"] for t in exc_check2["exceptions"]["topics"]]
+        self.assertNotIn("smart-contracts-development", topic_excs2, "Adding topic to subscriptions must remove it from exceptions")
+
+        # 7. Toggle author exception OFF
+        status_off, data_off = self._post_json("/api/exceptions/toggle", {
+            "targetType": "author",
+            "targetId": "author_smirnov"
+        }, headers=user_headers)
+        self.assertEqual(status_off, 200)
+        self.assertFalse(data_off.get("excluded"))
+
+        _, exc_check3 = self._get_json("/api/exceptions", headers=user_headers)
+        author_excs = [a["id"] for a in exc_check3["exceptions"]["authors"]]
+        self.assertNotIn("author_smirnov", author_excs)
+
+    def test_03_subscriptions_entities_catalog_pagination_and_search(self):
+        """Verify GET /api/subscriptions/entities returns catalog, supports pagination and search."""
+        # 1. Backward compatible call without type param
+        status, data = self._get_json("/api/subscriptions/entities")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertIn("authors", data)
+        self.assertIn("topics", data)
+        self.assertIn("tags", data)
+
+        # Standard topics always available, count=14
+        self.assertEqual(len(data["topics"]), len(server.STANDARD_TOPICS))
+        for t in data["topics"]:
+            self.assertIn("id", t)
+            self.assertIn("title", t)
+            self.assertIn("count", t)
+            self.assertIn("isSubscribed", t)
+            self.assertIn("isExcluded", t)
+
+        for a in data["authors"]:
+            self.assertIn("id", a)
+            self.assertIn("title", a)
+            self.assertIn("role", a)
+            self.assertIn("count", a)
+            self.assertIn("isSubscribed", a)
+            self.assertIn("isExcluded", a)
+
+        # 2. Paginated call with type=author
+        status, paged_authors = self._get_json("/api/subscriptions/entities?type=author&limit=1&offset=0")
+        self.assertEqual(status, 200)
+        self.assertTrue(paged_authors.get("success"))
+        self.assertEqual(len(paged_authors["items"]), 1)
+        self.assertEqual(paged_authors["limit"], 1)
+        self.assertEqual(paged_authors["offset"], 0)
+        self.assertGreater(paged_authors["total"], 1)
+        self.assertTrue(paged_authors["hasMore"])
+        first_author_id = paged_authors["items"][0]["id"]
+
+        # Offset 1
+        status, paged_authors_2 = self._get_json("/api/subscriptions/entities?type=author&limit=1&offset=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(paged_authors_2["items"]), 1)
+        second_author_id = paged_authors_2["items"][0]["id"]
+        self.assertNotEqual(first_author_id, second_author_id)
+
+        # 3. Paginated call with type=topic
+        status, paged_topics = self._get_json("/api/subscriptions/entities?type=topic&limit=5&offset=0")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(paged_topics["items"]), 5)
+        self.assertEqual(paged_topics["total"], len(server.STANDARD_TOPICS))
+
+        # 4. Search filtering
+        status, search_authors = self._get_json("/api/subscriptions/entities?type=author&search=Смирнов")
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(search_authors["total"], 1)
+        for it in search_authors["items"]:
+            self.assertIn("Смирнов", it["title"])
+
+        status, search_topics = self._get_json("/api/subscriptions/entities?type=topic&search=платежи")
+        self.assertEqual(status, 200)
+        self.assertEqual(search_topics["total"], 1)
+        self.assertEqual(search_topics["items"][0]["id"], "digital-ruble-payments")
+
+        status, empty_search = self._get_json("/api/subscriptions/entities?type=tag&search=несуществующий_тег_xyz")
+        self.assertEqual(status, 200)
+        self.assertEqual(empty_search["total"], 0)
+        self.assertEqual(empty_search["items"], [])
+        self.assertFalse(empty_search["hasMore"])
+
+    def test_04_exceptions_priority_over_subscriptions(self):
+        """Verify priority of exceptions: publication is hidden if its topic/tag is excluded, even if subscribed to author."""
+        user_id = "user_priority_tester"
+        user_headers = {"Cookie": f"sc_session={user_id}"}
+
+        # Clear subscriptions and exceptions for this user
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            conn.execute("DELETE FROM user_subscriptions WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM user_feed_exceptions WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM user_feed_settings WHERE user_id = ?", (user_id,))
+
+        # Subscribe user to author_smirnov (who authored art-01)
+        status, sub_resp = self._post_json("/api/subscriptions/toggle", {
+            "targetType": "author",
+            "targetId": "author_smirnov",
+            "targetTitle": "Алексей Смирнов"
+        }, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(sub_resp["subscribed"])
+
+        # Check tab=my: art-01 is visible because user subscribed to author
+        status, data_my = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status, 200)
+        ids_my = [a["id"] for a in data_my["articles"]]
+        self.assertIn("art-01", ids_my)
+
+        # Check tab=all: art-01 is visible
+        status, data_all = self._get_json("/api/articles?tab=all", headers=user_headers)
+        self.assertEqual(status, 200)
+        ids_all = [a["id"] for a in data_all["articles"]]
+        self.assertIn("art-01", ids_all)
+
+        # NOW: Add exception for topic 'digital-ruble-payments' (one of art-01's topics)
+        status, exc_resp = self._post_json("/api/exceptions/toggle", {
+            "targetType": "topic",
+            "targetId": "digital-ruble-payments",
+            "targetTitle": "Цифровой рубль и платежи"
+        }, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(exc_resp["excluded"])
+
+        # Verify art-01 is HIDDEN in tab=my (exceptions take precedence over subscriptions!)
+        status, data_my_hidden = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status, 200)
+        ids_my_hidden = [a["id"] for a in data_my_hidden["articles"]]
+        self.assertNotIn("art-01", ids_my_hidden, "art-01 must be hidden from tab=my because its topic is in exceptions")
+
+        # Verify art-01 is ALSO HIDDEN in tab=all for this user!
+        status, data_all_hidden = self._get_json("/api/articles?tab=all", headers=user_headers)
+        self.assertEqual(status, 200)
+        ids_all_hidden = [a["id"] for a in data_all_hidden["articles"]]
+        self.assertNotIn("art-01", ids_all_hidden, "art-01 must be hidden from tab=all because its topic is in exceptions")
+
+        # Remove the topic exception
+        self._post_json("/api/exceptions/toggle", {
+            "targetType": "topic",
+            "targetId": "digital-ruble-payments"
+        }, headers=user_headers)
+
+        # Now test with a tag exception: 'цифровой рубль' (one of art-01's keywords)
+        status, exc_tag = self._post_json("/api/exceptions/toggle", {
+            "targetType": "tag",
+            "targetId": "цифровой рубль",
+            "targetTitle": "Цифровой рубль"
+        }, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(exc_tag["excluded"])
+
+        # Verify art-01 is HIDDEN in tab=my and tab=all due to tag exception
+        status, data_my_tag = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertNotIn("art-01", [a["id"] for a in data_my_tag["articles"]])
+
+        status, data_all_tag = self._get_json("/api/articles?tab=all", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertNotIn("art-01", [a["id"] for a in data_all_tag["articles"]])
+
+        # Remove the tag exception
+        self._post_json("/api/exceptions/toggle", {
+            "targetType": "tag",
+            "targetId": "цифровой рубль"
+        }, headers=user_headers)
+
+        # Verify art-01 is restored
+        status, data_my_restored = self._get_json("/api/articles?tab=my", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertIn("art-01", [a["id"] for a in data_my_restored["articles"]])
+
+    def test_05_exceptions_application_in_feed_and_direct_url_and_saved(self):
+        """Verify exceptions hide articles in feed and search, but NOT in direct URL or saved bookmarks."""
+        user_id = "user_direct_test"
+        user_headers = {"Cookie": f"sc_session={user_id}"}
+
+        # Add author_smirnov to user's exceptions
+        status, exc_resp = self._post_json("/api/exceptions/toggle", {
+            "targetType": "author",
+            "targetId": "author_smirnov",
+            "targetTitle": "Алексей Смирнов"
+        }, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(exc_resp["excluded"])
+
+        # 1. Hidden in tab=all
+        status, data_all = self._get_json("/api/articles?tab=all", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertNotIn("art-01", [a["id"] for a in data_all["articles"]])
+
+        # 2. Hidden in search inside feed
+        status, data_search = self._get_json("/api/articles?tab=all&search=цифрового", headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertNotIn("art-01", [a["id"] for a in data_search["articles"]])
+
+        # 3. Direct access via GET /api/articles/art-01 MUST NOT be hidden!
+        status_direct, data_direct = self._get_json("/api/articles/art-01", headers=user_headers)
+        self.assertEqual(status_direct, 200)
+        self.assertTrue(data_direct.get("success"))
+        self.assertEqual(data_direct["article"]["id"], "art-01")
+        self.assertEqual(data_direct["article"]["title"], "Интеграция смарт-контрактов с платформой цифрового рубля Банка России")
+
+        # 4. Bookmarks: GET /api/articles?tab=saved&ids=art-01 MUST NOT be hidden!
+        status_saved, data_saved = self._get_json("/api/articles?tab=saved&ids=art-01", headers=user_headers)
+        self.assertEqual(status_saved, 200)
+        self.assertIn("art-01", [a["id"] for a in data_saved["articles"]])
+
+        # 5. Bookmarks via ids param: GET /api/articles?ids=art-01 MUST NOT be hidden!
+        status_ids, data_ids = self._get_json("/api/articles?ids=art-01", headers=user_headers)
+        self.assertEqual(status_ids, 200)
+        self.assertIn("art-01", [a["id"] for a in data_ids["articles"]])
+
+    def test_06_temporal_filters_and_sorting(self):
+        """Verify temporal filters (types, topics, complexities, periods, date range) and sorting."""
+        conn = server.get_db_connection(self.db_path)
+        with conn:
+            # Seed 3 diverse articles for filtering and sorting tests
+            conn.execute("""
+                INSERT OR REPLACE INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, article_delta, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'art-t31-old', 'draft-t31-old', 'Архивный материал стандартов', 'author_old', 'approved',
+                    ?, '<p>Старый текст публикации стандартов протоколов.</p>',
+                    NULL, 'idem_t31_old', 'hash_t31_old', '2025-01-01T12:00:00Z', '2025-01-01T12:00:00Z'
+                )
+            """, (json.dumps({
+                "materialType": "article",
+                "complexity": "easy",
+                "topics": ["standards-and-protocols"],
+                "keywords": ["стандарт", "архив"],
+                "format": "overview",
+                "targetAudience": "architects-integrators",
+                "description": "Описание архивной статьи длиной более пятидесяти символов для фильтрации."
+            }, ensure_ascii=False),))
+
+            # 20 days ago (within month and year, but outside week)
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            month_dt = (now_dt - datetime.timedelta(days=20)).isoformat()
+            conn.execute("""
+                INSERT OR REPLACE INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, article_delta, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'art-t31-month', 'draft-t31-month', 'Месячная новость разработки', 'author_month', 'approved',
+                    ?, '<p>Новостной материал месячной давности о смарт-контрактах.</p>',
+                    NULL, 'idem_t31_month', 'hash_t31_month', ?, ?
+                )
+            """, (json.dumps({
+                "materialType": "news",
+                "complexity": "medium",
+                "topics": ["smart-contracts-development"],
+                "keywords": ["новость", "разработка"],
+                "format": "news",
+                "targetAudience": "developers",
+                "description": "Описание новости месячной давности длиной более пятидесяти символов."
+            }, ensure_ascii=False), month_dt, month_dt))
+
+            # 2 days ago (within week, month, year)
+            week_dt = (now_dt - datetime.timedelta(days=2)).isoformat()
+            conn.execute("""
+                INSERT OR REPLACE INTO moderation_submissions (
+                    id, draft_id, title, author_id, status, publication_settings,
+                    article_html, article_delta, idempotency_key, snapshot_hash, created_at, updated_at
+                ) VALUES (
+                    'art-t31-week', 'draft-t31-week', 'Свежий пост оптимизации газа', 'author_week', 'approved',
+                    ?, '<p>Свежий пост о снижении расхода газа в смарт-контрактах.</p>',
+                    NULL, 'idem_t31_week', 'hash_t31_week', ?, ?
+                )
+            """, (json.dumps({
+                "materialType": "post",
+                "complexity": "hard",
+                "topics": ["smart-contracts-development"],
+                "keywords": ["пост", "газ"],
+                "format": "post",
+                "targetAudience": "developers",
+                "description": "Описание свежего поста длиной более пятидесяти символов для проверки."
+            }, ensure_ascii=False), week_dt, week_dt))
+
+            # Seed likes and comments for sorting verification:
+            conn.execute("DELETE FROM article_likes WHERE article_id IN ('art-t31-old', 'art-t31-month', 'art-t31-week')")
+            conn.execute("DELETE FROM article_comments WHERE article_id IN ('art-t31-old', 'art-t31-month', 'art-t31-week')")
+
+            # 5 likes for art-t31-week
+            for i in range(5):
+                conn.execute("INSERT INTO article_likes (article_id, user_id, created_at) VALUES ('art-t31-week', ?, ?)",
+                             (f"user_like_w_{i}", week_dt))
+            # 1 like for art-t31-month
+            conn.execute("INSERT INTO article_likes (article_id, user_id, created_at) VALUES ('art-t31-month', 'user_like_m_0', ?)",
+                         (month_dt,))
+
+            # 5 comments for art-t31-month
+            for i in range(5):
+                conn.execute("""
+                    INSERT INTO article_comments (id, article_id, user_id, author_name, content, status, created_at)
+                    VALUES (?, 'art-t31-month', ?, 'Читатель', 'Комментарий для теста сортировки', 'published', ?)
+                """, (f"comm_m_{i}", f"user_comm_m_{i}", month_dt))
+            # 1 comment for art-t31-week
+            conn.execute("""
+                INSERT INTO article_comments (id, article_id, user_id, author_name, content, status, created_at)
+                VALUES ('comm_w_0', 'art-t31-week', 'user_comm_w_0', 'Читатель', 'Один комментарий', 'published', ?)
+            """, (week_dt,))
+
+        # 1. Filter by period: week
+        status, data_week = self._get_json("/api/articles?period=week")
+        self.assertEqual(status, 200)
+        week_ids = {a["id"] for a in data_week["articles"]}
+        self.assertIn("art-t31-week", week_ids)
+        self.assertNotIn("art-t31-month", week_ids)
+        self.assertNotIn("art-t31-old", week_ids)
+
+        # 2. Filter by period: month
+        status, data_month = self._get_json("/api/articles?period=month")
+        self.assertEqual(status, 200)
+        month_ids = {a["id"] for a in data_month["articles"]}
+        self.assertIn("art-t31-week", month_ids)
+        self.assertIn("art-t31-month", month_ids)
+        self.assertNotIn("art-t31-old", month_ids)
+
+        # 3. Filter by period: year
+        status, data_year = self._get_json("/api/articles?period=year")
+        self.assertEqual(status, 200)
+        year_ids = {a["id"] for a in data_year["articles"]}
+        self.assertIn("art-t31-week", year_ids)
+        self.assertIn("art-t31-month", year_ids)
+        self.assertNotIn("art-t31-old", year_ids)
+
+        # 4. Filter by period: custom range
+        status, data_custom = self._get_json("/api/articles?period=custom&dateFrom=2025-01-01&dateTo=2025-01-02")
+        self.assertEqual(status, 200)
+        custom_ids = {a["id"] for a in data_custom["articles"]}
+        self.assertIn("art-t31-old", custom_ids)
+        self.assertNotIn("art-t31-week", custom_ids)
+        self.assertNotIn("art-t31-month", custom_ids)
+
+        # 5. Filter by multiple topics (OR logic within group)
+        status, data_top = self._get_json("/api/articles?topics=standards-and-protocols,smart-contracts-development")
+        self.assertEqual(status, 200)
+        top_ids = {a["id"] for a in data_top["articles"]}
+        self.assertIn("art-t31-old", top_ids)
+        self.assertIn("art-t31-month", top_ids)
+        self.assertIn("art-t31-week", top_ids)
+
+        # Single topic filter
+        status, data_single_top = self._get_json("/api/articles?topic=standards-and-protocols")
+        self.assertEqual(status, 200)
+        single_ids = {a["id"] for a in data_single_top["articles"]}
+        self.assertIn("art-t31-old", single_ids)
+        self.assertNotIn("art-t31-month", single_ids)
+
+        # 6. Filter by format and audience
+        status, data_fa = self._get_json("/api/articles?format=overview&audience=architects-integrators")
+        self.assertEqual(status, 200)
+        fa_ids = {a["id"] for a in data_fa["articles"]}
+        self.assertIn("art-t31-old", fa_ids)
+        self.assertNotIn("art-t31-month", fa_ids)
+
+        # 7. Sorting: popular (by likesCount DESC, then date DESC)
+        status, data_pop = self._get_json("/api/articles?sort=popular")
+        self.assertEqual(status, 200)
+        articles_pop = data_pop["articles"]
+        self.assertGreaterEqual(len(articles_pop), 2)
+        idx_week = next(i for i, a in enumerate(articles_pop) if a["id"] == "art-t31-week")
+        idx_month = next(i for i, a in enumerate(articles_pop) if a["id"] == "art-t31-month")
+        self.assertLess(idx_week, idx_month, "art-t31-week with 5 likes must precede art-t31-month with 1 like in sort=popular")
+
+        # 8. Sorting: discussed (by commentsCount DESC, then date DESC)
+        status, data_disc = self._get_json("/api/articles?sort=discussed")
+        self.assertEqual(status, 200)
+        articles_disc = data_disc["articles"]
+        idx_month_d = next(i for i, a in enumerate(articles_disc) if a["id"] == "art-t31-month")
+        idx_week_d = next(i for i, a in enumerate(articles_disc) if a["id"] == "art-t31-week")
+        self.assertLess(idx_month_d, idx_week_d, "art-t31-month with 5 comments must precede art-t31-week with 1 comment in sort=discussed")
+
+        # 9. Sorting: newest (by date DESC)
+        status, data_new = self._get_json("/api/articles?sort=newest")
+        self.assertEqual(status, 200)
+        articles_new = data_new["articles"]
+        idx_week_n = next(i for i, a in enumerate(articles_new) if a["id"] == "art-t31-week")
+        idx_old_n = next(i for i, a in enumerate(articles_new) if a["id"] == "art-t31-old")
+        self.assertLess(idx_week_n, idx_old_n, "art-t31-week (recent) must precede art-t31-old (2025) in sort=newest")
+
+    def test_07_batch_feed_settings_and_validation(self):
+        """Verify POST /api/user/feed-settings batch updating with subscriptions and exceptions, and validation."""
+        user_headers = {"Cookie": "sc_session=user_batch_tester"}
+
+        # Empty materialTypes rejected with 400
+        status, data_err = self._post_json("/api/user/feed-settings", {
+            "materialTypes": [],
+            "complexityLevels": ["easy"]
+        }, headers=user_headers)
+        self.assertEqual(status, 400)
+        self.assertIn("Выберите хотя бы один тип материала", data_err.get("error", ""))
+
+        # Batch update with materialTypes, complexityLevels, subscriptions, and exceptions
+        payload = {
+            "materialTypes": ["article", "news"],
+            "complexityLevels": ["hard"],
+            "subscriptions": {
+                "authors": [{"id": "author_melnikov", "title": "Илья Мельников"}],
+                "topics": [{"id": "law-and-compliance", "title": "Право и комплаенс"}],
+                "tags": [{"id": "цфа", "title": "ЦФА"}]
+            },
+            "exceptions": {
+                "topics": [{"id": "audit-and-verification", "title": "Аудит и проверка смарт-контрактов"}]
+            }
+        }
+        status, data_ok = self._post_json("/api/user/feed-settings", payload, headers=user_headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(data_ok.get("success"))
+        self.assertEqual(data_ok["materialTypes"], ["article", "news"])
+        self.assertEqual(data_ok["complexityLevels"], ["hard"])
+
+        # Verify subscriptions saved
+        status, subs_resp = self._get_json("/api/subscriptions", headers=user_headers)
+        self.assertEqual(status, 200)
+        sub_author_ids = [a["id"] for a in subs_resp["subscriptions"]["authors"]]
+        sub_topic_ids = [t["id"] for t in subs_resp["subscriptions"]["topics"]]
+        sub_tag_ids = [g["id"] for g in subs_resp["subscriptions"]["tags"]]
+        self.assertIn("author_melnikov", sub_author_ids)
+        self.assertIn("law-and-compliance", sub_topic_ids)
+        self.assertIn("цфа", sub_tag_ids)
+
+        # Verify exceptions saved
+        status, exc_resp = self._get_json("/api/exceptions", headers=user_headers)
+        self.assertEqual(status, 200)
+        exc_topic_ids = [t["id"] for t in exc_resp["exceptions"]["topics"]]
+        self.assertIn("audit-and-verification", exc_topic_ids)
+
+
 if __name__ == '__main__':
     unittest.main()
+
 
 

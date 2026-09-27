@@ -264,6 +264,18 @@
 [2026-09-27 17:40] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация и коммит (Task: task-30-feed-subnav-personalization-card-comments)
 [2026-09-27 17:42] | git_bot | GIT_COMMITTED | Зафиксирован коммит ec1b19a на ветке feat/task-30-feed-subnav-personalization-card-comments и выполнен локальный Fast-Forward слияние в main (Task: task-30-feed-subnav-personalization-card-comments)
 [2026-09-27 17:43] | pm_bot | TASK_DONE | Задача task-30 успешно завершена в статусе Done-Done. Все 252 теста пройдены (100%) (Task: task-30-feed-subnav-personalization-card-comments)
+[2026-09-27 18:23] | pm_bot | TASK_INIT | Инициализация доработки и визуально-поведенческой согласованности панелей «Настройка ленты» и «Фильтры», исключений и пагинации каталогов (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:25] | git_bot | GIT_PREPARE | Создана и активирована рабочая ветка feat/task-31-feed-settings-and-filters-unification (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:26] | pm_bot | DEV_ASSIGN | Назначение комплексной задачи разработки dev_bot (Frontend: единый контейнер выдвижных панелей, настройки ленты, компактные фильтры, подписки/исключения, чипы) и py_bot (Backend: user_feed_exceptions, пагинация каталогов, приоритет исключений, тесты) (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:38] | py_bot | DEV_COMPLETE | Реализована таблица user_feed_exceptions с индексами, эндпоинты /api/exceptions*, взаимное исключение подписок и исключений, пагинация и поиск в /api/subscriptions/entities, наивысший приоритет исключений и фильтры в /api/articles, добавлены тесты TestTask31FeedSettingsAndFiltersUnification, все 259 тестов успешно пройдены (100% PASS), DEV_HANDOVER сформирован со статусом READY_FOR_QA (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:48] | dev_bot | DEV_COMPLETE | Реализован единый формат выдвижных панелей ленты (#feedSettingsPanel и #feedFiltersPanel, 1360px), удалено модальное окно с затемнением, реализованы 3 раздела настроек (тумблеры типов, выбор сложности с галочками, режимы подписок и исключений), пагинированный поиск по каталогу по 20 элементов, черновик настроек с индикатором и отменой, временные фильтры с активными чипами, счетчик групп на кнопке фильтров, синхронизация URL, наивысший приоритет исключений и русская плюрализация (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:49] | pm_bot | QA_ASSIGN | Передача артефактов задачи task-31 на независимый аудит qa_bot (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:51] | qa_bot | QA_APPROVED | Независимый аудит согласованных панелей настроек и фильтров, подписок, исключений и пагинации каталогов завершен со статусом APPROVED (259/259 PASS, snapshot 4b0e5ed4c48e01f9a9d841bb83a4b633f7e6048cf6253b1771672aaa409b6d7d) (Task: task-31-feed-settings-and-filters-unification)
+[2026-09-27 18:54] | pm_bot | GIT_ASSIGN | Назначение задачи git_bot для этапа FINALIZE: проверка снимка, атомарная индексация и коммит (Task: task-31-feed-settings-and-filters-unification)
+
+
+
+
 
 
 

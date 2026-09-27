@@ -162,7 +162,7 @@
             id="btnFeedFiltersToggle"
             class="btn btn-secondary feed-subnav-btn feed-subnav-filters-btn"
             aria-expanded="false"
-            aria-controls="feedFiltersModal"
+            aria-controls="feedFiltersPanel"
             title="Открыть фильтры"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -251,14 +251,15 @@
     <!-- ================================================================
          SLIDE-OUT FEED SETTINGS PANEL (#feedSettingsPanel)
     ================================================================= -->
-    <section id="feedSettingsPanel" class="feed-settings-panel" aria-label="Настройка персональной ленты" style="display: none;">
-      <div class="feed-settings-panel-container">
-        <div class="feed-settings-panel-header">
-          <div class="feed-settings-title-wrap">
-            <h2 class="feed-settings-title">Настройка ленты</h2>
-            <span class="feed-settings-subtitle">Выберите типы материалов, уровень сложности и подписки для формирования персональной выдачи</span>
+    <section id="feedSettingsPanel" class="feed-slide-panel feed-settings-panel" aria-label="Настройка персональной ленты" style="display: none;">
+      <div class="feed-slide-panel-container">
+        <!-- Panel Header -->
+        <div class="feed-slide-panel-header">
+          <div class="feed-slide-panel-title-wrap">
+            <h2 class="feed-slide-panel-title">Настройка ленты</h2>
+            <span class="feed-slide-panel-subtitle">Выберите, что читать в своей ленте, и настройте интересы</span>
           </div>
-          <button type="button" class="feed-settings-close-btn" id="btnCloseFeedSettings" title="Закрыть панель настроек" aria-label="Закрыть панель настроек">
+          <button type="button" class="feed-slide-panel-close-btn" id="btnCloseFeedSettings" title="Закрыть панель настроек" aria-label="Закрыть панель настроек">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -266,79 +267,116 @@
           </button>
         </div>
 
-        <div class="feed-settings-panel-body">
-          <!-- 1. Типы материалов -->
-          <div class="feed-settings-section" id="feedSettingsSectionTypes">
-            <h3 class="feed-settings-section-title">Типы материалов</h3>
-            <p class="feed-settings-section-hint">Выберите типы публикаций, которые будут отображаться в вашей ленте (минимум один)</p>
-            <div class="feed-settings-checkboxes-grid" id="feedMaterialTypesList">
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedMaterialType" value="article" checked class="feed-checkbox-input">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Статьи</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedMaterialType" value="post" checked class="feed-checkbox-input">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Посты</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedMaterialType" value="news" checked class="feed-checkbox-input">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Новости</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedMaterialType" value="question" checked class="feed-checkbox-input">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Вопросы</span>
-              </label>
-            </div>
-            <div id="feedMaterialTypesError" class="feed-settings-error" style="display: none;">
-              Выберите хотя бы один тип материала
-            </div>
-          </div>
-
-          <!-- 2. Уровень сложности -->
-          <div class="feed-settings-section" id="feedSettingsSectionComplexity">
-            <h3 class="feed-settings-section-title">Уровень сложности</h3>
-            <p class="feed-settings-section-hint">Ограничьте материалы по уровню подготовки или оставьте любой</p>
-            <div class="feed-settings-complexity-grid" id="feedComplexityLevelsList">
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedComplexityLevel" value="all" checked class="feed-checkbox-input" id="feedCompAll">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Любой уровень</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedComplexityLevel" value="easy" class="feed-checkbox-input" id="feedCompEasy">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Простой</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedComplexityLevel" value="medium" class="feed-checkbox-input" id="feedCompMedium">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Средний</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedComplexityLevel" value="hard" class="feed-checkbox-input" id="feedCompHard">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Сложный</span>
-              </label>
-              <label class="feed-checkbox-label">
-                <input type="checkbox" name="feedComplexityLevel" value="none" class="feed-checkbox-input" id="feedCompNone">
-                <span class="feed-checkbox-custom"></span>
-                <span class="feed-checkbox-text">Не указан</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- 3. Подписки -->
-          <div class="feed-settings-section" id="feedSettingsSectionSubscriptions">
-            <div class="feed-settings-subs-header">
-              <div>
-                <h3 class="feed-settings-section-title">Подписки</h3>
-                <p class="feed-settings-section-hint">Материалы отслеживаемых авторов, тем и хэштегов собираются в вашу ленту</p>
+        <!-- Panel Body -->
+        <div class="feed-slide-panel-body">
+          <!-- Top Grid: Types (left) & Complexity (right) on desktop -->
+          <div class="feed-settings-top-grid">
+            <!-- 1. Типы материалов -->
+            <div class="feed-settings-section feed-settings-col" id="feedSettingsSectionTypes">
+              <div class="feed-section-header-row">
+                <h3 class="feed-settings-section-title">Типы материалов</h3>
+                <span class="feed-section-badge">Минимум один</span>
               </div>
-              <div class="feed-settings-subs-tabs" role="tablist">
+              <p class="feed-settings-section-hint">Выберите типы публикаций, которые будут отображаться в вашей ленте</p>
+              
+              <div class="feed-tumblers-grid" id="feedMaterialTypesList">
+                <label class="feed-tumbler-row" for="feedTypeArticle">
+                  <span class="feed-tumbler-label">Статьи</span>
+                  <span class="feed-tumbler-switch">
+                    <input type="checkbox" id="feedTypeArticle" name="feedMaterialType" value="article" checked class="feed-tumbler-input">
+                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
+                  </span>
+                </label>
+                <label class="feed-tumbler-row" for="feedTypePost">
+                  <span class="feed-tumbler-label">Посты</span>
+                  <span class="feed-tumbler-switch">
+                    <input type="checkbox" id="feedTypePost" name="feedMaterialType" value="post" checked class="feed-tumbler-input">
+                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
+                  </span>
+                </label>
+                <label class="feed-tumbler-row" for="feedTypeNews">
+                  <span class="feed-tumbler-label">Новости</span>
+                  <span class="feed-tumbler-switch">
+                    <input type="checkbox" id="feedTypeNews" name="feedMaterialType" value="news" checked class="feed-tumbler-input">
+                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
+                  </span>
+                </label>
+                <label class="feed-tumbler-row" for="feedTypeQuestion">
+                  <span class="feed-tumbler-label">Вопросы</span>
+                  <span class="feed-tumbler-switch">
+                    <input type="checkbox" id="feedTypeQuestion" name="feedMaterialType" value="question" checked class="feed-tumbler-input">
+                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
+                  </span>
+                </label>
+              </div>
+              <div id="feedMaterialTypesError" class="feed-settings-error" style="display: none;">
+                Выберите хотя бы один тип материала
+              </div>
+            </div>
+
+            <!-- 2. Уровень сложности -->
+            <div class="feed-settings-section feed-settings-col" id="feedSettingsSectionComplexity">
+              <h3 class="feed-settings-section-title">Уровень сложности</h3>
+              <p class="feed-settings-section-hint">Ограничьте материалы по уровню подготовки или оставьте любой</p>
+              
+              <div class="feed-choice-buttons-grid" id="feedComplexityLevelsList" role="group" aria-label="Уровень сложности">
+                <button type="button" class="feed-choice-btn active" data-complexity="all" id="feedCompAll">
+                  <span class="feed-choice-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </span>
+                  <span class="feed-choice-text">Любой уровень</span>
+                </button>
+                <button type="button" class="feed-choice-btn" data-complexity="easy" id="feedCompEasy">
+                  <span class="feed-choice-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </span>
+                  <span class="feed-choice-text">Простой</span>
+                </button>
+                <button type="button" class="feed-choice-btn" data-complexity="medium" id="feedCompMedium">
+                  <span class="feed-choice-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </span>
+                  <span class="feed-choice-text">Средний</span>
+                </button>
+                <button type="button" class="feed-choice-btn" data-complexity="hard" id="feedCompHard">
+                  <span class="feed-choice-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </span>
+                  <span class="feed-choice-text">Сложный</span>
+                </button>
+                <button type="button" class="feed-choice-btn" data-complexity="none" id="feedCompNone">
+                  <span class="feed-choice-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </span>
+                  <span class="feed-choice-text">Без указанного уровня</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Подписки и исключения -->
+          <div class="feed-settings-section feed-settings-subs-section" id="feedSettingsSectionSubscriptions">
+            <div class="feed-subs-section-top">
+              <div class="feed-subs-title-block">
+                <h3 class="feed-settings-section-title">Подписки и исключения</h3>
+                <p class="feed-settings-section-hint">Исключённые авторы, темы и хэштеги скрываются из общей и персональной ленты</p>
+              </div>
+
+              <!-- Segmented Control: Подписки / Исключения -->
+              <div class="feed-segmented-control" role="tablist" aria-label="Режим управления контентом">
+                <button type="button" class="feed-segmented-btn active" id="btnSubsModeSubscriptions" role="tab" aria-selected="true">
+                  <span>Подписки</span>
+                </button>
+                <button type="button" class="feed-segmented-btn" id="btnSubsModeExceptions" role="tab" aria-selected="false">
+                  <span>Исключения</span>
+                  <span class="feed-segmented-subtext">Не показывать в ленте</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tabs: Авторы / Темы / Хэштеги with counters -->
+            <div class="feed-subs-nav-bar">
+              <div class="feed-settings-subs-tabs" role="tablist" aria-label="Категории элементов">
                 <button type="button" class="subs-tab-btn active" id="tabFeedSettingsSubsAuthors" data-type="author" role="tab" aria-selected="true">
                   <span>Авторы</span> <span class="subs-tab-count" id="feedSettingsSubsAuthorsCount">0</span>
                 </button>
@@ -349,23 +387,218 @@
                   <span>Хэштеги</span> <span class="subs-tab-count" id="feedSettingsSubsTagsCount">0</span>
                 </button>
               </div>
+
+              <!-- Action button: Добавить подписку / Добавить исключение -->
+              <button type="button" class="btn btn-secondary btn-sm feed-subs-action-btn" id="btnToggleCatalogSearch">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span id="btnToggleCatalogSearchText">Добавить подписки</span>
+              </button>
             </div>
-            <div class="feed-settings-subs-search-box">
-              <input type="search" id="feedSettingsSubsSearch" class="feed-settings-subs-search" placeholder="Поиск в каталоге подписок..." autocomplete="off">
+
+            <!-- In-panel Search & Catalog view (revealed by button or empty state) -->
+            <div class="feed-catalog-pane" id="feedCatalogPane" style="display: none;">
+              <div class="feed-catalog-search-wrap">
+                <div class="feed-search-input-box">
+                  <svg class="feed-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input type="search" id="feedSettingsSubsSearch" class="feed-settings-subs-search" placeholder="Найти автора..." autocomplete="off">
+                  <span id="feedCatalogSearchSpinner" class="feed-search-spinner" style="display: none;"></span>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnCloseCatalogPane" title="Вернуться к моим элементам">
+                  <span>Мой список</span>
+                </button>
+              </div>
+              <div class="feed-catalog-list" id="feedSettingsCatalogList">
+                <!-- Dynamically rendered -->
+              </div>
+              <div class="feed-catalog-footer" id="feedCatalogFooter" style="display: none;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnCatalogLoadMore">
+                  <span>Показать ещё</span>
+                </button>
+              </div>
             </div>
-            <div class="feed-settings-subs-list" id="feedSettingsSubsList">
-              <!-- Rendered dynamically -->
+
+            <!-- User's Personal Items view (displayed by default) -->
+            <div class="feed-user-items-pane" id="feedUserItemsPane">
+              <div class="feed-settings-subs-list" id="feedSettingsSubsList">
+                <!-- Dynamically rendered -->
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="feed-settings-panel-footer">
-          <button type="button" class="btn btn-secondary" id="btnCancelFeedSettings">
-            <span>Отмена</span>
+        <!-- Panel Footer -->
+        <div class="feed-slide-panel-footer">
+          <div class="feed-footer-status">
+            <span id="feedSettingsUnsavedIndicator" class="feed-settings-unsaved-indicator" style="display: none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              Есть несохранённые изменения
+            </span>
+          </div>
+          <div class="feed-footer-actions">
+            <button type="button" class="btn btn-secondary" id="btnCancelFeedSettings">
+              <span>Отмена</span>
+            </button>
+            <button type="button" class="btn btn-primary" id="btnSaveFeedSettings" disabled>
+              <span>Сохранить настройки</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         SLIDE-OUT FEED FILTERS PANEL (#feedFiltersPanel)
+    ================================================================= -->
+    <section id="feedFiltersPanel" class="feed-slide-panel feed-filters-panel" aria-label="Фильтры публикаций" style="display: none;">
+      <div class="feed-slide-panel-container">
+        <!-- Panel Header -->
+        <div class="feed-slide-panel-header">
+          <div class="feed-slide-panel-title-wrap">
+            <h2 class="feed-slide-panel-title">Фильтры публикаций</h2>
+            <span class="feed-slide-panel-subtitle">Временное уточнение текущей выдачи</span>
+          </div>
+          <button type="button" class="feed-slide-panel-close-btn" id="btnCloseFeedFilters" title="Закрыть фильтры" aria-label="Закрыть фильтры">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
-          <button type="button" class="btn btn-primary" id="btnSaveFeedSettings">
-            <span>Сохранить настройки</span>
-          </button>
+        </div>
+
+        <!-- Panel Body -->
+        <div class="feed-slide-panel-body">
+          <!-- Primary Filter Parameters Grid -->
+          <div class="feed-filters-primary-grid">
+            <!-- 1. Типы материалов -->
+            <div class="feed-filter-group">
+              <label class="feed-filter-label">Тип материала</label>
+              <div class="feed-filter-multiselect" id="feedFilterMaterialTypes">
+                <button type="button" class="feed-filter-chip" data-type="article">Статьи</button>
+                <button type="button" class="feed-filter-chip" data-type="post">Посты</button>
+                <button type="button" class="feed-filter-chip" data-type="news">Новости</button>
+                <button type="button" class="feed-filter-chip" data-type="question">Вопросы</button>
+              </div>
+            </div>
+
+            <!-- 2. Уровень сложности -->
+            <div class="feed-filter-group">
+              <label class="feed-filter-label">Уровень сложности</label>
+              <div class="feed-filter-multiselect" id="feedFilterComplexityLevels">
+                <button type="button" class="feed-filter-chip" data-complexity="easy">Простой</button>
+                <button type="button" class="feed-filter-chip" data-complexity="medium">Средний</button>
+                <button type="button" class="feed-filter-chip" data-complexity="hard">Сложный</button>
+                <button type="button" class="feed-filter-chip" data-complexity="none">Без уровня</button>
+              </div>
+            </div>
+
+            <!-- 3. Дата публикации -->
+            <div class="feed-filter-group">
+              <label class="feed-filter-label">Дата публикации</label>
+              <div class="feed-filter-multiselect" id="feedFilterPeriods">
+                <button type="button" class="feed-filter-chip active" data-period="all">За всё время</button>
+                <button type="button" class="feed-filter-chip" data-period="week">За неделю</button>
+                <button type="button" class="feed-filter-chip" data-period="month">За месяц</button>
+                <button type="button" class="feed-filter-chip" data-period="year">За год</button>
+                <button type="button" class="feed-filter-chip" data-period="custom" id="btnFilterPeriodCustom">Период...</button>
+              </div>
+              <div class="feed-custom-date-row" id="feedFilterCustomDates" style="display: none;">
+                <div class="feed-date-field">
+                  <span class="feed-date-caption">С</span>
+                  <input type="date" id="filterDateFrom" class="feed-date-input" aria-label="Начальная дата">
+                </div>
+                <div class="feed-date-field">
+                  <span class="feed-date-caption">По</span>
+                  <input type="date" id="filterDateTo" class="feed-date-input" aria-label="Конечная дата">
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Сортировка -->
+            <div class="feed-filter-group">
+              <label class="feed-filter-label">Сортировка</label>
+              <div class="feed-filter-multiselect" id="feedFilterSortGroup">
+                <button type="button" class="feed-filter-chip active" data-sort="newest">Новые</button>
+                <button type="button" class="feed-filter-chip" data-sort="popular">Популярные</button>
+                <button type="button" class="feed-filter-chip" data-sort="comments">Обсуждаемые</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Topics Filter with Multi-select and Search -->
+          <div class="feed-filter-group feed-topics-filter-group">
+            <div class="feed-topics-filter-header">
+              <label class="feed-filter-label" for="filterTopicSearchInput">Темы публикаций</label>
+              <div class="feed-topic-search-wrap">
+                <input type="search" id="filterTopicSearchInput" class="filter-topic-search-input" placeholder="Поиск по темам..." autocomplete="off">
+              </div>
+            </div>
+
+            <!-- Selected topics chips (chips) -->
+            <div class="filter-selected-chips-bar" id="filterSelectedTopicsChips" style="display: none;"></div>
+
+            <!-- Topics buttons list -->
+            <div class="feed-filter-bar modal-topics-bar feed-topics-chips-grid" id="modalTopicsFilterBar" role="tablist">
+              <!-- Dynamically populated or all topics -->
+            </div>
+          </div>
+
+          <!-- Collapsible: Additional parameters (Format, Audience) -->
+          <details class="feed-filters-advanced" id="feedFiltersAdvanced">
+            <summary class="feed-filters-advanced-summary">
+              <span class="feed-summary-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="4" y1="21" x2="4" y2="14"></line>
+                  <line x1="4" y1="10" x2="4" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="3"></line>
+                  <line x1="20" y1="21" x2="20" y2="16"></line>
+                  <line x1="20" y1="12" x2="20" y2="3"></line>
+                  <line x1="1" y1="14" x2="7" y2="14"></line>
+                  <line x1="9" y1="8" x2="15" y2="8"></line>
+                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+                Дополнительные параметры
+              </span>
+              <svg class="summary-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </summary>
+            <div class="feed-filters-advanced-body">
+              <div class="filter-group">
+                <label for="feedFormatSelect" class="filter-label">Формат публикации</label>
+                <select id="feedFormatSelect" class="feed-select filter-control">
+                  <option value="all">Любой формат</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="feedAudienceSelect" class="filter-label">Целевая аудитория</label>
+                <select id="feedAudienceSelect" class="feed-select filter-control">
+                  <option value="all">Любая аудитория</option>
+                </select>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Panel Footer -->
+        <div class="feed-slide-panel-footer">
+          <div class="feed-footer-status">
+            <span class="feed-filters-hint">Фильтры уточняют текущую выдачу и не меняют сохранённые подписки</span>
+          </div>
+          <div class="feed-footer-actions">
+            <button type="button" id="feedResetFiltersBtn" class="btn btn-secondary">
+              <span>Сбросить</span>
+            </button>
+            <button type="button" id="btnApplyFilters" class="btn btn-primary">
+              <span>Применить фильтры</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -506,86 +739,7 @@
     </main>
   </div>
 
-  <!-- ================================================================
-       MODAL 1: UNIFIED FILTERS MODAL (Topics with search, Audience, Format, Complexity)
-  ================================================================= -->
-  <div id="feedFiltersModal" class="feed-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
-    <div class="feed-modal-card filters-modal-card">
-      <div class="feed-modal-header">
-        <div class="feed-modal-title-wrap">
-          <h2 id="filtersModalTitle" class="feed-modal-title">Фильтры публикаций</h2>
-          <span class="feed-modal-subtitle">Настройте параметры поиска и выборки материалов</span>
-        </div>
-        <button type="button" class="feed-modal-close-btn" id="btnCloseFiltersModal" title="Закрыть фильтры" aria-label="Закрыть фильтры">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
 
-      <div class="feed-modal-body">
-        <!-- Section: Thematic Filters with Search -->
-        <div class="filter-section">
-          <div class="filter-section-header">
-            <label class="filter-section-label" for="filterTopicSearchInput">Тематика публикаций</label>
-            <div class="filter-topic-search-wrap">
-              <input type="search" id="filterTopicSearchInput" class="filter-topic-search-input" placeholder="Поиск по темам..." autocomplete="off">
-            </div>
-          </div>
-          <div class="feed-filter-bar modal-topics-bar" id="modalTopicsFilterBar" role="tablist">
-            <button type="button" class="feed-filter-btn active" data-topic="all" role="tab" aria-selected="true">Все темы</button>
-            <button type="button" class="feed-filter-btn" data-topic="smart-contracts-development" role="tab" aria-selected="false">Разработка</button>
-            <button type="button" class="feed-filter-btn" data-topic="information-security" role="tab" aria-selected="false">Безопасность</button>
-            <button type="button" class="feed-filter-btn" data-topic="law-and-compliance" role="tab" aria-selected="false">Право и комплаенс</button>
-            <button type="button" class="feed-filter-btn" data-topic="oracles-and-data" role="tab" aria-selected="false">Оракулы</button>
-            <button type="button" class="feed-filter-btn" data-topic="integrations-and-api" role="tab" aria-selected="false">Интеграции</button>
-            <button type="button" class="feed-filter-btn" data-topic="pksc-architecture" role="tab" aria-selected="false">Архитектура ПКСК</button>
-            <button type="button" class="feed-filter-btn" data-topic="business-logic-deals" role="tab" aria-selected="false">Бизнес-логика</button>
-            <button type="button" class="feed-filter-btn" data-topic="testing-and-quality" role="tab" aria-selected="false">Тестирование</button>
-            <button type="button" class="feed-filter-btn" data-topic="audit-and-verification" role="tab" aria-selected="false">Аудит и проверка</button>
-            <button type="button" class="feed-filter-btn" data-topic="digital-ruble-payments" role="tab" aria-selected="false">Цифровой рубль</button>
-            <button type="button" class="feed-filter-btn" data-topic="infrastructure-operations" role="tab" aria-selected="false">Инфраструктура</button>
-            <button type="button" class="feed-filter-btn" data-topic="business-cases-adoption" role="tab" aria-selected="false">Бизнес-сценарии</button>
-          </div>
-        </div>
-
-        <!-- Section: Dropdowns (Audience, Format, Complexity) -->
-        <div class="filters-modal-grid">
-          <div class="filter-group">
-            <label for="feedAudienceSelect" class="filter-label">Целевая аудитория</label>
-            <select id="feedAudienceSelect" class="feed-select filter-control">
-              <option value="all">Любая аудитория</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label for="feedFormatSelect" class="filter-label">Формат материала</label>
-            <select id="feedFormatSelect" class="feed-select filter-control">
-              <option value="all">Любой формат</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label for="feedComplexitySelect" class="filter-label">Уровень сложности</label>
-            <select id="feedComplexitySelect" class="feed-select filter-control">
-              <option value="all">Любая сложность</option>
-              <option value="easy">Начальный</option>
-              <option value="medium">Средний</option>
-              <option value="hard">Сложный</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="feed-modal-footer">
-        <button type="button" id="feedResetFiltersBtn" class="btn btn-secondary">
-          <span>Сбросить</span>
-        </button>
-        <button type="button" id="btnApplyFilters" class="btn btn-primary">
-          <span>Применить фильтры</span>
-        </button>
-      </div>
-    </div>
-  </div>
 
   <!-- ================================================================
        MODAL 2: SUBSCRIPTIONS MANAGEMENT MODAL (Authors, Topics, Hashtags)

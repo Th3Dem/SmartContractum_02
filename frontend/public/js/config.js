@@ -61,19 +61,19 @@
   ];
 
   const TOPICS = [
-    { id: 'pksc-architecture', title: 'Архитектура и развитие ПКСК' },
-    { id: 'smart-contracts-development', title: 'Разработка смарт-контрактов' },
-    { id: 'business-logic-deals', title: 'Бизнес-логика и моделирование сделок' },
-    { id: 'testing-and-quality', title: 'Тестирование и качество' },
-    { id: 'information-security', title: 'Информационная безопасность' },
-    { id: 'audit-and-verification', title: 'Аудит и проверка смарт-контрактов' },
-    { id: 'law-and-compliance', title: 'Право и комплаенс' },
-    { id: 'oracles-and-data', title: 'Оракулы и доверенные внешние данные' },
-    { id: 'integrations-and-api', title: 'Интеграции и API' },
-    { id: 'digital-ruble-payments', title: 'Цифровой рубль и программируемые расчеты' },
-    { id: 'lifecycle-versioning', title: 'Жизненный цикл и версии смарт-контрактов' },
-    { id: 'infrastructure-operations', title: 'Инфраструктура и эксплуатация' },
-    { id: 'business-cases-adoption', title: 'Бизнес-сценарии и внедрение' }
+    { id: 'pksc-architecture', title: 'Архитектура и развитие ПКСК', description: 'Архитектурные паттерны, консенсус и масштабирование корпоративных систем' },
+    { id: 'smart-contracts-development', title: 'Разработка смарт-контрактов', description: 'Написание безопасного кода, оптимизация исполнения и шаблоны контрактов' },
+    { id: 'business-logic-deals', title: 'Бизнес-логика и моделирование сделок', description: 'Автоматизация бизнес-процессов, алгоритмы сделок и транзакций' },
+    { id: 'testing-and-quality', title: 'Тестирование и качество', description: 'Модульное, интеграционное и нагрузочное тестирование контрактов и узлов' },
+    { id: 'information-security', title: 'Информационная безопасность', description: 'Защита узлов, предотвращение атак и безопасность ключей' },
+    { id: 'audit-and-verification', title: 'Аудит и проверка смарт-контрактов', description: 'Формальная верификация, статический анализ и аудит безопасности' },
+    { id: 'law-and-compliance', title: 'Право и комплаенс', description: 'Правовой статус смарт-контрактов и регуляторные требования РФ' },
+    { id: 'oracles-and-data', title: 'Оракулы и доверенные внешние данные', description: 'Поставка доверенных внешних данных и верификация источников' },
+    { id: 'integrations-and-api', title: 'Интеграции и API', description: 'Интеграция реестров с банковскими и корпоративными системами' },
+    { id: 'digital-ruble-payments', title: 'Цифровой рубль и программируемые расчеты', description: 'Программируемые расчеты, интеграция цифрового рубля и платежи' },
+    { id: 'lifecycle-versioning', title: 'Жизненный цикл и версии смарт-контрактов', description: 'Управление версиями контрактов и обновление логики' },
+    { id: 'infrastructure-operations', title: 'Инфраструктура и эксплуатация', description: 'Развертывание узлов, мониторинг и сопровождение сетей' },
+    { id: 'business-cases-adoption', title: 'Бизнес-сценарии и внедрение', description: 'Практические кейсы внедрения распределенных реестров' }
   ];
 
   const FORMATS = [

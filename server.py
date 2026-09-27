@@ -247,6 +247,19 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON user_subscriptions(user_id);")
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_feed_exceptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_title TEXT,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, target_type, target_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_user_id ON user_feed_exceptions(user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_lookup ON user_feed_exceptions(user_id, target_type, target_id);")
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS article_likes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -1204,10 +1217,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(200, {"success": True, "authenticated": False, "user": None})
         elif path == "/api/user/feed-settings":
             self.handle_get_feed_settings()
+        elif path == "/api/exceptions":
+            self.handle_get_exceptions()
         elif path == "/api/subscriptions":
             self.handle_get_subscriptions()
         elif path == "/api/subscriptions/entities":
-            self.handle_get_subscription_entities()
+            self.handle_get_subscription_entities(parsed)
         elif path == "/api/moderation/status":
             self.handle_moderation_status(parsed)
         elif path == "/api/moderation/list":
@@ -1260,6 +1275,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_post_article_comment(art_id)
         elif path == "/api/comments":
             self.handle_post_article_comment("")
+        elif path == "/api/exceptions/toggle":
+            self.handle_exceptions_toggle()
         elif path == "/api/subscriptions/toggle":
             self.handle_subscriptions_toggle()
         elif path == "/api/moderation/submit":
@@ -1336,6 +1353,45 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "subscriptions": subs
         })
 
+    def handle_get_exceptions(self):
+        """GET /api/exceptions returns user's active feed exceptions."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(200, {
+                "success": True,
+                "exceptions": {"authors": [], "topics": [], "tags": []},
+                "total": 0
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT target_type, target_id, target_title, created_at 
+                FROM user_feed_exceptions WHERE user_id = ? ORDER BY id ASC
+            """, (user["id"],))
+            rows = cur.fetchall()
+
+        exceptions = {"authors": [], "topics": [], "tags": []}
+        for r in rows:
+            t = r["target_type"]
+            entry = {"id": r["target_id"], "title": r["target_title"], "createdAt": r["created_at"]}
+            if t == "author":
+                exceptions["authors"].append(entry)
+            elif t == "topic":
+                exceptions["topics"].append(entry)
+            elif t == "tag":
+                exceptions["tags"].append(entry)
+
+        total = len(exceptions["authors"]) + len(exceptions["topics"]) + len(exceptions["tags"])
+        self.send_json_response(200, {
+            "success": True,
+            "user": user,
+            "exceptions": exceptions,
+            "total": total
+        })
+
     def handle_subscriptions_toggle(self):
         """POST /api/subscriptions/toggle toggles subscription state."""
         user = self.get_current_user()
@@ -1389,6 +1445,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     INSERT INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
                     VALUES (?, ?, ?, ?, ?)
                 """, (user["id"], target_type, normalized_id, title, now_str))
+                # Remove from exceptions if present (mutual exclusion)
+                cur.execute("""
+                    DELETE FROM user_feed_exceptions
+                    WHERE user_id = ? AND target_type = ? AND target_id = ?
+                """, (user["id"], target_type, normalized_id))
                 subscribed = True
 
         self.send_json_response(200, {
@@ -1399,10 +1460,95 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "targetTitle": title
         })
 
-    def handle_get_subscription_entities(self):
-        """GET /api/subscriptions/entities returns catalog of entities available for subscription."""
+    def handle_exceptions_toggle(self):
+        """POST /api/exceptions/toggle toggles exception state."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8")
+            data = json.loads(body) if body else {}
+        except Exception as e:
+            self.send_json_response(400, {"success": False, "error": f"Invalid JSON payload: {e}"})
+            return
+
+        target_type = (data.get("targetType") or "").strip().lower()
+        raw_id = (data.get("targetId") or "").strip()
+        raw_title = (data.get("targetTitle") or "").strip()
+
+        if target_type not in ("author", "topic", "tag"):
+            self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', or 'tag'"})
+            return
+
+        if not raw_id:
+            self.send_json_response(400, {"success": False, "error": "targetId is required"})
+            return
+
+        # Normalize tag ID (lowercase, trim extra spaces, remove #)
+        if target_type == "tag":
+            normalized_id = normalize_keyword(raw_id).lstrip('#').strip().lower()
+            title = normalize_keyword(raw_title or raw_id).lstrip('#').strip()
+        else:
+            normalized_id = raw_id
+            title = raw_title or raw_id
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id FROM user_feed_exceptions 
+                WHERE user_id = ? AND target_type = ? AND target_id = ?
+            """, (user["id"], target_type, normalized_id))
+            row = cur.fetchone()
+
+            if row:
+                cur.execute("DELETE FROM user_feed_exceptions WHERE id = ?", (row["id"],))
+                excluded = False
+            else:
+                now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute("""
+                    INSERT INTO user_feed_exceptions (user_id, target_type, target_id, target_title, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user["id"], target_type, normalized_id, title, now_str))
+                # Remove from subscriptions if present (mutual exclusion)
+                cur.execute("""
+                    DELETE FROM user_subscriptions
+                    WHERE user_id = ? AND target_type = ? AND target_id = ?
+                """, (user["id"], target_type, normalized_id))
+                excluded = True
+
+        self.send_json_response(200, {
+            "success": True,
+            "excluded": excluded,
+            "targetType": target_type,
+            "targetId": normalized_id,
+            "targetTitle": title
+        })
+
+    def handle_get_subscription_entities(self, parsed_url=None):
+        """GET /api/subscriptions/entities returns catalog of entities available for subscription/exclusion."""
+        if parsed_url is None:
+            parsed_url = urllib.parse.urlparse(self.path)
+        query = urllib.parse.parse_qs(parsed_url.query)
+        entity_type = (query.get("type", [""])[0] or "").strip().lower()
+        search_query = (query.get("search", [""])[0] or "").strip().lower()
+
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
         user = self.get_current_user()
         user_subs = set()
+        user_exceptions = set()
         conn = self.get_db()
         with conn:
             if user:
@@ -1410,6 +1556,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
                 for r in cur.fetchall():
                     user_subs.add((r["target_type"], r["target_id"]))
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                for r in cur.fetchall():
+                    user_exceptions.add((r["target_type"], r["target_id"]))
 
             cur = conn.cursor()
             cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
@@ -1428,15 +1577,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             author_id = row["author_id"]
             author_name = settings.get("author") or "Автор платформы"
             author_role = settings.get("authorRole") or ""
+            author_avatar = settings.get("authorAvatar") or settings.get("avatar") or None
             if author_id not in authors_map:
                 authors_map[author_id] = {
                     "id": author_id,
                     "title": author_name,
                     "role": author_role,
+                    "avatar": author_avatar,
                     "count": 0,
-                    "isSubscribed": ("author", author_id) in user_subs
+                    "isSubscribed": ("author", author_id) in user_subs,
+                    "isExcluded": ("author", author_id) in user_exceptions
                 }
             authors_map[author_id]["count"] += 1
+            if author_avatar and not authors_map[author_id].get("avatar"):
+                authors_map[author_id]["avatar"] = author_avatar
 
             for t in settings.get("topics") or []:
                 topics_counts[t] = topics_counts.get(t, 0) + 1
@@ -1450,7 +1604,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             "id": norm_tag,
                             "title": display_tag,
                             "count": 0,
-                            "isSubscribed": ("tag", norm_tag) in user_subs
+                            "isSubscribed": ("tag", norm_tag) in user_subs,
+                            "isExcluded": ("tag", norm_tag) in user_exceptions
                         }
                     tags_map[norm_tag]["count"] += 1
 
@@ -1460,14 +1615,56 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "id": tid,
                 "title": tname,
                 "count": topics_counts.get(tid, 0),
-                "isSubscribed": ("topic", tid) in user_subs
+                "isSubscribed": ("topic", tid) in user_subs,
+                "isExcluded": ("topic", tid) in user_exceptions
             })
+
+        authors_list = sorted(list(authors_map.values()), key=lambda x: (-x["count"], x["title"]))
+        tags_list = sorted(list(tags_map.values()), key=lambda x: (-x["count"], x["title"]))
+
+        def match_search(item: dict) -> bool:
+            if not search_query:
+                return True
+            title_match = search_query in (item.get("title") or "").lower()
+            id_match = search_query in (item.get("id") or "").lower()
+            role_match = search_query in (item.get("role") or "").lower()
+            return title_match or id_match or role_match
+
+        if entity_type:
+            if entity_type in ("author", "authors"):
+                source = authors_list
+            elif entity_type in ("topic", "topics"):
+                source = topics_list
+            elif entity_type in ("tag", "tags"):
+                source = tags_list
+            else:
+                source = []
+
+            filtered_items = [it for it in source if match_search(it)]
+            total = len(filtered_items)
+            paged_items = filtered_items[offset : offset + limit]
+            has_more = (offset + limit) < total
+
+            self.send_json_response(200, {
+                "success": True,
+                "items": paged_items,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": has_more
+            })
+            return
+
+        # Backward compatibility when entity_type is not specified
+        filtered_authors = [it for it in authors_list if match_search(it)]
+        filtered_topics = [it for it in topics_list if match_search(it)]
+        filtered_tags = [it for it in tags_list if match_search(it)]
 
         self.send_json_response(200, {
             "success": True,
-            "authors": list(authors_map.values()),
-            "topics": topics_list,
-            "tags": sorted(list(tags_map.values()), key=lambda x: x["count"], reverse=True)
+            "authors": filtered_authors,
+            "topics": filtered_topics,
+            "tags": filtered_tags
         })
 
     def handle_get_feed_settings(self):
@@ -1608,6 +1805,86 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 json.dumps(clean_levels, ensure_ascii=False),
                 now_iso
             ))
+
+        # Optional batch update for subscriptions
+        if "subscriptions" in settings_obj:
+            batch_subs = settings_obj["subscriptions"]
+            now_iso_sub = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            items_to_add = []
+            if isinstance(batch_subs, dict):
+                for stype in ("author", "topic", "tag"):
+                    sub_list = batch_subs.get(f"{stype}s") or batch_subs.get(stype) or []
+                    if isinstance(sub_list, list):
+                        for s in sub_list:
+                            sid = s.get("id") if isinstance(s, dict) else str(s)
+                            stitle = (s.get("title") or sid) if isinstance(s, dict) else sid
+                            if stype == "tag":
+                                sid = normalize_keyword(sid).lstrip('#').strip().lower()
+                                stitle = normalize_keyword(stitle).lstrip('#').strip()
+                            if sid:
+                                items_to_add.append((user["id"], stype, sid, stitle, now_iso_sub))
+            elif isinstance(batch_subs, list):
+                for s in batch_subs:
+                    if isinstance(s, dict):
+                        stype = (s.get("targetType") or s.get("type") or "").strip().lower()
+                        sid = (s.get("targetId") or s.get("id") or "").strip()
+                        stitle = (s.get("targetTitle") or s.get("title") or sid).strip()
+                        if stype in ("author", "topic", "tag") and sid:
+                            if stype == "tag":
+                                sid = normalize_keyword(sid).lstrip('#').strip().lower()
+                                stitle = normalize_keyword(stitle).lstrip('#').strip()
+                            items_to_add.append((user["id"], stype, sid, stitle, now_iso_sub))
+
+            with conn:
+                conn.execute("DELETE FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                if items_to_add:
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, items_to_add)
+                    for item in items_to_add:
+                        conn.execute("DELETE FROM user_feed_exceptions WHERE user_id = ? AND target_type = ? AND target_id = ?",
+                                     (item[0], item[1], item[2]))
+
+        # Optional batch update for exceptions
+        if "exceptions" in settings_obj:
+            batch_exc = settings_obj["exceptions"]
+            now_iso_exc = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            exc_to_add = []
+            if isinstance(batch_exc, dict):
+                for etype in ("author", "topic", "tag"):
+                    exc_list = batch_exc.get(f"{etype}s") or batch_exc.get(etype) or []
+                    if isinstance(exc_list, list):
+                        for e in exc_list:
+                            eid = e.get("id") if isinstance(e, dict) else str(e)
+                            etitle = (e.get("title") or eid) if isinstance(e, dict) else eid
+                            if etype == "tag":
+                                eid = normalize_keyword(eid).lstrip('#').strip().lower()
+                                etitle = normalize_keyword(etitle).lstrip('#').strip()
+                            if eid:
+                                exc_to_add.append((user["id"], etype, eid, etitle, now_iso_exc))
+            elif isinstance(batch_exc, list):
+                for e in batch_exc:
+                    if isinstance(e, dict):
+                        etype = (e.get("targetType") or e.get("type") or "").strip().lower()
+                        eid = (e.get("targetId") or e.get("id") or "").strip()
+                        etitle = (e.get("targetTitle") or e.get("title") or eid).strip()
+                        if etype in ("author", "topic", "tag") and eid:
+                            if etype == "tag":
+                                eid = normalize_keyword(eid).lstrip('#').strip().lower()
+                                etitle = normalize_keyword(etitle).lstrip('#').strip()
+                            exc_to_add.append((user["id"], etype, eid, etitle, now_iso_exc))
+
+            with conn:
+                conn.execute("DELETE FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                if exc_to_add:
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO user_feed_exceptions (user_id, target_type, target_id, target_title, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, exc_to_add)
+                    for item in exc_to_add:
+                        conn.execute("DELETE FROM user_subscriptions WHERE user_id = ? AND target_type = ? AND target_id = ?",
+                                     (item[0], item[1], item[2]))
 
         self.send_json_response(200, {
             "success": True,
@@ -2205,13 +2482,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed_url.query)
         tab = (query.get("tab", ["all"])[0] or "all").strip().lower()
         search_query = (query.get("search", [""])[0] or "").strip().lower()
-        topic_filter = (query.get("topic", [""])[0] or "").strip()
+        topics_filter = (query.get("topics", [""])[0] or query.get("topic", [""])[0] or "").strip()
         audience_filter = (query.get("audience", [""])[0] or "").strip()
         format_filter = (query.get("format", [""])[0] or "").strip()
         complexity_filter = (query.get("complexities", [""])[0] or query.get("complexity", [""])[0] or "").strip()
         types_filter = (query.get("types", [""])[0] or query.get("type", [""])[0] or "").strip()
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         period_filter = (query.get("period", ["all"])[0] or "all").strip().lower()
+        date_from_str = (query.get("dateFrom", [""])[0] or query.get("date_from", [""])[0] or "").strip()
+        date_to_str = (query.get("dateTo", [""])[0] or query.get("date_to", [""])[0] or "").strip()
         ids_filter = (query.get("ids", [""])[0] or "").strip()
 
         try:
@@ -2225,6 +2504,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             offset = 0
 
         allowed_ids = set([x.strip() for x in ids_filter.split(",") if x.strip()]) if ids_filter else None
+
+        if topics_filter and topics_filter != "all":
+            req_topics = set([t.strip() for t in topics_filter.split(",") if t.strip()])
+        else:
+            req_topics = None
+        if req_topics and "all" in req_topics:
+            req_topics = None
 
         sub_authors = set()
         sub_topics = set()
@@ -2334,9 +2620,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             current_user = self.get_current_user()
             user_likes = set()
+            exc_authors = set()
+            exc_topics = set()
+            exc_tags = set()
             if current_user:
                 cur.execute("SELECT article_id FROM article_likes WHERE user_id = ?", (current_user["id"],))
                 user_likes = {r["article_id"] for r in cur.fetchall()}
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (current_user["id"],))
+                for r in cur.fetchall():
+                    ttype = r["target_type"]
+                    tid = r["target_id"]
+                    if ttype == "author":
+                        exc_authors.add(tid)
+                    elif ttype == "topic":
+                        exc_topics.add(tid)
+                    elif ttype == "tag":
+                        exc_tags.add(normalize_keyword(tid).lstrip('#').strip().lower())
 
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         topic_counts = {}
@@ -2358,6 +2657,30 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             for t in topics:
                 topic_counts[t] = topic_counts.get(t, 0) + 1
 
+            # Author metadata
+            author_name = settings.get("author") or (
+                "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
+            )
+            author_initials = settings.get("authorInitials") or (
+                "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
+            )
+            author_role = settings.get("authorRole") or ""
+            keywords = settings.get("keywords") or []
+            norm_kws = [normalize_keyword(k).lstrip('#').strip().lower() for k in keywords]
+
+            # Priority of exceptions:
+            # Publication is hidden if author, or at least one topic, or at least one keyword is in user exceptions.
+            # Applies to tab=all, tab=my, and searches inside them.
+            # Does NOT hide when tab=saved or when allowed_ids is passed (bookmarks).
+            is_excluded = (
+                (row["author_id"] in exc_authors) or
+                (author_name in exc_authors) or
+                any(t in exc_topics for t in topics) or
+                any(nk in exc_tags for nk in norm_kws)
+            )
+            if is_excluded and tab != "saved" and allowed_ids is None:
+                continue
+
             # Period filtering
             created_at_dt = None
             try:
@@ -2371,6 +2694,26 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             elif period_filter == "month" and created_at_dt:
                 if (now_utc - created_at_dt).total_seconds() > 30 * 86400:
                     continue
+            elif period_filter == "year" and created_at_dt:
+                if (now_utc - created_at_dt).total_seconds() > 365 * 86400:
+                    continue
+            elif (period_filter == "custom" or date_from_str or date_to_str) and created_at_dt:
+                if date_from_str:
+                    try:
+                        df = datetime.date.fromisoformat(date_from_str)
+                        df_dt = datetime.datetime(df.year, df.month, df.day, 0, 0, 0, tzinfo=datetime.timezone.utc)
+                        if created_at_dt < df_dt:
+                            continue
+                    except Exception:
+                        pass
+                if date_to_str:
+                    try:
+                        dt = datetime.date.fromisoformat(date_to_str)
+                        dt_dt = datetime.datetime(dt.year, dt.month, dt.day, 23, 59, 59, 999999, tzinfo=datetime.timezone.utc)
+                        if created_at_dt > dt_dt:
+                            continue
+                    except Exception:
+                        pass
 
             # IDs filtering (e.g. bookmarks)
             if allowed_ids is not None:
@@ -2394,8 +2737,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         continue
 
             # Topic filtering
-            if topic_filter and topic_filter != "all":
-                if topic_filter not in topics:
+            if req_topics is not None:
+                if not any(t in req_topics for t in topics):
                     continue
 
             # Audience filtering
@@ -2410,19 +2753,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if fmt != format_filter:
                     continue
 
-            # Author metadata
-            author_name = settings.get("author") or (
-                "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
-            )
-            author_initials = settings.get("authorInitials") or (
-                "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
-            )
-            author_role = settings.get("authorRole") or ""
-
             # Search query filtering across title, author, role, description, keywords and body
             title = row["title"] or ""
             desc = settings.get("description") or ""
-            keywords = settings.get("keywords") or []
             article_text = extract_article_text(row["article_html"] or "")
 
             if search_query:
@@ -2442,7 +2775,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         topic_title = sub_topics_titles.get(matched_topic) or TOPICS_TITLE_MAP.get(matched_topic, matched_topic)
                         subscription_reason = f"Вы подписаны на тему «{topic_title}»"
                     else:
-                        norm_kws = [normalize_keyword(k).lstrip('#').strip().lower() for k in keywords]
                         matched_tag = next((nk for nk in norm_kws if nk in sub_tags), None)
                         if matched_tag:
                             tag_title = sub_tags_titles.get(matched_tag) or matched_tag
@@ -2482,8 +2814,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "type": art_type
             })
 
-        if sort_by in ("oldest", "asc"):
+        if sort_by == "popular":
+            filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("createdAt", "")), reverse=True)
+        elif sort_by == "discussed":
+            filtered_articles.sort(key=lambda a: (a.get("commentsCount", 0), a.get("createdAt", "")), reverse=True)
+        elif sort_by in ("oldest", "asc"):
             filtered_articles.reverse()
+        elif sort_by in ("newest", "desc"):
+            filtered_articles.sort(key=lambda a: a.get("createdAt", ""), reverse=True)
 
         total = len(filtered_articles)
         paged_articles = filtered_articles[offset : offset + limit]
