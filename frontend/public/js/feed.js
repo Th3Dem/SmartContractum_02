@@ -1445,16 +1445,18 @@
 
     // 2. Format & Complexity Titles (Uniform order: Topic -> Format -> Complexity)
     let formatTitle = '';
-    if (window.PublicationConfig && item.format) {
+    if (window.PublicationConfig && item.format && item.format !== 'not_specified' && item.format !== 'none') {
       const f = window.PublicationConfig.getFormatById(item.format);
-      if (f) formatTitle = f.title;
+      if (f && f.title && f.title.toLowerCase() !== 'не указан') {
+        formatTitle = f.title;
+      }
     }
 
     let complexityTitle = '';
     let complexityClass = '';
     if (window.PublicationConfig && item.complexity && item.complexity !== 'none') {
       const c = window.PublicationConfig.getComplexityById(item.complexity);
-      if (c) {
+      if (c && c.title && c.title.toLowerCase() !== 'не указан') {
         complexityTitle = c.title;
         complexityClass = 'complexity-' + item.complexity;
       }
@@ -1475,9 +1477,15 @@
       badgesHtml += '<span class="meta-badge badge-demo">Демонстрационный материал</span>';
     }
 
-    // Clean titles and author roles from any redundant "(демо)" suffix
-    const cleanTitle = (item.title || '').replace(/\s*\((демо|demo)\)\s*/gi, '').trim();
-    const cleanRole = (item.authorRole || '').replace(/\s*\((демо|demo)\)\s*/gi, '').trim();
+    // Clean titles and author roles from any redundant "(демо)" suffix or prefix
+    const cleanTitle = (item.title || '')
+      .replace(/\s*\((демо|demo)\)\s*/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const cleanRole = (item.authorRole || '')
+      .replace(/\s*\((демо|demo)\)\s*/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
     // Tags HTML: Up to 3 tags directly, rest revealed on clicking "+N еще" / "Свернуть"
     const tags = Array.isArray(item.keywords) ? item.keywords : [];
@@ -1662,7 +1670,13 @@
 
     function renderItems() {
       listEl.innerHTML = '';
-      const visible = isSidebarTopicsExpanded ? sortedTopics : sortedTopics.slice(0, initialVisible);
+      // Short list: show ONLY topics with published articles (count > 0)
+      const nonZeroTopics = sortedTopics.filter(function (t) {
+        const count = (topicCounts && typeof topicCounts[t.id] === 'number') ? topicCounts[t.id] : 0;
+        return count > 0;
+      });
+
+      const visible = isSidebarTopicsExpanded ? sortedTopics : nonZeroTopics.slice(0, initialVisible);
 
       visible.forEach(function (t) {
         const count = (topicCounts && typeof topicCounts[t.id] === 'number') ? topicCounts[t.id] : 0;
@@ -1694,7 +1708,7 @@
         listEl.appendChild(btn);
       });
 
-      if (sortedTopics.length > initialVisible) {
+      if (sortedTopics.length > visible.length || isSidebarTopicsExpanded) {
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
         toggleBtn.className = 'widget-topics-toggle-btn';

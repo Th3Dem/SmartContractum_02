@@ -760,6 +760,93 @@ def update_submission_status(submission_id: str, new_status: str, db_path: Optio
         return cur.rowcount > 0
 
 
+MAX_COVER_DECODED_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_COVER_BASE64_CHARS = 14 * 1024 * 1024 + 1024  # ~14 MB
+
+COVER_DATA_URI_PATTERN = re.compile(
+    r"^data:image/(jpeg|jpg|png|webp|gif|svg\+xml);base64,(.+)$",
+    re.IGNORECASE | re.DOTALL
+)
+
+
+def validate_cover_image(cover_image: Any) -> Tuple[bool, Optional[str]]:
+    """
+    Validates publication cover image:
+    - Field is optional (None, empty string or whitespace-only is valid).
+    - If provided: must be string.
+    - Size: maximum 10 MB decoded data (~14 MB base64).
+    - Schemes supported:
+        * Relative path: /media/...
+        * Data URI: data:image/(jpeg|jpg|png|webp|gif|svg+xml);base64,...
+    - Base64 decodability and magic bytes:
+        * JPEG: starts with \xff\xd8\xff
+        * PNG: starts with \x89PNG
+        * WebP: starts with RIFF and bytes 8..12 are WEBP
+        * GIF: starts with GIF87a or GIF89a
+        * SVG: contains <svg
+    Returns (is_valid, error_message).
+    """
+    if cover_image is None or cover_image == "":
+        return True, None
+
+    if not isinstance(cover_image, str):
+        return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+    stripped = cover_image.strip()
+    if not stripped:
+        return True, None
+
+    if stripped.startswith("/media/"):
+        if ".." in stripped or len(stripped) > 500:
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+        if not re.match(r"^/media/[a-zA-Z0-9_\-\./]+$", stripped):
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+        return True, None
+
+    if stripped.startswith("data:image/"):
+        if len(stripped) > MAX_COVER_BASE64_CHARS:
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+        match = COVER_DATA_URI_PATTERN.match(stripped)
+        if not match:
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+        mime_sub = match.group(1).lower()
+        b64_str = match.group(2).strip()
+
+        try:
+            decoded = base64.b64decode(b64_str, validate=True)
+        except Exception:
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+        if len(decoded) == 0 or len(decoded) > MAX_COVER_DECODED_BYTES:
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+        is_valid_magic = False
+        if mime_sub in ("jpeg", "jpg"):
+            if len(decoded) >= 3 and decoded[:3] == b"\xff\xd8\xff":
+                is_valid_magic = True
+        elif mime_sub == "png":
+            if len(decoded) >= 4 and decoded[:4] == b"\x89PNG":
+                is_valid_magic = True
+        elif mime_sub == "webp":
+            if len(decoded) >= 12 and decoded[:4] == b"RIFF" and decoded[8:12] == b"WEBP":
+                is_valid_magic = True
+        elif mime_sub == "gif":
+            if len(decoded) >= 6 and (decoded[:6] == b"GIF87a" or decoded[:6] == b"GIF89a"):
+                is_valid_magic = True
+        elif mime_sub == "svg+xml":
+            if b"<svg" in decoded[:4096].lower():
+                is_valid_magic = True
+
+        if not is_valid_magic:
+            return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+        return True, None
+
+    return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
+
 def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict[str, str]]:
     """
     Validates submission payload according to product requirements:
@@ -772,6 +859,7 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
         - description: string 50..500 chars
         - format: valid format ID or null/empty
         - complexity: valid complexity ID or null/empty
+        - coverImage: optional valid image up to 10 MB (data URI / relative /media/ path)
     """
     field_errors: Dict[str, str] = {}
 
@@ -866,8 +954,18 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
             if not isinstance(compl, str) or compl not in VALID_COMPLEXITIES:
                 field_errors["complexity"] = "Недопустимый уровень сложности публикации."
 
+        # 4g. coverImage
+        cover_image = pub_settings.get("coverImage")
+        if cover_image is not None and cover_image != "":
+            is_cov_valid, cov_err = validate_cover_image(cover_image)
+            if not is_cov_valid:
+                field_errors["coverImage"] = cov_err or "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+
     if field_errors:
-        order = ["title", "html", "targetAudience", "topics", "keywords", "description", "format", "complexity", "draftId", "publicationSettings"]
+        order = [
+            "title", "html", "targetAudience", "topics", "keywords", "description",
+            "format", "complexity", "coverImage", "draftId", "publicationSettings"
+        ]
         first_key = next((k for k in order if k in field_errors), next(iter(field_errors.keys())))
         error_msg = field_errors[first_key]
         return False, error_msg, field_errors

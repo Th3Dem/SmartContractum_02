@@ -157,6 +157,21 @@
     }
   ];
 
+  const COVER = {
+    REQUIRED: false,
+    ALLOWED_FORMATS: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    ALLOWED_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.webp', '.gif'],
+    MAX_FILE_BYTES: 10 * 1024 * 1024, // 10 МБ
+    TARGET_WIDTH: 780,
+    TARGET_HEIGHT: 440,
+    ASPECT_RATIO_W: 39,
+    ASPECT_RATIO_H: 22,
+    ASPECT_RATIO_VALUE: 39 / 22, // ~1.7727
+    ASPECT_RATIO_STR: '39 / 22',
+    FEED_MAX_WIDTH_PX: 560,
+    FEED_HEIGHT_AT_MAX_WIDTH: 316
+  };
+
   const LIMITS = {
     KEYWORDS_MIN: 1,
     KEYWORDS_MAX: 10,
@@ -176,6 +191,7 @@
     FORMATS,
     COMPLEXITIES,
     LIMITS,
+    COVER,
 
     getAudienceById(id) {
       return AUDIENCES.find(a => a.id === id) || null;

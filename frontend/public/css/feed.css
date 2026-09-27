@@ -264,16 +264,17 @@
 }
 
 /* Direct Toolbar Above Articles */
-.feed-direct-toolbar {
+.feed-direct-toolbar,
+.feed-toolbar-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 14px;
+  padding: 6px 12px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .feed-direct-actions {
@@ -769,11 +770,13 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   font-size: 0.82rem;
+  box-shadow: none;
+  margin-top: 8px;
 }
 
 .active-chips-label {
@@ -1052,14 +1055,17 @@
   color: var(--accent-color);
 }
 
-/* Card Cover Image (Reserved 780:440 aspect-ratio) */
+/* Card Cover Image (Reserved 39:22 aspect-ratio) */
 .card-cover-container {
   width: 100%;
   max-width: 780px;
+  max-width: var(--card-cover-max-width, 560px);
   aspect-ratio: 780 / 440;
+  aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);
+  align-self: flex-start;
   border-radius: var(--radius-md);
   overflow: hidden;
-  margin: 0 0 14px 0;
+  margin: 0 0 12px 0;
   background: var(--bg-surface);
   position: relative;
   transition: opacity var(--transition-fast);
@@ -1090,8 +1096,11 @@
   opacity: 1;
 }
 
-.card-cover-container.is-error {
+.card-cover-container.is-error,
+.card-cover-container[style*="display: none"] {
   display: none !important;
+  margin: 0 !important;
+  height: 0 !important;
 }
 
 /* Card Lead Description */
@@ -1099,7 +1108,7 @@
   font-size: 0.94rem;
   color: var(--text-secondary);
   line-height: 1.55;
-  margin: 0 0 14px 0;
+  margin: 0 0 12px 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1112,7 +1121,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .tag-chip {
@@ -1153,7 +1162,7 @@
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--border-color);
-  padding-top: 12px;
+  padding-top: 10px;
   margin-top: auto;
   font-size: 0.85rem;
   color: var(--text-muted);

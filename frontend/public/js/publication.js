@@ -41,6 +41,9 @@
       this.description = ''; // plain text 50-500 chars
       this.isDescriptionCustom = false;
       this.coverDataUrl = null; // cropped 780x440 data URL
+      this.rawCoverImageSource = null; // original Data URL string
+      this.cropParams = { zoom: 1, panX: 0, panY: 0 };
+      this.previousCoverState = null; // backup for cancel/replace error recovery
       this.coverMeta = null; // metadata { originalName, originalWidth, originalHeight, isGif }
       this.status = 'draft'; // 'draft' | 'in_moderation'
 
@@ -129,14 +132,23 @@
       this.descriptionCountEl = document.getElementById('pub-desc-count');
       this.descriptionErrorEl = document.getElementById('pub-desc-error');
 
-      // Card Preview
-      this.cardPreviewCover = document.getElementById('preview-card-cover');
+      // Card Preview (7-step uniform structure)
+      this.cardPreview = document.getElementById('pub-card-preview');
+      this.cardPreviewAvatar = document.getElementById('preview-card-avatar');
+      this.cardPreviewAuthor = document.getElementById('preview-card-author');
+      this.cardPreviewDate = document.getElementById('preview-card-date');
+      this.cardPreviewDot = document.getElementById('preview-card-dot');
+      this.cardPreviewRole = document.getElementById('preview-card-role');
+      this.cardPreviewTitle = document.getElementById('preview-card-title');
       this.cardPreviewBadges = document.getElementById('preview-card-badges');
+      this.cardPreviewBadgeTopic = document.getElementById('preview-card-badge-topic');
       this.cardPreviewBadgeFormat = document.getElementById('preview-card-badge-format');
       this.cardPreviewBadgeComplexity = document.getElementById('preview-card-badge-complexity');
-      this.cardPreviewTitle = document.getElementById('preview-card-title');
+      this.cardPreviewCover = document.getElementById('preview-card-cover');
       this.cardPreviewDesc = document.getElementById('preview-card-desc');
+      this.cardPreviewTags = document.getElementById('preview-card-tags');
       this.cardPreviewTime = document.getElementById('preview-card-time');
+      this.cardPreviewBookmark = document.getElementById('preview-card-bookmark');
     }
 
     bindEvents() {
@@ -268,16 +280,26 @@
       }
 
       if (this.cropperCanvas) {
+        const getCanvasScale = () => {
+          const rect = this.cropperCanvas.getBoundingClientRect();
+          return {
+            scaleX: rect.width ? (this.cropperCanvas.width / rect.width) : 1,
+            scaleY: rect.height ? (this.cropperCanvas.height / rect.height) : 1
+          };
+        };
+
         this.cropperCanvas.addEventListener('mousedown', (e) => {
           this.isDraggingCrop = true;
-          this.dragStartX = e.clientX - this.cropPanX;
-          this.dragStartY = e.clientY - this.cropPanY;
+          const s = getCanvasScale();
+          this.dragStartX = (e.clientX * s.scaleX) - this.cropPanX;
+          this.dragStartY = (e.clientY * s.scaleY) - this.cropPanY;
         });
 
         window.addEventListener('mousemove', (e) => {
           if (!this.isDraggingCrop) return;
-          this.cropPanX = e.clientX - this.dragStartX;
-          this.cropPanY = e.clientY - this.dragStartY;
+          const s = getCanvasScale();
+          this.cropPanX = (e.clientX * s.scaleX) - this.dragStartX;
+          this.cropPanY = (e.clientY * s.scaleY) - this.dragStartY;
           this.drawCropperCanvas();
         });
 
@@ -289,16 +311,21 @@
         this.cropperCanvas.addEventListener('touchstart', (e) => {
           if (e.touches && e.touches[0]) {
             this.isDraggingCrop = true;
-            this.dragStartX = e.touches[0].clientX - this.cropPanX;
-            this.dragStartY = e.touches[0].clientY - this.cropPanY;
+            const s = getCanvasScale();
+            this.dragStartX = (e.touches[0].clientX * s.scaleX) - this.cropPanX;
+            this.dragStartY = (e.touches[0].clientY * s.scaleY) - this.cropPanY;
           }
-        });
+        }, { passive: false });
+
         this.cropperCanvas.addEventListener('touchmove', (e) => {
           if (!this.isDraggingCrop || !e.touches || !e.touches[0]) return;
-          this.cropPanX = e.touches[0].clientX - this.dragStartX;
-          this.cropPanY = e.touches[0].clientY - this.dragStartY;
+          e.preventDefault();
+          const s = getCanvasScale();
+          this.cropPanX = (e.touches[0].clientX * s.scaleX) - this.dragStartX;
+          this.cropPanY = (e.touches[0].clientY * s.scaleY) - this.dragStartY;
           this.drawCropperCanvas();
-        });
+        }, { passive: false });
+
         this.cropperCanvas.addEventListener('touchend', () => {
           this.isDraggingCrop = false;
         });
@@ -308,7 +335,7 @@
         this.cropperApplyBtn.addEventListener('click', () => this.applyCropping());
       }
       if (this.cropperCancelBtn) {
-        this.cropperCancelBtn.addEventListener('click', () => this.closeCropper());
+        this.cropperCancelBtn.addEventListener('click', () => this.closeCropper(true));
       }
 
       // Description input & counter
@@ -854,38 +881,81 @@
     }
 
     /* ==========================================================================
-       Section 6: Cover Image & Canvas Cropper (780x440)
+       Section 6: Cover Image & Canvas Cropper (39:22 / 780x440)
        ========================================================================== */
+    saveCoverBackup() {
+      this.previousCoverState = {
+        coverDataUrl: this.coverDataUrl,
+        rawCoverImage: this.rawCoverImage,
+        rawCoverImageSource: this.rawCoverImageSource,
+        cropParams: this.cropParams ? { ...this.cropParams } : { zoom: 1, panX: 0, panY: 0 },
+        coverMeta: this.coverMeta ? { ...this.coverMeta } : null
+      };
+    }
+
+    restoreCoverBackup() {
+      if (this.previousCoverState) {
+        this.coverDataUrl = this.previousCoverState.coverDataUrl;
+        this.rawCoverImage = this.previousCoverState.rawCoverImage;
+        this.rawCoverImageSource = this.previousCoverState.rawCoverImageSource;
+        this.cropParams = this.previousCoverState.cropParams ? { ...this.previousCoverState.cropParams } : { zoom: 1, panX: 0, panY: 0 };
+        this.coverMeta = this.previousCoverState.coverMeta ? { ...this.previousCoverState.coverMeta } : null;
+        this.cropZoom = this.cropParams.zoom || 1;
+        this.cropPanX = this.cropParams.panX || 0;
+        this.cropPanY = this.cropParams.panY || 0;
+      }
+      this.renderCoverUI();
+      this.updateCardPreview();
+    }
+
     handleCoverFile(file) {
+      if (!file) return;
       if (this.coverErrorEl) this.coverErrorEl.textContent = '';
       if (this.coverWarningEl) this.coverWarningEl.textContent = '';
       if (this.coverNoticeEl) this.coverNoticeEl.textContent = '';
 
+      const coverConfig = (window.PublicationConfig && window.PublicationConfig.COVER) || {
+        MAX_FILE_BYTES: 10 * 1024 * 1024,
+        ALLOWED_FORMATS: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+        TARGET_WIDTH: 780,
+        TARGET_HEIGHT: 440,
+        ASPECT_RATIO_VALUE: 39 / 22
+      };
+
       // Validate size (max 10MB)
-      if (file.size > this.config.LIMITS.COVER_MAX_BYTES) {
+      if (file.size > coverConfig.MAX_FILE_BYTES) {
         if (this.coverErrorEl) {
           this.coverErrorEl.textContent = 'Размер файла превышает 10 МБ. Выберите изображение меньшего размера.';
         }
+        if (this.coverFileInput) this.coverFileInput.value = '';
         return;
       }
 
-      // Validate MIME type
-      const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (!validTypes.includes(file.type)) {
+      // Validate MIME type & file extension
+      const validTypes = coverConfig.ALLOWED_FORMATS || ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      const fileName = (file.name || '').toLowerCase();
+      const validExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+      const hasValidExt = validExts.some(ext => fileName.endsWith(ext));
+      if (!validTypes.includes(file.type) && !hasValidExt) {
         if (this.coverErrorEl) {
           this.coverErrorEl.textContent = 'Неподдерживаемый формат. Разрешены только JPEG, PNG, WebP и GIF.';
         }
+        if (this.coverFileInput) this.coverFileInput.value = '';
         return;
       }
 
-      const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
+      const isGif = file.type === 'image/gif' || fileName.endsWith('.gif');
 
-      // Decode image in Canvas/Image to verify validity
+      // Preserve existing cover state for cancellation/error recovery
+      this.saveCoverBackup();
+
       const reader = new FileReader();
       reader.onload = (e) => {
+        const rawDataUrl = e.target.result;
         const img = new Image();
         img.onload = () => {
           this.rawCoverImage = img;
+          this.rawCoverImageSource = rawDataUrl;
           this.coverMeta = {
             originalName: file.name,
             originalWidth: img.naturalWidth,
@@ -893,35 +963,66 @@
             isGif: isGif
           };
 
-          // Resolution warning
-          if (img.naturalWidth < this.config.LIMITS.COVER_WIDTH || img.naturalHeight < this.config.LIMITS.COVER_HEIGHT) {
+          // Resolution warning if below recommended 780x440
+          if (img.naturalWidth < coverConfig.TARGET_WIDTH || img.naturalHeight < coverConfig.TARGET_HEIGHT) {
             if (this.coverWarningEl) {
-              this.coverWarningEl.textContent = `Разрешение изображения (${img.naturalWidth}×${img.naturalHeight} px) меньше рекомендуемого (780×440 px). Возможно снижение качества отображения.`;
+              this.coverWarningEl.textContent = `Разрешение изображения (${img.naturalWidth}×${img.naturalHeight} px) меньше рекомендуемого (${coverConfig.TARGET_WIDTH}×${coverConfig.TARGET_HEIGHT} px). Возможно снижение четкости.`;
             }
           }
 
-          // GIF notice
+          // Static GIF notice
           if (isGif && this.coverNoticeEl) {
             this.coverNoticeEl.textContent = 'Для GIF используется первый кадр в качестве статичной обложки.';
           }
 
-          // Open cropper with image
-          this.openCropper();
+          // Check aspect ratio (39:22 with ~0.02 epsilon)
+          const targetRatio = coverConfig.ASPECT_RATIO_VALUE || (39 / 22);
+          const imgRatio = img.naturalWidth / img.naturalHeight;
+          const is39x22 = Math.abs(imgRatio - targetRatio) <= 0.02;
+
+          if (is39x22) {
+            // Already 39:22 -> save whole frame by default without forced cropping modal
+            const targetW = coverConfig.TARGET_WIDTH;
+            const targetH = coverConfig.TARGET_HEIGHT;
+            const offscreen = document.createElement('canvas');
+            offscreen.width = targetW;
+            offscreen.height = targetH;
+            const ctx = offscreen.getContext('2d');
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+            this.coverDataUrl = offscreen.toDataURL('image/jpeg', 0.92);
+            this.cropParams = { zoom: 1, panX: 0, panY: 0 };
+            this.cropZoom = 1;
+            this.cropPanX = 0;
+            this.cropPanY = 0;
+            this.saveCoverBackup();
+            this.closeCropper(false);
+            this.renderCoverUI();
+            this.updateCardPreview();
+          } else {
+            // Proportions differ -> open cropper with fixed 39:22
+            this.cropParams = { zoom: 1, panX: 0, panY: 0 };
+            this.cropZoom = 1;
+            this.cropPanX = 0;
+            this.cropPanY = 0;
+            this.openCropper();
+          }
         };
 
         img.onerror = () => {
           if (this.coverErrorEl) {
             this.coverErrorEl.textContent = 'Не удалось декодировать изображение. Файл поврежден или не является валидной картинкой.';
           }
+          this.restoreCoverBackup();
         };
 
-        img.src = e.target.result;
+        img.src = rawDataUrl;
       };
 
       reader.onerror = () => {
         if (this.coverErrorEl) {
           this.coverErrorEl.textContent = 'Ошибка чтения файла изображения.';
         }
+        this.restoreCoverBackup();
       };
 
       reader.readAsDataURL(file);
@@ -930,16 +1031,30 @@
     openCropper() {
       if (!this.cropperWrapper || !this.rawCoverImage) return;
 
+      this.saveCoverBackup();
       this.cropperWrapper.classList.add('is-active');
-      this.cropZoom = 1;
-      this.cropPanX = 0;
-      this.cropPanY = 0;
-      if (this.cropperZoomInput) this.cropperZoomInput.value = '1';
+
+      if (this.cropParams) {
+        this.cropZoom = this.cropParams.zoom || 1;
+        this.cropPanX = this.cropParams.panX || 0;
+        this.cropPanY = this.cropParams.panY || 0;
+      } else {
+        this.cropZoom = 1;
+        this.cropPanX = 0;
+        this.cropPanY = 0;
+      }
+
+      if (this.cropperZoomInput) {
+        this.cropperZoomInput.value = String(this.cropZoom);
+      }
 
       this.drawCropperCanvas();
     }
 
-    closeCropper() {
+    closeCropper(wasCancelled = false) {
+      if (wasCancelled) {
+        this.restoreCoverBackup();
+      }
       if (this.cropperWrapper) {
         this.cropperWrapper.classList.remove('is-active');
       }
@@ -955,11 +1070,10 @@
 
       ctx.clearRect(0, 0, cw, ch);
 
-      // Draw background
+      // Background
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, cw, ch);
 
-      // Compute scale so image covers the 780x440 aspect ratio
       const img = this.rawCoverImage;
       const baseScale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
       const scale = baseScale * this.cropZoom;
@@ -967,12 +1081,18 @@
       const drawW = img.naturalWidth * scale;
       const drawH = img.naturalHeight * scale;
 
+      // Pan clamping within frame bounds
+      const maxPanX = Math.max(0, (drawW - cw) / 2);
+      const maxPanY = Math.max(0, (drawH - ch) / 2);
+      this.cropPanX = Math.max(-maxPanX, Math.min(maxPanX, this.cropPanX));
+      this.cropPanY = Math.max(-maxPanY, Math.min(maxPanY, this.cropPanY));
+
       const drawX = (cw - drawW) / 2 + this.cropPanX;
       const drawY = (ch - drawH) / 2 + this.cropPanY;
 
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
-      // Draw subtle grid / overlay border
+      // Frame border overlay
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.strokeRect(0.5, 0.5, cw - 1, ch - 1);
@@ -981,9 +1101,12 @@
     applyCropping() {
       if (!this.cropperCanvas || !this.rawCoverImage) return;
 
-      // Render to target 780x440 canvas
-      const targetW = this.config.LIMITS.COVER_WIDTH;
-      const targetH = this.config.LIMITS.COVER_HEIGHT;
+      const coverConfig = (window.PublicationConfig && window.PublicationConfig.COVER) || {
+        TARGET_WIDTH: 780,
+        TARGET_HEIGHT: 440
+      };
+      const targetW = coverConfig.TARGET_WIDTH;
+      const targetH = coverConfig.TARGET_HEIGHT;
 
       const offscreen = document.createElement('canvas');
       offscreen.width = targetW;
@@ -997,17 +1120,21 @@
       const drawW = img.naturalWidth * scale;
       const drawH = img.naturalHeight * scale;
 
-      // Factor cropPan relative to cropper canvas display vs target 780x440
-      const canvasDisplayW = this.cropperCanvas.width || targetW;
-      const ratio = targetW / canvasDisplayW;
-
-      const drawX = (targetW - drawW) / 2 + (this.cropPanX * ratio);
-      const drawY = (targetH - drawH) / 2 + (this.cropPanY * ratio);
+      const drawX = (targetW - drawW) / 2 + this.cropPanX;
+      const drawY = (targetH - drawH) / 2 + this.cropPanY;
 
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
+      // Export to permanent Data URL
       this.coverDataUrl = offscreen.toDataURL('image/jpeg', 0.92);
-      this.closeCropper();
+      this.cropParams = {
+        zoom: this.cropZoom,
+        panX: this.cropPanX,
+        panY: this.cropPanY
+      };
+      this.saveCoverBackup();
+
+      this.closeCropper(false);
       this.renderCoverUI();
       this.updateCardPreview();
     }
@@ -1015,12 +1142,18 @@
     deleteCover() {
       this.coverDataUrl = null;
       this.rawCoverImage = null;
+      this.rawCoverImageSource = null;
+      this.cropParams = { zoom: 1, panX: 0, panY: 0 };
+      this.cropZoom = 1;
+      this.cropPanX = 0;
+      this.cropPanY = 0;
       this.coverMeta = null;
+      this.previousCoverState = null;
       if (this.coverFileInput) this.coverFileInput.value = '';
       if (this.coverNoticeEl) this.coverNoticeEl.textContent = '';
       if (this.coverWarningEl) this.coverWarningEl.textContent = '';
       if (this.coverErrorEl) this.coverErrorEl.textContent = '';
-      this.closeCropper();
+      this.closeCropper(false);
       this.renderCoverUI();
       this.updateCardPreview();
     }
@@ -1037,6 +1170,16 @@
         this.coverPreviewWrapper.style.display = 'none';
         if (this.coverImg) this.coverImg.src = '';
       }
+    }
+
+    escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     /* ==========================================================================
@@ -1087,55 +1230,133 @@
     }
 
     /* ==========================================================================
-       Live Card Preview
+       Live Card Preview (Uniform 7-Step Feed Card Order)
        ========================================================================== */
     updateCardPreview() {
-      // 1. Cover
-      if (this.cardPreviewCover) {
-        if (this.coverDataUrl) {
-          this.cardPreviewCover.style.display = 'block';
-          this.cardPreviewCover.innerHTML = `<img src="${this.coverDataUrl}" alt="Обложка статьи" class="pub-preview-img">`;
+      // 1. Author and Date
+      const authorName = (window.currentUser && window.currentUser.name) ||
+        (window.EditorApp && window.EditorApp.authorName) ||
+        'Автор платформы';
+      const authorRole = (window.currentUser && window.currentUser.role) || '';
+      const authorInitials = authorName.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'АП';
+
+      if (this.cardPreviewAvatar) this.cardPreviewAvatar.textContent = authorInitials;
+      if (this.cardPreviewAuthor) this.cardPreviewAuthor.textContent = authorName;
+      if (this.cardPreviewDate) this.cardPreviewDate.textContent = 'Недавно';
+      if (this.cardPreviewRole) {
+        if (authorRole) {
+          this.cardPreviewRole.textContent = authorRole;
+          this.cardPreviewRole.style.display = 'inline';
+          if (this.cardPreviewDot) this.cardPreviewDot.style.display = 'inline-block';
         } else {
-          this.cardPreviewCover.style.display = 'none';
-          this.cardPreviewCover.innerHTML = '';
+          this.cardPreviewRole.style.display = 'none';
+          if (this.cardPreviewDot) this.cardPreviewDot.style.display = 'none';
         }
       }
 
-      // 2. Badges (Format & Complexity)
-      if (this.cardPreviewBadgeFormat) {
-        if (this.format && this.format !== 'not_specified') {
-          const fmt = this.config.getFormatById(this.format);
-          this.cardPreviewBadgeFormat.style.display = 'inline-flex';
-          this.cardPreviewBadgeFormat.textContent = fmt ? fmt.title : this.format;
-        } else {
-          this.cardPreviewBadgeFormat.style.display = 'none';
-        }
-      }
-
-      if (this.cardPreviewBadgeComplexity) {
-        if (this.complexity && this.complexity !== 'none') {
-          const c = this.config.getComplexityById(this.complexity);
-          this.cardPreviewBadgeComplexity.style.display = 'inline-flex';
-          this.cardPreviewBadgeComplexity.textContent = c ? c.title : this.complexity;
-          this.cardPreviewBadgeComplexity.className = `pub-badge pub-badge-${this.complexity}`;
-        } else {
-          this.cardPreviewBadgeComplexity.style.display = 'none';
-        }
-      }
-
-      // 3. Title
+      // 2. Title
       if (this.cardPreviewTitle) {
         const rawTitle = this.titleInput ? this.titleInput.value.trim() : '';
         this.cardPreviewTitle.textContent = rawTitle || 'Заголовок публикации';
       }
 
-      // 4. Description
-      if (this.cardPreviewDesc) {
-        const rawDesc = this.description ? this.description.trim() : '';
-        this.cardPreviewDesc.textContent = rawDesc || 'Краткое описание публикации появится здесь. Оно отображается в ленте материалов и помогает читателям понять содержание.';
+      // 3. Badges: Topic, Format, Complexity
+      let badgesCount = 0;
+      // Topic badge
+      if (this.cardPreviewBadgeTopic) {
+        if (this.topics && this.topics.length > 0) {
+          const topicId = this.topics[0];
+          const t = this.config.getTopicById ? this.config.getTopicById(topicId) : null;
+          if (t) {
+            this.cardPreviewBadgeTopic.textContent = t.title;
+            this.cardPreviewBadgeTopic.style.display = 'inline-flex';
+            badgesCount++;
+          } else {
+            this.cardPreviewBadgeTopic.style.display = 'none';
+          }
+        } else {
+          this.cardPreviewBadgeTopic.style.display = 'none';
+        }
       }
 
-      // 5. Reading Time
+      // Format badge
+      if (this.cardPreviewBadgeFormat) {
+        if (this.format && this.format !== 'not_specified' && this.format !== 'none') {
+          const fmt = this.config.getFormatById ? this.config.getFormatById(this.format) : null;
+          if (fmt && fmt.title && fmt.title.toLowerCase() !== 'не указан') {
+            this.cardPreviewBadgeFormat.style.display = 'inline-flex';
+            this.cardPreviewBadgeFormat.textContent = fmt.title;
+            badgesCount++;
+          } else {
+            this.cardPreviewBadgeFormat.style.display = 'none';
+          }
+        } else {
+          this.cardPreviewBadgeFormat.style.display = 'none';
+        }
+      }
+
+      // Complexity badge
+      if (this.cardPreviewBadgeComplexity) {
+        if (this.complexity && this.complexity !== 'none') {
+          const c = this.config.getComplexityById ? this.config.getComplexityById(this.complexity) : null;
+          if (c && c.title && c.title.toLowerCase() !== 'не указан') {
+            this.cardPreviewBadgeComplexity.style.display = 'inline-flex';
+            this.cardPreviewBadgeComplexity.textContent = c.title;
+            this.cardPreviewBadgeComplexity.className = `meta-badge complexity-badge complexity-${this.complexity} pub-badge pub-badge-${this.complexity}`;
+            badgesCount++;
+          } else {
+            this.cardPreviewBadgeComplexity.style.display = 'none';
+          }
+        } else {
+          this.cardPreviewBadgeComplexity.style.display = 'none';
+        }
+      }
+
+      if (this.cardPreviewBadges) {
+        this.cardPreviewBadges.style.display = badgesCount > 0 ? 'flex' : 'none';
+      }
+
+      // 4. Cover
+      if (this.cardPreviewCover) {
+        if (this.coverDataUrl) {
+          this.cardPreviewCover.style.display = 'block';
+          this.cardPreviewCover.classList.add('is-loaded');
+          this.cardPreviewCover.innerHTML = `<img src="${this.coverDataUrl}" alt="Обложка статьи" class="card-cover-img pub-preview-img">`;
+        } else {
+          this.cardPreviewCover.style.display = 'none';
+          this.cardPreviewCover.classList.remove('is-loaded');
+          this.cardPreviewCover.innerHTML = '';
+        }
+      }
+
+      // 5. Description
+      if (this.cardPreviewDesc) {
+        const rawDesc = this.description ? this.description.trim() : '';
+        this.cardPreviewDesc.textContent = rawDesc || 'Краткое описание публикации появится здесь...';
+      }
+
+      // 6. Keywords
+      if (this.cardPreviewTags) {
+        if (this.keywords && this.keywords.length > 0) {
+          this.cardPreviewTags.style.display = 'flex';
+          const maxVisible = 3;
+          const visible = this.keywords.slice(0, maxVisible);
+          const hiddenCount = this.keywords.length - visible.length;
+          let tagsHtml = '';
+          visible.forEach(tag => {
+            tagsHtml += `<button type="button" class="tag-chip" tabindex="-1">#${this.escapeHtml(tag)}</button>`;
+          });
+          if (hiddenCount > 0) {
+            tagsHtml += `<span class="tag-expand-btn">+${hiddenCount} еще</span>`;
+          }
+          this.cardPreviewTags.innerHTML = tagsHtml;
+        } else {
+          this.cardPreviewTags.style.display = 'none';
+          this.cardPreviewTags.innerHTML = '';
+        }
+      }
+
+      // 7. Reading Time
       if (this.cardPreviewTime) {
         const text = this.editor ? this.editor.getText().trim() : '';
         const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
@@ -1158,6 +1379,8 @@
         description: this.description,
         isDescriptionCustom: this.isDescriptionCustom,
         coverDataUrl: this.coverDataUrl,
+        rawCoverImageSource: this.rawCoverImageSource,
+        cropParams: this.cropParams ? { ...this.cropParams } : { zoom: 1, panX: 0, panY: 0 },
         coverMeta: this.coverMeta,
         status: this.status
       };
@@ -1177,8 +1400,26 @@
       this.description = typeof settings.description === 'string' ? settings.description : '';
       this.isDescriptionCustom = Boolean(settings.isDescriptionCustom || (settings.description && settings.description.length > 0));
       this.coverDataUrl = settings.coverDataUrl || null;
+      this.rawCoverImageSource = settings.rawCoverImageSource || null;
+      this.cropParams = settings.cropParams || { zoom: 1, panX: 0, panY: 0 };
       this.coverMeta = settings.coverMeta || null;
       this.status = settings.status || 'draft';
+
+      if (this.rawCoverImageSource) {
+        const img = new Image();
+        img.onload = () => {
+          this.rawCoverImage = img;
+        };
+        img.src = this.rawCoverImageSource;
+      } else if (this.coverDataUrl) {
+        const img = new Image();
+        img.onload = () => {
+          this.rawCoverImage = img;
+        };
+        img.src = this.coverDataUrl;
+      } else {
+        this.rawCoverImage = null;
+      }
 
       this.render();
       this.updateCardPreview();
@@ -1194,8 +1435,11 @@
       this.description = '';
       this.isDescriptionCustom = false;
       this.coverDataUrl = null;
+      this.rawCoverImageSource = null;
+      this.cropParams = { zoom: 1, panX: 0, panY: 0 };
       this.coverMeta = null;
       this.rawCoverImage = null;
+      this.previousCoverState = null;
       this.status = 'draft';
 
       this.render();

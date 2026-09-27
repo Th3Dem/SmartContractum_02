@@ -1816,6 +1816,336 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             self.assertIn("Екатерина Романова", authors)
 
 
+
+class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
+    """
+    Test suite for task-28-feed-cover-sync-and-polish:
+    1. Unified cover configuration in PublicationConfig.COVER and theme.css tokens
+    2. Editor feed section descriptions, hints, and 7-step card preview markup
+    3. Editor CSS preview card styles (560px max width, 39:22 aspect ratio, 0px empty state)
+    4. Feed CSS card cover, line clamp, and compact toolbar
+    5. Feed sidebar topics showing only count > 0 in short list
+    6. Server-side cover image validation (base64 JPEG/PNG/WebP/GIF/SVG, limits, error handling)
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'js', 'config.js'), 'r', encoding='utf-8') as f:
+            cls.config_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'theme.css'), 'r', encoding='utf-8') as f:
+            cls.theme_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'editor.html'), 'r', encoding='utf-8') as f:
+            cls.editor_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'editor.css'), 'r', encoding='utf-8') as f:
+            cls.editor_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'feed.css'), 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+            cls.server_py = f.read()
+
+        os.environ["SERVER_QUIET"] = "1"
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, 'task28_test.db')
+
+        cls.server = server.create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR)
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def test_unified_cover_config_and_tokens(self):
+        """
+        Verify PublicationConfig.COVER in config.js (780x440, 39:22, max 10MB, formats)
+        and design tokens in theme.css (--card-cover-aspect-ratio: 39 / 22;, --card-cover-max-width: 560px;).
+        """
+        # 1. PublicationConfig.COVER parameters in config.js
+        self.assertIn('const COVER = {', self.config_js)
+        self.assertIn('TARGET_WIDTH: 780', self.config_js)
+        self.assertIn('TARGET_HEIGHT: 440', self.config_js)
+        self.assertIn('ASPECT_RATIO_W: 39', self.config_js)
+        self.assertIn('ASPECT_RATIO_H: 22', self.config_js)
+        self.assertIn("ASPECT_RATIO_STR: '39 / 22'", self.config_js)
+        self.assertIn('MAX_FILE_BYTES: 10 * 1024 * 1024', self.config_js)
+        self.assertIn('FEED_MAX_WIDTH_PX: 560', self.config_js)
+        self.assertIn("'image/jpeg'", self.config_js)
+        self.assertIn("'image/png'", self.config_js)
+        self.assertIn("'image/webp'", self.config_js)
+        self.assertIn("'image/gif'", self.config_js)
+        self.assertIn('COVER,', self.config_js)
+        self.assertIn('window.PublicationConfig = PublicationConfig;', self.config_js)
+
+        # 2. Design tokens in theme.css
+        self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
+        self.assertIn('--card-cover-max-width: 560px;', self.theme_css)
+
+    def test_editor_feed_section_texts_and_preview_markup(self):
+        """
+        Verify exact hint and description texts in editor.html and
+        the 7-step sequence of elements in #pub-card-preview:
+        author -> title -> badges -> cover -> description -> tags -> footer.
+        """
+        # 1. Exact hint and description texts in editor.html
+        self.assertIn(
+            'Обложка необязательна. Рекомендуемое разрешение — от 780 × 440 px. Область обложки — 39:22. JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр',
+            self.editor_html
+        )
+        self.assertIn(
+            'В ленте обложка отображается в уменьшенном размере с сохранением выбранного кадра. Для GIF используется первый кадр без анимации.',
+            self.editor_html
+        )
+        self.assertIn('Кадрирование обложки (39:22)', self.editor_html)
+
+        # 2. 7-step card preview markup structure
+        preview_pos = self.editor_html.find('id="pub-card-preview"')
+        self.assertNotEqual(preview_pos, -1, "Preview card #pub-card-preview must exist in editor.html")
+        preview_chunk = self.editor_html[preview_pos:preview_pos + 4000]
+
+        idx_author = preview_chunk.find('class="card-meta"')
+        idx_title = preview_chunk.find('id="preview-card-title"')
+        idx_badges = preview_chunk.find('id="preview-card-badges"')
+        idx_cover = preview_chunk.find('id="preview-card-cover"')
+        idx_desc = preview_chunk.find('id="preview-card-desc"')
+        idx_tags = preview_chunk.find('id="preview-card-tags"')
+        idx_footer = preview_chunk.find('class="card-footer')
+
+        self.assertNotEqual(idx_author, -1, "Author block must exist in preview card")
+        self.assertNotEqual(idx_title, -1, "Title must exist in preview card")
+        self.assertNotEqual(idx_badges, -1, "Badges container must exist in preview card")
+        self.assertNotEqual(idx_cover, -1, "Cover container must exist in preview card")
+        self.assertNotEqual(idx_desc, -1, "Description lead must exist in preview card")
+        self.assertNotEqual(idx_tags, -1, "Tags container must exist in preview card")
+        self.assertNotEqual(idx_footer, -1, "Footer must exist in preview card")
+
+        self.assertLess(idx_author, idx_title, "Author must precede Title")
+        self.assertLess(idx_title, idx_badges, "Title must precede Badges")
+        self.assertLess(idx_badges, idx_cover, "Badges must precede Cover")
+        self.assertLess(idx_cover, idx_desc, "Cover must precede Description")
+        self.assertLess(idx_desc, idx_tags, "Description must precede Tags")
+        self.assertLess(idx_tags, idx_footer, "Tags must precede Footer")
+
+    def test_editor_css_preview_card_styles(self):
+        """
+        Verify .pub-feed-card-cover styles: max-width 560px, aspect-ratio 39 / 22,
+        left alignment, and 0px reserved space when hidden.
+        """
+        self.assertIn('.pub-feed-card-cover', self.editor_css)
+        self.assertIn('max-width: var(--card-cover-max-width, 560px);', self.editor_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
+        self.assertIn('align-self: flex-start;', self.editor_css)
+
+        # 0px when cover is hidden / empty
+        self.assertIn('.pub-feed-card-cover[style*="display: none"]', self.editor_css)
+        self.assertIn('display: none !important;', self.editor_css)
+        self.assertIn('margin: 0 !important;', self.editor_css)
+        self.assertIn('height: 0 !important;', self.editor_css)
+
+    def test_feed_css_card_cover_and_compactness(self):
+        """
+        Verify .card-cover-container in feed.css (max-width 560px, aspect-ratio 39 / 22, left alignment),
+        .card-lead line clamping to 3 lines, and compact .feed-toolbar-row.
+        """
+        # 1. .card-cover-container styling
+        self.assertIn('.card-cover-container', self.feed_css)
+        self.assertIn('max-width: var(--card-cover-max-width, 560px);', self.feed_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
+        self.assertIn('align-self: flex-start;', self.feed_css)
+
+        # 2. .card-lead 3 lines limit
+        self.assertIn('.card-lead', self.feed_css)
+        self.assertIn('-webkit-line-clamp: 3;', self.feed_css)
+        self.assertIn('display: -webkit-box;', self.feed_css)
+        self.assertIn('-webkit-box-orient: vertical;', self.feed_css)
+
+        # 3. Compact service row .feed-toolbar-row
+        self.assertIn('.feed-toolbar-row', self.feed_css)
+        self.assertIn('display: flex;', self.feed_css)
+        self.assertIn('justify-content: space-between;', self.feed_css)
+
+    def test_feed_sidebar_topics_only_with_positive_count(self):
+        """
+        Verify renderSidebarTopics logic in feed.js: the short sidebar list
+        filters and displays only topics with count > 0.
+        """
+        self.assertIn('function renderSidebarTopics(topicCounts)', self.feed_js)
+        self.assertIn('count > 0', self.feed_js)
+        self.assertIn('const nonZeroTopics = sortedTopics.filter', self.feed_js)
+        self.assertIn(
+            'const visible = isSidebarTopicsExpanded ? sortedTopics : nonZeroTopics.slice(0, initialVisible);',
+            self.feed_js
+        )
+
+    def test_server_cover_image_validation(self):
+        """
+        Verify server-side cover image validation in server.py:
+        - Successful acceptance of valid base64 images (JPEG, PNG, WebP, GIF, SVG)
+        - Rejection of invalid base64 / corrupted data
+        - Rejection of unsupported MIME types
+        - Rejection of images over 10 MB
+        - Handling draft without cover (None, empty string, omitted)
+        - Full submit flow via POST /api/moderation/submit and persistence in queue
+        """
+        base_payload = {
+            "draftId": "draft_t28_test",
+            "title": "Тестирование валидации обложки",
+            "html": "<p>Тело публикации с достаточным количеством символов для успешной валидации статьи.</p>",
+            "publicationSettings": {
+                "targetAudience": "smart-contracts-dev",
+                "topics": ["smart-contracts-development"],
+                "keywords": ["валидация", "обложка", "тест"],
+                "description": "Описание статьи длиной более 50 символов для проверки серверной валидации.",
+                "format": "tutorial",
+                "complexity": "medium"
+            },
+            "idempotencyKey": "key_t28_val",
+            "authorId": "author_tester"
+        }
+
+        # 1. Draft without cover is valid (None, empty string, omitted)
+        p_omitted = json.loads(json.dumps(base_payload))
+        ok, err, f_errs = server.validate_submission_payload(p_omitted)
+        self.assertTrue(ok, f"Draft without cover should be valid: {err}")
+        self.assertNotIn("coverImage", f_errs)
+
+        p_empty = json.loads(json.dumps(base_payload))
+        p_empty["publicationSettings"]["coverImage"] = ""
+        ok, err, f_errs = server.validate_submission_payload(p_empty)
+        self.assertTrue(ok, f"Draft with empty coverImage should be valid: {err}")
+        self.assertNotIn("coverImage", f_errs)
+
+        p_none = json.loads(json.dumps(base_payload))
+        p_none["publicationSettings"]["coverImage"] = None
+        ok, err, f_errs = server.validate_submission_payload(p_none)
+        self.assertTrue(ok, f"Draft with None coverImage should be valid: {err}")
+        self.assertNotIn("coverImage", f_errs)
+
+        # 2. Acceptance of valid images (JPEG, PNG, WebP, GIF, SVG, /media/ path)
+        jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\xff\xd9"
+        jpeg_uri = f"data:image/jpeg;base64,{base64.b64encode(jpeg_bytes).decode('ascii')}"
+        p_jpeg = json.loads(json.dumps(base_payload))
+        p_jpeg["publicationSettings"]["coverImage"] = jpeg_uri
+        ok, err, f_errs = server.validate_submission_payload(p_jpeg)
+        self.assertTrue(ok, f"Valid JPEG should pass validation: {err}")
+
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        png_uri = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}"
+        p_png = json.loads(json.dumps(base_payload))
+        p_png["publicationSettings"]["coverImage"] = png_uri
+        ok, err, f_errs = server.validate_submission_payload(p_png)
+        self.assertTrue(ok, f"Valid PNG should pass validation: {err}")
+
+        webp_bytes = b"RIFF\x14\x00\x00\x00WEBPVP8 \x08\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00"
+        webp_uri = f"data:image/webp;base64,{base64.b64encode(webp_bytes).decode('ascii')}"
+        p_webp = json.loads(json.dumps(base_payload))
+        p_webp["publicationSettings"]["coverImage"] = webp_uri
+        ok, err, f_errs = server.validate_submission_payload(p_webp)
+        self.assertTrue(ok, f"Valid WebP should pass validation: {err}")
+
+        gif_bytes = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        gif_uri = f"data:image/gif;base64,{base64.b64encode(gif_bytes).decode('ascii')}"
+        p_gif = json.loads(json.dumps(base_payload))
+        p_gif["publicationSettings"]["coverImage"] = gif_uri
+        ok, err, f_errs = server.validate_submission_payload(p_gif)
+        self.assertTrue(ok, f"Valid GIF should pass validation: {err}")
+
+        svg_bytes = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440"><rect width="780" height="440" fill="#000"/></svg>'
+        svg_uri = f"data:image/svg+xml;base64,{base64.b64encode(svg_bytes).decode('ascii')}"
+        p_svg = json.loads(json.dumps(base_payload))
+        p_svg["publicationSettings"]["coverImage"] = svg_uri
+        ok, err, f_errs = server.validate_submission_payload(p_svg)
+        self.assertTrue(ok, f"Valid SVG should pass validation: {err}")
+
+        p_media = json.loads(json.dumps(base_payload))
+        p_media["publicationSettings"]["coverImage"] = "/media/covers/cover_01.png"
+        ok, err, f_errs = server.validate_submission_payload(p_media)
+        self.assertTrue(ok, f"Valid /media/ path should pass validation: {err}")
+
+        # 3. Rejection of invalid base64 / corrupted data
+        p_corrupt_b64 = json.loads(json.dumps(base_payload))
+        p_corrupt_b64["publicationSettings"]["coverImage"] = "data:image/png;base64,corrupted_base64_!@#$"
+        ok, err, f_errs = server.validate_submission_payload(p_corrupt_b64)
+        self.assertFalse(ok)
+        self.assertIn("coverImage", f_errs)
+        self.assertIn("Обложка должна быть валидным изображением", f_errs["coverImage"])
+
+        # 4. Rejection of valid base64 but corrupted image magic bytes
+        p_corrupt_magic = json.loads(json.dumps(base_payload))
+        p_corrupt_magic["publicationSettings"]["coverImage"] = f"data:image/png;base64,{base64.b64encode(b'not_a_png_image_data').decode('ascii')}"
+        ok, err, f_errs = server.validate_submission_payload(p_corrupt_magic)
+        self.assertFalse(ok)
+        self.assertIn("coverImage", f_errs)
+
+        # 5. Rejection of unsupported MIME types
+        p_unsupported = json.loads(json.dumps(base_payload))
+        p_unsupported["publicationSettings"]["coverImage"] = f"data:image/bmp;base64,{base64.b64encode(b'BM12345').decode('ascii')}"
+        ok, err, f_errs = server.validate_submission_payload(p_unsupported)
+        self.assertFalse(ok)
+        self.assertIn("coverImage", f_errs)
+
+        # 6. Rejection of image exceeding 10 MB
+        big_bytes = b"\x89PNG" + (b"\x00" * (10 * 1024 * 1024 + 10))
+        big_uri = f"data:image/png;base64,{base64.b64encode(big_bytes).decode('ascii')}"
+        p_over_10mb = json.loads(json.dumps(base_payload))
+        p_over_10mb["publicationSettings"]["coverImage"] = big_uri
+        ok, err, f_errs = server.validate_submission_payload(p_over_10mb)
+        self.assertFalse(ok)
+        self.assertIn("coverImage", f_errs)
+        self.assertIn("до 10 МБ", f_errs["coverImage"])
+
+        # 7. End-to-end HTTP POST /api/moderation/submit check
+        p_submit_ok = json.loads(json.dumps(base_payload))
+        p_submit_ok["draftId"] = "draft_t28_http_ok"
+        p_submit_ok["idempotencyKey"] = "idemp_t28_http_ok"
+        p_submit_ok["publicationSettings"]["coverImage"] = png_uri
+        post_data = json.dumps(p_submit_ok).encode('utf-8')
+        req = urllib.request.Request(
+            f"{self.base_url}/api/moderation/submit",
+            data=post_data,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req) as resp:
+            submit_res = json.loads(resp.read().decode('utf-8'))
+            self.assertTrue(submit_res.get("success"))
+            self.assertEqual(submit_res.get("status"), "pending_moderation")
+            sub_id = submit_res.get("submissionId")
+
+        # Verify cover image is stored in snapshot
+        list_req = urllib.request.Request(f"{self.base_url}/api/moderation/list")
+        with urllib.request.urlopen(list_req) as resp:
+            list_res = json.loads(resp.read().decode('utf-8'))
+            found = next((s for s in list_res["submissions"] if s["id"] == sub_id), None)
+            self.assertIsNotNone(found)
+            self.assertEqual(found["publicationSettings"]["coverImage"], png_uri)
+
+        # HTTP rejection for invalid cover
+        p_submit_bad = json.loads(json.dumps(base_payload))
+        p_submit_bad["draftId"] = "draft_t28_http_bad"
+        p_submit_bad["idempotencyKey"] = "idemp_t28_http_bad"
+        p_submit_bad["publicationSettings"]["coverImage"] = "data:image/tiff;base64,not_supported"
+        req_bad = urllib.request.Request(
+            f"{self.base_url}/api/moderation/submit",
+            data=json.dumps(p_submit_bad).encode('utf-8'),
+            headers={"Content-Type": "application/json"}
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req_bad)
+        self.assertEqual(ctx.exception.code, 400)
+        bad_res = json.loads(ctx.exception.read().decode('utf-8'))
+        ctx.exception.close()
+        self.assertFalse(bad_res.get("success"))
+        self.assertIn("coverImage", bad_res.get("fieldErrors", {}))
+
+
 if __name__ == '__main__':
     unittest.main()
+
 
