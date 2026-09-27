@@ -3519,6 +3519,199 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
         self.assertIn("audit-and-verification", exc_topic_ids)
 
 
+class TestTask32FeedSettingsUXPolish(unittest.TestCase):
+    """
+    Test suite for task-32-feed-settings-ux-polish:
+    1. Subscriptions block strict order (Title -> Switch -> Mode hint -> Tabs with counters & Add button -> List).
+    2. Author card avatar from card.js, word wrapping for topics/tags without button overlap, secondary toggle button.
+    3. Updated hints in settings, removed badge 'Минимум один', unified naming 'Без указанного уровня'.
+    4. Explicit 'Все типы' and 'Любой уровень' with mutual exclusivity logic.
+    5. Compact topics dropdown selector with search, checkboxes, and chips.
+    6. Advanced filters 2-column layout (16-24px gap) with counter badge.
+    7. Single unified sort above feed, removed from filter panel, sort preserved on reset.
+    8. Compact search placeholder 'Поиск публикаций', compact count 'N публикаций', empty state actions.
+    9. Strict Onest font, zero emojis, 100% offline-first.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.feed_html_path = os.path.join(FRONTEND_DIR, 'feed.html')
+        with open(cls.feed_html_path, 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+
+        cls.feed_css_path = os.path.join(FRONTEND_DIR, 'css', 'feed.css')
+        with open(cls.feed_css_path, 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+
+        cls.feed_js_path = os.path.join(FRONTEND_DIR, 'js', 'feed.js')
+        with open(cls.feed_js_path, 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+
+        cls.card_js_path = os.path.join(FRONTEND_DIR, 'js', 'card.js')
+        with open(cls.card_js_path, 'r', encoding='utf-8') as f:
+            cls.card_js = f.read()
+
+    def test_01_subscriptions_block_strict_order_and_no_badge(self):
+        """1. Verify block 'Подписки и исключения' strict order and removal of 'Не показывать в ленте' badge."""
+        self.assertIn('feedSettingsSectionSubscriptions', self.feed_html)
+        subs_sec_match = re.search(r'<div[^>]*id=["\']feedSettingsSectionSubscriptions["\'][^>]*>(.*?)</div>\s*</div>\s*<!-- Panel Footer', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(subs_sec_match)
+        subs_content = subs_sec_match.group(1)
+
+        idx_title = subs_content.find('Подписки и исключения')
+        idx_switch = subs_content.find('feed-subs-switch-row')
+        idx_mode_hint = subs_content.find('feedSubsModeHint')
+        idx_tabs_row = subs_content.find('feed-subs-nav-bar')
+        idx_items_list = subs_content.find('feedUserSubsList')
+
+        self.assertGreater(idx_title, -1)
+        self.assertGreater(idx_switch, idx_title, "Switch row must appear after title")
+        self.assertGreater(idx_mode_hint, idx_switch, "Dynamic mode hint must appear after switch row")
+        self.assertGreater(idx_tabs_row, idx_mode_hint, "Tabs row must appear after mode hint")
+        self.assertGreater(idx_items_list, idx_tabs_row, "User items list must appear after tabs row")
+
+        # Verify old gray badge 'Не показывать в ленте' removed from segmented control
+        self.assertNotIn('Не показывать в ленте', subs_content)
+        self.assertIn('btnSubsModeSubscriptions', subs_content)
+        self.assertIn('btnSubsModeExceptions', subs_content)
+
+    def test_02_author_card_avatar_and_secondary_button_styles(self):
+        """2. Verify createAvatarEl in card.js, .subs-author-avatar, word wrap, and secondary button."""
+        # card.js must export createAvatarEl on window.SmartContractumCard
+        self.assertIn('createAvatarEl', self.card_js)
+        self.assertIn('window.SmartContractumCard', self.card_js)
+
+        # Card hierarchy preserved in card.js
+        idx_meta = self.card_js.find('class="card-meta"')
+        idx_title = self.card_js.find('class="card-title')
+        idx_badges = self.card_js.find('class="card-meta-badges')
+        idx_cover = self.card_js.find('class="card-cover-container')
+        idx_lead = self.card_js.find('class="card-lead')
+        idx_tags = self.card_js.find('class="card-tags')
+        idx_footer = self.card_js.find('class="card-footer')
+        self.assertTrue(idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_tags < idx_footer)
+
+        # feed.css styles
+        self.assertIn('.subs-author-avatar', self.feed_css)
+        self.assertIn('.subs-item--author', self.feed_css)
+        self.assertIn('.subs-item-info--compact', self.feed_css)
+        self.assertIn('.subs-item-title--wrap', self.feed_css)
+        self.assertIn('word-break: break-word', self.feed_css)
+
+        # Non-stretching grid: minmax(280px, 380px) and align-content: start
+        subs_grid_match = re.search(r'\.feed-settings-subs-list\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(subs_grid_match)
+        subs_grid_rules = subs_grid_match.group(1)
+        self.assertIn('minmax(280px, 380px)', subs_grid_rules)
+        self.assertIn('align-content: start', subs_grid_rules)
+
+        # Neutral secondary button
+        self.assertIn('.subs-toggle-btn', self.feed_css)
+        self.assertIn('.subs-toggle-btn:hover', self.feed_css)
+        self.assertIn('.subs-toggle-btn:focus-visible', self.feed_css)
+
+    def test_03_settings_clean_hints_and_unified_naming(self):
+        """3. Verify removed 'Минимум один', updated hints, and unified 'Без указанного уровня'."""
+        self.assertNotIn('Минимум один', self.feed_html)
+        self.assertIn('Выберите хотя бы один тип материалов для “Моей ленты”', self.feed_html)
+        self.assertIn('Выберите подходящие уровни для “Моей ленты” или оставьте любой', self.feed_html)
+
+        # Unified naming 'Без указанного уровня' in settings and filters
+        self.assertIn('id="feedCompNone"', self.feed_html)
+        self.assertIn('id="feedFilterCompNone"', self.feed_html)
+        self.assertIn('Без указанного уровня', self.feed_html)
+
+    def test_04_filters_all_types_and_any_level(self):
+        """4. Verify explicit 'Все типы' and 'Любой уровень' chips with mutual exclusivity logic."""
+        self.assertIn('data-type="all"', self.feed_html)
+        self.assertIn('data-complexity="all"', self.feed_html)
+        self.assertIn('Все типы', self.feed_html)
+        self.assertIn('Любой уровень', self.feed_html)
+
+        # Mutual exclusivity in feed.js
+        self.assertIn("t === 'all'", self.feed_js)
+        self.assertIn("c === 'all'", self.feed_js)
+
+    def test_05_filters_topics_dropdown_selector(self):
+        """5. Verify compact topics dropdown selector with search, checkboxes, and chips."""
+        self.assertIn('id="feedTopicsDropdownTrigger"', self.feed_html)
+        self.assertIn('id="feedTopicsDropdownMenu"', self.feed_html)
+        self.assertIn('id="filterTopicSearchInput"', self.feed_html)
+        self.assertIn('id="modalTopicsFilterBar"', self.feed_html)
+        self.assertIn('id="filterSelectedTopicsChips"', self.feed_html)
+        self.assertIn('Все темы', self.feed_html)
+
+        # CSS dropdown styles
+        self.assertIn('.feed-topics-dropdown-wrap', self.feed_css)
+        self.assertIn('.feed-topics-dropdown-trigger', self.feed_css)
+        self.assertIn('.feed-topics-dropdown-menu', self.feed_css)
+        self.assertIn('.feed-topic-checkbox-item', self.feed_css)
+        self.assertIn('.filter-selected-chips-bar', self.feed_css)
+
+    def test_06_filters_advanced_2_columns_and_counter_badge(self):
+        """6. Verify 2-column layout (16-24px gap) with counter badge on advanced filters."""
+        self.assertIn('id="feedFiltersAdvanced"', self.feed_html)
+        self.assertIn('id="feedAdvancedFiltersCountBadge"', self.feed_html)
+
+        adv_body_match = re.search(r'\.feed-filters-advanced-body\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(adv_body_match)
+        adv_body_rules = adv_body_match.group(1)
+        self.assertIn('grid-template-columns: 1fr 1fr', adv_body_rules)
+        self.assertIn('gap: 20px', adv_body_rules)
+
+        self.assertIn('.advanced-count-badge', self.feed_css)
+        self.assertIn('updateAdvancedFiltersUI', self.feed_js)
+
+    def test_07_unified_sorting_toolbar_and_no_sort_in_filters(self):
+        """7. Verify sort dropdown is only in direct toolbar, removed from filters panel, and preserved on reset."""
+        # Panel has no sort dropdown
+        filters_panel_match = re.search(r'<section[^>]*id=["\']feedFiltersPanel["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(filters_panel_match)
+        filters_panel_content = filters_panel_match.group(1)
+        self.assertNotIn('feedSortSelect', filters_panel_content)
+
+        # Toolbar has sort dropdown with newest, popular, discussed, oldest
+        self.assertIn('id="feedSortSelect"', self.feed_html)
+        sort_select_match = re.search(r'<select[^>]*id=["\']feedSortSelect["\'][^>]*>(.*?)</select>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(sort_select_match)
+        sort_options = sort_select_match.group(1)
+        self.assertIn('value="newest"', sort_options)
+        self.assertIn('value="popular"', sort_options)
+        self.assertIn('value="discussed"', sort_options)
+        self.assertIn('value="oldest"', sort_options)
+
+        # resetAllFilters in feed.js preserves state.sort
+        reset_func_match = re.search(r'function resetAllFilters\(\)\s*\{([^}]+)\}', self.feed_js)
+        self.assertIsNotNone(reset_func_match)
+        reset_func_code = reset_func_match.group(1)
+        self.assertNotIn("state.sort = 'newest'", reset_func_code)
+
+    def test_08_compact_search_and_results_count_and_empty_state(self):
+        """8. Verify compact placeholder 'Поиск публикаций', compact count 'N публикаций', and empty state actions."""
+        self.assertIn('placeholder="Поиск публикаций"', self.feed_html)
+
+        # updateResultsCount calls pluralizePublications
+        count_func_match = re.search(r'function updateResultsCount\(\)\s*\{([^}]+)\}', self.feed_js)
+        self.assertIsNotNone(count_func_match)
+        count_code = count_func_match.group(1)
+        self.assertIn('pluralizePublications', count_code)
+
+        # renderEmptyState has change filters and reset filters
+        self.assertIn('feedEmptyChangeFiltersBtn', self.feed_js)
+        self.assertIn('feedEmptyResetBtn', self.feed_js)
+        self.assertIn('Изменить фильтры', self.feed_js)
+
+    def test_09_offline_first_strict_onest_and_zero_emojis(self):
+        """9. Verify 100% offline-first, strict Onest font, and zero emojis across modified files."""
+        emoji_pattern = re.compile(r'[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55]')
+        url_pattern = re.compile(r'https?://(?!localhost|127\.0\.0\.1|www\.w3\.org|smartcontractum\.ru)[^\s\'"<>]+')
+        for fname, content in [('feed.html', self.feed_html), ('feed.css', self.feed_css), ('feed.js', self.feed_js), ('card.js', self.card_js)]:
+            matches = emoji_pattern.findall(content)
+            self.assertEqual(len(matches), 0, f"Found emojis in {fname}: {matches}")
+            ext_urls = [m for m in url_pattern.findall(content) if 'w3.org' not in m]
+            self.assertEqual(len(ext_urls), 0, f"External URLs found in {fname}: {ext_urls}")
+
+
 if __name__ == '__main__':
     unittest.main()
 

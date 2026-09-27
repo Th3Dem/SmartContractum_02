@@ -424,13 +424,50 @@
     return card;
   }
 
+  function createAvatarEl(authorData, options) {
+    options = options || {};
+    let name = '';
+    let avatarUrl = '';
+    let initials = '';
+    if (typeof authorData === 'string') {
+      name = authorData;
+    } else if (authorData && typeof authorData === 'object') {
+      name = authorData.author || authorData.title || authorData.name || '';
+      avatarUrl = authorData.avatar || authorData.avatarUrl || authorData.photo || '';
+      initials = authorData.initials || authorData.authorInitials || '';
+    }
+    if (!initials) {
+      initials = name.split(/\s+/).map(function (p) { return p[0]; }).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'АП';
+    }
+
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'author-avatar' + (options.className ? (' ' + options.className) : '');
+    if (options.id) avatarDiv.id = options.id;
+    avatarDiv.setAttribute('aria-hidden', 'true');
+
+    if (avatarUrl) {
+      const img = document.createElement('img');
+      img.className = 'author-avatar-img';
+      img.src = avatarUrl;
+      img.alt = name || 'Аватар';
+      img.onerror = function () {
+        avatarDiv.innerHTML = escapeHtml(initials);
+      };
+      avatarDiv.appendChild(img);
+    } else {
+      avatarDiv.textContent = initials;
+    }
+    return avatarDiv;
+  }
+
   window.SmartContractumCard = {
     escapeHtml: escapeHtml,
     cleanString: cleanString,
     getBadgesHtml: getBadgesHtml,
     getComplexityBadgeHtml: getComplexityBadgeHtml,
     renderCardInnerHtml: renderCardInnerHtml,
-    createCardElement: createCardElement
+    createCardElement: createCardElement,
+    createAvatarEl: createAvatarEl
   };
 
 })(window);
