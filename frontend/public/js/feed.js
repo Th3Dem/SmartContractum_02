@@ -642,10 +642,16 @@
       tabTags.setAttribute('aria-selected', activeSettingsSubsType === 'tag' ? 'true' : 'false');
     }
 
-    // 5. Action button text
+    // 5. Action button text & aria-label
+    const actionBtn = document.getElementById('btnToggleCatalogSearch');
     const actionText = document.getElementById('btnToggleCatalogSearchText');
+    const actionTitle = (activeSubsMode === 'subscriptions') ? 'Добавить подписки' : 'Добавить исключения';
+    if (actionBtn) {
+      actionBtn.title = actionTitle;
+      actionBtn.setAttribute('aria-label', actionTitle);
+    }
     if (actionText) {
-      actionText.textContent = (activeSubsMode === 'subscriptions') ? 'Добавить подписки' : 'Добавить исключения';
+      actionText.textContent = 'Добавить';
     }
 
     // 6. Dynamic mode hint
@@ -653,7 +659,7 @@
     if (modeHint) {
       modeHint.textContent = (activeSubsMode === 'subscriptions')
         ? 'Публикации выбранных авторов, тем и хэштегов попадают в “Мою ленту”'
-        : 'Выбранные авторы, темы и хэштеги скрываются из общей и персональной ленты';
+        : 'Скрываются в общей и персональной ленте';
     }
 
     updateSettingsDraftUI();
@@ -1694,9 +1700,7 @@
     }
 
     if (adv) {
-      if (count > 0) {
-        adv.open = true;
-      }
+      adv.open = (count > 0);
     }
   }
 
@@ -1754,14 +1758,47 @@
       });
     });
 
-    // 3. Period chips
+    // 3. Period selector & custom dates
+    const periodSelect = document.getElementById('feedFilterPeriodSelect');
     const periodChips = document.querySelectorAll('#feedFilterPeriods .feed-filter-chip');
     const customDates = document.getElementById('feedFilterCustomDates');
+    const dFromInput = document.getElementById('filterDateFrom');
+    const dToInput = document.getElementById('filterDateTo');
+
+    if (periodSelect) {
+      periodSelect.addEventListener('change', function () {
+        const val = periodSelect.value;
+        if (customDates) {
+          customDates.style.display = (val === 'custom') ? 'flex' : 'none';
+        }
+      });
+    }
+
+    if (dFromInput && dToInput) {
+      dFromInput.addEventListener('change', function () {
+        if (dFromInput.value) {
+          dToInput.min = dFromInput.value;
+        } else {
+          dToInput.removeAttribute('min');
+        }
+      });
+      dToInput.addEventListener('change', function () {
+        if (dToInput.value) {
+          dFromInput.max = dToInput.value;
+        } else {
+          dFromInput.removeAttribute('max');
+        }
+      });
+    }
+
     periodChips.forEach(function (chip) {
       chip.addEventListener('click', function () {
         periodChips.forEach(function (c) { c.classList.remove('active'); });
         chip.classList.add('active');
         const p = chip.getAttribute('data-period');
+        if (periodSelect) {
+          periodSelect.value = p;
+        }
         if (customDates) {
           customDates.style.display = (p === 'custom') ? 'flex' : 'none';
         }
@@ -1975,6 +2012,10 @@
 
     // 3. Period
     const per = state.filters.period || 'all';
+    const periodSelect = document.getElementById('feedFilterPeriodSelect');
+    if (periodSelect) {
+      periodSelect.value = per;
+    }
     document.querySelectorAll('#feedFilterPeriods .feed-filter-chip').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-period') === per);
     });
@@ -1982,8 +2023,18 @@
     if (customDates) customDates.style.display = (per === 'custom') ? 'flex' : 'none';
     const dFrom = document.getElementById('filterDateFrom');
     const dTo = document.getElementById('filterDateTo');
-    if (dFrom) dFrom.value = state.filters.dateFrom || '';
-    if (dTo) dTo.value = state.filters.dateTo || '';
+    const valFrom = state.filters.dateFrom || '';
+    const valTo = state.filters.dateTo || '';
+    if (dFrom) {
+      dFrom.value = valFrom;
+      if (valTo) dFrom.max = valTo;
+      else dFrom.removeAttribute('max');
+    }
+    if (dTo) {
+      dTo.value = valTo;
+      if (valFrom) dTo.min = valFrom;
+      else dTo.removeAttribute('min');
+    }
 
     // 4. Topics
     updateFilterTopicsUI();
@@ -2005,6 +2056,10 @@
       b.classList.toggle('active', b.getAttribute('data-complexity') === 'all');
     });
 
+    const periodSelect = document.getElementById('feedFilterPeriodSelect');
+    if (periodSelect) {
+      periodSelect.value = 'all';
+    }
     document.querySelectorAll('#feedFilterPeriods .feed-filter-chip').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-period') === 'all');
     });
@@ -2012,8 +2067,17 @@
     if (customDates) customDates.style.display = 'none';
     const dFrom = document.getElementById('filterDateFrom');
     const dTo = document.getElementById('filterDateTo');
-    if (dFrom) dFrom.value = '';
-    if (dTo) dTo.value = '';
+    if (dFrom) {
+      dFrom.value = '';
+      dFrom.removeAttribute('max');
+    }
+    if (dTo) {
+      dTo.value = '';
+      dTo.removeAttribute('min');
+    }
+    state.filters.period = 'all';
+    state.filters.dateFrom = '';
+    state.filters.dateTo = '';
 
     const topicSearch = document.getElementById('filterTopicSearchInput');
     if (topicSearch) topicSearch.value = '';
@@ -2051,15 +2115,24 @@
       state.filters.complexities = activeComp;
     }
 
+    const periodSelect = document.getElementById('feedFilterPeriodSelect');
     const activePeriodBtn = document.querySelector('#feedFilterPeriods .feed-filter-chip.active');
-    const periodVal = activePeriodBtn ? activePeriodBtn.getAttribute('data-period') : 'all';
-    state.filters.period = periodVal;
+    const periodVal = periodSelect ? periodSelect.value : (activePeriodBtn ? activePeriodBtn.getAttribute('data-period') : 'all');
+
     if (periodVal === 'custom') {
       const dFrom = document.getElementById('filterDateFrom');
       const dTo = document.getElementById('filterDateTo');
-      state.filters.dateFrom = dFrom ? dFrom.value : '';
-      state.filters.dateTo = dTo ? dTo.value : '';
+      const valFrom = dFrom ? dFrom.value : '';
+      const valTo = dTo ? dTo.value : '';
+      if (valFrom && valTo && valFrom > valTo) {
+        showToast('Начальная дата не может быть позже конечной');
+        return;
+      }
+      state.filters.period = periodVal;
+      state.filters.dateFrom = valFrom;
+      state.filters.dateTo = valTo;
     } else {
+      state.filters.period = periodVal;
       state.filters.dateFrom = '';
       state.filters.dateTo = '';
     }
