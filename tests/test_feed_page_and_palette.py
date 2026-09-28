@@ -3553,27 +3553,31 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
 
     def test_01_subscriptions_block_strict_order_and_no_badge(self):
         """1. Verify block 'Подписки и исключения' strict order and removal of 'Не показывать в ленте' badge."""
-        self.assertIn('feedSettingsSectionSubscriptions', self.feed_html)
-        subs_sec_match = re.search(r'<div[^>]*id=["\']feedSettingsSectionSubscriptions["\'][^>]*>(.*?)</div>\s*</div>\s*<!-- Panel Footer', self.feed_html, re.DOTALL)
-        self.assertIsNotNone(subs_sec_match)
-        subs_content = subs_sec_match.group(1)
+        if 'feedSettingsSectionSubscriptions' in self.feed_html:
+            subs_sec_match = re.search(r'<div[^>]*id=["\']feedSettingsSectionSubscriptions["\'][^>]*>(.*?)</div>\s*</div>\s*<!-- Panel Footer', self.feed_html, re.DOTALL)
+            self.assertIsNotNone(subs_sec_match)
+            subs_content = subs_sec_match.group(1)
 
-        idx_title = subs_content.find('Подписки и исключения')
-        idx_switch = subs_content.find('feed-subs-switch-row')
-        idx_mode_hint = subs_content.find('feedSubsModeHint')
-        idx_tabs_row = subs_content.find('feed-subs-nav-bar')
-        idx_items_list = subs_content.find('feedUserSubsList')
+            idx_title = subs_content.find('Подписки и исключения')
+            idx_switch = subs_content.find('feed-subs-switch-row')
+            idx_mode_hint = subs_content.find('feedSubsModeHint')
+            idx_tabs_row = subs_content.find('feed-subs-nav-bar')
+            idx_items_list = subs_content.find('feedUserSubsList')
 
-        self.assertGreater(idx_title, -1)
-        self.assertGreater(idx_switch, idx_title, "Switch row must appear after title")
-        self.assertGreater(idx_mode_hint, idx_switch, "Dynamic mode hint must appear after switch row")
-        self.assertGreater(idx_tabs_row, idx_mode_hint, "Tabs row must appear after mode hint")
-        self.assertGreater(idx_items_list, idx_tabs_row, "User items list must appear after tabs row")
+            self.assertGreater(idx_title, -1)
+            self.assertGreater(idx_switch, idx_title, "Switch row must appear after title")
+            self.assertGreater(idx_mode_hint, idx_switch, "Dynamic mode hint must appear after switch row")
+            self.assertGreater(idx_tabs_row, idx_mode_hint, "Tabs row must appear after mode hint")
+            self.assertGreater(idx_items_list, idx_tabs_row, "User items list must appear after tabs row")
 
-        # Verify old gray badge 'Не показывать в ленте' removed from segmented control
-        self.assertNotIn('Не показывать в ленте', subs_content)
-        self.assertIn('btnSubsModeSubscriptions', subs_content)
-        self.assertIn('btnSubsModeExceptions', subs_content)
+            # Verify old gray badge 'Не показывать в ленте' removed from segmented control
+            self.assertNotIn('Не показывать в ленте', subs_content)
+            self.assertIn('btnSubsModeSubscriptions', subs_content)
+            self.assertIn('btnSubsModeExceptions', subs_content)
+        else:
+            # Task 35: Subscriptions completely removed from feedSettingsPanel
+            self.assertNotIn('feedSettingsSectionSubscriptions', self.feed_html)
+            self.assertNotIn('Не показывать в ленте', self.feed_html)
 
     def test_02_author_card_avatar_and_secondary_button_styles(self):
         """2. Verify createAvatarEl in card.js, .subs-author-avatar, word wrap, and secondary button."""
@@ -3615,11 +3619,13 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
         self.assertNotIn('Минимум один', self.feed_html)
         self.assertTrue(
             'Что показывать в “Моей ленте”' in self.feed_html or
-            'Выберите хотя бы один тип материалов для “Моей ленты”' in self.feed_html
+            'Выберите хотя бы один тип материалов для “Моей ленты”' in self.feed_html or
+            'Типы материалов' in self.feed_html
         )
         self.assertTrue(
             'Можно выбрать несколько уровней' in self.feed_html or
-            'Выберите подходящие уровни для “Моей ленты” или оставьте любой' in self.feed_html
+            'Выберите подходящие уровни для “Моей ленты” или оставьте любой' in self.feed_html or
+            'Любой уровень — без ограничений' in self.feed_html
         )
 
         # Unified naming 'Без указанного уровня' / 'Не указан' in settings and filters
@@ -3656,17 +3662,24 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
 
     def test_06_filters_advanced_2_columns_and_counter_badge(self):
         """6. Verify 2-column layout (16-24px gap) with counter badge on advanced filters."""
-        self.assertIn('id="feedFiltersAdvanced"', self.feed_html)
-        self.assertIn('id="feedAdvancedFiltersCountBadge"', self.feed_html)
+        if 'id="feedFiltersAdvanced"' in self.feed_html:
+            self.assertIn('id="feedFiltersAdvanced"', self.feed_html)
+            self.assertIn('id="feedAdvancedFiltersCountBadge"', self.feed_html)
 
-        adv_body_match = re.search(r'\.feed-filters-advanced-body\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(adv_body_match)
-        adv_body_rules = adv_body_match.group(1)
-        self.assertTrue('grid-template-columns: 1fr 1fr' in adv_body_rules or 'repeat(2, minmax(0, 1fr))' in adv_body_rules)
-        self.assertIn('gap: 20px', adv_body_rules)
+            adv_body_match = re.search(r'\.feed-filters-advanced-body\s*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(adv_body_match)
+            adv_body_rules = adv_body_match.group(1)
+            self.assertTrue('grid-template-columns: 1fr 1fr' in adv_body_rules or 'repeat(2, minmax(0, 1fr))' in adv_body_rules)
+            self.assertIn('gap: 20px', adv_body_rules)
 
-        self.assertIn('.advanced-count-badge', self.feed_css)
-        self.assertIn('updateAdvancedFiltersUI', self.feed_js)
+            self.assertIn('.advanced-count-badge', self.feed_css)
+            self.assertIn('updateAdvancedFiltersUI', self.feed_js)
+        else:
+            # Task 35: Replaced collapsible advanced details with 4 constantly visible fields in a 2x2 grid
+            self.assertIn('feed-filters-fields-grid', self.feed_html)
+            grid_match = re.search(r'\.feed-filters-fields-grid[^{]*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(grid_match)
+            self.assertIn('repeat(2, minmax(0, 1fr))', grid_match.group(1))
 
     def test_07_unified_sorting_toolbar_and_no_sort_in_filters(self):
         """7. Verify sort dropdown is only in direct toolbar, removed from filters panel, and preserved on reset."""
@@ -3739,42 +3752,57 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
         """1. Verify feed settings subtitle, 2-column layout on desktop and single column on mobile."""
         self.assertTrue(
             'Выберите, что читать и что скрывать' in self.feed_html or
-            'Настройте интересы для “Моей ленты” и исключения для обеих лент' in self.feed_html
+            'Настройте интересы для “Моей ленты” и исключения для обеих лент' in self.feed_html or
+            'Выберите типы материалов и уровень сложности для “Моей ленты”' in self.feed_html
         )
-        self.assertIn('feed-settings-col-left', self.feed_html)
-        self.assertIn('feedSettingsSectionSubscriptions', self.feed_html)
+        if 'feedSettingsSectionSubscriptions' in self.feed_html:
+            self.assertIn('feed-settings-col-left', self.feed_html)
+            self.assertIn('feedSettingsSectionSubscriptions', self.feed_html)
 
-        # CSS 2-column flex container and column widths
-        self.assertIn('.feed-settings-panel .feed-slide-panel-body', self.feed_css)
-        self.assertIn('.feed-settings-col-left', self.feed_css)
-        self.assertIn('.feed-settings-subs-section', self.feed_css)
+            # CSS 2-column flex container and column widths
+            self.assertIn('.feed-settings-panel .feed-slide-panel-body', self.feed_css)
+            self.assertIn('.feed-settings-col-left', self.feed_css)
+            self.assertIn('.feed-settings-subs-section', self.feed_css)
 
-        # Left column width 360-400px
-        left_match = re.search(r'\.feed-settings-col-left\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(left_match)
-        left_rules = left_match.group(1)
-        self.assertTrue('380px' in left_rules or '360px' in left_rules or '400px' in left_rules)
-        self.assertTrue('min-width: 360px' in left_rules)
-        self.assertTrue('max-width: 400px' in left_rules)
+            # Left column width 360-400px
+            left_match = re.search(r'\.feed-settings-col-left\s*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(left_match)
+            left_rules = left_match.group(1)
+            self.assertTrue('380px' in left_rules or '360px' in left_rules or '400px' in left_rules)
+            self.assertTrue('min-width: 360px' in left_rules)
+            self.assertTrue('max-width: 400px' in left_rules)
 
-        # Mobile media query (max-width: 959px) stacks columns
-        self.assertIn('@media (max-width: 959px)', self.feed_css)
-        mobile_match = re.search(r'@media\s*\(max-width:\s*959px\)\s*\{([^}]+(\{[^}]+\}[^}]+)+)\}', self.feed_css)
-        self.assertIsNotNone(mobile_match)
-        mobile_css = mobile_match.group(0)
-        self.assertIn('flex-direction: column', mobile_css)
+            # Mobile media query (max-width: 959px) stacks columns
+            self.assertIn('@media (max-width: 959px)', self.feed_css)
+            mobile_match = re.search(r'@media\s*\(max-width:\s*959px\)\s*\{([^}]+(\{[^}]+\}[^}]+)+)\}', self.feed_css)
+            self.assertIsNotNone(mobile_match)
+            mobile_css = mobile_match.group(0)
+            self.assertIn('flex-direction: column', mobile_css)
+        else:
+            # Task 35: 2-column grid layout for settings panel (1fr 1fr) without subscriptions
+            self.assertIn('feedSettingsSectionTypes', self.feed_html)
+            self.assertIn('feedSettingsSectionComplexity', self.feed_html)
+            settings_body_match = re.search(r'(\.feed-settings-panel|#feedSettingsPanel)\s+\.feed-slide-panel-body\s*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(settings_body_match)
+            self.assertIn('grid-template-columns: 1fr 1fr', settings_body_match.group(2))
 
     def test_02_feed_settings_types_and_complexity_structure(self):
         """2. Verify left column: Types 2x2 tumblers, Complexity upper row and 2x2 grid, with hints."""
         # Types hint and tumblers grid
-        self.assertIn('Что показывать в “Моей ленте”', self.feed_html)
+        self.assertTrue(
+            'Что показывать в “Моей ленте”' in self.feed_html or
+            'Типы материалов' in self.feed_html
+        )
         self.assertIn('feed-tumblers-grid', self.feed_html)
         tumbler_grid_match = re.search(r'\.feed-tumblers-grid\s*\{([^}]+)\}', self.feed_css)
         self.assertIsNotNone(tumbler_grid_match)
         self.assertIn('repeat(2, minmax(0, 1fr))', tumbler_grid_match.group(1))
 
         # Complexity hint, any-row and 2x2 grid
-        self.assertIn('Можно выбрать несколько уровней', self.feed_html)
+        self.assertTrue(
+            'Можно выбрать несколько уровней' in self.feed_html or
+            'Любой уровень — без ограничений' in self.feed_html
+        )
         self.assertIn('feed-complexity-grid-wrap', self.feed_html)
         self.assertIn('feed-complexity-any-row', self.feed_html)
         self.assertIn('feed-complexity-2x2-grid', self.feed_html)
@@ -3791,31 +3819,36 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
 
     def test_03_feed_settings_subscriptions_and_add_button(self):
         """3. Verify right column subscriptions: dynamic hint, Add button, 1-col items, and card protection."""
-        # Dynamic hint for exceptions
-        self.assertIn('Скрываются в общей и персональной ленте', self.feed_js)
+        if 'id="btnToggleCatalogSearch"' in self.feed_html:
+            # Dynamic hint for exceptions
+            self.assertIn('Скрываются в общей и персональной ленте', self.feed_js)
 
-        # Add button with plus icon and dynamic title/aria-label
-        self.assertIn('id="btnToggleCatalogSearch"', self.feed_html)
-        self.assertIn('id="btnToggleCatalogSearchText"', self.feed_html)
-        self.assertIn('Добавить', self.feed_html)
-        self.assertIn('Добавить подписки', self.feed_js)
-        self.assertIn('Добавить исключения', self.feed_js)
+            # Add button with plus icon and dynamic title/aria-label
+            self.assertIn('id="btnToggleCatalogSearch"', self.feed_html)
+            self.assertIn('id="btnToggleCatalogSearchText"', self.feed_html)
+            self.assertIn('Добавить', self.feed_html)
+            self.assertIn('Добавить подписки', self.feed_js)
+            self.assertIn('Добавить исключения', self.feed_js)
 
-        # 1-column layout for #feedUserSubsList
-        self.assertIn('id="feedUserSubsList"', self.feed_html)
-        subs_list_match = re.search(r'\.feed-settings-subs-list\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(subs_list_match)
-        self.assertIn('grid-template-columns: 1fr;', subs_list_match.group(1))
+            # 1-column layout for #feedUserSubsList
+            self.assertIn('id="feedUserSubsList"', self.feed_html)
+            subs_list_match = re.search(r'\.feed-settings-subs-list\s*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(subs_list_match)
+            self.assertIn('grid-template-columns: 1fr;', subs_list_match.group(1))
 
-        # Overflow / ellipsis protection for author card
-        self.assertIn('text-overflow: ellipsis', self.feed_css)
-        self.assertIn('white-space: nowrap', self.feed_css)
+            # Overflow / ellipsis protection for author card
+            self.assertIn('text-overflow: ellipsis', self.feed_css)
+            self.assertIn('white-space: nowrap', self.feed_css)
 
-        # Compact empty state
-        self.assertIn('.feed-subs-empty-state', self.feed_css)
-        empty_state_match = re.search(r'\.feed-subs-empty-state\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(empty_state_match)
-        self.assertIn('padding: 20px', empty_state_match.group(1))
+            # Compact empty state
+            self.assertIn('.feed-subs-empty-state', self.feed_css)
+            empty_state_match = re.search(r'\.feed-subs-empty-state\s*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(empty_state_match)
+            self.assertIn('padding: 20px', empty_state_match.group(1))
+        else:
+            # Task 35: Subscriptions completely removed from settings panel
+            self.assertNotIn('feedSettingsSectionSubscriptions', self.feed_html)
+            self.assertNotIn('btnToggleCatalogSearch', self.feed_html)
 
     def test_04_feed_filters_panel_header_and_2x2_grid(self):
         """4. Verify filters panel subtitle, removed duplicate footer hint, and 2x2 desktop grid."""
@@ -3866,21 +3899,28 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
 
     def test_06_feed_filters_advanced_parameters_collapsible(self):
         """6. Verify collapsible advanced parameters in 2 columns with chevron, badge, and auto-open."""
-        self.assertIn('id="feedFiltersAdvanced"', self.feed_html)
-        self.assertIn('class="feed-filters-advanced-summary"', self.feed_html)
-        self.assertIn('class="summary-chevron"', self.feed_html)
-        self.assertIn('id="feedAdvancedFiltersCountBadge"', self.feed_html)
-        self.assertIn('class="feed-filters-advanced-body"', self.feed_html)
+        if 'id="feedFiltersAdvanced"' in self.feed_html:
+            self.assertIn('id="feedFiltersAdvanced"', self.feed_html)
+            self.assertIn('class="feed-filters-advanced-summary"', self.feed_html)
+            self.assertIn('class="summary-chevron"', self.feed_html)
+            self.assertIn('id="feedAdvancedFiltersCountBadge"', self.feed_html)
+            self.assertIn('class="feed-filters-advanced-body"', self.feed_html)
 
-        # CSS 2 equal columns and gap
-        adv_body_match = re.search(r'\.feed-filters-advanced-body\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(adv_body_match)
-        adv_css = adv_body_match.group(1)
-        self.assertIn('repeat(2, minmax(0, 1fr))', adv_css)
-        self.assertTrue('20px' in adv_css or '22px' in adv_css or '24px' in adv_css)
+            # CSS 2 equal columns and gap
+            adv_body_match = re.search(r'\.feed-filters-advanced-body\s*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(adv_body_match)
+            adv_css = adv_body_match.group(1)
+            self.assertIn('repeat(2, minmax(0, 1fr))', adv_css)
+            self.assertTrue('20px' in adv_css or '22px' in adv_css or '24px' in adv_css)
 
-        # Auto-open logic in feed.js
-        self.assertIn('adv.open = (count > 0);', self.feed_js)
+            # Auto-open logic in feed.js
+            self.assertIn('adv.open = (count > 0);', self.feed_js)
+        else:
+            # Task 35: 4 constantly visible fields in a 2x2 grid without details
+            self.assertIn('feed-filters-fields-grid', self.feed_html)
+            grid_match = re.search(r'\.feed-filters-fields-grid[^{]*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(grid_match)
+            self.assertIn('repeat(2, minmax(0, 1fr))', grid_match.group(1))
 
     def test_07_visual_hierarchy_calm_accents_and_neutral_buttons(self):
         """7. Verify saturated calm primary buttons, soft active chips with checkmark, and neutral secondary buttons."""
@@ -4011,7 +4051,7 @@ class TestTask34StickyPanelsAndMultiFilter(unittest.TestCase):
     def test_08_ui_polish_details(self):
         """8. Verify select chevron, 'Не указан' complexity, 38px button heights, and neutral unsaved dot."""
         self.assertIn('.feed-select-chevron', self.feed_css)
-        self.assertIn('feed-select-chevron', self.feed_html)
+        self.assertTrue('feed-select-chevron' in self.feed_html or 'feedDateDropdownTrigger' in self.feed_html)
         self.assertIn('Не указан', self.feed_html)
         self.assertIn('Автор не указал сложность', self.feed_html)
         self.assertIn('feed-unsaved-dot', self.feed_css)
@@ -4030,6 +4070,244 @@ class TestTask34StickyPanelsAndMultiFilter(unittest.TestCase):
         """10. Verify filtersDraftState in-memory preservation and smooth scroll on apply."""
         self.assertIn('filtersDraftState', self.feed_js)
         self.assertIn("scrollIntoView({ behavior: 'smooth'", self.feed_js)
+
+
+class TestTask35FeedPanelsSimplificationAndDropdownFix(unittest.TestCase):
+    """
+    Test suite for Task 35: Feed panels simplification, tumbler unification, 4 visible filter fields, and dropdown clipping fix.
+    Requirements:
+      1. Subscriptions removed from settings panel; save payload contains strictly materialTypes and complexityLevels.
+      2. 2-column desktop layout (1fr 1fr) for settings panel, 1 col mobile, panel subtitle and 2x2 tumblers.
+      3. Strict tumbler logic: Types require >=1 active type; Complexity "Любой уровень" mutually exclusive with specific levels.
+      4. Filter panel tumblers: "Все типы" mutually exclusive with specific types; Complexity tumblers identical.
+      5. 4 visible filter fields in 2x2 grid without collapsible details, unified 38px height.
+      6. Dropdown fixed positioning, dynamic anchoring to getBoundingClientRect, constrained between header and footer, .opens-up.
+      7. Menus scroll only options list (overscroll-behavior: contain), headers/search pinned, small catalogs display completely.
+      8. Custom single-choice Date dropdown in unified site style, keeping hidden select for backwards compatibility.
+      9. Multiple selection preserved for Topics, Formats, Audiences with chips, search, and clear button.
+      10. Escape key hierarchy (closes dropdown menu first, then panel).
+      11. Zero emojis, strict Onest font, 100% offline-first.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.feed_html_path = os.path.join(FRONTEND_DIR, 'feed.html')
+        with open(cls.feed_html_path, 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+
+        cls.feed_css_path = os.path.join(FRONTEND_DIR, 'css', 'feed.css')
+        with open(cls.feed_css_path, 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+
+        cls.feed_js_path = os.path.join(FRONTEND_DIR, 'js', 'feed.js')
+        with open(cls.feed_js_path, 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+
+    def test_01_subscriptions_removed_from_settings_and_clean_payload(self):
+        """1. Verify subscriptions completely removed from #feedSettingsPanel and save payload only has types & complexity."""
+        settings_panel_match = re.search(r'<section[^>]*id=["\']feedSettingsPanel["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(settings_panel_match)
+        settings_html = settings_panel_match.group(1)
+
+        # Removed subscription elements from settings panel
+        self.assertNotIn('feedSettingsSectionSubscriptions', settings_html)
+        self.assertNotIn('btnToggleCatalogSearch', settings_html)
+        self.assertNotIn('feedUserSubsList', settings_html)
+        self.assertNotIn('feedSubsModeHint', settings_html)
+        self.assertNotIn('feedSubsTabBar', settings_html)
+
+        # Save payload in feed.js has strictly materialTypes and complexityLevels
+        payload_pattern = r'const\s+payload\s*=\s*\{\s*materialTypes:\s*draftSettingsState\.materialTypes,\s*complexityLevels:\s*draftSettingsState\.complexityLevels\s*\};'
+        self.assertIsNotNone(re.search(payload_pattern, self.feed_js))
+        self.assertNotIn("payload.subscriptions", self.feed_js)
+        self.assertNotIn("payload.exceptions", self.feed_js)
+
+    def test_02_settings_panel_2column_desktop_and_tumblers_layout(self):
+        """2. Verify new 2-column layout (1fr 1fr), subtitle, and tumbler structure for types and complexity."""
+        # Subtitle
+        self.assertIn('Выберите типы материалов и уровень сложности для “Моей ленты”', self.feed_html)
+
+        # Desktop 2-column grid in css
+        settings_grid_match = re.search(r'(\.feed-settings-panel|#feedSettingsPanel)\s+\.feed-slide-panel-body\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(settings_grid_match)
+        css_rules = settings_grid_match.group(2)
+        self.assertIn('grid-template-columns: 1fr 1fr', css_rules)
+        self.assertIn('gap: 28px', css_rules)
+
+        # Mobile 1-column responsive rule
+        mobile_match = re.search(r'@media\s*\(max-width:\s*768px\)\s*\{([^}]+(\{[^}]+\}[^}]+)*)\}', self.feed_css)
+        self.assertIsNotNone(mobile_match)
+        self.assertIn('grid-template-columns: 1fr', mobile_match.group(0))
+
+        # Types 2x2 grid & Complexity 2x2 grid with upper row
+        self.assertIn('id="feedSettingsSectionTypes"', self.feed_html)
+        self.assertIn('id="feedSettingsSectionComplexity"', self.feed_html)
+        self.assertIn('feed-tumblers-grid', self.feed_html)
+        self.assertIn('feed-tumbler-any-row', self.feed_html)
+
+        # Tumbler components classes
+        self.assertIn('.feed-tumbler-row', self.feed_css)
+        self.assertIn('.feed-tumbler-switch', self.feed_css)
+        self.assertIn('.feed-tumbler-slider', self.feed_css)
+
+    def test_03_strict_tumbler_mutual_exclusivity_and_validation_logic(self):
+        """3. Verify strict tumbler logic: Types require >=1 active type; Complexity 'Любой уровень' mutual exclusivity."""
+        # Type validation error element
+        self.assertIn('id="feedMaterialTypesError"', self.feed_html)
+        self.assertIn('.feed-settings-error', self.feed_css)
+
+        # feed.js handlers
+        self.assertIn('handleComplexityTumblerChange', self.feed_js)
+        self.assertIn('handleFilterTypeTumblerChange', self.feed_js)
+
+        # Types must have at least 1 in settings
+        self.assertIn('validateMaterialTypes', self.feed_js)
+        self.assertIn('types.length > 0', self.feed_js)
+        self.assertIn('feedMaterialTypesError', self.feed_js)
+
+        # Hints
+        self.assertIn('Любой уровень — без ограничений', self.feed_html)
+        self.assertTrue('Автор не указал сложность' in self.feed_html or 'Автор не задал сложность' in self.feed_html)
+
+    def test_04_filters_panel_tumbler_components(self):
+        """4. Verify filter panel replaces buttons with identical tumbler components for types and complexity."""
+        filters_panel_match = re.search(r'<section[^>]*id=["\']feedFiltersPanel["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(filters_panel_match)
+        filters_html = filters_panel_match.group(1)
+
+        # Tumblers grid in filters panel
+        self.assertIn('feed-filters-tumblers-grid', filters_html)
+        self.assertIn('feedFilterTypeAll', filters_html)
+        self.assertIn('feedFilterCompAll', filters_html)
+        self.assertIn('name="feedFilterMaterialType"', filters_html)
+        self.assertIn('name="feedFilterComplexity"', filters_html)
+
+        # CSS for filters tumblers grid
+        self.assertIn('.feed-filters-tumblers-grid', self.feed_css)
+
+    def test_05_four_constantly_visible_filter_fields_in_2x2_grid(self):
+        """5. Verify 4 constantly visible fields in 2x2 grid without collapsible <details>."""
+        # Collapsible details removed
+        self.assertNotIn('feedFiltersAdvanced', self.feed_html)
+        self.assertNotIn('feed-filters-advanced', self.feed_html)
+        self.assertNotIn('feed-filters-advanced-summary', self.feed_html)
+
+        # 4 fields in 2x2 grid
+        self.assertIn('feed-filters-fields-grid', self.feed_html)
+        grid_match = re.search(r'\.feed-filters-fields-grid[^{]*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(grid_match)
+        self.assertIn('repeat(2, minmax(0, 1fr))', grid_match.group(1))
+
+        # Order of 4 fields: Row 1 = Topics, Date; Row 2 = Format, Audience
+        idx_topics = self.feed_html.find('feedFilterGroupTopics')
+        idx_date = self.feed_html.find('feedFilterGroupDate')
+        idx_format = self.feed_html.find('feedFormatFilterGroup')
+        idx_audience = self.feed_html.find('feedAudienceFilterGroup')
+        self.assertTrue(idx_topics < idx_date < idx_format < idx_audience, "Fields must be ordered Topics, Date, Format, Audience")
+
+        # Unified 38px height for triggers
+        self.assertIn('.feed-multiselect-dropdown-trigger', self.feed_css)
+        self.assertIn('.feed-date-dropdown-trigger', self.feed_css)
+        trigger_match = re.search(r'\.feed-multiselect-dropdown-trigger[^{]*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(trigger_match)
+        self.assertIn('height: 38px', trigger_match.group(1))
+
+    def test_06_dropdown_fixed_positioning_and_dynamic_anchoring(self):
+        """6. Verify fixed positioning, dynamic anchoring via getBoundingClientRect, and .opens-up class."""
+        # CSS fixed position for dropdown menus
+        for menu_class in ['.feed-multiselect-dropdown-menu', '.feed-topics-dropdown-menu', '.feed-date-dropdown-menu']:
+            match = re.search(re.escape(menu_class) + r'[^{]*\{([^}]+)\}', self.feed_css)
+            self.assertIsNotNone(match, f"{menu_class} rule must exist")
+            self.assertIn('position: fixed', match.group(1), f"{menu_class} must use position: fixed")
+            self.assertIn('z-index: 1050', match.group(1), f"{menu_class} must have z-index: 1050")
+
+        # JavaScript positionDropdownMenu implementation
+        self.assertIn('function positionDropdownMenu', self.feed_js)
+        self.assertIn('getBoundingClientRect()', self.feed_js)
+        self.assertIn('.opens-up', self.feed_css)
+        self.assertIn('opens-up', self.feed_js)
+        self.assertIn('closeAllFilterDropdowns', self.feed_js)
+
+    def test_07_menu_scrolling_and_small_catalogs_display(self):
+        """7. Verify inner options scrolling with overscroll-behavior: contain, pinned search, full small catalogs."""
+        # overscroll-behavior: contain
+        self.assertIn('overscroll-behavior: contain', self.feed_css)
+        self.assertIn('.feed-multiselect-checkbox-list', self.feed_css)
+        self.assertIn('.feed-date-options-list', self.feed_css)
+
+        # Header/search/actions pinned while options list scrolls
+        menu_css_match = re.search(r'\.feed-multiselect-dropdown-menu[^{]*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(menu_css_match)
+        self.assertIn('display: flex', menu_css_match.group(1))
+        self.assertIn('flex-direction: column', menu_css_match.group(1))
+
+    def test_08_custom_date_single_choice_dropdown_and_hidden_select(self):
+        """8. Verify custom Date dropdown with checkmark, hidden fallback select, and custom date range."""
+        self.assertIn('id="feedDateDropdownTrigger"', self.feed_html)
+        self.assertIn('id="feedDateDropdownMenu"', self.feed_html)
+        self.assertIn('feed-period-select', self.feed_html)
+
+        # Options in custom dropdown
+        self.assertIn('data-value="all"', self.feed_html)
+        self.assertIn('data-value="week"', self.feed_html)
+        self.assertIn('data-value="month"', self.feed_html)
+        self.assertIn('data-value="year"', self.feed_html)
+        self.assertIn('data-value="custom"', self.feed_html)
+
+        # Date dropdown styles in css
+        self.assertIn('.feed-date-dropdown-menu', self.feed_css)
+        self.assertIn('.feed-date-option-item', self.feed_css)
+        self.assertIn('.feed-date-option-check', self.feed_css)
+
+        # JS initialization
+        self.assertIn('initDateDropdown', self.feed_js)
+
+    def test_09_multiselect_preserved_for_topics_formats_audiences(self):
+        """9. Verify multiselect preserved with search, clear button, and removable chips."""
+        # Topics
+        self.assertIn('id="filterTopicSearchInput"', self.feed_html)
+        self.assertIn('id="btnTopicsClearSelection"', self.feed_html)
+        self.assertIn('id="filterSelectedTopicsChips"', self.feed_html)
+
+        # Formats
+        self.assertIn('id="filterFormatSearchInput"', self.feed_html)
+        self.assertIn('id="btnFormatsClearSelection"', self.feed_html)
+        self.assertIn('id="filterSelectedFormatsChips"', self.feed_html)
+
+        # Audiences
+        self.assertIn('id="filterAudienceSearchInput"', self.feed_html)
+        self.assertIn('id="btnAudiencesClearSelection"', self.feed_html)
+        self.assertIn('id="filterSelectedAudiencesChips"', self.feed_html)
+
+    def test_10_escape_key_hierarchy_and_draft_state(self):
+        """10. Verify Escape closes dropdown first (focusing trigger) then panel, and draft state is preserved."""
+        # Escape handler in feed.js
+        escape_handler_match = re.search(r"e\.key === 'Escape'[\s\S]*?closeAllFilterDropdowns", self.feed_js)
+        self.assertIsNotNone(escape_handler_match)
+
+        # Focus return on Escape
+        self.assertIn('.focus()', escape_handler_match.group(0))
+
+        # In-memory drafts
+        self.assertIn('draftSettingsState', self.feed_js)
+        self.assertIn('filtersDraftState', self.feed_js)
+
+    def test_11_zero_emojis_strict_onest_and_offline_first(self):
+        """11. Verify 100% offline-first, strict Onest font, and zero emojis across all feed files."""
+        emoji_pattern = re.compile(r'[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55]')
+        url_pattern = re.compile(r'https?://(?!localhost|127\.0\.0\.1|www\.w3\.org|smartcontractum\.ru)[^\s\'"<>]+')
+
+        for fname, content in [('feed.html', self.feed_html), ('feed.css', self.feed_css), ('feed.js', self.feed_js)]:
+            matches = emoji_pattern.findall(content)
+            self.assertEqual(len(matches), 0, f"Found emojis in {fname}: {matches}")
+            ext_urls = [m for m in url_pattern.findall(content) if 'w3.org' not in m]
+            self.assertEqual(len(ext_urls), 0, f"External URLs found in {fname}: {ext_urls}")
+
+        # Strict Onest font usage in Theme & Feed
+        with open(os.path.join(FRONTEND_DIR, 'css', 'theme.css'), 'r', encoding='utf-8') as f:
+            theme_css = f.read()
+        self.assertIn("font-family: 'Onest'", theme_css)
+        self.assertIn("var(--font-sans)", self.feed_css)
 
 
 if __name__ == '__main__':

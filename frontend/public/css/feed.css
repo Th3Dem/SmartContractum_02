@@ -459,50 +459,32 @@
    Feed Settings Panel Elements
    ========================================================================== */
 .feed-settings-panel .feed-slide-panel-body {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 28px;
-  align-items: flex-start;
+  align-items: start;
+  min-height: auto;
+  padding: 4px 6px 4px 0;
 }
 
-.feed-settings-col-left {
-  flex: 0 0 380px;
-  width: 380px;
-  max-width: 400px;
-  min-width: 360px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.feed-settings-panel .feed-settings-subs-section {
-  flex: 1 1 0%;
+.feed-settings-col-left,
+.feed-settings-col {
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-@media (max-width: 959px) {
-  .feed-settings-panel .feed-slide-panel-body {
-    flex-direction: column;
-    gap: 20px;
-  }
-  .feed-settings-col-left {
-    flex: none;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-  }
-  .feed-settings-panel .feed-settings-subs-section {
-    width: 100%;
-  }
+.feed-settings-panel .feed-settings-subs-section {
+  display: none;
 }
 
-.feed-settings-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+@media (max-width: 767px) {
+  .feed-settings-panel .feed-slide-panel-body {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
 }
 
 .feed-section-header-row {
@@ -1567,6 +1549,29 @@
   color: var(--accent-color);
 }
 
+.feed-filters-tumblers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 24px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .feed-filters-tumblers-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+}
+
+.feed-tumbler-any-row,
+.feed-complexity-any-row {
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.feed-filters-fields-grid,
 .feed-filters-primary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1574,6 +1579,7 @@
 }
 
 @media (max-width: 768px) {
+  .feed-filters-fields-grid,
   .feed-filters-primary-grid {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -1754,9 +1760,12 @@
 }
 
 .feed-multiselect-dropdown-trigger,
-.feed-topics-dropdown-trigger {
+.feed-topics-dropdown-trigger,
+.feed-date-dropdown-trigger {
   width: 100%;
   height: 38px;
+  min-height: 38px;
+  max-height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1769,25 +1778,29 @@
   font-size: 0.88rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
   text-align: left;
   box-sizing: border-box;
 }
 
 .feed-multiselect-dropdown-trigger:hover,
-.feed-topics-dropdown-trigger:hover {
+.feed-topics-dropdown-trigger:hover,
+.feed-date-dropdown-trigger:hover {
   border-color: var(--border-hover, #64748b);
   background: var(--bg-card);
 }
 
 .feed-multiselect-dropdown-trigger:focus-visible,
-.feed-topics-dropdown-trigger:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 1px;
+.feed-topics-dropdown-trigger:focus-visible,
+.feed-date-dropdown-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(56, 97, 251, 0.2);
 }
 
 .feed-multiselect-dropdown-trigger[aria-expanded="true"] .dropdown-trigger-icon,
-.feed-topics-dropdown-trigger[aria-expanded="true"] .dropdown-trigger-icon {
+.feed-topics-dropdown-trigger[aria-expanded="true"] .dropdown-trigger-icon,
+.feed-date-dropdown-trigger[aria-expanded="true"] .dropdown-trigger-icon {
   transform: rotate(180deg);
 }
 
@@ -1806,31 +1819,91 @@
 }
 
 .feed-multiselect-dropdown-menu,
-.feed-topics-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+.feed-topics-dropdown-menu,
+.feed-date-dropdown-menu {
+  position: fixed;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md, 8px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
-  z-index: 50;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  z-index: 1050;
   padding: 8px;
-  max-height: 280px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 6px;
   box-sizing: border-box;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+[data-theme="light"] .feed-multiselect-dropdown-menu,
+[data-theme="light"] .feed-topics-dropdown-menu,
+[data-theme="light"] .feed-date-dropdown-menu {
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
 }
 
 .feed-multiselect-dropdown-menu.opens-up,
-.feed-topics-dropdown-menu.opens-up {
-  top: auto;
-  bottom: calc(100% + 4px);
-  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.28);
+.feed-topics-dropdown-menu.opens-up,
+.feed-date-dropdown-menu.opens-up {
+  box-shadow: 0 -16px 36px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .feed-multiselect-dropdown-menu.opens-up,
+[data-theme="light"] .feed-topics-dropdown-menu.opens-up,
+[data-theme="light"] .feed-date-dropdown-menu.opens-up {
+  box-shadow: 0 -16px 36px rgba(0, 0, 0, 0.12);
+}
+
+/* Date single-choice options list */
+.feed-date-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.feed-date-option-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.feed-date-option-item:hover {
+  background-color: var(--bg-card);
+}
+
+.feed-date-option-item.is-selected {
+  background-color: rgba(56, 97, 251, 0.12);
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+[data-theme="light"] .feed-date-option-item.is-selected {
+  background-color: rgba(56, 97, 251, 0.1);
+  color: #1d4ed8;
+}
+
+.feed-date-option-check {
+  display: none;
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.feed-date-option-item.is-selected .feed-date-option-check {
+  display: inline-flex;
 }
 
 .feed-topic-search-wrap {

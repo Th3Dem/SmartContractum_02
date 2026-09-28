@@ -575,24 +575,6 @@
       if (draftCL[i] !== savedCL[i]) return true;
     }
 
-    const categories = ['authors', 'topics', 'tags'];
-    for (let c = 0; c < categories.length; c++) {
-      const cat = categories[c];
-      const dSubs = (draftSettingsState.subscriptions[cat] || []).map(function (x) { return x.id || x; }).sort();
-      const sSubs = (savedSettingsState.subscriptions[cat] || []).map(function (x) { return x.id || x; }).sort();
-      if (dSubs.length !== sSubs.length) return true;
-      for (let i = 0; i < dSubs.length; i++) {
-        if (dSubs[i] !== sSubs[i]) return true;
-      }
-
-      const dExc = (draftSettingsState.exceptions[cat] || []).map(function (x) { return x.id || x; }).sort();
-      const sExc = (savedSettingsState.exceptions[cat] || []).map(function (x) { return x.id || x; }).sort();
-      if (dExc.length !== sExc.length) return true;
-      for (let i = 0; i < dExc.length; i++) {
-        if (dExc[i] !== sExc[i]) return true;
-      }
-    }
-
     return false;
   }
 
@@ -619,92 +601,104 @@
     if (saveBtn) {
       saveBtn.disabled = !hasChanges || !isValid;
     }
+  }
 
-    // Update counters on category tabs
-    const authorsCountEl = document.getElementById('feedSettingsSubsAuthorsCount');
-    const topicsCountEl = document.getElementById('feedSettingsSubsTopicsCount');
-    const tagsCountEl = document.getElementById('feedSettingsSubsTagsCount');
+  function handleComplexityTumblerChange(inputs, clickedInput, onUpdate) {
+    const val = clickedInput.value || clickedInput.getAttribute('data-complexity');
+    const isTurningOn = clickedInput.checked;
+    const allInput = Array.from(inputs).find(function (i) {
+      const c = i.value || i.getAttribute('data-complexity');
+      return c === 'all';
+    });
+    const specificInputs = Array.from(inputs).filter(function (i) {
+      return i !== allInput;
+    });
 
-    const curStore = draftSettingsState[activeSubsMode] || {};
-    if (authorsCountEl) authorsCountEl.textContent = (curStore.authors || []).length;
-    if (topicsCountEl) topicsCountEl.textContent = (curStore.topics || []).length;
-    if (tagsCountEl) tagsCountEl.textContent = (curStore.tags || []).length;
-
-    if (isCatalogOpen) {
-      renderFeedSettingsCatalogList();
+    const c = val;
+    if (c === 'all') {
+      if (!isTurningOn) {
+        // Cannot uncheck only active "Любой уровень"
+        clickedInput.checked = true;
+        return;
+      }
+      // Turning on "Любой уровень" resets specific levels
+      specificInputs.forEach(function (inp) {
+        inp.checked = false;
+      });
     } else {
-      renderFeedSettingsSubsList();
+      if (isTurningOn) {
+        // Turning on specific disables "Любой уровень"
+        if (allInput) allInput.checked = false;
+      } else {
+        // Turning off specific: if no specific remaining, re-enable "Любой уровень"
+        const anySpecificChecked = specificInputs.some(function (inp) { return inp.checked; });
+        if (!anySpecificChecked && allInput) {
+          allInput.checked = true;
+        }
+      }
     }
+    if (onUpdate) onUpdate();
+  }
+
+  function handleFilterTypeTumblerChange(inputs, clickedInput, onUpdate) {
+    const val = clickedInput.value || clickedInput.getAttribute('data-type');
+    const isTurningOn = clickedInput.checked;
+    const allInput = Array.from(inputs).find(function (i) {
+      const t = i.value || i.getAttribute('data-type');
+      return t === 'all';
+    });
+    const specificInputs = Array.from(inputs).filter(function (i) {
+      return i !== allInput;
+    });
+
+    const t = val;
+    if (t === 'all') {
+      if (!isTurningOn) {
+        // Cannot uncheck only active "Все типы"
+        clickedInput.checked = true;
+        return;
+      }
+      // Turning on "Все типы" resets specific types
+      specificInputs.forEach(function (inp) {
+        inp.checked = false;
+      });
+    } else {
+      if (isTurningOn) {
+        // Turning on specific disables "Все типы"
+        if (allInput) allInput.checked = false;
+      } else {
+        // Turning off specific: if no specific remaining, re-enable "Все типы"
+        const anySpecificChecked = specificInputs.some(function (inp) { return inp.checked; });
+        if (!anySpecificChecked && allInput) {
+          allInput.checked = true;
+        }
+      }
+    }
+    if (onUpdate) onUpdate();
   }
 
   function syncSettingsUIFromDraft() {
-    // 1. Tumblers
+    // 1. Material Types Tumblers
     const types = draftSettingsState.materialTypes || ['article', 'post', 'news', 'question'];
     const typeInputs = document.querySelectorAll('input[name="feedMaterialType"]');
     typeInputs.forEach(function (inp) {
       inp.checked = (types.indexOf(inp.value) !== -1);
     });
 
-    // 2. Complexity buttons
+    // 2. Complexity Tumblers
     const compLevels = draftSettingsState.complexityLevels || ['all'];
-    const compButtons = document.querySelectorAll('#feedComplexityLevelsList .feed-choice-btn');
     const isAll = (compLevels.indexOf('all') !== -1 || compLevels.length === 0);
-    compButtons.forEach(function (btn) {
-      const c = btn.getAttribute('data-complexity');
-      const active = (c === 'all') ? isAll : (!isAll && compLevels.indexOf(c) !== -1);
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    const compInputs = document.querySelectorAll('input[name="feedComplexityLevel"]');
+    compInputs.forEach(function (inp) {
+      const c = inp.value || inp.getAttribute('data-complexity');
+      if (c === 'all') {
+        inp.checked = isAll;
+      } else {
+        inp.checked = (!isAll && (compLevels.indexOf(c) !== -1 || (c === 'none' && compLevels.indexOf('unspecified') !== -1)));
+      }
     });
 
-    // 3. Segmented control
-    const subModeBtn = document.getElementById('btnSubsModeSubscriptions');
-    const excModeBtn = document.getElementById('btnSubsModeExceptions');
-    if (subModeBtn) {
-      subModeBtn.classList.toggle('active', activeSubsMode === 'subscriptions');
-      subModeBtn.setAttribute('aria-selected', activeSubsMode === 'subscriptions' ? 'true' : 'false');
-    }
-    if (excModeBtn) {
-      excModeBtn.classList.toggle('active', activeSubsMode === 'exceptions');
-      excModeBtn.setAttribute('aria-selected', activeSubsMode === 'exceptions' ? 'true' : 'false');
-    }
-
-    // 4. Sub tabs
-    const tabAuthors = document.getElementById('tabFeedSettingsSubsAuthors');
-    const tabTopics = document.getElementById('tabFeedSettingsSubsTopics');
-    const tabTags = document.getElementById('tabFeedSettingsSubsTags');
-    if (tabAuthors) {
-      tabAuthors.classList.toggle('active', activeSettingsSubsType === 'author');
-      tabAuthors.setAttribute('aria-selected', activeSettingsSubsType === 'author' ? 'true' : 'false');
-    }
-    if (tabTopics) {
-      tabTopics.classList.toggle('active', activeSettingsSubsType === 'topic');
-      tabTopics.setAttribute('aria-selected', activeSettingsSubsType === 'topic' ? 'true' : 'false');
-    }
-    if (tabTags) {
-      tabTags.classList.toggle('active', activeSettingsSubsType === 'tag');
-      tabTags.setAttribute('aria-selected', activeSettingsSubsType === 'tag' ? 'true' : 'false');
-    }
-
-    // 5. Action button text & aria-label
-    const actionBtn = document.getElementById('btnToggleCatalogSearch');
-    const actionText = document.getElementById('btnToggleCatalogSearchText');
-    const actionTitle = (activeSubsMode === 'subscriptions') ? 'Добавить подписки' : 'Добавить исключения';
-    if (actionBtn) {
-      actionBtn.title = actionTitle;
-      actionBtn.setAttribute('aria-label', actionTitle);
-    }
-    if (actionText) {
-      actionText.textContent = 'Добавить';
-    }
-
-    // 6. Dynamic mode hint
-    const modeHint = document.getElementById('feedSubsModeHint');
-    if (modeHint) {
-      modeHint.textContent = (activeSubsMode === 'subscriptions')
-        ? 'Публикации выбранных авторов, тем и хэштегов попадают в “Мою ленту”'
-        : 'Скрываются в общей и персональной ленте';
-    }
-
+    validateMaterialTypes();
     updateSettingsDraftUI();
   }
 
@@ -1427,112 +1421,38 @@
           return i.value;
         });
         draftSettingsState.materialTypes = checkedVals;
+        validateMaterialTypes();
         updateSettingsDraftUI();
       });
     });
 
-    // Complexity choice buttons
-    const compButtons = document.querySelectorAll('#feedComplexityLevelsList .feed-choice-btn');
-    compButtons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        const c = btn.getAttribute('data-complexity');
-        if (c === 'all') {
-          draftSettingsState.complexityLevels = ['all'];
-        } else {
-          draftSettingsState.complexityLevels = (draftSettingsState.complexityLevels || []).filter(function (x) { return x !== 'all'; });
-          const idx = draftSettingsState.complexityLevels.indexOf(c);
-          if (idx !== -1) {
-            draftSettingsState.complexityLevels.splice(idx, 1);
-          } else {
-            draftSettingsState.complexityLevels.push(c);
-          }
-          if (draftSettingsState.complexityLevels.length === 0) {
+    // Complexity tumblers
+    const compInputs = document.querySelectorAll('input[name="feedComplexityLevel"]');
+    compInputs.forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        handleComplexityTumblerChange(compInputs, inp, function () {
+          const allInp = Array.from(compInputs).find(function (i) {
+            const val = i.value || i.getAttribute('data-complexity');
+            return val === 'all';
+          });
+          if (allInp && allInp.checked) {
             draftSettingsState.complexityLevels = ['all'];
+          } else {
+            draftSettingsState.complexityLevels = Array.from(compInputs)
+              .filter(function (i) {
+                const val = i.value || i.getAttribute('data-complexity');
+                return val !== 'all' && i.checked;
+              })
+              .map(function (i) { return i.value || i.getAttribute('data-complexity'); });
+            if (draftSettingsState.complexityLevels.length === 0) {
+              draftSettingsState.complexityLevels = ['all'];
+              if (allInp) allInp.checked = true;
+            }
           }
-        }
-        syncSettingsUIFromDraft();
+          updateSettingsDraftUI();
+        });
       });
     });
-
-    // Segmented control buttons
-    const subModeBtn = document.getElementById('btnSubsModeSubscriptions');
-    const excModeBtn = document.getElementById('btnSubsModeExceptions');
-    if (subModeBtn) {
-      subModeBtn.addEventListener('click', function () {
-        activeSubsMode = 'subscriptions';
-        syncSettingsUIFromDraft();
-        if (isCatalogOpen) fetchAndRenderCatalog(true);
-      });
-    }
-    if (excModeBtn) {
-      excModeBtn.addEventListener('click', function () {
-        activeSubsMode = 'exceptions';
-        syncSettingsUIFromDraft();
-        if (isCatalogOpen) fetchAndRenderCatalog(true);
-      });
-    }
-
-    // Sub tabs
-    const tabAuthors = document.getElementById('tabFeedSettingsSubsAuthors');
-    const tabTopics = document.getElementById('tabFeedSettingsSubsTopics');
-    const tabTags = document.getElementById('tabFeedSettingsSubsTags');
-    if (tabAuthors) {
-      tabAuthors.addEventListener('click', function () {
-        activeSettingsSubsType = 'author';
-        syncSettingsUIFromDraft();
-        if (isCatalogOpen) openCatalogPane();
-      });
-    }
-    if (tabTopics) {
-      tabTopics.addEventListener('click', function () {
-        activeSettingsSubsType = 'topic';
-        syncSettingsUIFromDraft();
-        if (isCatalogOpen) openCatalogPane();
-      });
-    }
-    if (tabTags) {
-      tabTags.addEventListener('click', function () {
-        activeSettingsSubsType = 'tag';
-        syncSettingsUIFromDraft();
-        if (isCatalogOpen) openCatalogPane();
-      });
-    }
-
-    // Catalog toggle and close buttons
-    const btnToggleCatalog = document.getElementById('btnToggleCatalogSearch');
-    if (btnToggleCatalog) {
-      btnToggleCatalog.addEventListener('click', function () {
-        if (isCatalogOpen) {
-          closeCatalogPane();
-        } else {
-          openCatalogPane();
-        }
-      });
-    }
-    const btnCloseCatalog = document.getElementById('btnCloseCatalogPane');
-    if (btnCloseCatalog) {
-      btnCloseCatalog.addEventListener('click', closeCatalogPane);
-    }
-
-    // Catalog search input
-    const subsSearchInput = document.getElementById('feedSettingsSubsSearch');
-    if (subsSearchInput) {
-      subsSearchInput.addEventListener('input', function () {
-        clearTimeout(catalogDebounceTimer);
-        catalogDebounceTimer = setTimeout(function () {
-          fetchAndRenderCatalog(true);
-        }, 250);
-      });
-    }
-
-    // Catalog load more button
-    const btnCatLoadMore = document.getElementById('btnCatalogLoadMore');
-    if (btnCatLoadMore) {
-      btnCatLoadMore.addEventListener('click', function () {
-        catalogOffset += CATALOG_LIMIT;
-        fetchAndRenderCatalog(false);
-      });
-    }
 
     // Save button
     if (saveBtn) {
@@ -1541,9 +1461,7 @@
 
         const payload = {
           materialTypes: draftSettingsState.materialTypes,
-          complexityLevels: draftSettingsState.complexityLevels,
-          subscriptions: draftSettingsState.subscriptions,
-          exceptions: draftSettingsState.exceptions
+          complexityLevels: draftSettingsState.complexityLevels
         };
 
         if (currentUser) {
@@ -1557,13 +1475,12 @@
             .then(function (data) {
               saveBtn.disabled = false;
               if (data && data.success) {
-                savedSettingsState = cloneSettings(draftSettingsState);
+                savedSettingsState.materialTypes = draftSettingsState.materialTypes.slice();
+                savedSettingsState.complexityLevels = draftSettingsState.complexityLevels.slice();
                 state.feedSettings.materialTypes = savedSettingsState.materialTypes.slice();
                 state.feedSettings.complexityLevels = savedSettingsState.complexityLevels.slice();
-                state.userSubscriptions = cloneSettings(savedSettingsState.subscriptions);
-                state.userExceptions = cloneSettings(savedSettingsState.exceptions);
 
-                 closeFeedSettingsPanel(true);
+                closeFeedSettingsPanel(true);
                 if (state.tab === 'all') {
                   showToast('Настройки сохранены', 'Открыть мою ленту', function () {
                     switchTab('my');
@@ -1584,11 +1501,10 @@
             });
         } else {
           // Guest mode: save locally in session
-          savedSettingsState = cloneSettings(draftSettingsState);
+          savedSettingsState.materialTypes = draftSettingsState.materialTypes.slice();
+          savedSettingsState.complexityLevels = draftSettingsState.complexityLevels.slice();
           state.feedSettings.materialTypes = savedSettingsState.materialTypes.slice();
           state.feedSettings.complexityLevels = savedSettingsState.complexityLevels.slice();
-          state.userSubscriptions = cloneSettings(savedSettingsState.subscriptions);
-          state.userExceptions = cloneSettings(savedSettingsState.exceptions);
 
           try {
             localStorage.setItem('sc_guest_feed_settings', JSON.stringify(savedSettingsState));
@@ -1852,20 +1768,55 @@
     }
   }
 
-  function openDropdownMenu(wrap, menu, trigger, searchInput) {
-    menu.style.display = 'flex';
-    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+  let activeDropdownMenu = null;
+  let activeDropdownTrigger = null;
 
-    // Adaptive direction: check bottom viewport clearance
+  function positionDropdownMenu(menu, trigger) {
+    if (!menu || !trigger || menu.style.display === 'none') return;
     const rect = trigger.getBoundingClientRect();
-    const menuHeight = 280;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+    const panelBody = document.querySelector('#feedFiltersPanel .feed-slide-panel-body');
+    if (panelBody) {
+      const bodyRect = panelBody.getBoundingClientRect();
+      if (rect.bottom < bodyRect.top || rect.top > bodyRect.bottom) {
+        closeDropdownMenu(menu, trigger);
+        return;
+      }
+    }
+
+    const headerEl = document.getElementById('feedSubnavBar') || document.querySelector('.feed-slide-panel-header');
+    const headerBottom = headerEl ? Math.max(0, headerEl.getBoundingClientRect().bottom) : 0;
+    const panelFooter = document.querySelector('#feedFiltersPanel .feed-slide-panel-footer');
+    const footerTop = panelFooter ? panelFooter.getBoundingClientRect().top : window.innerHeight;
+
+    const spaceBelow = Math.max(0, footerTop - rect.bottom - 8);
+    const spaceAbove = Math.max(0, rect.top - headerBottom - 8);
+
+    menu.style.position = 'fixed';
+    menu.style.left = Math.round(rect.left) + 'px';
+    menu.style.width = Math.round(rect.width) + 'px';
+    menu.style.zIndex = '1050';
+
+    const estimatedHeight = 220;
+    if (spaceBelow < estimatedHeight && spaceAbove > spaceBelow) {
       menu.classList.add('opens-up');
+      menu.style.top = 'auto';
+      menu.style.bottom = Math.round(window.innerHeight - rect.top + 4) + 'px';
+      menu.style.maxHeight = Math.min(360, Math.floor(spaceAbove)) + 'px';
     } else {
       menu.classList.remove('opens-up');
+      menu.style.bottom = 'auto';
+      menu.style.top = Math.round(rect.bottom + 4) + 'px';
+      menu.style.maxHeight = Math.min(360, Math.floor(spaceBelow)) + 'px';
     }
+  }
+
+  function openDropdownMenu(wrap, menu, trigger, searchInput) {
+    closeAllFilterDropdowns(menu);
+    menu.style.display = 'flex';
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    activeDropdownMenu = menu;
+    activeDropdownTrigger = trigger;
+    positionDropdownMenu(menu, trigger);
 
     if (searchInput) {
       setTimeout(function () { searchInput.focus(); }, 40);
@@ -1873,25 +1824,45 @@
   }
 
   function closeDropdownMenu(menu, trigger) {
+    if (!menu) return;
     menu.style.display = 'none';
     menu.classList.remove('opens-up');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (activeDropdownMenu === menu) {
+      activeDropdownMenu = null;
+      activeDropdownTrigger = null;
+    }
   }
 
   function closeAllFilterDropdowns(exceptMenu) {
     const menus = [
       document.getElementById('feedTopicsDropdownMenu'),
       document.getElementById('feedFormatsDropdownMenu'),
-      document.getElementById('feedAudiencesDropdownMenu')
+      document.getElementById('feedAudiencesDropdownMenu'),
+      document.getElementById('feedDateDropdownMenu')
     ];
     menus.forEach(function (m) {
       if (m && m !== exceptMenu && m.style.display !== 'none') {
-        const wrap = m.closest('.feed-multiselect-dropdown-wrap, .feed-topics-dropdown-wrap');
-        const trig = wrap ? wrap.querySelector('.feed-multiselect-dropdown-trigger, .feed-topics-dropdown-trigger') : null;
+        const wrap = m.closest('.feed-multiselect-dropdown-wrap, .feed-topics-dropdown-wrap, .feed-date-dropdown-wrap');
+        const trig = wrap ? wrap.querySelector('.feed-multiselect-dropdown-trigger, .feed-topics-dropdown-trigger, .feed-date-dropdown-trigger') : null;
         closeDropdownMenu(m, trig);
       }
     });
   }
+
+  function updateActiveDropdownPosition() {
+    if (activeDropdownMenu && activeDropdownTrigger && activeDropdownMenu.style.display !== 'none') {
+      positionDropdownMenu(activeDropdownMenu, activeDropdownTrigger);
+    }
+  }
+  window.addEventListener('resize', updateActiveDropdownPosition);
+  window.addEventListener('scroll', updateActiveDropdownPosition, { passive: true });
+  document.addEventListener('DOMContentLoaded', function () {
+    const filterPanelBody = document.querySelector('#feedFiltersPanel .feed-slide-panel-body');
+    if (filterPanelBody) {
+      filterPanelBody.addEventListener('scroll', updateActiveDropdownPosition, { passive: true });
+    }
+  });
 
   function setupGenericMultiselect(options) {
     const wrap = document.getElementById(options.wrapId);
@@ -2220,6 +2191,103 @@
         updateAdvancedFiltersUI();
       }
     });
+
+    initDateDropdown();
+  }
+
+  function initDateDropdown() {
+    const wrap = document.getElementById('feedDateDropdownWrap');
+    const trigger = document.getElementById('feedDateDropdownTrigger');
+    const triggerText = document.getElementById('feedDateDropdownTriggerText');
+    const menu = document.getElementById('feedDateDropdownMenu');
+    const optionBtns = document.querySelectorAll('.feed-date-option-item');
+    const periodSelect = document.getElementById('feedFilterPeriodSelect');
+    const customDates = document.getElementById('feedFilterCustomDates');
+
+    if (!wrap || !trigger || !menu) return;
+
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const isOpen = menu.style.display !== 'none';
+      if (isOpen) {
+        closeDropdownMenu(menu, trigger);
+      } else {
+        closeAllFilterDropdowns(menu);
+        openDropdownMenu(wrap, menu, trigger, null);
+      }
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target) && menu.style.display !== 'none') {
+        closeDropdownMenu(menu, trigger);
+      }
+    });
+
+    optionBtns.forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const val = btn.getAttribute('data-value');
+        const textEl = btn.querySelector('.feed-date-option-text');
+        const label = textEl ? textEl.textContent.trim() : val;
+        const draft = initFiltersDraftState();
+        draft.period = val;
+
+        if (periodSelect) periodSelect.value = val;
+        if (triggerText) triggerText.textContent = label;
+
+        optionBtns.forEach(function (b) {
+          const isSel = (b === btn);
+          b.classList.toggle('is-selected', isSel);
+          b.setAttribute('aria-selected', isSel ? 'true' : 'false');
+        });
+
+        if (customDates) {
+          customDates.style.display = (val === 'custom') ? 'flex' : 'none';
+        }
+        if (val !== 'custom') {
+          draft.dateFrom = '';
+          draft.dateTo = '';
+          const dFrom = document.getElementById('filterDateFrom');
+          const dTo = document.getElementById('filterDateTo');
+          if (dFrom) dFrom.value = '';
+          if (dTo) dTo.value = '';
+        }
+
+        closeDropdownMenu(menu, trigger);
+        checkFiltersPanelUnappliedChanges();
+      });
+    });
+
+    wrap.addEventListener('keydown', function (e) {
+      if (menu.style.display === 'none') {
+        if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          closeAllFilterDropdowns(menu);
+          openDropdownMenu(wrap, menu, trigger, null);
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeDropdownMenu(menu, trigger);
+        trigger.focus();
+        return;
+      }
+
+      const options = Array.from(menu.querySelectorAll('.feed-date-option-item'));
+      const activeIdx = options.indexOf(document.activeElement);
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = options[activeIdx + 1] || options[0];
+        if (next) next.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = options[activeIdx - 1] || options[options.length - 1];
+        if (prev) prev.focus();
+      }
+    });
   }
 
   function renderFilterTopicsUI() {
@@ -2243,63 +2311,63 @@
       closeBtn.addEventListener('click', closeFeedFiltersPanel);
     }
 
-    // 1. Material Types multi-select chips with "Все типы"
-    const typeChips = document.querySelectorAll('#feedFilterMaterialTypes .feed-filter-chip');
-    typeChips.forEach(function (chip) {
-      chip.addEventListener('click', function () {
+    // 1. Material Types tumblers with "Все типы"
+    const filterTypeInputs = document.querySelectorAll('input[name="feedFilterMaterialType"]');
+    filterTypeInputs.forEach(function (inp) {
+      inp.addEventListener('change', function () {
         const draft = initFiltersDraftState();
-        const t = chip.getAttribute('data-type');
-        const allChip = document.querySelector('#feedFilterMaterialTypes .feed-filter-chip[data-type="all"]');
-        if (t === 'all') {
-          typeChips.forEach(function (c) { c.classList.remove('active'); });
-          chip.classList.add('active');
-          draft.types = [];
-        } else {
-          if (allChip) allChip.classList.remove('active');
-          chip.classList.toggle('active');
-          const anyActive = Array.from(document.querySelectorAll('#feedFilterMaterialTypes .feed-filter-chip:not([data-type="all"])')).some(function (c) {
-            return c.classList.contains('active');
+        const t = inp.value || inp.getAttribute('data-type');
+        handleFilterTypeTumblerChange(filterTypeInputs, inp, function () {
+          const allInp = Array.from(filterTypeInputs).find(function (i) {
+            const val = i.value || i.getAttribute('data-type');
+            return val === 'all';
           });
-          if (!anyActive && allChip) {
-            allChip.classList.add('active');
+          if (allInp && allInp.checked) {
             draft.types = [];
           } else {
-            draft.types = Array.from(document.querySelectorAll('#feedFilterMaterialTypes .feed-filter-chip.active:not([data-type="all"])')).map(function (b) {
-              return b.getAttribute('data-type');
-            });
+            draft.types = Array.from(filterTypeInputs)
+              .filter(function (i) {
+                const val = i.value || i.getAttribute('data-type');
+                return val !== 'all' && i.checked;
+              })
+              .map(function (i) { return i.value || i.getAttribute('data-type'); });
+            if (draft.types.length === 0) {
+              draft.types = [];
+              if (allInp) allInp.checked = true;
+            }
           }
-        }
-        checkFiltersPanelUnappliedChanges();
+          checkFiltersPanelUnappliedChanges();
+        });
       });
     });
 
-    // 2. Complexity multi-select chips with "Любой уровень"
-    const compChips = document.querySelectorAll('#feedFilterComplexityLevels .feed-filter-chip');
-    compChips.forEach(function (chip) {
-      chip.addEventListener('click', function () {
+    // 2. Complexity tumblers with "Любой уровень"
+    const filterCompInputs = document.querySelectorAll('input[name="feedFilterComplexity"]');
+    filterCompInputs.forEach(function (inp) {
+      inp.addEventListener('change', function () {
         const draft = initFiltersDraftState();
-        const c = chip.getAttribute('data-complexity');
-        const allChip = document.querySelector('#feedFilterComplexityLevels .feed-filter-chip[data-complexity="all"]');
-        if (c === 'all') {
-          compChips.forEach(function (ch) { ch.classList.remove('active'); });
-          chip.classList.add('active');
-          draft.complexities = [];
-        } else {
-          if (allChip) allChip.classList.remove('active');
-          chip.classList.toggle('active');
-          const anyActive = Array.from(document.querySelectorAll('#feedFilterComplexityLevels .feed-filter-chip:not([data-complexity="all"])')).some(function (ch) {
-            return ch.classList.contains('active');
+        const c = inp.value || inp.getAttribute('data-complexity');
+        handleComplexityTumblerChange(filterCompInputs, inp, function () {
+          const allInp = Array.from(filterCompInputs).find(function (i) {
+            const val = i.value || i.getAttribute('data-complexity');
+            return val === 'all';
           });
-          if (!anyActive && allChip) {
-            allChip.classList.add('active');
+          if (allInp && allInp.checked) {
             draft.complexities = [];
           } else {
-            draft.complexities = Array.from(document.querySelectorAll('#feedFilterComplexityLevels .feed-filter-chip.active:not([data-complexity="all"])')).map(function (b) {
-              return b.getAttribute('data-complexity');
-            });
+            draft.complexities = Array.from(filterCompInputs)
+              .filter(function (i) {
+                const val = i.value || i.getAttribute('data-complexity');
+                return val !== 'all' && i.checked;
+              })
+              .map(function (i) { return i.value || i.getAttribute('data-complexity'); });
+            if (draft.complexities.length === 0) {
+              draft.complexities = [];
+              if (allInp) allInp.checked = true;
+            }
           }
-        }
-        checkFiltersPanelUnappliedChanges();
+          checkFiltersPanelUnappliedChanges();
+        });
       });
     });
 
@@ -2377,12 +2445,12 @@
     // Global escape key handler for panels & dropdowns
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        const openMenu = document.querySelector('.feed-multiselect-dropdown-menu[style*="display: flex"], .feed-topics-dropdown-menu[style*="display: flex"], .feed-multiselect-dropdown-menu[style*="display: block"], .feed-topics-dropdown-menu[style*="display: block"]');
+        const openMenu = document.querySelector('.feed-multiselect-dropdown-menu[style*="display: flex"], .feed-topics-dropdown-menu[style*="display: flex"], .feed-date-dropdown-menu[style*="display: flex"], .feed-multiselect-dropdown-menu[style*="display: block"], .feed-topics-dropdown-menu[style*="display: block"], .feed-date-dropdown-menu[style*="display: block"]');
         if (openMenu && openMenu.style.display !== 'none') {
           openMenu.style.display = 'none';
           openMenu.classList.remove('opens-up');
-          const wrap = openMenu.closest('.feed-multiselect-dropdown-wrap, .feed-topics-dropdown-wrap');
-          const trigger = wrap ? wrap.querySelector('.feed-multiselect-dropdown-trigger, .feed-topics-dropdown-trigger') : null;
+          const wrap = openMenu.closest('.feed-multiselect-dropdown-wrap, .feed-topics-dropdown-wrap, .feed-date-dropdown-wrap');
+          const trigger = wrap ? wrap.querySelector('.feed-multiselect-dropdown-trigger, .feed-topics-dropdown-trigger, .feed-date-dropdown-trigger') : null;
           if (trigger) {
             trigger.setAttribute('aria-expanded', 'false');
             trigger.focus();
@@ -2417,6 +2485,14 @@
     // 1. Types
     const types = draft.types || [];
     const isAllTypes = (types.length === 0);
+    document.querySelectorAll('input[name="feedFilterMaterialType"]').forEach(function (inp) {
+      const dt = inp.value || inp.getAttribute('data-type');
+      if (dt === 'all') {
+        inp.checked = isAllTypes;
+      } else {
+        inp.checked = (!isAllTypes && types.indexOf(dt) !== -1);
+      }
+    });
     document.querySelectorAll('#feedFilterMaterialTypes .feed-filter-chip').forEach(function (b) {
       const dt = b.getAttribute('data-type');
       if (dt === 'all') {
@@ -2429,6 +2505,14 @@
     // 2. Complexities
     const comp = draft.complexities || [];
     const isAllComp = (comp.length === 0);
+    document.querySelectorAll('input[name="feedFilterComplexity"]').forEach(function (inp) {
+      const dc = inp.value || inp.getAttribute('data-complexity');
+      if (dc === 'all') {
+        inp.checked = isAllComp;
+      } else {
+        inp.checked = (!isAllComp && (comp.indexOf(dc) !== -1 || (dc === 'none' && comp.indexOf('unspecified') !== -1)));
+      }
+    });
     document.querySelectorAll('#feedFilterComplexityLevels .feed-filter-chip').forEach(function (b) {
       const dc = b.getAttribute('data-complexity');
       if (dc === 'all') {
@@ -2438,12 +2522,28 @@
       }
     });
 
-    // 3. Period
+    // 3. Period & Date Dropdown
     const per = draft.period || 'all';
     const periodSelect = document.getElementById('feedFilterPeriodSelect');
     if (periodSelect) {
       periodSelect.value = per;
     }
+    const dateLabels = {
+      all: 'За всё время',
+      week: 'За неделю',
+      month: 'За месяц',
+      year: 'За год',
+      custom: 'Указать период'
+    };
+    const dateTrigText = document.getElementById('feedDateDropdownTriggerText');
+    if (dateTrigText) {
+      dateTrigText.textContent = dateLabels[per] || 'За всё время';
+    }
+    document.querySelectorAll('.feed-date-option-item').forEach(function (btn) {
+      const isSel = (btn.getAttribute('data-value') === per);
+      btn.classList.toggle('is-selected', isSel);
+      btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
+    });
     document.querySelectorAll('#feedFilterPeriods .feed-filter-chip').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-period') === per);
     });
@@ -2503,30 +2603,32 @@
   function applyFiltersFromPanel() {
     const draft = initFiltersDraftState();
 
-    // Read current types from chips
-    const isAllTypes = Boolean(document.querySelector('#feedFilterMaterialTypes .feed-filter-chip[data-type="all"].active'));
+    // Read current types from tumblers or chips
+    const allTypeInp = document.getElementById('feedFilterTypeAll');
+    const isAllTypes = allTypeInp ? allTypeInp.checked : (draft.types.length === 0);
     if (isAllTypes) {
       draft.types = [];
     } else {
-      draft.types = Array.from(document.querySelectorAll('#feedFilterMaterialTypes .feed-filter-chip.active:not([data-type="all"])')).map(function (b) {
-        return b.getAttribute('data-type');
-      });
+      draft.types = Array.from(document.querySelectorAll('input[name="feedFilterMaterialType"]:checked'))
+        .filter(function (i) { return i.value !== 'all'; })
+        .map(function (i) { return i.value || i.getAttribute('data-type'); });
     }
 
-    // Read current complexities from chips
-    const isAllComp = Boolean(document.querySelector('#feedFilterComplexityLevels .feed-filter-chip[data-complexity="all"].active'));
+    // Read current complexities from tumblers or chips
+    const allCompInp = document.getElementById('feedFilterCompAll');
+    const isAllComp = allCompInp ? allCompInp.checked : (draft.complexities.length === 0);
     if (isAllComp) {
       draft.complexities = [];
     } else {
-      draft.complexities = Array.from(document.querySelectorAll('#feedFilterComplexityLevels .feed-filter-chip.active:not([data-complexity="all"])')).map(function (b) {
-        return b.getAttribute('data-complexity');
-      });
+      draft.complexities = Array.from(document.querySelectorAll('input[name="feedFilterComplexity"]:checked'))
+        .filter(function (i) { return i.value !== 'all'; })
+        .map(function (i) { return i.value || i.getAttribute('data-complexity'); });
     }
 
     // Read period
     const periodSelect = document.getElementById('feedFilterPeriodSelect');
     const activePeriodBtn = document.querySelector('#feedFilterPeriods .feed-filter-chip.active');
-    const periodVal = periodSelect ? periodSelect.value : (activePeriodBtn ? activePeriodBtn.getAttribute('data-period') : 'all');
+    const periodVal = draft.period || (periodSelect ? periodSelect.value : (activePeriodBtn ? activePeriodBtn.getAttribute('data-period') : 'all'));
 
     if (periodVal === 'custom') {
       const dFrom = document.getElementById('filterDateFrom');
