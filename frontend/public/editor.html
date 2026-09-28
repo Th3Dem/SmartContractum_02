@@ -106,6 +106,22 @@
               </span>
             </span>
           </button>
+          <!-- Saved button in header (relocated in task-37) -->
+          <button
+            type="button"
+            id="feedSavedTab"
+            class="header-saved-btn feed-saved-btn personal-tab"
+            data-tab="saved"
+            role="tab"
+            aria-selected="false"
+            title="Показать сохраненные статьи"
+          >
+            <svg class="saved-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+            </svg>
+            <span class="header-saved-label">Сохраненные</span>
+            <span id="feedSavedCount" class="feed-saved-count">0</span>
+          </button>
           <div class="header-user-bar">
             <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
               <div class="btn-user-avatar-wrap" aria-hidden="true">
@@ -1417,6 +1433,31 @@
                     </div>
                   </footer>
                 </article>
+              </div>
+            </div>
+          </section>
+
+          <!-- 8. Авторство и сообщество -->
+          <section class="pub-section" id="pub-section-entity">
+            <div class="pub-section-header">
+              <span class="pub-section-num">8</span>
+              <div>
+                <h3 class="pub-section-title">Авторство и сообщество</h3>
+                <p class="pub-section-hint">Публикация от личного имени или от технологической компании, а также размещение статьи в инженерном клубе.</p>
+              </div>
+            </div>
+            <div class="pub-entity-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="pub-field-group">
+                <label for="pub-company-select" class="pub-label" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.85rem; color: var(--text-secondary);">Опубликовать от имени</label>
+                <select id="pub-company-select" class="feed-select" style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-family: 'Onest', sans-serif; padding: 0 10px;">
+                  <option value="">Лично (автор)</option>
+                </select>
+              </div>
+              <div class="pub-field-group">
+                <label for="pub-club-select" class="pub-label" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.85rem; color: var(--text-secondary);">Разместить в клубе</label>
+                <select id="pub-club-select" class="feed-select" style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-family: 'Onest', sans-serif; padding: 0 10px;">
+                  <option value="">Без размещения в клубе (общая лента)</option>
+                </select>
               </div>
             </div>
           </section>

@@ -69,6 +69,10 @@
       badgesHtml += '<span class="meta-badge format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(formatTitle) + '</span>';
     }
 
+    if (item.clubTitle) {
+      badgesHtml += '<span class="meta-badge club-badge"' + (isPreview ? ' id="preview-card-badge-club"' : '') + '>' + escapeHtml(item.clubTitle) + '</span>';
+    }
+
     // Note: Complexity badge has been moved down to the bottom service row.
     // Note: "Демонстрационный материал" badge has been completely removed per requirements.
 
@@ -121,13 +125,20 @@
         '</div>';
     }
 
+    const companyBadgeHtml = item.companyName
+      ? ('<span class="card-company-badge"' + (isPreview ? ' id="preview-card-company"' : '') + '>' + escapeHtml(item.companyName) + '</span>')
+      : (isPreview ? '<span class="card-company-badge" id="preview-card-company" style="display: none;"></span>' : '');
+
     // 1. Author (Date removed from author row per task-30 requirements)
     const authorHtml =
       '<div class="card-meta">' +
         '<div class="author-info">' +
           '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + escapeHtml(authorInitials) + '</div>' +
           '<div class="author-details">' +
-            '<span class="author-name"' + (isPreview ? ' id="preview-card-author"' : '') + '>' + escapeHtml(authorName) + '</span>' +
+            '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
+              '<span class="author-name"' + (isPreview ? ' id="preview-card-author"' : '') + '>' + escapeHtml(authorName) + '</span>' +
+              companyBadgeHtml +
+            '</div>' +
             (cleanRole
               ? ('<div class="meta-sub-row"><span class="author-role"' + (isPreview ? ' id="preview-card-role"' : '') + '>' + escapeHtml(cleanRole) + '</span></div>')
               : (isPreview ? '<div class="meta-sub-row"><span class="author-role" id="preview-card-role" style="display: none;"></span></div>' : '')

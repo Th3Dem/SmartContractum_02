@@ -181,7 +181,11 @@
   const state = {
     search: '',
     sort: 'newest',
-    tab: 'all', // 'all' | 'my' | 'saved'
+    tab: 'focus', // 'focus' | 'top' | 'new' | 'subscriptions' | 'clubs' | 'companies' | 'directions' | 'saved'
+    topPeriod: 'week', // 'day' | 'week' | 'month' | 'all'
+    activeClubId: null,
+    activeCompanyId: null,
+    companiesSubtab: 'catalog', // 'catalog' | 'articles'
     savedOnly: false,
     limit: 10,
     offset: 0,
@@ -210,12 +214,16 @@
     userSubscriptions: {
       authors: [],
       topics: [],
-      tags: []
+      tags: [],
+      clubs: [],
+      companies: []
     },
     userExceptions: {
       authors: [],
       topics: [],
-      tags: []
+      tags: [],
+      clubs: [],
+      companies: []
     }
   };
 
@@ -230,15 +238,35 @@
 
     const tabParam = (params.get('tab') || '').toLowerCase();
     const savedParam = params.get('saved');
+    const clubParam = params.get('club') || params.get('clubId');
+    const companyParam = params.get('company') || params.get('companyId');
+    const periodParam = params.get('period');
 
-    if (tabParam === 'my') {
-      state.tab = 'my';
+    if (periodParam && ['day', 'week', 'month', 'all'].includes(periodParam)) {
+      state.topPeriod = periodParam;
+    } else {
+      state.topPeriod = 'week';
+    }
+
+    if (clubParam) {
+      state.tab = 'clubs';
+      state.activeClubId = clubParam;
+      state.savedOnly = false;
+    } else if (companyParam) {
+      state.tab = 'companies';
+      state.activeCompanyId = companyParam;
+      state.savedOnly = false;
+    } else if (tabParam === 'my' || tabParam === 'subscriptions') {
+      state.tab = 'subscriptions';
       state.savedOnly = false;
     } else if (tabParam === 'saved' || savedParam === '1' || savedParam === 'true') {
       state.tab = 'saved';
       state.savedOnly = true;
+    } else if (['focus', 'top', 'new', 'clubs', 'companies', 'directions', 'all'].includes(tabParam)) {
+      state.tab = tabParam === 'all' ? 'focus' : tabParam;
+      state.savedOnly = false;
     } else {
-      state.tab = 'all';
+      state.tab = 'focus';
       state.savedOnly = false;
     }
 
@@ -314,8 +342,17 @@
 
   function syncURL(replace) {
     const params = new URLSearchParams();
-    if (state.tab && state.tab !== 'all') {
+    if (state.tab && state.tab !== 'focus') {
       params.set('tab', state.tab);
+    }
+    if (state.tab === 'top' && state.topPeriod && state.topPeriod !== 'week') {
+      params.set('period', state.topPeriod);
+    }
+    if (state.tab === 'clubs' && state.activeClubId) {
+      params.set('club', state.activeClubId);
+    }
+    if (state.tab === 'companies' && state.activeCompanyId) {
+      params.set('company', state.activeCompanyId);
     }
     if (state.search) params.set('search', state.search);
     if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
@@ -809,6 +846,14 @@
   }
 
   function initSubnavTabs() {
+    const tabFocus = document.getElementById('tabFeedFocus');
+    const tabTop = document.getElementById('tabFeedTop');
+    const tabNew = document.getElementById('tabFeedNew');
+    const tabSubs = document.getElementById('tabFeedSubscriptions');
+    const tabClubs = document.getElementById('tabFeedClubs');
+    const tabCompanies = document.getElementById('tabFeedCompanies');
+    const tabDirections = document.getElementById('tabFeedDirections');
+
     const tabAll = document.getElementById('tabFeedAll');
     const tabMy = document.getElementById('tabFeedMy');
     const tabSaved = document.getElementById('feedSavedTab');
@@ -826,29 +871,74 @@
 
     if (manageSubsBtn) {
       manageSubsBtn.addEventListener('click', function () {
-        openFeedSettingsPanel();
-        const subsSection = document.getElementById('feedSettingsSectionSubscriptions');
-        if (subsSection) {
-          subsSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        openSubscriptionsModal('author');
+      });
+    }
+
+    if (tabFocus) {
+      tabFocus.addEventListener('click', function () {
+        switchTab('focus');
+      });
+    }
+
+    if (tabTop) {
+      tabTop.addEventListener('click', function () {
+        switchTab('top');
+      });
+    }
+
+    if (tabNew) {
+      tabNew.addEventListener('click', function () {
+        switchTab('new');
+      });
+    }
+
+    if (tabSubs) {
+      tabSubs.addEventListener('click', function () {
+        if (state.tab === 'subscriptions' || state.tab === 'my') {
+          showToast('Возврат ко всем публикациям');
+          switchTab('focus');
+        } else if (!currentUser) {
+          openAuthModal('subscriptions');
+        } else {
+          switchTab('subscriptions');
         }
+      });
+    }
+
+    if (tabClubs) {
+      tabClubs.addEventListener('click', function () {
+        switchTab('clubs');
+      });
+    }
+
+    if (tabCompanies) {
+      tabCompanies.addEventListener('click', function () {
+        switchTab('companies');
+      });
+    }
+
+    if (tabDirections) {
+      tabDirections.addEventListener('click', function () {
+        switchTab('directions');
       });
     }
 
     if (tabAll) {
       tabAll.addEventListener('click', function () {
-        switchTab('all');
+        switchTab('focus');
       });
     }
 
     if (tabMy) {
       tabMy.addEventListener('click', function () {
-        if (state.tab === 'my') {
+        if (state.tab === 'my' || state.tab === 'subscriptions') {
           showToast('Возврат ко всем публикациям');
-          switchTab('all');
+          switchTab('focus');
         } else if (!currentUser) {
-          openAuthModal('my');
+          openAuthModal('subscriptions');
         } else {
-          switchTab('my');
+          switchTab('subscriptions');
         }
       });
     }
@@ -862,57 +952,210 @@
         }
       });
     }
+
+    // Top period pills
+    const periodPills = document.querySelectorAll('.feed-top-period-bar .feed-period-pill');
+    periodPills.forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        const p = pill.getAttribute('data-period');
+        if (p) {
+          state.topPeriod = p;
+          periodPills.forEach(function (btn) { btn.classList.toggle('active', btn === pill); });
+          syncURL(false);
+          fetchFeed(true);
+        }
+      });
+    });
+
+    // Sidebar All Directions button
+    const btnShowAllTopics = document.getElementById('btnShowAllTopics');
+    if (btnShowAllTopics) {
+      btnShowAllTopics.addEventListener('click', function () {
+        switchTab('directions');
+      });
+    }
   }
 
   function switchTab(tabName) {
+    if (tabName === 'my') tabName = 'subscriptions';
+    if (tabName === 'all') tabName = 'focus';
+
     state.tab = tabName;
     state.savedOnly = (tabName === 'saved');
     state.offset = 0;
+
+    if (tabName !== 'clubs') state.activeClubId = null;
+    if (tabName !== 'companies') state.activeCompanyId = null;
 
     updateSubnavTabsUI();
 
     const manageSubsBtn = document.getElementById('btnManageSubscriptions');
     if (manageSubsBtn) {
-      manageSubsBtn.style.display = (tabName === 'my' && currentUser) ? 'inline-flex' : 'none';
+      manageSubsBtn.style.display = ((tabName === 'subscriptions' || tabName === 'my') && currentUser) ? 'inline-flex' : 'none';
     }
 
     syncURL(false);
-    fetchFeed(true);
+
+    if (tabName === 'clubs') {
+      if (state.activeClubId) {
+        openClubDetail(state.activeClubId);
+      } else {
+        loadClubs();
+      }
+    } else if (tabName === 'companies') {
+      if (state.activeCompanyId) {
+        openCompanyDetail(state.activeCompanyId);
+      } else {
+        loadCompanies(state.companiesSubtab || 'catalog');
+      }
+    } else if (tabName === 'directions') {
+      loadDirections();
+    } else {
+      fetchFeed(true);
+    }
   }
 
   function updateFeedTitleUI() {
     const titleEl = document.querySelector('.feed-compact-title');
-    if (state.tab === 'my') {
-      if (titleEl) titleEl.textContent = 'Моя лента';
-      document.title = 'Моя лента — SmartContractum';
-    } else if (state.tab === 'saved') {
-      if (titleEl) titleEl.textContent = 'Сохраненные';
-      document.title = 'Сохраненные — SmartContractum';
-    } else {
-      if (titleEl) titleEl.textContent = 'Лента публикаций';
-      document.title = 'Лента публикаций — SmartContractum';
+    const titles = {
+      focus: 'В фокусе — SmartContractum',
+      top: 'Топ публикаций — SmartContractum',
+      new: 'Новые публикации — SmartContractum',
+      subscriptions: 'Мои подписки — SmartContractum',
+      my: 'Мои подписки — SmartContractum',
+      clubs: 'Клубы и сообщества — SmartContractum',
+      companies: 'Компании — SmartContractum',
+      directions: 'Направления — SmartContractum',
+      saved: 'Сохраненные — SmartContractum'
+    };
+    const t = titles[state.tab] || 'Лента публикаций — SmartContractum';
+    document.title = t;
+    if (titleEl) {
+      titleEl.textContent = t.split(' — ')[0];
     }
   }
 
   function updateSubnavTabsUI() {
+    const tabFocus = document.getElementById('tabFeedFocus');
+    const tabTop = document.getElementById('tabFeedTop');
+    const tabNew = document.getElementById('tabFeedNew');
+    const tabSubs = document.getElementById('tabFeedSubscriptions');
+    const tabClubs = document.getElementById('tabFeedClubs');
+    const tabCompanies = document.getElementById('tabFeedCompanies');
+    const tabDirections = document.getElementById('tabFeedDirections');
     const tabAll = document.getElementById('tabFeedAll');
     const tabMy = document.getElementById('tabFeedMy');
     const tabSaved = document.getElementById('feedSavedTab');
 
+    const cur = state.tab;
+
+    if (tabFocus) {
+      const isFocus = cur === 'focus' || cur === 'all';
+      tabFocus.classList.toggle('active', isFocus);
+      tabFocus.setAttribute('aria-selected', isFocus ? 'true' : 'false');
+    }
+    if (tabTop) {
+      const isTop = cur === 'top';
+      tabTop.classList.toggle('active', isTop);
+      tabTop.setAttribute('aria-selected', isTop ? 'true' : 'false');
+    }
+    if (tabNew) {
+      const isNew = cur === 'new';
+      tabNew.classList.toggle('active', isNew);
+      tabNew.setAttribute('aria-selected', isNew ? 'true' : 'false');
+    }
+    if (tabSubs) {
+      const isSubs = cur === 'subscriptions' || cur === 'my';
+      tabSubs.classList.toggle('active', isSubs);
+      tabSubs.setAttribute('aria-selected', isSubs ? 'true' : 'false');
+    }
+    if (tabClubs) {
+      const isClubs = cur === 'clubs';
+      tabClubs.classList.toggle('active', isClubs);
+      tabClubs.setAttribute('aria-selected', isClubs ? 'true' : 'false');
+    }
+    if (tabCompanies) {
+      const isComp = cur === 'companies';
+      tabCompanies.classList.toggle('active', isComp);
+      tabCompanies.setAttribute('aria-selected', isComp ? 'true' : 'false');
+    }
+    if (tabDirections) {
+      const isDir = cur === 'directions';
+      tabDirections.classList.toggle('active', isDir);
+      tabDirections.setAttribute('aria-selected', isDir ? 'true' : 'false');
+    }
     if (tabAll) {
-      const isAll = state.tab === 'all';
+      const isAll = cur === 'focus' || cur === 'all';
       tabAll.classList.toggle('active', isAll);
       tabAll.setAttribute('aria-selected', isAll ? 'true' : 'false');
     }
     if (tabMy) {
-      const isMy = state.tab === 'my';
+      const isMy = cur === 'subscriptions' || cur === 'my';
       tabMy.classList.toggle('active', isMy);
       tabMy.setAttribute('aria-selected', isMy ? 'true' : 'false');
     }
     if (tabSaved) {
-      const isSaved = state.tab === 'saved';
+      const isSaved = cur === 'saved';
       tabSaved.classList.toggle('active', isSaved);
       tabSaved.setAttribute('aria-selected', isSaved ? 'true' : 'false');
+    }
+
+    // Top Period Bar
+    const periodBar = document.getElementById('feedTopPeriodBar');
+    if (periodBar) {
+      periodBar.style.display = (cur === 'top') ? 'block' : 'none';
+      const periodPills = periodBar.querySelectorAll('.feed-period-pill');
+      periodPills.forEach(function (pill) {
+        pill.classList.toggle('active', pill.getAttribute('data-period') === state.topPeriod);
+      });
+    }
+
+    // View toggling in main column
+    const articlesView = document.getElementById('feedArticlesView');
+    const clubsView = document.getElementById('clubsView');
+    const clubDetailView = document.getElementById('clubDetailView');
+    const companiesView = document.getElementById('companiesView');
+    const companyDetailView = document.getElementById('companyDetailView');
+    const directionsView = document.getElementById('directionsView');
+
+    if (cur === 'clubs') {
+      if (articlesView) articlesView.style.display = 'none';
+      if (companiesView) companiesView.style.display = 'none';
+      if (companyDetailView) companyDetailView.style.display = 'none';
+      if (directionsView) directionsView.style.display = 'none';
+      if (state.activeClubId) {
+        if (clubsView) clubsView.style.display = 'none';
+        if (clubDetailView) clubDetailView.style.display = 'flex';
+      } else {
+        if (clubsView) clubsView.style.display = 'flex';
+        if (clubDetailView) clubDetailView.style.display = 'none';
+      }
+    } else if (cur === 'companies') {
+      if (articlesView) articlesView.style.display = 'none';
+      if (clubsView) clubsView.style.display = 'none';
+      if (clubDetailView) clubDetailView.style.display = 'none';
+      if (directionsView) directionsView.style.display = 'none';
+      if (state.activeCompanyId) {
+        if (companiesView) companiesView.style.display = 'none';
+        if (companyDetailView) companyDetailView.style.display = 'flex';
+      } else {
+        if (companiesView) companiesView.style.display = 'flex';
+        if (companyDetailView) companyDetailView.style.display = 'none';
+      }
+    } else if (cur === 'directions') {
+      if (articlesView) articlesView.style.display = 'none';
+      if (clubsView) clubsView.style.display = 'none';
+      if (clubDetailView) clubDetailView.style.display = 'none';
+      if (companiesView) companiesView.style.display = 'none';
+      if (companyDetailView) companyDetailView.style.display = 'none';
+      if (directionsView) directionsView.style.display = 'flex';
+    } else {
+      if (articlesView) articlesView.style.display = 'block';
+      if (clubsView) clubsView.style.display = 'none';
+      if (clubDetailView) clubDetailView.style.display = 'none';
+      if (companiesView) companiesView.style.display = 'none';
+      if (companyDetailView) companyDetailView.style.display = 'none';
+      if (directionsView) directionsView.style.display = 'none';
     }
 
     updateFeedTitleUI();
@@ -3154,7 +3397,15 @@
 
     // Build API query
     const params = new URLSearchParams();
-    params.set('tab', state.tab);
+    let backendTab = state.tab;
+    if (backendTab === 'my') backendTab = 'subscriptions';
+    if (backendTab === 'all') backendTab = 'focus';
+    params.set('tab', backendTab);
+
+    if (backendTab === 'top') {
+      params.set('period', state.topPeriod || 'week');
+    }
+
     if (state.search) params.set('search', state.search);
     if (state.sort) params.set('sort', state.sort);
 
@@ -3189,8 +3440,8 @@
       params.set('audience', state.filters.audience);
     }
 
-    // Personal feed settings apply to 'my' tab
-    if (state.tab === 'my') {
+    // Personal feed settings apply to subscriptions / my tab
+    if (state.tab === 'my' || state.tab === 'subscriptions') {
       if (state.feedSettings && state.feedSettings.materialTypes && state.feedSettings.materialTypes.length < 4) {
         params.set('types', state.feedSettings.materialTypes.join(','));
       }
@@ -3218,9 +3469,9 @@
 
     fetch('/api/articles?' + params.toString())
       .then(function (res) {
-        if (res.status === 401 && state.tab === 'my') {
+        if (res.status === 401 && (state.tab === 'my' || state.tab === 'subscriptions')) {
           state.isLoading = false;
-          openAuthModal('my');
+          openAuthModal('subscriptions');
           throw new Error('AUTH_REQUIRED');
         }
         if (!res.ok) throw new Error('API status: ' + res.status);
@@ -3399,8 +3650,30 @@
     const container = document.getElementById('feedCardsContainer');
     if (!container) return;
 
-    if (state.tab === 'my') {
-      if (state.noSubscriptions) {
+    if (state.tab === 'my' || state.tab === 'subscriptions') {
+      if (!currentUser) {
+        container.innerHTML =
+          '<div class="my-feed-empty-state">' +
+            '<div class="empty-state-icon-box">' +
+              '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>' +
+                '<circle cx="12" cy="7" r="4"></circle>' +
+              '</svg>' +
+            '</div>' +
+            '<h3 class="empty-state-title">Войдите в аккаунт</h3>' +
+            '<p class="empty-state-desc">Войдите в аккаунт, чтобы управлять подписками и читать персональную ленту материалов.</p>' +
+            '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
+              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyLogin">' +
+                '<span>Войти в аккаунт</span>' +
+              '</button>' +
+            '</div>' +
+          '</div>';
+        const loginBtn = document.getElementById('btnEmptyLogin');
+        if (loginBtn) {
+          loginBtn.addEventListener('click', function () { openAuthModal('subscriptions'); });
+        }
+        return;
+      } else if (state.noSubscriptions) {
         container.innerHTML =
           '<div class="my-feed-empty-state">' +
             '<div class="empty-state-icon-box">' +
@@ -3412,13 +3685,13 @@
               '</svg>' +
             '</div>' +
             '<h3 class="empty-state-title">У вас пока нет подписок</h3>' +
-            '<p class="empty-state-desc">Подпишитесь на авторов, темы или хэштеги, чтобы собрать свою ленту.</p>' +
+            '<p class="empty-state-desc">Подпишитесь на авторов, клубы, компании, направления или теги, чтобы собрать свою ленту.</p>' +
             '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
-              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyOpenSettings">' +
-                '<span>Настроить ленту</span>' +
+              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyChooseSubs">' +
+                '<span>Выбрать подписки</span>' +
               '</button>' +
-              '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyChooseSubs">' +
-                '<span>Выбрать темы и авторов</span>' +
+              '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyOpenSettings">' +
+                '<span>Настроить ленту</span>' +
               '</button>' +
             '</div>' +
           '</div>';
@@ -3429,7 +3702,7 @@
         }
         const chooseBtn = document.getElementById('btnEmptyChooseSubs');
         if (chooseBtn) {
-          chooseBtn.addEventListener('click', openSubscriptionsModal);
+          chooseBtn.addEventListener('click', function () { openSubscriptionsModal('author'); });
         }
         return;
       } else {
@@ -3445,23 +3718,23 @@
             '<h3 class="empty-state-title">В вашей ленте пока нет новых публикаций</h3>' +
             '<p class="empty-state-desc">Попробуйте расширить круг подписок, изменить настройки ленты или перейти ко всем публикациям.</p>' +
             '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
-              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyOpenSettings">' +
-                '<span>Настроить ленту</span>' +
+              '<button type="button" class="btn btn-primary empty-state-btn" id="btnEmptyManageSubs">' +
+                '<span>Управление подписками</span>' +
               '</button>' +
               '<button type="button" class="btn btn-secondary empty-state-btn" id="btnEmptyAllFeed">' +
-                '<span>Все публикации</span>' +
+                '<span>В фокусе</span>' +
               '</button>' +
             '</div>' +
           '</div>';
 
-        const openSettingsBtn = document.getElementById('btnEmptyOpenSettings');
-        if (openSettingsBtn) {
-          openSettingsBtn.addEventListener('click', openFeedSettingsPanel);
+        const manageBtn = document.getElementById('btnEmptyManageSubs');
+        if (manageBtn) {
+          manageBtn.addEventListener('click', function () { openSubscriptionsModal('author'); });
         }
         const allFeedBtn = document.getElementById('btnEmptyAllFeed');
         if (allFeedBtn) {
           allFeedBtn.addEventListener('click', function () {
-            switchTab('all');
+            switchTab('focus');
           });
         }
         return;
@@ -4048,6 +4321,1144 @@
   ];
 
   // --------------------------------------------------------------------------
+  // 12b. Task 37: Entities (Clubs, Companies, Directions) & Subscriptions Modal
+  // --------------------------------------------------------------------------
+  function debounce(fn, ms) {
+    let timer;
+    return function (...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
+  function getTopicTitle(topicId) {
+    if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
+      const t = window.PublicationConfig.getTopicById(topicId);
+      if (t) return t.title;
+    }
+    return topicId;
+  }
+
+  function getInitials(str) {
+    if (!str) return 'SC';
+    const parts = str.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return str.slice(0, 2).toUpperCase();
+  }
+
+  function toggleSubscription(targetType, targetId, btnEl, title) {
+    if (!currentUser) {
+      openAuthModal('subscriptions');
+      return;
+    }
+    if (btnEl) btnEl.disabled = true;
+    fetch('/api/subscriptions/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_type: targetType,
+        target_id: targetId,
+        target_title: title || ''
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Status: ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (btnEl) btnEl.disabled = false;
+        if (data && data.success) {
+          const isSub = Boolean(data.isSubscribed);
+          if (btnEl) {
+            btnEl.classList.toggle('is-subscribed', isSub);
+            btnEl.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
+          }
+          showToast(isSub ? 'Подписка оформлена' : 'Подписка отменена');
+          updateModalSubsCounts();
+        }
+      })
+      .catch(function () {
+        if (btnEl) btnEl.disabled = false;
+        showToast('Не удалось обновить подписку', 'error');
+      });
+  }
+
+  function toggleException(targetType, targetId, btnEl, title) {
+    if (!currentUser) {
+      openAuthModal('subscriptions');
+      return;
+    }
+    if (btnEl) btnEl.disabled = true;
+    fetch('/api/exceptions/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_type: targetType,
+        target_id: targetId,
+        target_title: title || ''
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Status: ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (btnEl) btnEl.disabled = false;
+        if (data && data.success) {
+          const isExc = Boolean(data.isExcluded);
+          if (btnEl) {
+            btnEl.classList.toggle('is-excluded', isExc);
+            btnEl.textContent = isExc ? 'В исключениях' : 'Скрыть';
+          }
+          showToast(isExc ? 'Добавлено в исключения' : 'Удалено из исключений');
+        }
+      })
+      .catch(function () {
+        if (btnEl) btnEl.disabled = false;
+        showToast('Не удалось обновить исключение', 'error');
+      });
+  }
+
+  // --- CLUBS ---
+  function loadClubs() {
+    const grid = document.getElementById('clubsGrid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
+
+    const searchInput = document.getElementById('clubsSearchInput');
+    const dirFilter = document.getElementById('clubsDirectionFilter');
+    const q = searchInput ? searchInput.value.trim() : '';
+    const dir = dirFilter ? dirFilter.value : '';
+
+    const params = new URLSearchParams();
+    if (q) params.set('search', q);
+    if (dir && dir !== 'all') params.set('direction', dir);
+
+    fetch('/api/clubs?' + params.toString())
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          renderClubsGrid(data.clubs || []);
+        } else {
+          grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить каталог клубов.</p></div>';
+        }
+      })
+      .catch(function () {
+        grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке клубов.</p></div>';
+      });
+  }
+
+  function renderClubsGrid(clubs) {
+    const grid = document.getElementById('clubsGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    if (!clubs || clubs.length === 0) {
+      grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Клубы не найдены. Вы можете создать первое сообщество.</p></div>';
+      return;
+    }
+
+    clubs.forEach(function (club) {
+      const card = document.createElement('div');
+      card.className = 'entity-card';
+      card.setAttribute('data-club-id', club.id);
+
+      const avatarInitials = getInitials(club.title);
+      const badgesHtml = (club.directions || []).map(function (d) {
+        return '<span class="meta-badge topic-badge">' + escapeHtml(getTopicTitle(d)) + '</span>';
+      }).join('');
+
+      card.innerHTML =
+        '<div class="entity-card-header">' +
+          '<div class="entity-avatar">' + escapeHtml(avatarInitials) + '</div>' +
+          '<div class="entity-card-title-wrap">' +
+            '<h3 class="entity-card-title">' + escapeHtml(club.title) + '</h3>' +
+            (badgesHtml ? '<div class="entity-card-badges">' + badgesHtml + '</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<p class="entity-card-desc">' + escapeHtml(club.description) + '</p>' +
+        '<div class="entity-card-meta">' +
+          '<span class="entity-meta-item">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
+            '<span>' + pluralize(club.subscribersCount || 0, 'участник', 'участника', 'участников') + '</span>' +
+          '</span>' +
+          '<span class="entity-meta-item">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>' +
+            '<span>' + pluralizePublications(club.articlesCount || 0) + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="entity-card-actions">' +
+          '<button type="button" class="btn btn-secondary btn-entity-open">В клуб</button>' +
+          '<button type="button" class="btn btn-secondary btn-entity-sub ' + (club.isSubscribed ? 'is-subscribed' : '') + '">' +
+            (club.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+          '</button>' +
+        '</div>';
+
+      const openBtn = card.querySelector('.btn-entity-open');
+      if (openBtn) {
+        openBtn.addEventListener('click', function () { openClubDetail(club.id); });
+      }
+      const titleEl = card.querySelector('.entity-card-title');
+      if (titleEl) {
+        titleEl.style.cursor = 'pointer';
+        titleEl.addEventListener('click', function () { openClubDetail(club.id); });
+      }
+
+      const subBtn = card.querySelector('.btn-entity-sub');
+      if (subBtn) {
+        subBtn.addEventListener('click', function () {
+          toggleSubscription('club', club.id, subBtn, club.title);
+        });
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  function openClubDetail(clubId) {
+    state.activeClubId = clubId;
+    state.tab = 'clubs';
+    syncURL(false);
+    updateSubnavTabsUI();
+
+    const detailCard = document.getElementById('clubDetailCard');
+    const articlesContainer = document.getElementById('clubArticlesContainer');
+    if (detailCard) detailCard.innerHTML = '<div class="feed-skeleton-card" style="height: 160px;"></div>';
+    if (articlesContainer) articlesContainer.innerHTML = '';
+
+    fetch('/api/clubs/' + encodeURIComponent(clubId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success && data.club) {
+          renderClubDetailCard(data.club);
+          loadClubArticles(clubId);
+        } else {
+          showToast('Клуб не найден', 'error');
+          state.activeClubId = null;
+          syncURL(false);
+          updateSubnavTabsUI();
+          loadClubs();
+        }
+      })
+      .catch(function () {
+        showToast('Ошибка при загрузке клуба', 'error');
+      });
+  }
+
+  function renderClubDetailCard(club) {
+    const detailCard = document.getElementById('clubDetailCard');
+    if (!detailCard) return;
+
+    const avatarInitials = getInitials(club.title);
+    const badgesHtml = (club.directions || []).map(function (d) {
+      return '<span class="meta-badge topic-badge">' + escapeHtml(getTopicTitle(d)) + '</span>';
+    }).join('');
+
+    detailCard.innerHTML =
+      '<div class="entity-detail-top">' +
+        '<div class="entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>' +
+        '<div class="entity-detail-info">' +
+          '<h2 class="entity-detail-title">' + escapeHtml(club.title) + '</h2>' +
+          (badgesHtml ? '<div class="entity-detail-badges">' + badgesHtml + '</div>' : '') +
+          '<p class="entity-detail-desc">' + escapeHtml(club.description) + '</p>' +
+          (club.rules ? '<div class="entity-detail-rules"><strong>Правила сообщества:</strong> ' + escapeHtml(club.rules) + '</div>' : '') +
+          '<div class="entity-detail-stats">' +
+            '<span class="entity-meta-item">' +
+              '<strong>' + (club.subscribersCount || 0) + '</strong> ' +
+              pluralize(club.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') +
+            '</span>' +
+            '<span class="entity-meta-item">' +
+              '<strong>' + (club.articlesCount || 0) + '</strong> ' +
+              pluralize(club.articlesCount || 0, 'статья', 'статьи', 'статей') +
+            '</span>' +
+          '</div>' +
+          '<div class="entity-detail-actions" style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">' +
+            '<button type="button" class="btn btn-secondary btn-club-sub ' + (club.isSubscribed ? 'is-subscribed' : '') + '">' +
+              (club.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+            '</button>' +
+            '<a href="editor.html?clubId=' + encodeURIComponent(club.id) + '&clubTitle=' + encodeURIComponent(club.title) + '" class="btn btn-primary btn-club-write">' +
+              '<span>Написать в клуб</span>' +
+            '</a>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    const subBtn = detailCard.querySelector('.btn-club-sub');
+    if (subBtn) {
+      subBtn.addEventListener('click', function () {
+        toggleSubscription('club', club.id, subBtn, club.title);
+      });
+    }
+  }
+
+  function loadClubArticles(clubId) {
+    const container = document.getElementById('clubArticlesContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="feed-skeleton-card" style="height: 120px;"></div>';
+
+    fetch('/api/articles?club=' + encodeURIComponent(clubId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        container.innerHTML = '';
+        if (data && data.success && data.articles && data.articles.length > 0) {
+          data.articles.forEach(function (art) {
+            container.appendChild(createCardElement(art));
+          });
+        } else {
+          container.innerHTML =
+            '<div class="feed-empty-state">' +
+              '<p class="empty-state-desc">В этом клубе пока нет опубликованных материалов. Станьте первым автором!</p>' +
+              '<a href="editor.html?clubId=' + encodeURIComponent(clubId) + '" class="btn btn-primary" style="margin-top: 12px;">Написать первую публикацию</a>' +
+            '</div>';
+        }
+      })
+      .catch(function () {
+        container.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке публикаций клуба.</p></div>';
+      });
+  }
+
+  // --- COMPANIES ---
+  function loadCompanies(subtab) {
+    state.companiesSubtab = subtab || 'catalog';
+
+    const btnCat = document.getElementById('btnCompaniesTabCatalog');
+    const btnArt = document.getElementById('btnCompaniesTabArticles');
+    const catGrid = document.getElementById('companiesGrid');
+    const artGrid = document.getElementById('companiesArticlesGrid');
+    const toolbar = document.getElementById('companiesToolbar');
+
+    if (btnCat) btnCat.classList.toggle('active', state.companiesSubtab === 'catalog');
+    if (btnArt) btnArt.classList.toggle('active', state.companiesSubtab === 'articles');
+
+    if (state.companiesSubtab === 'catalog') {
+      if (catGrid) catGrid.style.display = 'grid';
+      if (toolbar) toolbar.style.display = 'flex';
+      if (artGrid) artGrid.style.display = 'none';
+
+      const searchInput = document.getElementById('companiesSearchInput');
+      const q = searchInput ? searchInput.value.trim() : '';
+
+      if (catGrid) catGrid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
+
+      fetch('/api/companies' + (q ? '?search=' + encodeURIComponent(q) : ''))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success) {
+            renderCompaniesGrid(data.companies || []);
+          } else {
+            if (catGrid) catGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить компании.</p></div>';
+          }
+        })
+        .catch(function () {
+          if (catGrid) catGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке компаний.</p></div>';
+        });
+    } else {
+      if (catGrid) catGrid.style.display = 'none';
+      if (toolbar) toolbar.style.display = 'none';
+      if (artGrid) artGrid.style.display = 'block';
+
+      if (artGrid) artGrid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
+
+      fetch('/api/articles?isCompany=true')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (artGrid) artGrid.innerHTML = '';
+          const articles = (data && data.articles) ? data.articles.filter(function (a) { return Boolean(a.companyId || a.companyName); }) : [];
+          if (articles.length > 0) {
+            articles.forEach(function (art) {
+              artGrid.appendChild(createCardElement(art));
+            });
+          } else {
+            if (artGrid) {
+              artGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Пока нет публикаций от технологических компаний.</p></div>';
+            }
+          }
+        })
+        .catch(function () {
+          if (artGrid) artGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке публикаций компаний.</p></div>';
+        });
+    }
+  }
+
+  function renderCompaniesGrid(companies) {
+    const grid = document.getElementById('companiesGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    if (!companies || companies.length === 0) {
+      grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Компании не найдены. Зарегистрируйте первую технологическую компанию.</p></div>';
+      return;
+    }
+
+    companies.forEach(function (comp) {
+      const card = document.createElement('div');
+      card.className = 'entity-card';
+      card.setAttribute('data-company-id', comp.id);
+
+      const avatarInitials = getInitials(comp.name);
+      const verifiedIcon = comp.isVerified
+        ? '<span class="verified-icon" title="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+        : '';
+
+      card.innerHTML =
+        '<div class="entity-card-header">' +
+          '<div class="entity-avatar">' + escapeHtml(avatarInitials) + '</div>' +
+          '<div class="entity-card-title-wrap">' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<h3 class="entity-card-title">' + escapeHtml(comp.name) + '</h3>' +
+              verifiedIcon +
+            '</div>' +
+            (comp.specialization ? '<span class="entity-card-spec">' + escapeHtml(comp.specialization) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<p class="entity-card-desc">' + escapeHtml(comp.description) + '</p>' +
+        (comp.website ? '<div class="entity-card-website"><a href="' + escapeHtml(comp.website) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(comp.website) + '</a></div>' : '') +
+        '<div class="entity-card-meta">' +
+          '<span class="entity-meta-item">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
+            '<span>' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') + '</span>' +
+          '</span>' +
+          '<span class="entity-meta-item">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>' +
+            '<span>' + pluralizePublications(comp.articlesCount || 0) + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="entity-card-actions">' +
+          '<button type="button" class="btn btn-secondary btn-entity-open">О компании</button>' +
+          '<button type="button" class="btn btn-secondary btn-entity-sub ' + (comp.isSubscribed ? 'is-subscribed' : '') + '">' +
+            (comp.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+          '</button>' +
+        '</div>';
+
+      const openBtn = card.querySelector('.btn-entity-open');
+      if (openBtn) {
+        openBtn.addEventListener('click', function () { openCompanyDetail(comp.id); });
+      }
+      const titleEl = card.querySelector('.entity-card-title');
+      if (titleEl) {
+        titleEl.style.cursor = 'pointer';
+        titleEl.addEventListener('click', function () { openCompanyDetail(comp.id); });
+      }
+
+      const subBtn = card.querySelector('.btn-entity-sub');
+      if (subBtn) {
+        subBtn.addEventListener('click', function () {
+          toggleSubscription('company', comp.id, subBtn, comp.name);
+        });
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  function openCompanyDetail(companyId) {
+    state.activeCompanyId = companyId;
+    state.tab = 'companies';
+    syncURL(false);
+    updateSubnavTabsUI();
+
+    const detailCard = document.getElementById('companyDetailCard');
+    const articlesContainer = document.getElementById('companyArticlesContainer');
+    if (detailCard) detailCard.innerHTML = '<div class="feed-skeleton-card" style="height: 160px;"></div>';
+    if (articlesContainer) articlesContainer.innerHTML = '';
+
+    fetch('/api/companies/' + encodeURIComponent(companyId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success && data.company) {
+          renderCompanyDetailCard(data.company);
+          loadCompanyArticles(companyId);
+        } else {
+          showToast('Компания не найдена', 'error');
+          state.activeCompanyId = null;
+          syncURL(false);
+          updateSubnavTabsUI();
+          loadCompanies('catalog');
+        }
+      })
+      .catch(function () {
+        showToast('Ошибка при загрузке компании', 'error');
+      });
+  }
+
+  function renderCompanyDetailCard(comp) {
+    const detailCard = document.getElementById('companyDetailCard');
+    if (!detailCard) return;
+
+    const avatarInitials = getInitials(comp.name);
+    const verifiedIcon = comp.isVerified
+      ? '<span class="verified-icon" title="Верифицированная компания"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+      : '';
+
+    detailCard.innerHTML =
+      '<div class="entity-detail-top">' +
+        '<div class="entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>' +
+        '<div class="entity-detail-info">' +
+          '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<h2 class="entity-detail-title">' + escapeHtml(comp.name) + '</h2>' +
+            verifiedIcon +
+          '</div>' +
+          (comp.specialization ? '<div class="entity-detail-spec">' + escapeHtml(comp.specialization) + '</div>' : '') +
+          '<p class="entity-detail-desc">' + escapeHtml(comp.description) + '</p>' +
+          (comp.website ? '<div class="entity-detail-website"><a href="' + escapeHtml(comp.website) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(comp.website) + '</a></div>' : '') +
+          '<div class="entity-detail-stats">' +
+            '<span class="entity-meta-item">' +
+              '<strong>' + (comp.subscribersCount || 0) + '</strong> ' +
+              pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') +
+            '</span>' +
+            '<span class="entity-meta-item">' +
+              '<strong>' + (comp.articlesCount || 0) + '</strong> ' +
+              pluralize(comp.articlesCount || 0, 'статья', 'статьи', 'статей') +
+            '</span>' +
+          '</div>' +
+          '<div class="entity-detail-actions" style="margin-top: 14px;">' +
+            '<button type="button" class="btn btn-secondary btn-comp-sub ' + (comp.isSubscribed ? 'is-subscribed' : '') + '">' +
+              (comp.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    const subBtn = detailCard.querySelector('.btn-comp-sub');
+    if (subBtn) {
+      subBtn.addEventListener('click', function () {
+        toggleSubscription('company', comp.id, subBtn, comp.name);
+      });
+    }
+  }
+
+  function loadCompanyArticles(companyId) {
+    const container = document.getElementById('companyArticlesContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="feed-skeleton-card" style="height: 120px;"></div>';
+
+    fetch('/api/articles?company=' + encodeURIComponent(companyId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        container.innerHTML = '';
+        if (data && data.success && data.articles && data.articles.length > 0) {
+          data.articles.forEach(function (art) {
+            container.appendChild(createCardElement(art));
+          });
+        } else {
+          container.innerHTML =
+            '<div class="feed-empty-state">' +
+              '<p class="empty-state-desc">У этой компании пока нет опубликованных материалов.</p>' +
+            '</div>';
+        }
+      })
+      .catch(function () {
+        container.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке публикаций компании.</p></div>';
+      });
+  }
+
+  // --- DIRECTIONS ---
+  function loadDirections() {
+    const grid = document.getElementById('directionsGrid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
+
+    const searchInput = document.getElementById('directionsSearchInput');
+    const q = searchInput ? searchInput.value.trim() : '';
+
+    fetch('/api/directions' + (q ? '?search=' + encodeURIComponent(q) : ''))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          renderDirectionsGrid(data.directions || []);
+        } else {
+          grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить направления.</p></div>';
+        }
+      })
+      .catch(function () {
+        grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке направлений.</p></div>';
+      });
+  }
+
+  function renderDirectionsGrid(directions) {
+    const grid = document.getElementById('directionsGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    if (!directions || directions.length === 0) {
+      grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Направления не найдены.</p></div>';
+      return;
+    }
+
+    directions.forEach(function (dir) {
+      const card = document.createElement('div');
+      card.className = 'entity-card direction-card';
+      card.setAttribute('data-direction-id', dir.id);
+
+      card.innerHTML =
+        '<div class="entity-card-header">' +
+          '<div class="entity-avatar direction-avatar">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>' +
+          '</div>' +
+          '<div class="entity-card-title-wrap">' +
+            '<h3 class="entity-card-title">' + escapeHtml(dir.title) + '</h3>' +
+            '<span class="entity-meta-item">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>' +
+              '<span>' + pluralizePublications(dir.articlesCount || dir.count || 0) + '</span>' +
+            '</span>' +
+          '</div>' +
+        '</div>' +
+        '<p class="entity-card-desc">' + escapeHtml(dir.description) + '</p>' +
+        '<div class="entity-card-meta">' +
+          '<span class="entity-meta-item">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
+            '<span>' + pluralize(dir.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="entity-card-actions">' +
+          '<button type="button" class="btn btn-secondary btn-direction-feed">В ленту</button>' +
+          '<button type="button" class="btn btn-secondary btn-direction-sub ' + (dir.isSubscribed ? 'is-subscribed' : '') + '">' +
+            (dir.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+          '</button>' +
+        '</div>';
+
+      const feedBtn = card.querySelector('.btn-direction-feed');
+      if (feedBtn) {
+        feedBtn.addEventListener('click', function () {
+          state.filters.topics = [dir.id];
+          state.tab = 'focus';
+          syncURL(false);
+          switchTab('focus');
+        });
+      }
+
+      const subBtn = card.querySelector('.btn-direction-sub');
+      if (subBtn) {
+        subBtn.addEventListener('click', function () {
+          toggleSubscription('topic', dir.id, subBtn, dir.title);
+        });
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  // --- SUBSCRIPTIONS MODAL (5 TABS) ---
+  let activeSubsModalTab = 'author';
+
+  function openSubscriptionsModal(initialTab) {
+    if (!currentUser) {
+      openAuthModal('subscriptions');
+      return;
+    }
+    const modal = document.getElementById('subscriptionsModal');
+    if (!modal) return;
+
+    activeSubsModalTab = initialTab || 'author';
+    setModalSubsTab(activeSubsModalTab);
+
+    const searchInput = document.getElementById('subsSearchInput');
+    if (searchInput) searchInput.value = '';
+
+    modal.style.display = 'flex';
+    document.body.classList.add('feed-modal-open');
+    loadModalSubsList();
+    updateModalSubsCounts();
+  }
+
+  function closeSubscriptionsModal() {
+    const modal = document.getElementById('subscriptionsModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.classList.remove('feed-modal-open');
+    if (state.tab === 'subscriptions' || state.tab === 'my') {
+      fetchFeed(true);
+    }
+  }
+
+  function setModalSubsTab(type) {
+    activeSubsModalTab = type;
+    const tabBtns = document.querySelectorAll('.subs-tab-btn');
+    tabBtns.forEach(function (btn) {
+      const isAct = btn.getAttribute('data-type') === type;
+      btn.classList.toggle('active', isAct);
+      btn.setAttribute('aria-selected', isAct ? 'true' : 'false');
+    });
+
+    const searchInput = document.getElementById('subsSearchInput');
+    if (searchInput) {
+      const placeholders = {
+        author: 'Поиск по авторам...',
+        club: 'Поиск по клубам...',
+        company: 'Поиск по компаниям...',
+        topic: 'Поиск по направлениям...',
+        tag: 'Поиск по тегам...'
+      };
+      searchInput.placeholder = placeholders[type] || 'Поиск в каталоге...';
+    }
+
+    loadModalSubsList();
+  }
+
+  function updateModalSubsCounts() {
+    fetch('/api/subscriptions')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success && data.subscriptions) {
+          const subs = data.subscriptions;
+          const aCount = document.getElementById('subsAuthorsCount');
+          const clCount = document.getElementById('subsClubsCount');
+          const cpCount = document.getElementById('subsCompaniesCount');
+          const tpCount = document.getElementById('subsTopicsCount');
+          const tgCount = document.getElementById('subsTagsCount');
+
+          if (aCount) aCount.textContent = (subs.authors || []).length;
+          if (clCount) clCount.textContent = (subs.clubs || []).length;
+          if (cpCount) cpCount.textContent = (subs.companies || []).length;
+          if (tpCount) tpCount.textContent = (subs.topics || []).length;
+          if (tgCount) tgCount.textContent = (subs.tags || []).length;
+        }
+      })
+      .catch(function () {});
+  }
+
+  function loadModalSubsList() {
+    const container = document.getElementById('subsListContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="feed-skeleton-card" style="height: 60px; margin: 8px 0;"></div>';
+
+    const searchInput = document.getElementById('subsSearchInput');
+    const q = searchInput ? searchInput.value.trim() : '';
+
+    const params = new URLSearchParams();
+    params.set('type', activeSubsModalTab);
+    if (q) params.set('search', q);
+    params.set('limit', '50');
+
+    fetch('/api/subscriptions/entities?' + params.toString())
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          renderModalSubsList(data.items || []);
+        } else {
+          container.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить данные.</p></div>';
+        }
+      })
+      .catch(function () {
+        container.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка соединения.</p></div>';
+      });
+  }
+
+  function renderModalSubsList(items) {
+    const container = document.getElementById('subsListContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!items || items.length === 0) {
+      container.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ничего не найдено.</p></div>';
+      return;
+    }
+
+    items.forEach(function (item) {
+      const row = document.createElement('div');
+      row.className = 'subs-modal-item';
+
+      const title = item.title || item.name || item.id;
+      const displayTitle = (activeSubsModalTab === 'tag') ? ('#' + title.replace(/^#/, '')) : title;
+      const subtitle = item.role || item.specialization || item.description ||
+        (item.articlesCount !== undefined ? pluralizePublications(item.articlesCount) :
+        (item.count !== undefined ? pluralizePublications(item.count) : ''));
+
+      const avatarInitials = getInitials(title);
+
+      row.innerHTML =
+        '<div class="subs-item-main">' +
+          '<div class="author-avatar subs-author-avatar">' + escapeHtml(avatarInitials) + '</div>' +
+          '<div class="subs-item-info">' +
+            '<span class="subs-item-title">' + escapeHtml(displayTitle) + '</span>' +
+            (subtitle ? '<span class="subs-item-sub">' + escapeHtml(subtitle) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="subs-item-actions" style="display: flex; gap: 8px;">' +
+          '<button type="button" class="btn btn-secondary subs-toggle-btn ' + (item.isSubscribed ? 'is-subscribed' : '') + '">' +
+            (item.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+          '</button>' +
+          '<button type="button" class="btn btn-secondary subs-toggle-exc-btn ' + (item.isExcluded ? 'is-excluded' : '') + '">' +
+            (item.isExcluded ? 'В исключениях' : 'Скрыть') +
+          '</button>' +
+        '</div>';
+
+      const subBtn = row.querySelector('.subs-toggle-btn');
+      if (subBtn) {
+        subBtn.addEventListener('click', function () {
+          toggleSubscription(activeSubsModalTab, item.id, subBtn, title);
+        });
+      }
+
+      const excBtn = row.querySelector('.subs-toggle-exc-btn');
+      if (excBtn) {
+        excBtn.addEventListener('click', function () {
+          toggleException(activeSubsModalTab, item.id, excBtn, title);
+        });
+      }
+
+      container.appendChild(row);
+    });
+  }
+
+  // --- CREATE CLUB MODAL ---
+  function openCreateClubModal() {
+    if (!currentUser) {
+      openAuthModal('create_club');
+      return;
+    }
+    const modal = document.getElementById('createClubModal');
+    if (!modal) return;
+
+    // Reset form
+    const form = document.getElementById('createClubForm');
+    if (form) form.reset();
+    const err = document.getElementById('createClubError');
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+
+    // Populate directions container
+    const dirContainer = document.getElementById('newClubDirectionsContainer');
+    if (dirContainer && (!dirContainer.children || dirContainer.children.length === 0)) {
+      fetch('/api/directions')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success && data.directions) {
+            dirContainer.innerHTML = '';
+            data.directions.forEach(function (d) {
+              const label = document.createElement('label');
+              label.style.display = 'inline-flex';
+              label.style.alignItems = 'center';
+              label.style.gap = '6px';
+              label.style.padding = '4px 10px';
+              label.style.borderRadius = '16px';
+              label.style.background = 'var(--bg-secondary)';
+              label.style.fontSize = '0.8rem';
+              label.style.cursor = 'pointer';
+              label.innerHTML = '<input type="checkbox" name="clubDirection" value="' + escapeHtml(d.id) + '"><span>' + escapeHtml(d.title) + '</span>';
+              dirContainer.appendChild(label);
+            });
+          }
+        })
+        .catch(function () {});
+    }
+
+    modal.style.display = 'flex';
+    document.body.classList.add('feed-modal-open');
+  }
+
+  function closeCreateClubModal() {
+    const modal = document.getElementById('createClubModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.classList.remove('feed-modal-open');
+  }
+
+  function submitCreateClub() {
+    const titleInput = document.getElementById('newClubTitle');
+    const descInput = document.getElementById('newClubDescription');
+    const rulesInput = document.getElementById('newClubRules');
+    const tagsInput = document.getElementById('newClubTags');
+    const err = document.getElementById('createClubError');
+    const submitBtn = document.getElementById('btnSubmitCreateClub');
+
+    const title = titleInput ? titleInput.value.trim() : '';
+    const description = descInput ? descInput.value.trim() : '';
+    const rules = rulesInput ? rulesInput.value.trim() : '';
+    const tagsRaw = tagsInput ? tagsInput.value.trim() : '';
+
+    if (!title) {
+      if (err) { err.style.display = 'block'; err.textContent = 'Укажите название клуба'; }
+      if (titleInput) titleInput.focus();
+      return;
+    }
+    if (!description) {
+      if (err) { err.style.display = 'block'; err.textContent = 'Укажите описание клуба'; }
+      if (descInput) descInput.focus();
+      return;
+    }
+
+    const checkedDirs = Array.from(document.querySelectorAll('input[name="clubDirection"]:checked')).map(function (inp) {
+      return inp.value;
+    });
+    const tags = tagsRaw.split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+
+    if (submitBtn) submitBtn.disabled = true;
+
+    fetch('/api/clubs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: title,
+        description: description,
+        rules: rules,
+        directions: checkedDirs,
+        tags: tags
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (d) { throw new Error(d.error || 'Ошибка при создании клуба'); });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (data && data.success && data.club) {
+          closeCreateClubModal();
+          showToast('Клуб успешно создан!');
+          openClubDetail(data.club.id);
+        }
+      })
+      .catch(function (e) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (err) { err.style.display = 'block'; err.textContent = e.message; }
+      });
+  }
+
+  // --- CREATE COMPANY MODAL ---
+  function openCreateCompanyModal() {
+    if (!currentUser) {
+      openAuthModal('create_company');
+      return;
+    }
+    const modal = document.getElementById('createCompanyModal');
+    if (!modal) return;
+
+    const form = document.getElementById('createCompanyForm');
+    if (form) form.reset();
+    const err = document.getElementById('createCompanyError');
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+
+    modal.style.display = 'flex';
+    document.body.classList.add('feed-modal-open');
+  }
+
+  function closeCreateCompanyModal() {
+    const modal = document.getElementById('createCompanyModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.classList.remove('feed-modal-open');
+  }
+
+  function submitCreateCompany() {
+    const nameInput = document.getElementById('newCompanyName');
+    const descInput = document.getElementById('newCompanyDescription');
+    const specInput = document.getElementById('newCompanyIndustry');
+    const webInput = document.getElementById('newCompanyWebsite');
+    const err = document.getElementById('createCompanyError');
+    const submitBtn = document.getElementById('btnSubmitCreateCompany');
+
+    const name = nameInput ? nameInput.value.trim() : '';
+    const description = descInput ? descInput.value.trim() : '';
+    const specialization = specInput ? specInput.value.trim() : '';
+    const website = webInput ? webInput.value.trim() : '';
+
+    if (!name) {
+      if (err) { err.style.display = 'block'; err.textContent = 'Укажите название компании'; }
+      if (nameInput) nameInput.focus();
+      return;
+    }
+    if (!description) {
+      if (err) { err.style.display = 'block'; err.textContent = 'Укажите описание деятельности'; }
+      if (descInput) descInput.focus();
+      return;
+    }
+    if (!specialization) {
+      if (err) { err.style.display = 'block'; err.textContent = 'Укажите отраслевое направление'; }
+      if (specInput) specInput.focus();
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+
+    fetch('/api/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        description: description,
+        specialization: specialization,
+        website: website
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (d) { throw new Error(d.error || 'Ошибка при регистрации компании'); });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (data && data.success && data.company) {
+          closeCreateCompanyModal();
+          showToast('Компания успешно зарегистрирована!');
+          openCompanyDetail(data.company.id);
+        }
+      })
+      .catch(function (e) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (err) { err.style.display = 'block'; err.textContent = e.message; }
+      });
+  }
+
+  // --- INITIALIZE ALL TASK 37 CONTROLS ---
+  function initTask37Entities() {
+    // Back buttons
+    const btnBackToClubs = document.getElementById('btnBackToClubs');
+    if (btnBackToClubs) {
+      btnBackToClubs.addEventListener('click', function () {
+        state.activeClubId = null;
+        syncURL(false);
+        switchTab('clubs');
+      });
+    }
+
+    const btnBackToCompanies = document.getElementById('btnBackToCompanies');
+    if (btnBackToCompanies) {
+      btnBackToCompanies.addEventListener('click', function () {
+        state.activeCompanyId = null;
+        syncURL(false);
+        switchTab('companies');
+      });
+    }
+
+    // Companies Subtabs
+    const btnCompaniesTabCatalog = document.getElementById('btnCompaniesTabCatalog');
+    const btnCompaniesTabArticles = document.getElementById('btnCompaniesTabArticles');
+    if (btnCompaniesTabCatalog) {
+      btnCompaniesTabCatalog.addEventListener('click', function () {
+        loadCompanies('catalog');
+      });
+    }
+    if (btnCompaniesTabArticles) {
+      btnCompaniesTabArticles.addEventListener('click', function () {
+        loadCompanies('articles');
+      });
+    }
+
+    // Search and filters
+    const clubsSearchInput = document.getElementById('clubsSearchInput');
+    if (clubsSearchInput) {
+      clubsSearchInput.addEventListener('input', debounce(function () {
+        loadClubs();
+      }, 300));
+    }
+    const clubsDirFilter = document.getElementById('clubsDirectionFilter');
+    if (clubsDirFilter) {
+      clubsDirFilter.addEventListener('change', function () {
+        loadClubs();
+      });
+      // Populate directions in select
+      fetch('/api/directions')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success && data.directions) {
+            data.directions.forEach(function (d) {
+              const opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = d.title;
+              clubsDirFilter.appendChild(opt);
+            });
+          }
+        })
+        .catch(function () {});
+    }
+
+    const companiesSearchInput = document.getElementById('companiesSearchInput');
+    if (companiesSearchInput) {
+      companiesSearchInput.addEventListener('input', debounce(function () {
+        loadCompanies('catalog');
+      }, 300));
+    }
+
+    const directionsSearchInput = document.getElementById('directionsSearchInput');
+    if (directionsSearchInput) {
+      directionsSearchInput.addEventListener('input', debounce(function () {
+        loadDirections();
+      }, 300));
+    }
+
+    // Modals: Create Club
+    const btnOpenCreateClub = document.getElementById('btnOpenCreateClub');
+    if (btnOpenCreateClub) {
+      btnOpenCreateClub.addEventListener('click', openCreateClubModal);
+    }
+    const btnCloseCreateClubModalEl = document.getElementById('btnCloseCreateClubModal');
+    if (btnCloseCreateClubModalEl) {
+      btnCloseCreateClubModalEl.addEventListener('click', closeCreateClubModal);
+    }
+    const btnCancelCreateClub = document.getElementById('btnCancelCreateClub');
+    if (btnCancelCreateClub) {
+      btnCancelCreateClub.addEventListener('click', closeCreateClubModal);
+    }
+    const btnSubmitCreateClubEl = document.getElementById('btnSubmitCreateClub');
+    if (btnSubmitCreateClubEl) {
+      btnSubmitCreateClubEl.addEventListener('click', submitCreateClub);
+    }
+
+    // Modals: Create Company
+    const btnOpenCreateCompany = document.getElementById('btnOpenCreateCompany');
+    if (btnOpenCreateCompany) {
+      btnOpenCreateCompany.addEventListener('click', openCreateCompanyModal);
+    }
+    const btnCloseCreateCompanyModalEl = document.getElementById('btnCloseCreateCompanyModal');
+    if (btnCloseCreateCompanyModalEl) {
+      btnCloseCreateCompanyModalEl.addEventListener('click', closeCreateCompanyModal);
+    }
+    const btnCancelCreateCompany = document.getElementById('btnCancelCreateCompany');
+    if (btnCancelCreateCompany) {
+      btnCancelCreateCompany.addEventListener('click', closeCreateCompanyModal);
+    }
+    const btnSubmitCreateCompanyEl = document.getElementById('btnSubmitCreateCompany');
+    if (btnSubmitCreateCompanyEl) {
+      btnSubmitCreateCompanyEl.addEventListener('click', submitCreateCompany);
+    }
+
+    // Modals: Subscriptions
+    const btnCloseSubsModalEl = document.getElementById('btnCloseSubsModal');
+    if (btnCloseSubsModalEl) {
+      btnCloseSubsModalEl.addEventListener('click', closeSubscriptionsModal);
+    }
+
+    const subsModalTabBtns = document.querySelectorAll('.subs-tab-btn');
+    subsModalTabBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const type = btn.getAttribute('data-type');
+        if (type) setModalSubsTab(type);
+      });
+    });
+
+    const subsSearchInput = document.getElementById('subsSearchInput');
+    if (subsSearchInput) {
+      subsSearchInput.addEventListener('input', debounce(function () {
+        loadModalSubsList();
+      }, 300));
+    }
+
+    // Backdrop clicks to close modals
+    const createClubModalEl = document.getElementById('createClubModal');
+    if (createClubModalEl) {
+      createClubModalEl.addEventListener('click', function (e) {
+        if (e.target === createClubModalEl) closeCreateClubModal();
+      });
+    }
+    const createCompanyModalEl = document.getElementById('createCompanyModal');
+    if (createCompanyModalEl) {
+      createCompanyModalEl.addEventListener('click', function (e) {
+        if (e.target === createCompanyModalEl) closeCreateCompanyModal();
+      });
+    }
+    const subscriptionsModalEl = document.getElementById('subscriptionsModal');
+    if (subscriptionsModalEl) {
+      subscriptionsModalEl.addEventListener('click', function (e) {
+        if (e.target === subscriptionsModalEl) closeSubscriptionsModal();
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // 13. DOM Ready Entry Point
   // --------------------------------------------------------------------------
   document.addEventListener('DOMContentLoaded', function () {
@@ -4058,15 +5469,36 @@
     initFeedSettingsPanel();
     initFeedFiltersPanel();
     initAuthControls();
+    initTask37Entities();
 
     checkAuthStatus(function () {
       parseURLParams();
-      fetchFeed(true);
+      if (state.tab === 'clubs') {
+        if (state.activeClubId) openClubDetail(state.activeClubId);
+        else loadClubs();
+      } else if (state.tab === 'companies') {
+        if (state.activeCompanyId) openCompanyDetail(state.activeCompanyId);
+        else loadCompanies(state.companiesSubtab || 'catalog');
+      } else if (state.tab === 'directions') {
+        loadDirections();
+      } else {
+        fetchFeed(true);
+      }
     });
 
     window.addEventListener('popstate', function () {
       parseURLParams();
-      fetchFeed(true);
+      if (state.tab === 'clubs') {
+        if (state.activeClubId) openClubDetail(state.activeClubId);
+        else loadClubs();
+      } else if (state.tab === 'companies') {
+        if (state.activeCompanyId) openCompanyDetail(state.activeCompanyId);
+        else loadCompanies(state.companiesSubtab || 'catalog');
+      } else if (state.tab === 'directions') {
+        loadDirections();
+      } else {
+        fetchFeed(true);
+      }
     });
   });
 

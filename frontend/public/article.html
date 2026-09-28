@@ -105,6 +105,22 @@
               </span>
             </span>
           </button>
+          <!-- Saved button in header (relocated in task-37) -->
+          <button
+            type="button"
+            id="feedSavedTab"
+            class="header-saved-btn feed-saved-btn personal-tab"
+            data-tab="saved"
+            role="tab"
+            aria-selected="false"
+            title="Показать сохраненные статьи"
+          >
+            <svg class="saved-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+            </svg>
+            <span class="header-saved-label">Сохраненные</span>
+            <span id="feedSavedCount" class="feed-saved-count">0</span>
+          </button>
           <div class="header-user-bar">
             <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
               <div class="btn-user-avatar-wrap" aria-hidden="true">

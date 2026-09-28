@@ -48,6 +48,12 @@
       this.coverMeta = null; // metadata { originalName, originalWidth, originalHeight, isGif }
       this.status = 'draft'; // 'draft' | 'in_moderation'
 
+      // Entity & Club attribution state
+      this.companyId = null;
+      this.companyName = null;
+      this.clubId = null;
+      this.clubTitle = null;
+
       // Cropper state
       this.rawCoverImage = null; // HTMLImageElement
       this.cropZoom = 1;
@@ -68,6 +74,7 @@
 
       this.initElements();
       this.bindEvents();
+      this.initEntityOptions();
       this.updateReadinessUI();
     }
 
@@ -155,6 +162,10 @@
       this.cardPreviewBookmark = document.getElementById('preview-card-bookmark');
       this.cardPreviewLike = document.getElementById('preview-card-like');
       this.cardPreviewComments = document.getElementById('preview-card-comments');
+
+      // Section 8: Entity (Company & Club)
+      this.companySelect = document.getElementById('pub-company-select');
+      this.clubSelect = document.getElementById('pub-club-select');
     }
 
     bindEvents() {
@@ -365,6 +376,77 @@
           this.updateCardPreview();
           if (this.descriptionErrorEl) this.descriptionErrorEl.textContent = '';
         });
+      }
+
+      // Section 8: Entity selects
+      if (this.companySelect) {
+        this.companySelect.addEventListener('change', () => {
+          this.companyId = this.companySelect.value || null;
+          const opt = this.companySelect.selectedOptions ? this.companySelect.selectedOptions[0] : null;
+          this.companyName = (opt && this.companyId) ? opt.textContent : null;
+          this.updateCardPreview();
+        });
+      }
+
+      if (this.clubSelect) {
+        this.clubSelect.addEventListener('change', () => {
+          this.clubId = this.clubSelect.value || null;
+          const opt = this.clubSelect.selectedOptions ? this.clubSelect.selectedOptions[0] : null;
+          this.clubTitle = (opt && this.clubId) ? opt.textContent : null;
+          this.updateCardPreview();
+        });
+      }
+    }
+
+    initEntityOptions() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const preselectedClub = urlParams.get('clubId') || urlParams.get('club');
+      const preselectedCompany = urlParams.get('companyId') || urlParams.get('company');
+
+      if (this.companySelect) {
+        fetch('/api/companies')
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.success && data.companies) {
+              data.companies.forEach(comp => {
+                const opt = document.createElement('option');
+                opt.value = comp.id;
+                opt.textContent = comp.name;
+                this.companySelect.appendChild(opt);
+              });
+              if (preselectedCompany) {
+                this.companySelect.value = preselectedCompany;
+                this.companyId = preselectedCompany;
+                const sel = this.companySelect.selectedOptions ? this.companySelect.selectedOptions[0] : null;
+                if (sel) this.companyName = sel.textContent;
+                this.updateCardPreview();
+              }
+            }
+          })
+          .catch(() => {});
+      }
+
+      if (this.clubSelect) {
+        fetch('/api/clubs')
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.success && data.clubs) {
+              data.clubs.forEach(club => {
+                const opt = document.createElement('option');
+                opt.value = club.id;
+                opt.textContent = club.title;
+                this.clubSelect.appendChild(opt);
+              });
+              if (preselectedClub) {
+                this.clubSelect.value = preselectedClub;
+                this.clubId = preselectedClub;
+                const sel = this.clubSelect.selectedOptions ? this.clubSelect.selectedOptions[0] : null;
+                if (sel) this.clubTitle = sel.textContent;
+                this.updateCardPreview();
+              }
+            }
+          })
+          .catch(() => {});
       }
     }
 
@@ -1302,7 +1384,9 @@
           readingTime: `~${minutes} мин чтения`,
           likesCount: 0,
           hasLiked: false,
-          commentsCount: 0
+          commentsCount: 0,
+          companyName: this.companyName || null,
+          clubTitle: this.clubTitle || null
         };
 
         this.cardPreview.innerHTML = window.SmartContractumCard.renderCardInnerHtml(previewItem, { isPreview: true });
@@ -1479,6 +1563,10 @@
         rawCoverImageSource: this.rawCoverImageSource,
         cropParams: this.cropParams ? { ...this.cropParams } : { zoom: 1, panX: 0, panY: 0 },
         coverMeta: this.coverMeta,
+        companyId: this.companyId || null,
+        companyName: this.companyName || null,
+        clubId: this.clubId || null,
+        clubTitle: this.clubTitle || null,
         status: this.status
       };
     }
@@ -1501,7 +1589,14 @@
       this.rawCoverImageSource = settings.rawCoverImageSource || null;
       this.cropParams = settings.cropParams || { zoom: 1, panX: 0, panY: 0 };
       this.coverMeta = settings.coverMeta || null;
+      this.companyId = settings.companyId || null;
+      this.companyName = settings.companyName || null;
+      this.clubId = settings.clubId || null;
+      this.clubTitle = settings.clubTitle || null;
       this.status = settings.status || 'draft';
+
+      if (this.companySelect) this.companySelect.value = this.companyId || '';
+      if (this.clubSelect) this.clubSelect.value = this.clubId || '';
 
       if (this.rawCoverImageSource) {
         const img = new Image();
@@ -1539,7 +1634,14 @@
       this.coverMeta = null;
       this.rawCoverImage = null;
       this.previousCoverState = null;
+      this.companyId = null;
+      this.companyName = null;
+      this.clubId = null;
+      this.clubTitle = null;
       this.status = 'draft';
+
+      if (this.companySelect) this.companySelect.value = '';
+      if (this.clubSelect) this.clubSelect.value = '';
 
       this.render();
       this.updateCardPreview();

@@ -91,6 +91,29 @@ def is_valid_id(value: Any) -> bool:
     return bool(re.match(r'^[a-zA-Z0-9_-]+$', val))
 
 
+def slugify(text: str) -> str:
+    """Creates URL-safe slug from Russian or Latin text."""
+    translit_map = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+        'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+        'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+        'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    }
+    s = text.lower().strip()
+    out = []
+    for ch in s:
+        if ch in translit_map:
+            out.append(translit_map[ch])
+        elif ch.isalnum() or ch in ('-', '_'):
+            out.append(ch)
+        elif ch.isspace():
+            out.append('-')
+    res = re.sub(r'-+', '-', ''.join(out)).strip('-')
+    return res or f"item-{uuid.uuid4().hex[:8]}"
+
+
+
 def extract_article_text(html_content: str) -> str:
     """
     Extracts text content from HTML by stripping all tags, unescaping HTML entities,
@@ -194,12 +217,11 @@ STANDARD_TOPICS = [
     ("information-security", "Информационная безопасность"),
     ("audit-and-verification", "Аудит и проверка смарт-контрактов"),
     ("law-and-compliance", "Право и комплаенс"),
-    ("digital-ruble-payments", "Цифровой рубль и платежи"),
-    ("oracles-and-data", "Оракулы и поставка данных"),
+    ("oracles-and-data", "Оракулы и доверенные внешние данные"),
     ("integrations-and-api", "Интеграции и API"),
-    ("infrastructure-and-nodes", "Инфраструктура и узлы"),
-    ("analytics-and-monitoring", "Аналитика и мониторинг"),
-    ("standards-and-protocols", "Стандарты и протоколы"),
+    ("digital-ruble-payments", "Цифровой рубль и программируемые расчеты"),
+    ("lifecycle-versioning", "Жизненный цикл и версии смарт-контрактов"),
+    ("infrastructure-operations", "Инфраструктура и эксплуатация"),
     ("business-cases-adoption", "Бизнес-сценарии и внедрение"),
 ]
 TOPICS_TITLE_MAP = dict(STANDARD_TOPICS)
@@ -291,9 +313,53 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
                 updated_at TEXT NOT NULL
             );
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clubs (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                avatar TEXT,
+                rules TEXT,
+                owner_id TEXT NOT NULL,
+                directions TEXT,
+                tags TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_clubs_owner ON clubs(owner_id);")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS companies (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                specialization TEXT NOT NULL,
+                website TEXT,
+                logo TEXT,
+                directions TEXT,
+                owner_id TEXT NOT NULL,
+                is_verified INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_companies_owner ON companies(owner_id);")
+
         seed_approved_articles(conn)
         seed_user_subscriptions(conn)
         seed_article_comments(conn)
+
+        try:
+            import seed_data
+            seed_data.seed_clubs(conn)
+            seed_data.seed_companies(conn)
+            seed_data.seed_articles(conn)
+            seed_data.seed_user_subscriptions(conn)
+            seed_data.seed_article_likes(conn)
+            seed_data.seed_article_comments(conn)
+        except Exception as e:
+            print(f"Warning: error seeding extended data: {e}", file=sys.stderr)
     return conn
 
 
@@ -1111,10 +1177,23 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
             elif cov_res.saved_url and cov_res.saved_url.startswith("/media/"):
                 pub_settings["coverImage"] = cov_res.saved_url
 
+        # 4i. companyId (optional)
+        comp_id = pub_settings.get("companyId") or pub_settings.get("company_id")
+        if comp_id is not None and comp_id != "":
+            if not isinstance(comp_id, str) or not is_valid_id(comp_id):
+                field_errors["companyId"] = "Недопустимый идентификатор компании."
+
+        # 4j. clubId (optional)
+        club_id = pub_settings.get("clubId") or pub_settings.get("club_id")
+        if club_id is not None and club_id != "":
+            if not isinstance(club_id, str) or not is_valid_id(club_id):
+                field_errors["clubId"] = "Недопустимый идентификатор клуба."
+
     if field_errors:
         order = [
             "title", "html", "targetAudience", "topics", "keywords", "description",
-            "format", "complexity", "materialType", "coverImage", "draftId", "publicationSettings"
+            "format", "complexity", "materialType", "coverImage", "companyId", "clubId",
+            "draftId", "publicationSettings"
         ]
         first_key = next((k for k in order if k in field_errors), next(iter(field_errors.keys())))
         error_msg = field_errors[first_key]
@@ -1238,6 +1317,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_articles_api(parsed)
         elif path.startswith("/media/"):
             self.handle_serve_media(parsed)
+        elif path == "/api/clubs" or path.startswith("/api/clubs/"):
+            if path == "/api/clubs":
+                self.handle_get_clubs(parsed)
+            else:
+                club_id = path[len("/api/clubs/"):].strip("/")
+                self.handle_get_club_detail(club_id)
+        elif path == "/api/companies" or path.startswith("/api/companies/"):
+            if path == "/api/companies":
+                self.handle_get_companies(parsed)
+            else:
+                company_id = path[len("/api/companies/"):].strip("/")
+                self.handle_get_company_detail(company_id)
+        elif path == "/api/directions":
+            self.handle_get_directions(parsed)
         elif path.startswith("/api/"):
             self.send_json_response(404, {
                 "success": False,
@@ -1258,6 +1351,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_auth_logout()
         elif path == "/api/user/feed-settings":
             self.handle_post_feed_settings()
+        elif path == "/api/clubs":
+            self.handle_post_club()
+        elif path == "/api/companies":
+            self.handle_post_company()
         elif path == "/api/likes/toggle":
             try:
                 cl = int(self.headers.get("Content-Length", 0))
@@ -1336,7 +1433,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             """, (user["id"],))
             rows = cur.fetchall()
 
-        subs = {"authors": [], "topics": [], "tags": []}
+        subs = {"authors": [], "topics": [], "tags": [], "clubs": [], "companies": []}
         for r in rows:
             t = r["target_type"]
             entry = {"id": r["target_id"], "title": r["target_title"], "createdAt": r["created_at"]}
@@ -1346,6 +1443,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 subs["topics"].append(entry)
             elif t == "tag":
                 subs["tags"].append(entry)
+            elif t == "club":
+                subs["clubs"].append(entry)
+            elif t == "company":
+                subs["companies"].append(entry)
 
         self.send_json_response(200, {
             "success": True,
@@ -1359,7 +1460,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if not user:
             self.send_json_response(200, {
                 "success": True,
-                "exceptions": {"authors": [], "topics": [], "tags": []},
+                "exceptions": {"authors": [], "topics": [], "tags": [], "clubs": [], "companies": []},
                 "total": 0
             })
             return
@@ -1373,7 +1474,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             """, (user["id"],))
             rows = cur.fetchall()
 
-        exceptions = {"authors": [], "topics": [], "tags": []}
+        exceptions = {"authors": [], "topics": [], "tags": [], "clubs": [], "companies": []}
         for r in rows:
             t = r["target_type"]
             entry = {"id": r["target_id"], "title": r["target_title"], "createdAt": r["created_at"]}
@@ -1383,8 +1484,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 exceptions["topics"].append(entry)
             elif t == "tag":
                 exceptions["tags"].append(entry)
+            elif t == "club":
+                exceptions["clubs"].append(entry)
+            elif t == "company":
+                exceptions["companies"].append(entry)
 
-        total = len(exceptions["authors"]) + len(exceptions["topics"]) + len(exceptions["tags"])
+        total = len(exceptions["authors"]) + len(exceptions["topics"]) + len(exceptions["tags"]) + len(exceptions["clubs"]) + len(exceptions["companies"])
         self.send_json_response(200, {
             "success": True,
             "user": user,
@@ -1407,12 +1512,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(400, {"success": False, "error": f"Invalid JSON payload: {e}"})
             return
 
-        target_type = (data.get("targetType") or "").strip().lower()
-        raw_id = (data.get("targetId") or "").strip()
-        raw_title = (data.get("targetTitle") or "").strip()
+        target_type = (data.get("targetType") or data.get("target_type") or "").strip().lower()
+        raw_id = (data.get("targetId") or data.get("target_id") or "").strip()
+        raw_title = (data.get("targetTitle") or data.get("target_title") or "").strip()
 
-        if target_type not in ("author", "topic", "tag"):
-            self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', or 'tag'"})
+        if target_type not in ("author", "topic", "tag", "club", "company"):
+            self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', 'tag', 'club', or 'company'"})
             return
 
         if not raw_id:
@@ -1455,6 +1560,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json_response(200, {
             "success": True,
             "subscribed": subscribed,
+            "isSubscribed": subscribed,
+            "is_subscribed": subscribed,
             "targetType": target_type,
             "targetId": normalized_id,
             "targetTitle": title
@@ -1475,12 +1582,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(400, {"success": False, "error": f"Invalid JSON payload: {e}"})
             return
 
-        target_type = (data.get("targetType") or "").strip().lower()
-        raw_id = (data.get("targetId") or "").strip()
-        raw_title = (data.get("targetTitle") or "").strip()
+        target_type = (data.get("targetType") or data.get("target_type") or "").strip().lower()
+        raw_id = (data.get("targetId") or data.get("target_id") or "").strip()
+        raw_title = (data.get("targetTitle") or data.get("target_title") or "").strip()
 
-        if target_type not in ("author", "topic", "tag"):
-            self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', or 'tag'"})
+        if target_type not in ("author", "topic", "tag", "club", "company"):
+            self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', 'tag', 'club', or 'company'"})
             return
 
         if not raw_id:
@@ -1523,6 +1630,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json_response(200, {
             "success": True,
             "excluded": excluded,
+            "isExcluded": excluded,
+            "is_excluded": excluded,
             "targetType": target_type,
             "targetId": normalized_id,
             "targetTitle": title
@@ -1564,9 +1673,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
             rows = cur.fetchall()
 
+            cur.execute("SELECT * FROM clubs ORDER BY created_at ASC")
+            club_rows = cur.fetchall()
+
+            cur.execute("SELECT * FROM companies ORDER BY created_at ASC")
+            comp_rows = cur.fetchall()
+
         authors_map = {}
         tags_map = {}
         topics_counts = {}
+        club_counts = {}
+        comp_counts = {}
 
         for row in rows:
             try:
@@ -1609,11 +1726,23 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         }
                     tags_map[norm_tag]["count"] += 1
 
+            cid = settings.get("clubId")
+            if cid:
+                club_counts[cid] = club_counts.get(cid, 0) + 1
+
+            cmp_id = settings.get("companyId")
+            if cmp_id:
+                comp_counts[cmp_id] = comp_counts.get(cmp_id, 0) + 1
+
+        import seed_data
+        desc_map = seed_data.TOPICS_DESCRIPTION_MAP
+
         topics_list = []
         for tid, tname in STANDARD_TOPICS:
             topics_list.append({
                 "id": tid,
                 "title": tname,
+                "description": desc_map.get(tid, ""),
                 "count": topics_counts.get(tid, 0),
                 "isSubscribed": ("topic", tid) in user_subs,
                 "isExcluded": ("topic", tid) in user_exceptions
@@ -1622,13 +1751,40 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         authors_list = sorted(list(authors_map.values()), key=lambda x: (-x["count"], x["title"]))
         tags_list = sorted(list(tags_map.values()), key=lambda x: (-x["count"], x["title"]))
 
+        clubs_list = []
+        for cr in club_rows:
+            cid = cr["id"]
+            clubs_list.append({
+                "id": cid,
+                "title": cr["title"],
+                "description": cr["description"],
+                "count": club_counts.get(cid, 0),
+                "isSubscribed": ("club", cid) in user_subs,
+                "isExcluded": ("club", cid) in user_exceptions
+            })
+
+        companies_list = []
+        for cpr in comp_rows:
+            cid = cpr["id"]
+            companies_list.append({
+                "id": cid,
+                "title": cpr["name"],
+                "name": cpr["name"],
+                "description": cpr["description"],
+                "specialization": cpr["specialization"],
+                "count": comp_counts.get(cid, 0),
+                "isSubscribed": ("company", cid) in user_subs,
+                "isExcluded": ("company", cid) in user_exceptions
+            })
+
         def match_search(item: dict) -> bool:
             if not search_query:
                 return True
-            title_match = search_query in (item.get("title") or "").lower()
+            title_match = search_query in (item.get("title") or item.get("name") or "").lower()
             id_match = search_query in (item.get("id") or "").lower()
-            role_match = search_query in (item.get("role") or "").lower()
-            return title_match or id_match or role_match
+            role_match = search_query in (item.get("role") or item.get("specialization") or "").lower()
+            desc_match = search_query in (item.get("description") or "").lower()
+            return title_match or id_match or role_match or desc_match
 
         if entity_type:
             if entity_type in ("author", "authors"):
@@ -1637,6 +1793,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 source = topics_list
             elif entity_type in ("tag", "tags"):
                 source = tags_list
+            elif entity_type in ("club", "clubs"):
+                source = clubs_list
+            elif entity_type in ("company", "companies"):
+                source = companies_list
             else:
                 source = []
 
@@ -1655,16 +1815,500 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # Backward compatibility when entity_type is not specified
+        # Full catalog when entity_type is not specified
         filtered_authors = [it for it in authors_list if match_search(it)]
         filtered_topics = [it for it in topics_list if match_search(it)]
         filtered_tags = [it for it in tags_list if match_search(it)]
+        filtered_clubs = [it for it in clubs_list if match_search(it)]
+        filtered_companies = [it for it in companies_list if match_search(it)]
 
         self.send_json_response(200, {
             "success": True,
             "authors": filtered_authors,
             "topics": filtered_topics,
-            "tags": filtered_tags
+            "tags": filtered_tags,
+            "clubs": filtered_clubs,
+            "companies": filtered_companies
+        })
+
+    def handle_get_clubs(self, parsed_url):
+        """GET /api/clubs returns catalog of professional communities."""
+        query = urllib.parse.parse_qs(parsed_url.query)
+        search_query = (query.get("search", [""])[0] or "").strip().lower()
+        direction_filter = (query.get("direction", [""])[0] or query.get("topic", [""])[0] or "").strip()
+
+        user = self.get_current_user()
+        user_subs = set()
+        user_exceptions = set()
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            if user:
+                cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                user_subs = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                user_exceptions = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+
+            cur.execute("SELECT * FROM clubs ORDER BY created_at ASC")
+            club_rows = cur.fetchall()
+
+            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            article_counts = {}
+            for r in cur.fetchall():
+                try:
+                    s = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                    cid = s.get("clubId")
+                    if cid:
+                        article_counts[cid] = article_counts.get(cid, 0) + 1
+                except Exception:
+                    pass
+
+            cur.execute("SELECT target_id, COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'club' GROUP BY target_id")
+            sub_counts = {r["target_id"]: r["cnt"] for r in cur.fetchall()}
+
+        clubs_list = []
+        for r in club_rows:
+            cid = r["id"]
+            title = r["title"]
+            desc = r["description"]
+            rules = r["rules"]
+            directions = json.loads(r["directions"]) if r["directions"] else []
+            tags = json.loads(r["tags"]) if r["tags"] else []
+
+            if direction_filter and direction_filter != "all":
+                if direction_filter not in directions:
+                    continue
+
+            if search_query:
+                haystack = f"{title} {desc} {rules or ''} {' '.join(tags)}".lower()
+                if not all(w in haystack for w in search_query.split()):
+                    continue
+
+            clubs_list.append({
+                "id": cid,
+                "title": title,
+                "description": desc,
+                "avatar": r["avatar"],
+                "rules": rules,
+                "ownerId": r["owner_id"],
+                "directions": directions,
+                "tags": tags,
+                "articlesCount": article_counts.get(cid, 0),
+                "subscribersCount": sub_counts.get(cid, 0),
+                "isSubscribed": ("club", cid) in user_subs,
+                "isExcluded": ("club", cid) in user_exceptions,
+                "createdAt": r["created_at"],
+                "updatedAt": r["updated_at"]
+            })
+
+        self.send_json_response(200, {
+            "success": True,
+            "clubs": clubs_list,
+            "total": len(clubs_list)
+        })
+
+    def handle_get_club_detail(self, club_id: str):
+        """GET /api/clubs/<id> returns detail for a single club."""
+        user = self.get_current_user()
+        user_subs = set()
+        user_exceptions = set()
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            if user:
+                cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                user_subs = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                user_exceptions = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+
+            cur.execute("SELECT * FROM clubs WHERE id = ?", (club_id,))
+            row = cur.fetchone()
+            if not row:
+                self.send_json_response(404, {"success": False, "error": f"Клуб '{club_id}' не найден"})
+                return
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'club' AND target_id = ?", (club_id,))
+            sub_count = cur.fetchone()["cnt"]
+
+            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            art_cnt = 0
+            for r in cur.fetchall():
+                try:
+                    s = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                    if s.get("clubId") == club_id:
+                        art_cnt += 1
+                except Exception:
+                    pass
+
+        directions = json.loads(row["directions"]) if row["directions"] else []
+        tags = json.loads(row["tags"]) if row["tags"] else []
+
+        club_data = {
+            "id": row["id"],
+            "title": row["title"],
+            "description": row["description"],
+            "avatar": row["avatar"],
+            "rules": row["rules"],
+            "ownerId": row["owner_id"],
+            "directions": directions,
+            "tags": tags,
+            "articlesCount": art_cnt,
+            "subscribersCount": sub_count,
+            "isSubscribed": ("club", club_id) in user_subs,
+            "isExcluded": ("club", club_id) in user_exceptions,
+            "createdAt": row["created_at"],
+            "updatedAt": row["updated_at"]
+        }
+
+        self.send_json_response(200, {
+            "success": True,
+            "club": club_data
+        })
+
+    def handle_post_club(self):
+        """POST /api/clubs creates a new club with current user as owner."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
+            return
+
+        try:
+            cl = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(cl).decode("utf-8")
+            data = json.loads(body) if body else {}
+        except Exception as e:
+            self.send_json_response(400, {"success": False, "error": f"Invalid JSON: {e}"})
+            return
+
+        title = (data.get("title") or "").strip()
+        description = (data.get("description") or "").strip()
+        if not title:
+            self.send_json_response(400, {"success": False, "error": "Название клуба обязательно"})
+            return
+        if not description:
+            self.send_json_response(400, {"success": False, "error": "Описание клуба обязательно"})
+            return
+
+        rules = (data.get("rules") or "").strip()
+        avatar = data.get("avatar")
+        directions = data.get("directions") or []
+        tags = data.get("tags") or []
+        if isinstance(directions, str):
+            directions = [d.strip() for d in directions.split(",") if d.strip()]
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+        club_id = slugify(title)
+        now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM clubs WHERE id = ?", (club_id,))
+            if cur.fetchone():
+                club_id = f"{club_id}-{uuid.uuid4().hex[:4]}"
+
+            conn.execute("""
+                INSERT INTO clubs (id, title, description, avatar, rules, owner_id, directions, tags, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                club_id, title, description, avatar, rules, user["id"],
+                json.dumps(directions, ensure_ascii=False),
+                json.dumps(tags, ensure_ascii=False),
+                now_str, now_str
+            ))
+
+            conn.execute("""
+                INSERT OR IGNORE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                VALUES (?, 'club', ?, ?, ?)
+            """, (user["id"], club_id, title, now_str))
+
+        self.send_json_response(201, {
+            "success": True,
+            "club": {
+                "id": club_id,
+                "title": title,
+                "description": description,
+                "avatar": avatar,
+                "rules": rules,
+                "ownerId": user["id"],
+                "directions": directions,
+                "tags": tags,
+                "articlesCount": 0,
+                "subscribersCount": 1,
+                "isSubscribed": True,
+                "createdAt": now_str
+            }
+        })
+
+    def handle_get_companies(self, parsed_url):
+        """GET /api/companies returns catalog of corporate blogs."""
+        query = urllib.parse.parse_qs(parsed_url.query)
+        search_query = (query.get("search", [""])[0] or "").strip().lower()
+        direction_filter = (query.get("direction", [""])[0] or query.get("topic", [""])[0] or "").strip()
+
+        user = self.get_current_user()
+        user_subs = set()
+        user_exceptions = set()
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            if user:
+                cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                user_subs = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                user_exceptions = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+
+            cur.execute("SELECT * FROM companies ORDER BY created_at ASC")
+            comp_rows = cur.fetchall()
+
+            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            article_counts = {}
+            for r in cur.fetchall():
+                try:
+                    s = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                    cid = s.get("companyId")
+                    if cid:
+                        article_counts[cid] = article_counts.get(cid, 0) + 1
+                except Exception:
+                    pass
+
+            cur.execute("SELECT target_id, COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'company' GROUP BY target_id")
+            sub_counts = {r["target_id"]: r["cnt"] for r in cur.fetchall()}
+
+        comps_list = []
+        for r in comp_rows:
+            cid = r["id"]
+            name = r["name"]
+            desc = r["description"]
+            spec = r["specialization"]
+            website = r["website"]
+            directions = json.loads(r["directions"]) if r["directions"] else []
+
+            if direction_filter and direction_filter != "all":
+                if direction_filter not in directions:
+                    continue
+
+            if search_query:
+                haystack = f"{name} {desc} {spec} {website or ''}".lower()
+                if not all(w in haystack for w in search_query.split()):
+                    continue
+
+            comps_list.append({
+                "id": cid,
+                "name": name,
+                "description": desc,
+                "specialization": spec,
+                "website": website,
+                "logo": r["logo"],
+                "directions": directions,
+                "ownerId": r["owner_id"],
+                "isVerified": bool(r["is_verified"]),
+                "articlesCount": article_counts.get(cid, 0),
+                "subscribersCount": sub_counts.get(cid, 0),
+                "isSubscribed": ("company", cid) in user_subs,
+                "isExcluded": ("company", cid) in user_exceptions,
+                "createdAt": r["created_at"],
+                "updatedAt": r["updated_at"]
+            })
+
+        self.send_json_response(200, {
+            "success": True,
+            "companies": comps_list,
+            "total": len(comps_list)
+        })
+
+    def handle_get_company_detail(self, company_id: str):
+        """GET /api/companies/<id> returns detail for a single company."""
+        user = self.get_current_user()
+        user_subs = set()
+        user_exceptions = set()
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            if user:
+                cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                user_subs = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                user_exceptions = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+
+            cur.execute("SELECT * FROM companies WHERE id = ?", (company_id,))
+            row = cur.fetchone()
+            if not row:
+                self.send_json_response(404, {"success": False, "error": f"Компания '{company_id}' не найдена"})
+                return
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'company' AND target_id = ?", (company_id,))
+            sub_count = cur.fetchone()["cnt"]
+
+            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            art_cnt = 0
+            for r in cur.fetchall():
+                try:
+                    s = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                    if s.get("companyId") == company_id:
+                        art_cnt += 1
+                except Exception:
+                    pass
+
+        directions = json.loads(row["directions"]) if row["directions"] else []
+
+        comp_data = {
+            "id": row["id"],
+            "name": row["name"],
+            "description": row["description"],
+            "specialization": row["specialization"],
+            "website": row["website"],
+            "logo": row["logo"],
+            "directions": directions,
+            "ownerId": row["owner_id"],
+            "isVerified": bool(row["is_verified"]),
+            "articlesCount": art_cnt,
+            "subscribersCount": sub_count,
+            "isSubscribed": ("company", company_id) in user_subs,
+            "isExcluded": ("company", company_id) in user_exceptions,
+            "createdAt": row["created_at"],
+            "updatedAt": row["updated_at"]
+        }
+
+        self.send_json_response(200, {
+            "success": True,
+            "company": comp_data
+        })
+
+    def handle_post_company(self):
+        """POST /api/companies creates a new company profile with current user as owner."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
+            return
+
+        try:
+            cl = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(cl).decode("utf-8")
+            data = json.loads(body) if body else {}
+        except Exception as e:
+            self.send_json_response(400, {"success": False, "error": f"Invalid JSON: {e}"})
+            return
+
+        name = (data.get("name") or "").strip()
+        description = (data.get("description") or "").strip()
+        specialization = (data.get("specialization") or "").strip()
+        if not name:
+            self.send_json_response(400, {"success": False, "error": "Название компании обязательно"})
+            return
+        if not description:
+            self.send_json_response(400, {"success": False, "error": "Описание компании обязательно"})
+            return
+        if not specialization:
+            self.send_json_response(400, {"success": False, "error": "Специализация компании обязательна"})
+            return
+
+        website = (data.get("website") or "").strip()
+        logo = data.get("logo")
+        directions = data.get("directions") or []
+        if isinstance(directions, str):
+            directions = [d.strip() for d in directions.split(",") if d.strip()]
+
+        company_id = slugify(name)
+        now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM companies WHERE id = ?", (company_id,))
+            if cur.fetchone():
+                company_id = f"{company_id}-{uuid.uuid4().hex[:4]}"
+
+            conn.execute("""
+                INSERT INTO companies (id, name, description, specialization, website, logo, directions, owner_id, is_verified, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            """, (
+                company_id, name, description, specialization, website, logo,
+                json.dumps(directions, ensure_ascii=False),
+                user["id"], now_str, now_str
+            ))
+
+            conn.execute("""
+                INSERT OR IGNORE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                VALUES (?, 'company', ?, ?, ?)
+            """, (user["id"], company_id, name, now_str))
+
+        self.send_json_response(201, {
+            "success": True,
+            "company": {
+                "id": company_id,
+                "name": name,
+                "description": description,
+                "specialization": specialization,
+                "website": website,
+                "logo": logo,
+                "directions": directions,
+                "ownerId": user["id"],
+                "isVerified": True,
+                "articlesCount": 0,
+                "subscribersCount": 1,
+                "isSubscribed": True,
+                "createdAt": now_str
+            }
+        })
+
+    def handle_get_directions(self, parsed_url):
+        """GET /api/directions returns catalog of all standard directions / topics."""
+        query = urllib.parse.parse_qs(parsed_url.query)
+        search_query = (query.get("search", [""])[0] or "").strip().lower()
+
+        import seed_data
+        desc_map = seed_data.TOPICS_DESCRIPTION_MAP
+
+        user = self.get_current_user()
+        user_subs = set()
+        user_exceptions = set()
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            if user:
+                cur.execute("SELECT target_type, target_id FROM user_subscriptions WHERE user_id = ?", (user["id"],))
+                user_subs = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (user["id"],))
+                user_exceptions = {(r["target_type"], r["target_id"]) for r in cur.fetchall()}
+
+            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            topic_article_counts = {}
+            for r in cur.fetchall():
+                try:
+                    s = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                    for t in s.get("topics") or []:
+                        topic_article_counts[t] = topic_article_counts.get(t, 0) + 1
+                except Exception:
+                    pass
+
+            cur.execute("SELECT target_id, COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'topic' GROUP BY target_id")
+            topic_sub_counts = {r["target_id"]: r["cnt"] for r in cur.fetchall()}
+
+        directions_list = []
+        for tid, ttitle in STANDARD_TOPICS:
+            tdesc = desc_map.get(tid, f"Направление «{ttitle}» в экосистеме смарт-контрактов")
+            if search_query:
+                haystack = f"{tid} {ttitle} {tdesc}".lower()
+                if not all(w in haystack for w in search_query.split()):
+                    continue
+
+            directions_list.append({
+                "id": tid,
+                "title": ttitle,
+                "description": tdesc,
+                "articlesCount": topic_article_counts.get(tid, 0),
+                "count": topic_article_counts.get(tid, 0),
+                "subscribersCount": topic_sub_counts.get(tid, 0),
+                "isSubscribed": ("topic", tid) in user_subs,
+                "isExcluded": ("topic", tid) in user_exceptions
+            })
+
+        self.send_json_response(200, {
+            "success": True,
+            "directions": directions_list,
+            "total": len(directions_list)
         })
 
     def handle_get_feed_settings(self):
@@ -2466,24 +3110,32 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         """
         GET /api/articles
         Query parameters:
+          tab: 'focus' (default), 'top', 'new', 'subscriptions'/'my', 'saved', 'all'
+          period: 'day', 'week', 'month', 'all' (for tab=top, default 'week')
           search: search string across title, description, keywords, and body
-          topic: filter by topic ID
+          topic / topics / direction: filter by topic ID
+          club / clubId: filter by club ID
+          company / companyId: filter by company ID
           audience: filter by target audience ID
           format: filter by format ID
           complexity / complexities: filter by complexity ID(s)
           type / types: filter by material type(s)
-          sort: 'newest' (default) or 'oldest'
-          period: 'all' (default), 'month', 'week'
+          sort: 'popular', 'discussed', 'newest', 'oldest'
           ids: comma-separated list of article IDs (for bookmarks retrieval)
           limit: items per page (default 10)
           offset: offset for pagination (default 0)
-        Returns only approved articles.
+        Returns approved articles matching criteria.
         """
         query = urllib.parse.parse_qs(parsed_url.query)
-        tab = (query.get("tab", ["all"])[0] or "all").strip().lower()
+        tab_raw = (query.get("tab", ["focus"])[0] or "focus").strip().lower()
+        tab = "subscriptions" if tab_raw == "my" else tab_raw
         search_query = (query.get("search", [""])[0] or "").strip().lower()
-        topics_filter = (query.get("topics", [""])[0] or query.get("topic", [""])[0] or "").strip()
-        
+
+        direction_param = (query.get("direction", [""])[0] or "").strip()
+        topics_filter = (query.get("topics", [""])[0] or query.get("topic", [""])[0] or direction_param).strip()
+        club_filter = (query.get("club", [""])[0] or query.get("clubId", [""])[0] or "").strip()
+        company_filter = (query.get("company", [""])[0] or query.get("companyId", [""])[0] or "").strip()
+
         # Audience filter (supports single or multiple, comma-separated or repeated)
         audiences_raw = query.get("audiences", []) + query.get("audience", [])
         allowed_audiences = set()
@@ -2509,7 +3161,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         complexity_filter = (query.get("complexities", [""])[0] or query.get("complexity", [""])[0] or "").strip()
         types_filter = (query.get("types", [""])[0] or query.get("type", [""])[0] or "").strip()
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
-        period_filter = (query.get("period", ["all"])[0] or "all").strip().lower()
+        has_explicit_sort = "sort" in query
+
+        # Period filtering: for tab=top defaults to week; otherwise defaults to all
+        default_period = "week" if tab == "top" else "all"
+        period_filter = (query.get("period", [default_period])[0] or default_period).strip().lower()
         date_from_str = (query.get("dateFrom", [""])[0] or query.get("date_from", [""])[0] or "").strip()
         date_to_str = (query.get("dateTo", [""])[0] or query.get("date_to", [""])[0] or "").strip()
         ids_filter = (query.get("ids", [""])[0] or "").strip()
@@ -2536,13 +3192,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         sub_authors = set()
         sub_topics = set()
         sub_tags = set()
+        sub_clubs = set()
+        sub_companies = set()
         sub_topics_titles = {}
         sub_tags_titles = {}
+        sub_clubs_titles = {}
+        sub_companies_titles = {}
 
         user_types = None
         user_complexities = None
 
-        if tab == "my":
+        if tab in ("subscriptions", "my"):
             user = self.get_current_user()
             if not user:
                 self.send_json_response(401, {
@@ -2585,7 +3245,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "offset": offset,
                     "hasMore": False,
                     "topicCounts": {},
-                    "tab": "my",
+                    "tab": tab_raw,
                     "noSubscriptions": True
                 })
                 return
@@ -2603,11 +3263,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     norm_t = normalize_keyword(sid).lstrip('#').strip().lower()
                     sub_tags.add(norm_t)
                     sub_tags_titles[norm_t] = stitle
+                elif stype == "club":
+                    sub_clubs.add(sid)
+                    sub_clubs_titles[sid] = stitle
+                elif stype == "company":
+                    sub_companies.add(sid)
+                    sub_companies_titles[sid] = stitle
 
         # Determine effective types filter
         if types_filter and types_filter != "all":
             allowed_types = set([t.strip().lower() for t in types_filter.split(",") if t.strip()])
-        elif tab == "my" and user_types:
+        elif tab in ("subscriptions", "my") and user_types:
             allowed_types = set([t.strip().lower() for t in user_types if t.strip()])
         else:
             allowed_types = None
@@ -2618,7 +3284,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Determine effective complexity filter
         if complexity_filter and complexity_filter != "all":
             allowed_complexities = set([c.strip().lower() for c in complexity_filter.split(",") if c.strip()])
-        elif tab == "my" and user_complexities:
+        elif tab in ("subscriptions", "my") and user_complexities:
             allowed_complexities = set([c.strip().lower() for c in user_complexities if c.strip()])
         else:
             allowed_complexities = None
@@ -2626,39 +3292,58 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if allowed_complexities and "all" in allowed_complexities:
             allowed_complexities = None
 
-        conn = self.get_db()
-        with conn:
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
-            rows = cur.fetchall()
-
-            # Pre-fetch counts for likes and comments
-            cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
-            likes_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
-
-            cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' GROUP BY article_id")
-            comments_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
-
-            current_user = self.get_current_user()
-            user_likes = set()
-            exc_authors = set()
-            exc_topics = set()
-            exc_tags = set()
-            if current_user:
-                cur.execute("SELECT article_id FROM article_likes WHERE user_id = ?", (current_user["id"],))
-                user_likes = {r["article_id"] for r in cur.fetchall()}
-                cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (current_user["id"],))
-                for r in cur.fetchall():
-                    ttype = r["target_type"]
-                    tid = r["target_id"]
-                    if ttype == "author":
-                        exc_authors.add(tid)
-                    elif ttype == "topic":
-                        exc_topics.add(tid)
-                    elif ttype == "tag":
-                        exc_tags.add(normalize_keyword(tid).lstrip('#').strip().lower())
-
         now_utc = datetime.datetime.now(datetime.timezone.utc)
+        cutoff_72h_dt = now_utc - datetime.timedelta(hours=72)
+        cutoff_72h_str = cutoff_72h_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
+                rows = cur.fetchall()
+
+                # Pre-fetch counts for likes and comments
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
+                likes_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' GROUP BY article_id")
+                comments_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+                # 72h window counts for focus gravity score
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes WHERE created_at >= ? GROUP BY article_id", (cutoff_72h_str,))
+                likes_72h_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' AND created_at >= ? GROUP BY article_id", (cutoff_72h_str,))
+                comments_72h_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+                current_user = self.get_current_user()
+                user_likes = set()
+                exc_authors = set()
+                exc_topics = set()
+                exc_tags = set()
+                exc_clubs = set()
+                exc_companies = set()
+                if current_user:
+                    cur.execute("SELECT article_id FROM article_likes WHERE user_id = ?", (current_user["id"],))
+                    user_likes = {r["article_id"] for r in cur.fetchall()}
+                    cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (current_user["id"],))
+                    for r in cur.fetchall():
+                        ttype = r["target_type"]
+                        tid = r["target_id"]
+                        if ttype == "author":
+                            exc_authors.add(tid)
+                        elif ttype == "topic":
+                            exc_topics.add(tid)
+                        elif ttype == "tag":
+                            exc_tags.add(normalize_keyword(tid).lstrip('#').strip().lower())
+                        elif ttype == "club":
+                            exc_clubs.add(tid)
+                        elif ttype == "company":
+                            exc_companies.add(tid)
+        finally:
+            conn.close()
+
         topic_counts = {}
         filtered_articles = []
         seen_article_ids = set()
@@ -2689,15 +3374,27 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             keywords = settings.get("keywords") or []
             norm_kws = [normalize_keyword(k).lstrip('#').strip().lower() for k in keywords]
 
+            art_club_id = settings.get("clubId")
+            art_company_id = settings.get("companyId")
+
+            # Club filter
+            if club_filter and art_club_id != club_filter:
+                continue
+
+            # Company filter
+            if company_filter and art_company_id != company_filter:
+                continue
+
             # Priority of exceptions:
-            # Publication is hidden if author, or at least one topic, or at least one keyword is in user exceptions.
-            # Applies to tab=all, tab=my, and searches inside them.
-            # Does NOT hide when tab=saved or when allowed_ids is passed (bookmarks).
+            # Publication is hidden if author, topic, keyword, club, or company is in user exceptions.
+            # Applies to all feed modes and searches. Does NOT hide when tab=saved or bookmarks (allowed_ids).
             is_excluded = (
                 (row["author_id"] in exc_authors) or
                 (author_name in exc_authors) or
                 any(t in exc_topics for t in topics) or
-                any(nk in exc_tags for nk in norm_kws)
+                any(nk in exc_tags for nk in norm_kws) or
+                (art_club_id and art_club_id in exc_clubs) or
+                (art_company_id and art_company_id in exc_companies)
             )
             if is_excluded and tab != "saved" and allowed_ids is None:
                 continue
@@ -2709,10 +3406,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
-            if period_filter == "week" and created_at_dt:
+            if (period_filter == "day" or (tab == "top" and period_filter == "day")) and created_at_dt:
+                if (now_utc - created_at_dt).total_seconds() > 86400:
+                    continue
+            elif (period_filter == "week" or (tab == "top" and period_filter == "week")) and created_at_dt:
                 if (now_utc - created_at_dt).total_seconds() > 7 * 86400:
                     continue
-            elif period_filter == "month" and created_at_dt:
+            elif (period_filter == "month" or (tab == "top" and period_filter == "month")) and created_at_dt:
                 if (now_utc - created_at_dt).total_seconds() > 30 * 86400:
                     continue
             elif period_filter == "year" and created_at_dt:
@@ -2762,34 +3462,42 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if not any(t in req_topics for t in topics):
                     continue
 
-            # Audience filtering (multi-selection support: match any allowed audience)
+            # Audience filtering (multi-selection support)
             target_audience = settings.get("targetAudience") or ""
             if allowed_audiences is not None:
                 if target_audience not in allowed_audiences:
                     continue
 
-            # Format filtering (multi-selection support: match any allowed format)
+            # Format filtering (multi-selection support)
             fmt = settings.get("format") or ""
             if allowed_formats is not None:
                 if fmt not in allowed_formats:
                     continue
 
-            # Search query filtering across title, author, role, description, keywords and body
+            # Search query filtering across title, author, role, description, keywords, club, company and body
             title = row["title"] or ""
             desc = settings.get("description") or ""
+            club_title = settings.get("clubTitle") or ""
+            company_name = settings.get("companyName") or ""
             article_text = extract_article_text(row["article_html"] or "")
 
             if search_query:
-                search_haystack = f"{title} {author_name} {author_role} {desc} {' '.join(keywords)} {article_text}".lower()
+                search_haystack = f"{title} {author_name} {author_role} {club_title} {company_name} {desc} {' '.join(keywords)} {article_text}".lower()
                 words = search_query.split()
                 if not all(w in search_haystack for w in words):
                     continue
 
-            # Check subscription filter for "my" feed
+            # Check subscription filter for "subscriptions" / "my" feed
             subscription_reason = None
-            if tab == "my":
+            if tab in ("subscriptions", "my"):
                 if row["author_id"] in sub_authors or author_name in sub_authors:
                     subscription_reason = f"Вы подписаны на автора {author_name}"
+                elif art_club_id and art_club_id in sub_clubs:
+                    c_title = sub_clubs_titles.get(art_club_id) or club_title or art_club_id
+                    subscription_reason = f"Вы подписаны на клуб «{c_title}»"
+                elif art_company_id and art_company_id in sub_companies:
+                    cp_name = sub_companies_titles.get(art_company_id) or company_name or art_company_id
+                    subscription_reason = f"Вы подписаны на компанию «{cp_name}»"
                 else:
                     matched_topic = next((t for t in topics if t in sub_topics), None)
                     if matched_topic:
@@ -2805,6 +3513,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     continue
 
             reading_time, reading_minutes = calculate_reading_time(row["article_html"] or "")
+
+            # Focus gravity formula: (likes_72h * 2 + comments_72h * 3) / ((age_hours + 2.0) ** 1.5)
+            age_hours = max(0.0, (now_utc - created_at_dt).total_seconds() / 3600.0) if created_at_dt else 100.0
+            l_72 = likes_72h_counts.get(art_id, 0)
+            c_72 = comments_72h_counts.get(art_id, 0)
+            focus_score = (l_72 * 2.0 + c_72 * 3.0) / ((age_hours + 2.0) ** 1.5)
 
             seen_article_ids.add(art_id)
             filtered_articles.append({
@@ -2832,17 +3546,39 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "hasLiked": art_id in user_likes,
                 "commentsCount": comments_counts.get(art_id, 0),
                 "materialType": art_type,
-                "type": art_type
+                "type": art_type,
+                "companyId": art_company_id,
+                "companyName": company_name or None,
+                "clubId": art_club_id,
+                "clubTitle": club_title or None,
+                "focusScore": round(focus_score, 4)
             })
 
-        if sort_by == "popular":
-            filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("createdAt", "")), reverse=True)
-        elif sort_by == "discussed":
-            filtered_articles.sort(key=lambda a: (a.get("commentsCount", 0), a.get("createdAt", "")), reverse=True)
-        elif sort_by in ("oldest", "asc"):
-            filtered_articles.reverse()
-        elif sort_by in ("newest", "desc"):
-            filtered_articles.sort(key=lambda a: a.get("createdAt", ""), reverse=True)
+        # Apply sorting logic
+        if has_explicit_sort:
+            if sort_by == "popular":
+                filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("createdAt", "")), reverse=True)
+            elif sort_by == "discussed":
+                filtered_articles.sort(key=lambda a: (a.get("commentsCount", 0), a.get("createdAt", "")), reverse=True)
+            elif sort_by in ("oldest", "asc"):
+                filtered_articles.reverse()
+            elif sort_by in ("newest", "desc"):
+                filtered_articles.sort(key=lambda a: (a.get("createdAt", ""), a.get("id", "")), reverse=True)
+        else:
+            if tab in ("focus", "all"):
+                # Default "В фокусе": gravity popularity with fallback to createdAt
+                filtered_articles.sort(key=lambda a: (a.get("focusScore", 0.0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
+            elif tab == "top":
+                # "Топ": sort by likesCount DESC, commentsCount DESC, createdAt DESC
+                filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
+            elif tab == "new":
+                # "Новое": strict chronological DESC
+                filtered_articles.sort(key=lambda a: (a.get("createdAt", ""), a.get("id", "")), reverse=True)
+            elif tab in ("subscriptions", "my"):
+                # "Подписки": chronological DESC
+                filtered_articles.sort(key=lambda a: (a.get("createdAt", ""), a.get("id", "")), reverse=True)
+            else:
+                filtered_articles.sort(key=lambda a: (a.get("createdAt", ""), a.get("id", "")), reverse=True)
 
         total = len(filtered_articles)
         paged_articles = filtered_articles[offset : offset + limit]
@@ -2856,7 +3592,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "offset": offset,
             "hasMore": has_more,
             "topicCounts": topic_counts,
-            "tab": tab,
+            "tab": tab_raw,
             "noSubscriptions": False
         })
 
