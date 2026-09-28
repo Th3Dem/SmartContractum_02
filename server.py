@@ -2483,8 +2483,29 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         tab = (query.get("tab", ["all"])[0] or "all").strip().lower()
         search_query = (query.get("search", [""])[0] or "").strip().lower()
         topics_filter = (query.get("topics", [""])[0] or query.get("topic", [""])[0] or "").strip()
-        audience_filter = (query.get("audience", [""])[0] or "").strip()
-        format_filter = (query.get("format", [""])[0] or "").strip()
+        
+        # Audience filter (supports single or multiple, comma-separated or repeated)
+        audiences_raw = query.get("audiences", []) + query.get("audience", [])
+        allowed_audiences = set()
+        for item in audiences_raw:
+            for a in item.split(","):
+                a_clean = a.strip()
+                if a_clean and a_clean != "all":
+                    allowed_audiences.add(a_clean)
+        if not allowed_audiences:
+            allowed_audiences = None
+
+        # Format filter (supports single or multiple, comma-separated or repeated)
+        formats_raw = query.get("formats", []) + query.get("format", [])
+        allowed_formats = set()
+        for item in formats_raw:
+            for f in item.split(","):
+                f_clean = f.strip()
+                if f_clean and f_clean != "all":
+                    allowed_formats.add(f_clean)
+        if not allowed_formats:
+            allowed_formats = None
+
         complexity_filter = (query.get("complexities", [""])[0] or query.get("complexity", [""])[0] or "").strip()
         types_filter = (query.get("types", [""])[0] or query.get("type", [""])[0] or "").strip()
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
@@ -2741,16 +2762,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if not any(t in req_topics for t in topics):
                     continue
 
-            # Audience filtering
+            # Audience filtering (multi-selection support: match any allowed audience)
             target_audience = settings.get("targetAudience") or ""
-            if audience_filter and audience_filter != "all":
-                if target_audience != audience_filter:
+            if allowed_audiences is not None:
+                if target_audience not in allowed_audiences:
                     continue
 
-            # Format filtering
+            # Format filtering (multi-selection support: match any allowed format)
             fmt = settings.get("format") or ""
-            if format_filter and format_filter != "all":
-                if fmt != format_filter:
+            if allowed_formats is not None:
+                if fmt not in allowed_formats:
                     continue
 
             # Search query filtering across title, author, role, description, keywords and body

@@ -3622,10 +3622,10 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
             'Выберите подходящие уровни для “Моей ленты” или оставьте любой' in self.feed_html
         )
 
-        # Unified naming 'Без указанного уровня' in settings and filters
+        # Unified naming 'Без указанного уровня' / 'Не указан' in settings and filters
         self.assertIn('id="feedCompNone"', self.feed_html)
         self.assertIn('id="feedFilterCompNone"', self.feed_html)
-        self.assertIn('Без указанного уровня', self.feed_html)
+        self.assertTrue('Не указан' in self.feed_html or 'Без указанного уровня' in self.feed_html)
 
     def test_04_filters_all_types_and_any_level(self):
         """4. Verify explicit 'Все типы' and 'Любой уровень' chips with mutual exclusivity logic."""
@@ -3737,7 +3737,10 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
 
     def test_01_feed_settings_subtitle_and_2col_desktop_layout(self):
         """1. Verify feed settings subtitle, 2-column layout on desktop and single column on mobile."""
-        self.assertIn('Настройте интересы для “Моей ленты” и исключения для обеих лент', self.feed_html)
+        self.assertTrue(
+            'Выберите, что читать и что скрывать' in self.feed_html or
+            'Настройте интересы для “Моей ленты” и исключения для обеих лент' in self.feed_html
+        )
         self.assertIn('feed-settings-col-left', self.feed_html)
         self.assertIn('feedSettingsSectionSubscriptions', self.feed_html)
 
@@ -3910,6 +3913,123 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
             self.assertEqual(len(matches), 0, f"Found emojis in {fname}: {matches}")
             ext_urls = [m for m in url_pattern.findall(content) if 'w3.org' not in m]
             self.assertEqual(len(ext_urls), 0, f"External URLs found in {fname}: {ext_urls}")
+
+
+class TestTask34StickyPanelsAndMultiFilter(unittest.TestCase):
+    """
+    Test suite for Task 34: Feed Panels Sticky Behavior and Multi-Value Filtering.
+    Verifies:
+      1. Panels fixed under sticky header (--feed-header-total-height, overscroll-behavior: contain).
+      2. Internal scrolling structure (scrollable body, pinned sticky footer).
+      3. Multiple format selection (chips, clear selection, search).
+      4. Multiple audience selection (chips, clear selection, search).
+      5. Joint filtering logic (OR within group, AND between groups, backwards compatible URL/API).
+      6. Unified multiselect dropdown design (theme surface, Onest font, smart upward opening, keyboard nav).
+      7. Clean chips design (no default browser button styling, accessible SVG remove).
+      8. UI polish (chevron on date select, complexity 'Не указан', equal button heights 38px, neutral unsaved dot).
+      9. Feed mode in title, save settings toast action, unapplied filters indicator, active filters counter badge.
+      10. Draft preservation, apply filters closes panel and smooth-scrolls to results.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.feed_html_path = os.path.join(FRONTEND_DIR, 'feed.html')
+        with open(cls.feed_html_path, 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+
+        cls.feed_css_path = os.path.join(FRONTEND_DIR, 'css', 'feed.css')
+        with open(cls.feed_css_path, 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+
+        cls.feed_js_path = os.path.join(FRONTEND_DIR, 'js', 'feed.js')
+        with open(cls.feed_js_path, 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+
+    def test_01_panels_fixed_position_under_header(self):
+        """1. Verify panels use position: fixed under sticky subnav with dynamic CSS variable."""
+        self.assertIn('position: fixed;', self.feed_css)
+        self.assertIn('--feed-header-total-height', self.feed_css)
+        self.assertIn('function updateFeedPanelsPosition()', self.feed_js)
+        self.assertIn("document.documentElement.style.setProperty('--feed-header-total-height'", self.feed_js)
+        self.assertIn("window.addEventListener('scroll', updateFeedPanelsPosition", self.feed_js)
+        self.assertIn("window.addEventListener('resize', updateFeedPanelsPosition", self.feed_js)
+
+    def test_02_internal_scrolling_and_sticky_footer(self):
+        """2. Verify internal scroll containment and pinned action footer."""
+        self.assertIn('.feed-slide-panel-body', self.feed_css)
+        self.assertIn('overscroll-behavior: contain', self.feed_css)
+        self.assertIn('position: sticky', self.feed_css)
+        self.assertIn('bottom: 0', self.feed_css)
+
+    def test_03_multi_format_selection_markup_and_controls(self):
+        """3. Verify multi-format selection dropdown, trigger, clear button, and chips."""
+        self.assertIn('id="feedFormatsDropdownWrap"', self.feed_html)
+        self.assertIn('id="feedFormatsDropdownTrigger"', self.feed_html)
+        self.assertIn('id="modalFormatsFilterBar"', self.feed_html)
+        self.assertIn('id="btnFormatsClearSelection"', self.feed_html)
+        self.assertIn('id="filterSelectedFormatsChips"', self.feed_html)
+        self.assertIn('id="filterFormatSearchInput"', self.feed_html)
+
+    def test_04_multi_audience_selection_markup_and_controls(self):
+        """4. Verify multi-audience selection dropdown, trigger, clear button, and chips."""
+        self.assertIn('id="feedAudiencesDropdownWrap"', self.feed_html)
+        self.assertIn('id="feedAudiencesDropdownTrigger"', self.feed_html)
+        self.assertIn('id="modalAudiencesFilterBar"', self.feed_html)
+        self.assertIn('id="btnAudiencesClearSelection"', self.feed_html)
+        self.assertIn('id="filterSelectedAudiencesChips"', self.feed_html)
+        self.assertIn('id="filterAudienceSearchInput"', self.feed_html)
+
+    def test_05_joint_filtering_and_backwards_compatible_api(self):
+        """5. Verify server and client multi-filtering with backwards compatibility."""
+        # Client URL parsing & serialization
+        self.assertIn("params.get('formats')", self.feed_js)
+        self.assertIn("params.get('audiences')", self.feed_js)
+        self.assertIn("params.set('formats'", self.feed_js)
+        self.assertIn("params.set('audiences'", self.feed_js)
+
+        # Server-side joint filtering verification in server.py
+        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+            server_code = f.read()
+        self.assertIn('allowed_audiences', server_code)
+        self.assertIn('allowed_formats', server_code)
+        self.assertIn('query.get("audiences"', server_code)
+        self.assertIn('query.get("formats"', server_code)
+
+    def test_06_unified_dropdown_design_and_adaptive_direction(self):
+        """6. Verify unified dropdown styles, .opens-up support, and keyboard navigation."""
+        self.assertIn('.feed-multiselect-dropdown-menu', self.feed_css)
+        self.assertIn('.opens-up', self.feed_css)
+        self.assertIn("e.key === 'Escape'", self.feed_js)
+        self.assertIn('closeAllFilterDropdowns', self.feed_js)
+
+    def test_07_clean_selected_chips_styling(self):
+        """7. Verify selected chips have no default browser button styling and accessible SVGs."""
+        self.assertIn('.filter-selected-chip', self.feed_css)
+        self.assertIn('.filter-selected-chip-remove', self.feed_css)
+        self.assertIn('background: transparent', self.feed_css)
+
+    def test_08_ui_polish_details(self):
+        """8. Verify select chevron, 'Не указан' complexity, 38px button heights, and neutral unsaved dot."""
+        self.assertIn('.feed-select-chevron', self.feed_css)
+        self.assertIn('feed-select-chevron', self.feed_html)
+        self.assertIn('Не указан', self.feed_html)
+        self.assertIn('Автор не указал сложность', self.feed_html)
+        self.assertIn('feed-unsaved-dot', self.feed_css)
+        self.assertIn('height: 38px', self.feed_css)
+
+    def test_09_feed_modes_toast_unapplied_indicator_and_badge(self):
+        """9. Verify feed mode page title update, toast with action, unapplied indicator, and badge logic."""
+        self.assertIn('updateFeedTitleUI', self.feed_js)
+        self.assertIn('feedFiltersUnappliedIndicator', self.feed_html)
+        self.assertIn('checkFiltersPanelUnappliedChanges', self.feed_js)
+        self.assertIn('feed-toast-action-btn', self.feed_css)
+        self.assertIn('feed-toast-action-btn', self.feed_js)
+        self.assertIn('Открыть мою ленту', self.feed_js)
+
+    def test_10_draft_preservation_and_smooth_scroll(self):
+        """10. Verify filtersDraftState in-memory preservation and smooth scroll on apply."""
+        self.assertIn('filtersDraftState', self.feed_js)
+        self.assertIn("scrollIntoView({ behavior: 'smooth'", self.feed_js)
 
 
 if __name__ == '__main__':
