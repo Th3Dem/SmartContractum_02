@@ -1,0 +1,44 @@
+test_article_page_handles_comment_form_hash (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_article_page_handles_comment_form_hash)
+Verify article.js smoothly scrolls to comment form and prompts guest with auth modal. ... ok
+test_author_name_no_dark_borders_and_accessible_focus (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_author_name_no_dark_borders_and_accessible_focus)
+Verify .btn-author-profile has no border/background and retains :focus-visible. ... ok
+test_question_badge_rendered_and_no_faq (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_question_badge_rendered_and_no_faq)
+Verify questions render explicit 'Вопрос' badge and suppress format badge (FAQ). ... ok
+test_right_block_cta_content_and_links (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_right_block_cta_content_and_links)
+Verify right block CTA has 'Нужна помощь?' heading, exact copy, and opens editor modes. ... ok
+test_subnav_left_aligned_and_no_space_between (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_subnav_left_aligned_and_no_space_between)
+Verify .feed-subnav-container is flex-start left-aligned without space-between. ... ok
+test_subnav_mobile_horizontal_scroll_no_overflow (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_subnav_mobile_horizontal_scroll_no_overflow)
+Verify mobile subnav container allows horizontal scrolling with nowrap flex. ... ok
+test_topics_widget_single_transition_and_count (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_topics_widget_single_transition_and_count)
+Verify topics widget has subtitle 'Количество публикаций' and single transition button with count. ... ok
+test_two_user_full_question_answer_solution_scenario (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_two_user_full_question_answer_solution_scenario)
+Full 2-user scenario: ... [2026-09-28 20:23:25] "POST /api/auth/login HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "POST /api/auth/login HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "POST /api/moderation/submit HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "GET /api/articles?materialType=question HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "POST /api/articles/sub_1790616205_07db9f79/comments HTTP/1.1" 201 -
+[2026-09-28 20:23:25] "GET /api/notifications HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "POST /api/articles/sub_1790616205_07db9f79/comments/comm_1790616205267_16d78c/solution HTTP/1.1" 403 -
+/usr/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 403: 'Forbidden'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+[2026-09-28 20:23:25] "POST /api/articles/sub_1790616205_07db9f79/comments/comm_1790616205267_16d78c/solution HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "GET /api/articles/sub_1790616205_07db9f79 HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "GET /api/notifications HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "POST /api/articles/sub_1790616205_07db9f79/comments/comm_1790616205267_16d78c/solution HTTP/1.1" 200 -
+ok
+test_unanswered_questions_widget_structure_and_order (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_unanswered_questions_widget_structure_and_order)
+Verify unanswered questions widget is placed after CTA and has link to all unanswered. ... ok
+test_welcome_banner_exact_text_and_no_false_promises (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_welcome_banner_exact_text_and_no_false_promises)
+Verify welcome banner contains approved text and no unverified claims. ... ok
+test_welcome_banner_server_settings_persistence (tests.test_task39_community_mvp_ui_polish.TestTask39CommunityMVP.test_welcome_banner_server_settings_persistence)
+Verify authenticated user can persist welcome banner dismissal to /api/user/feed-settings. ... [2026-09-28 20:23:25] "POST /api/auth/login HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "GET /api/user/feed-settings HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "POST /api/user/feed-settings HTTP/1.1" 200 -
+[2026-09-28 20:23:25] "GET /api/user/feed-settings HTTP/1.1" 200 -
+ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.682s
+
+OK
