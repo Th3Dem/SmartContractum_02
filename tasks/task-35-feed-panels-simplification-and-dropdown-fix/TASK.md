@@ -66,12 +66,12 @@
   - Запрещено изменять:
     - `frontend/public/vendor/*`
 
-- **Текущий статус**: QA_APPROVED
-- **Ответственный исполнитель**: git_bot (FINALIZE)
-- **Рабочая ветка / копия**: feat/task-35-feed-panels-simplification-and-dropdown-fix
+- **Текущий статус**: DONE
+- **Ответственный исполнитель**: pm_bot
+- **Рабочая ветка / копия**: main
 - **Diff Snapshot Hash**: 2772790db2a0010a110392a059447fab507ddafea9ec65c9251f4df8898c224c
 - **Блокер**: нет
-- **Следующий шаг**: Вызов git_bot для этапа FINALIZE (фиксация коммитов и слияние в main)
+- **Следующий шаг**: Задача завершена (Done-Done)
 - **Ссылки на отчеты**:
   - DEV: `tasks/task-35-feed-panels-simplification-and-dropdown-fix/DEV_HANDOVER.md`
   - QA: `tasks/task-35-feed-panels-simplification-and-dropdown-fix/QA_REVIEW.md`
