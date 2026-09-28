@@ -129,7 +129,7 @@
           <span>Все публикации</span>
         </button>
 
-        <!-- Left Controls: 1. Write -> 2. Feed Settings -> 3. Filters -> 4. My Feed -> 5. Saved -->
+        <!-- Left Controls: 1. Write -> 2. My Feed -> 3. Saved -->
         <div class="feed-subnav-left">
           <!-- 1. «Написать» (#btnHeroWrite) - primary accent action at the left edge -->
           <a href="editor.html" class="btn btn-primary feed-subnav-write-btn" id="btnHeroWrite" title="Перейти в редактор статей">
@@ -140,39 +140,7 @@
             <span>Написать</span>
           </a>
 
-          <!-- 2. «Настройка ленты» (#btnFeedSettingsToggle) - secondary action -->
-          <button
-            type="button"
-            id="btnFeedSettingsToggle"
-            class="btn btn-secondary feed-subnav-btn feed-subnav-settings-btn"
-            aria-expanded="false"
-            aria-controls="feedSettingsPanel"
-            title="Настройка параметров ленты"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-            <span>Настройка ленты</span>
-          </button>
-
-          <!-- 3. «Фильтры» (#btnFeedFiltersToggle) - single filter button -->
-          <button
-            type="button"
-            id="btnFeedFiltersToggle"
-            class="btn btn-secondary feed-subnav-btn feed-subnav-filters-btn"
-            aria-expanded="false"
-            aria-controls="feedFiltersPanel"
-            title="Открыть фильтры"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-            </svg>
-            <span>Фильтры</span>
-            <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
-          </button>
-
-          <!-- 4. «Моя лента» (#tabFeedMy) - toggle with noticeable active state -->
+          <!-- 2. «Моя лента» (#tabFeedMy) - toggle with noticeable active state -->
           <button
             type="button"
             class="feed-subnav-tab personal-tab feed-my-tab-btn"
@@ -189,7 +157,7 @@
             <span>Моя лента</span>
           </button>
 
-          <!-- 5. «Сохраненные» (#feedSavedTab) - compact saved menu/button -->
+          <!-- 3. «Сохраненные» (#feedSavedTab) - compact saved menu/button -->
           <button
             type="button"
             id="feedSavedTab"
@@ -207,7 +175,7 @@
           </button>
         </div>
 
-        <!-- Right: 6. Expandable search group -->
+        <!-- Right: Search group and Filters button -->
         <div class="feed-subnav-right">
           <div class="feed-subnav-search-group" id="feedSearchGroup">
             <input
@@ -244,6 +212,22 @@
               </svg>
             </button>
           </div>
+
+          <!-- «Фильтры» (#btnFeedFiltersToggle) - single filter button to the right of search -->
+          <button
+            type="button"
+            id="btnFeedFiltersToggle"
+            class="btn btn-secondary feed-subnav-btn feed-subnav-filters-btn"
+            aria-expanded="false"
+            aria-controls="feedFiltersPanel"
+            title="Открыть фильтры"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span>Фильтры</span>
+            <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
+          </button>
         </div>
       </div>
     </nav>
@@ -683,52 +667,6 @@
       <div class="feed-layout-grid">
         <!-- Main Content Column -->
         <section class="feed-main-column">
-          <!-- Compact Page Title & Description (No heavy banner) -->
-          <div class="feed-compact-header">
-            <h1 class="feed-compact-title">Лента публикаций</h1>
-            <p class="feed-compact-desc">Разработка, безопасность и практика применения коммерческих смарт-контрактов</p>
-          </div>
-
-          <!-- Direct Toolbar Above Articles: Results Count, Sort, Manage Subscriptions -->
-          <div class="feed-direct-toolbar feed-toolbar-row" id="feedDirectToolbar">
-            <div class="feed-results-info">
-              <span id="feedResultsCount" class="feed-results-count" aria-live="polite">Загрузка статей...</span>
-            </div>
-            <div class="feed-direct-actions">
-              <!-- Manage Subscriptions button (visible in My Feed) -->
-              <button type="button" class="btn btn-secondary btn-sm feed-manage-subs-btn" id="btnManageSubscriptions" style="display: none;" title="Настроить подписки на авторов, темы и теги">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="8.5" cy="7" r="4"></circle>
-                  <line x1="20" y1="8" x2="20" y2="14"></line>
-                  <line x1="23" y1="11" x2="17" y2="11"></line>
-                </svg>
-                <span>Управление подписками</span>
-              </button>
-
-              <!-- Sort Order Select -->
-              <div class="feed-select-wrap">
-                <label for="feedSortSelect" class="visually-hidden">Сортировка</label>
-                <select id="feedSortSelect" class="feed-select feed-select-sm" title="Сортировка статей">
-                  <option value="newest">Сначала новые</option>
-                  <option value="popular">Популярные</option>
-                  <option value="discussed">Обсуждаемые</option>
-                  <option value="oldest">Сначала старые</option>
-                </select>
-              </div>
-
-              <!-- Period Select (Shown only when relevant) -->
-              <div class="feed-select-wrap" id="feedPeriodSelectWrap" style="display: none;">
-                <label for="feedPeriodSelect" class="visually-hidden">Период</label>
-                <select id="feedPeriodSelect" class="feed-select feed-select-sm" title="Выбор периода">
-                  <option value="all">За все время</option>
-                  <option value="month">За месяц</option>
-                  <option value="week">За неделю</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
           <!-- Active Filter Chips Bar -->
           <div id="feedActiveChipsBar" class="feed-active-chips-bar" style="display: none;">
             <div class="active-chips-label">Применены фильтры:</div>

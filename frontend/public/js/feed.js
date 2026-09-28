@@ -882,15 +882,14 @@
 
   function updateFeedTitleUI() {
     const titleEl = document.querySelector('.feed-compact-title');
-    if (!titleEl) return;
     if (state.tab === 'my') {
-      titleEl.textContent = 'Моя лента';
+      if (titleEl) titleEl.textContent = 'Моя лента';
       document.title = 'Моя лента — SmartContractum';
     } else if (state.tab === 'saved') {
-      titleEl.textContent = 'Сохраненные';
+      if (titleEl) titleEl.textContent = 'Сохраненные';
       document.title = 'Сохраненные — SmartContractum';
     } else {
-      titleEl.textContent = 'Лента публикаций';
+      if (titleEl) titleEl.textContent = 'Лента публикаций';
       document.title = 'Лента публикаций — SmartContractum';
     }
   }
@@ -2676,7 +2675,10 @@
     syncURL(false);
     fetchFeed(true);
 
-    const scrollTarget = document.getElementById('feedDirectToolbar') || document.getElementById('feedResultsCount');
+    const chipsBar = document.getElementById('feedActiveChipsBar');
+    const scrollTarget = (chipsBar && chipsBar.style.display !== 'none')
+      ? chipsBar
+      : (document.getElementById('feedCardsContainer') || document.querySelector('.feed-main-column'));
     if (scrollTarget) {
       scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }

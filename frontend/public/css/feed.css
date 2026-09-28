@@ -3669,10 +3669,19 @@ details[open] .summary-chevron {
 
   .feed-subnav-right {
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .feed-subnav-search-group {
-    width: 100% !important;
+    flex: 1;
+    min-width: 0;
+    width: auto !important;
+  }
+
+  .feed-subnav-right .feed-subnav-filters-btn {
+    flex-shrink: 0;
   }
 
   .feed-slide-panel-container {

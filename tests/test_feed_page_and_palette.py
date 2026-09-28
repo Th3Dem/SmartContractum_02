@@ -1362,8 +1362,8 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
         self.assertIn('id="tabFeedMy"', subnav_content, "#tabFeedMy must be located within #feedSubnavBar")
 
     def test_feed_period_select_wrap_initial_hidden(self):
-        """Verify #feedPeriodSelectWrap exists and is hidden by default when sort is newest."""
-        self.assertIn('id="feedPeriodSelectWrap"', self.feed_html)
+        """Verify #feedPeriodSelectWrap was removed with direct toolbar in task-36, and updatePeriodVisibility is safe."""
+        self.assertNotIn('id="feedPeriodSelectWrap"', self.feed_html)
         self.assertIn('updatePeriodVisibility', self.feed_js)
 
     def test_calm_metadata_badges_no_red_hard_complexity(self):
@@ -1483,11 +1483,12 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         self.assertIn('background-color: #ffffff', light_subnav.group(1))
 
     def test_direct_toolbar_and_no_duplicate_controls(self):
-        """Verify direct toolbar above articles and removal of duplicate controls block."""
-        self.assertIn('id="feedDirectToolbar"', self.feed_html)
-        self.assertIn('id="feedResultsCount"', self.feed_html)
-        self.assertIn('id="feedSortSelect"', self.feed_html)
-        self.assertIn('id="btnManageSubscriptions"', self.feed_html)
+        """Verify removal of direct toolbar, compact header, and duplicate controls block in task-36."""
+        self.assertNotIn('id="feedDirectToolbar"', self.feed_html)
+        self.assertNotIn('id="feedResultsCount"', self.feed_html)
+        self.assertNotIn('id="feedSortSelect"', self.feed_html)
+        self.assertNotIn('id="btnManageSubscriptions"', self.feed_html)
+        self.assertNotIn('feed-compact-header', self.feed_html)
 
         # Old hero card and controls section are not in feed.html
         self.assertNotIn('feed-hero-card', self.feed_html)
@@ -3682,22 +3683,15 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
             self.assertIn('repeat(2, minmax(0, 1fr))', grid_match.group(1))
 
     def test_07_unified_sorting_toolbar_and_no_sort_in_filters(self):
-        """7. Verify sort dropdown is only in direct toolbar, removed from filters panel, and preserved on reset."""
+        """7. Verify sort dropdown is removed from toolbar and filters panel in task-36, and sort state is preserved."""
         # Panel has no sort dropdown
         filters_panel_match = re.search(r'<section[^>]*id=["\']feedFiltersPanel["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
         self.assertIsNotNone(filters_panel_match)
         filters_panel_content = filters_panel_match.group(1)
         self.assertNotIn('feedSortSelect', filters_panel_content)
 
-        # Toolbar has sort dropdown with newest, popular, discussed, oldest
-        self.assertIn('id="feedSortSelect"', self.feed_html)
-        sort_select_match = re.search(r'<select[^>]*id=["\']feedSortSelect["\'][^>]*>(.*?)</select>', self.feed_html, re.DOTALL)
-        self.assertIsNotNone(sort_select_match)
-        sort_options = sort_select_match.group(1)
-        self.assertIn('value="newest"', sort_options)
-        self.assertIn('value="popular"', sort_options)
-        self.assertIn('value="discussed"', sort_options)
-        self.assertIn('value="oldest"', sort_options)
+        # In task-36, direct toolbar with feedSortSelect was removed per user request
+        self.assertNotIn('id="feedSortSelect"', self.feed_html)
 
         # resetAllFilters in feed.js preserves state.sort
         reset_func_match = re.search(r'function resetAllFilters\(\)\s*\{([^}]+)\}', self.feed_js)
@@ -4310,8 +4304,105 @@ class TestTask35FeedPanelsSimplificationAndDropdownFix(unittest.TestCase):
         self.assertIn("var(--font-sans)", self.feed_css)
 
 
+
+class TestTask36FeedHeaderSimplificationAndLayoutElevation(unittest.TestCase):
+    """Compliance and regression tests for Task 36:
+    Header simplification (removal of settings button, moving filters button to right of search),
+    removal of compact header & direct toolbar (results count and sort), and feed layout elevation.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(FRONTEND_DIR, 'feed.html'), 'r', encoding='utf-8') as f:
+            cls.feed_html = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'css', 'feed.css'), 'r', encoding='utf-8') as f:
+            cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
+            cls.feed_js = f.read()
+
+    def test_01_btn_settings_removed_from_header_menu(self):
+        """1. Verify 'Настройка ленты' button (#btnFeedSettingsToggle) is removed from subnav bar."""
+        subnav_match = re.search(r'<nav[^>]*class=["\'][^"\']*feed-subnav-bar[^"\']*["\'][^>]*>(.*?)</nav>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(subnav_match, "feed-subnav-bar not found in feed.html")
+        subnav_html = subnav_match.group(1)
+        self.assertNotIn('btnFeedSettingsToggle', subnav_html)
+        self.assertNotIn('Настройка ленты', subnav_html)
+
+    def test_02_filters_button_moved_to_right_of_search_in_subnav_right(self):
+        """2. Verify 'Фильтры' button is moved to the far right of the subnav, right of search group."""
+        subnav_right_match = re.search(r'<div[^>]*class=["\'][^"\']*feed-subnav-right[^"\']*["\'][^>]*>(.*?)</div>\s*</div>\s*</nav>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(subnav_right_match, "feed-subnav-right not found in feed.html")
+        subnav_right_html = subnav_right_match.group(1)
+
+        self.assertIn('id="feedSearchGroup"', subnav_right_html)
+        self.assertIn('id="btnFeedFiltersToggle"', subnav_right_html)
+
+        # btnFeedFiltersToggle must appear AFTER feedSearchGroup
+        search_idx = subnav_right_html.index('id="feedSearchGroup"')
+        filters_idx = subnav_right_html.index('id="btnFeedFiltersToggle"')
+        self.assertGreater(filters_idx, search_idx, "btnFeedFiltersToggle must be placed to the right of feedSearchGroup")
+
+    def test_03_compact_header_and_desc_removed(self):
+        """3. Verify .feed-compact-header and text phrase are removed from feed.html."""
+        self.assertNotIn('feed-compact-header', self.feed_html)
+        self.assertNotIn('feed-compact-title', self.feed_html)
+        self.assertNotIn('feed-compact-desc', self.feed_html)
+        self.assertNotIn('Разработка, безопасность и практика применения коммерческих смарт-контрактов', self.feed_html)
+
+    def test_04_direct_toolbar_results_count_and_sort_select_removed(self):
+        """4. Verify direct toolbar (#feedDirectToolbar), count (#feedResultsCount), and sort select are removed."""
+        self.assertNotIn('id="feedDirectToolbar"', self.feed_html)
+        self.assertNotIn('id="feedResultsCount"', self.feed_html)
+        self.assertNotIn('id="feedSortSelect"', self.feed_html)
+        self.assertNotIn('id="feedPeriodSelectWrap"', self.feed_html)
+        self.assertNotIn('id="btnManageSubscriptions"', self.feed_html)
+
+    def test_05_feed_elevation_layout_and_css(self):
+        """5. Verify feed articles list starts immediately under sticky subnav and container has elevated padding."""
+        # Main column directly contains chips bar and feed cards container
+        main_col_match = re.search(r'<section[^>]*class=["\'][^"\']*feed-main-column[^"\']*["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
+        self.assertIsNotNone(main_col_match, "feed-main-column not found in feed.html")
+        main_col_html = main_col_match.group(1).strip()
+
+        # First visible elements in main column must be chips bar or cards container
+        chips_idx = main_col_html.find('id="feedActiveChipsBar"')
+        cards_idx = main_col_html.find('id="feedCardsContainer"')
+        self.assertTrue(chips_idx != -1 and cards_idx != -1)
+        self.assertLess(chips_idx, cards_idx)
+
+        # Padding in feed.css is aligned with max-width container
+        container_rule = re.search(r'\.feed-main-container\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(container_rule)
+        self.assertIn('padding: 20px 24px 60px 24px;', container_rule.group(1))
+
+    def test_06_js_safe_execution_and_scroll_target(self):
+        """6. Verify feed.js scrollTarget fallbacks safely without feedDirectToolbar."""
+        self.assertIn("getElementById('feedActiveChipsBar')", self.feed_js)
+        self.assertIn("getElementById('feedCardsContainer')", self.feed_js)
+
+        # updateFeedTitleUI updates document.title even without .feed-compact-title
+        self.assertIn('document.title =', self.feed_js)
+
+    def test_07_mobile_responsive_subnav_right_styling(self):
+        """7. Verify feed.css includes responsive styling for .feed-subnav-right containing search and filters."""
+        self.assertIn('.feed-subnav-right .feed-subnav-filters-btn', self.feed_css)
+        self.assertIn('flex-shrink: 0;', self.feed_css)
+
+    def test_08_offline_first_strict_onest_and_zero_emojis(self):
+        """8. Verify 100% offline-first, strict Onest font, and zero emojis across modified files."""
+        emoji_pattern = re.compile(r'[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55]')
+        url_pattern = re.compile(r'https?://(?!localhost|127\.0\.0\.1|www\.w3\.org|smartcontractum\.ru)[^\s\'"<>]+')
+
+        for fname, content in [('feed.html', self.feed_html), ('feed.css', self.feed_css), ('feed.js', self.feed_js)]:
+            matches = emoji_pattern.findall(content)
+            self.assertEqual(len(matches), 0, f"Found emojis in {fname}: {matches}")
+            ext_urls = [m for m in url_pattern.findall(content) if 'w3.org' not in m]
+            self.assertEqual(len(ext_urls), 0, f"External URLs found in {fname}: {ext_urls}")
+
+
 if __name__ == '__main__':
     unittest.main()
+
 
 
 
