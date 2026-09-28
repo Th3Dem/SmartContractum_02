@@ -1061,3 +1061,72 @@
   padding: 10px;
   font-weight: 600;
 }
+
+/* ==========================================================================
+   Task 38: Solution Badge, Solution Comment Highlight & Code Copy
+   ========================================================================== */
+.comment-item.is-solution-comment {
+  border-left: 3px solid #16c784 !important;
+  background-color: rgba(22, 199, 132, 0.04);
+}
+
+.solution-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 199, 132, 0.12);
+  border: 1px solid rgba(22, 199, 132, 0.3);
+  color: #16c784;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: 8px 0;
+}
+
+.btn-toggle-solution {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.btn-toggle-solution:hover {
+  border-color: #16c784;
+  color: #16c784;
+}
+
+.comment-type-badge.answer-badge {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.btn-copy-code {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btn-copy-code:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+

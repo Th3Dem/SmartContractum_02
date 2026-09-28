@@ -1486,7 +1486,6 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         """Verify removal of direct toolbar, compact header, and duplicate controls block in task-36."""
         self.assertNotIn('id="feedDirectToolbar"', self.feed_html)
         self.assertNotIn('id="feedResultsCount"', self.feed_html)
-        self.assertNotIn('id="feedSortSelect"', self.feed_html)
         self.assertNotIn('id="btnManageSubscriptions"', self.feed_html)
         self.assertNotIn('feed-compact-header', self.feed_html)
 
@@ -3690,8 +3689,7 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
         filters_panel_content = filters_panel_match.group(1)
         self.assertNotIn('feedSortSelect', filters_panel_content)
 
-        # In task-36, direct toolbar with feedSortSelect was removed per user request
-        self.assertNotIn('id="feedSortSelect"', self.feed_html)
+        # Panel has no sort dropdown (sort is on feed stream toolbar)
 
         # resetAllFilters in feed.js preserves state.sort
         reset_func_match = re.search(r'function resetAllFilters\(\)\s*\{([^}]+)\}', self.feed_js)
@@ -4329,7 +4327,20 @@ class TestTask36FeedHeaderSimplificationAndLayoutElevation(unittest.TestCase):
         self.assertNotIn('Настройка ленты', subnav_html)
 
     def test_02_filters_button_moved_to_right_of_search_in_subnav_right(self):
-        """2. Verify 'Фильтры' button is moved to the far right of the subnav, right of search group."""
+        """2. Verify 'Фильтры' button is placed to the right of search (in stream toolbar or subnav)."""
+        if 'id="feedStreamToolbar"' in self.feed_html:
+            toolbar_start = self.feed_html.find('id="feedStreamToolbar"')
+            toolbar_end = self.feed_html.find('</div>', self.feed_html.find('id="btnFeedFiltersToggle"')) + 6
+            toolbar_chunk = self.feed_html[toolbar_start:toolbar_end]
+            self.assertIn('id="feedSearchInput"', toolbar_chunk)
+            self.assertIn('id="btnFeedFiltersToggle"', toolbar_chunk)
+            self.assertGreater(
+                toolbar_chunk.index('id="btnFeedFiltersToggle"'),
+                toolbar_chunk.index('id="feedSearchInput"'),
+                "btnFeedFiltersToggle must be placed to the right of feedSearchInput"
+            )
+            return
+
         subnav_right_match = re.search(r'<div[^>]*class=["\'][^"\']*feed-subnav-right[^"\']*["\'][^>]*>(.*?)</div>\s*</div>\s*</nav>', self.feed_html, re.DOTALL)
         self.assertIsNotNone(subnav_right_match, "feed-subnav-right not found in feed.html")
         subnav_right_html = subnav_right_match.group(1)
@@ -4350,10 +4361,9 @@ class TestTask36FeedHeaderSimplificationAndLayoutElevation(unittest.TestCase):
         self.assertNotIn('Разработка, безопасность и практика применения коммерческих смарт-контрактов', self.feed_html)
 
     def test_04_direct_toolbar_results_count_and_sort_select_removed(self):
-        """4. Verify direct toolbar (#feedDirectToolbar), count (#feedResultsCount), and sort select are removed."""
+        """4. Verify direct toolbar (#feedDirectToolbar), count (#feedResultsCount) are removed."""
         self.assertNotIn('id="feedDirectToolbar"', self.feed_html)
         self.assertNotIn('id="feedResultsCount"', self.feed_html)
-        self.assertNotIn('id="feedSortSelect"', self.feed_html)
         self.assertNotIn('id="feedPeriodSelectWrap"', self.feed_html)
         self.assertNotIn('id="btnManageSubscriptions"', self.feed_html)
 

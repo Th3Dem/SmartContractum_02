@@ -26,6 +26,29 @@ def make_svg_data_uri(svg_markup: str) -> str:
     return f"data:image/svg+xml;base64,{b64}"
 
 
+def split_title_lines(title: str, max_chars: int = 34) -> Tuple[str, str]:
+    """Splits title into two lines without breaking words in the middle."""
+    words = title.strip().split()
+    if not words:
+        return "", ""
+    line1_words = []
+    line2_words = []
+    curr_len = 0
+    for w in words:
+        w_len = len(w)
+        if not line2_words and (curr_len == 0 or curr_len + 1 + w_len <= max_chars):
+            line1_words.append(w)
+            curr_len += (1 if curr_len > 0 else 0) + w_len
+        else:
+            line2_words.append(w)
+    
+    l1 = " ".join(line1_words)
+    l2 = " ".join(line2_words)
+    if len(l2) > 38:
+        l2 = l2[:35].rsplit(" ", 1)[0] + "..."
+    return l1, l2
+
+
 def generate_svg_cover(badge_text: str, line1: str, line2: str, subtext: str, color1: str = "#38bdf8", color2: str = "#6366f1") -> str:
     """Generates standard 780x440 (39:22) SVG base64 cover image adhering to design system."""
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440">
@@ -763,10 +786,10 @@ ARTICLES_DATA = [
         "id": "art-24",
         "draft_id": "draft-24",
         "title": "Опрос сообщества: какие инструменты отладки смарт-контрактов вы используете?",
-        "author_id": "author_zaitsev",
-        "author": "Евгений Зайцев",
-        "authorInitials": "ЕЗ",
-        "authorRole": "Инженер тестирования",
+        "author_id": "author_petrov",
+        "author": "Дмитрий Петров",
+        "authorInitials": "ДП",
+        "authorRole": "Ведущий разработчик смарт-контрактов",
         "targetAudience": "smart-contracts-dev",
         "topics": ["testing-and-quality"],
         "keywords": ["Опрос", "Инструменты", "Отладка", "Hardhat", "Foundry"],
@@ -879,6 +902,54 @@ ARTICLES_DATA = [
         "badge_text": "БЕНЧМАРКИ",
         "subtext": "EVM vs WASM • +420% скорости • Стресс-тестирование"
     },
+    {
+        "id": "art-29",
+        "draft_id": "draft-29",
+        "title": "Как реализовать атомарный своп между Hyperledger Fabric и Masterchain без централизованного шлюза?",
+        "author_id": "author_volkov",
+        "author": "Сергей Волков",
+        "authorInitials": "СВ",
+        "authorRole": "Senior Blockchain Engineer",
+        "targetAudience": "smart-contracts-dev",
+        "topics": ["integrations-and-api", "pksc-architecture"],
+        "keywords": ["Атомарный своп", "Hyperledger", "Masterchain", "Хэш-локи", "HTLC"],
+        "description": "Изучаем архитектуру безопасного обмена активами между приватной сетью Hyperledger Fabric и Masterchain. Возможно ли обойтись схемой HTLC на стороне chaincode и смарт-контракта без доверенных ретрансляторов?",
+        "format": "faq",
+        "complexity": "hard",
+        "materialType": "question",
+        "clubId": None,
+        "clubTitle": None,
+        "companyId": None,
+        "companyName": None,
+        "created_at": "2024-12-06T14:00:00Z",
+        "likes_count": 5,
+        "badge_text": "ВОПРОС",
+        "subtext": "Атомарный своп • Fabric vs Masterchain • HTLC"
+    },
+    {
+        "id": "art-30",
+        "draft_id": "draft-30",
+        "title": "Ошибка Out of Gas при пакетной выплате дивидендов в смарт-контракте ЦФА",
+        "author_id": "author_morozova",
+        "author": "Елена Морозова",
+        "authorInitials": "ЕМ",
+        "authorRole": "Руководитель направления смарт-контрактов",
+        "targetAudience": "smart-contracts-dev",
+        "topics": ["smart-contracts-development", "digital-ruble-payments"],
+        "keywords": ["ЦФА", "Дивиденды", "Out of Gas", "Пакетная обработка", "Оптимизация"],
+        "description": "При начислении купонного дохода более чем на 300 держателей транзакция падает по лимиту газа в блоке. Как лучше реструктурировать вызовы — pull over push или меркл-дерево выплат?",
+        "format": "faq",
+        "complexity": "medium",
+        "materialType": "question",
+        "clubId": None,
+        "clubTitle": None,
+        "companyId": None,
+        "companyName": None,
+        "created_at": "2024-12-07T12:00:00Z",
+        "likes_count": 8,
+        "badge_text": "РЕШЕННЫЙ ВОПРОС",
+        "subtext": "ЦФА • Дивиденды • Лимит газа • Оптимизация"
+    },
 ]
 
 
@@ -896,7 +967,7 @@ def compute_snapshot_hash(title: str, article_html: str, publication_settings: A
 
 
 def seed_articles(conn: sqlite3.Connection):
-    """Seeds the 28 comprehensive publications into moderation_submissions idempotently."""
+    """Seeds the comprehensive publications into moderation_submissions idempotently."""
     for art in ARTICLES_DATA:
         cur = conn.cursor()
         cur.execute("SELECT id, article_html, publication_settings FROM moderation_submissions WHERE id = ?", (art["id"],))
@@ -904,10 +975,10 @@ def seed_articles(conn: sqlite3.Connection):
 
         badge_text = art.get("badge_text") or "SMARTCONTRACTUM"
         t = art["title"]
-        line1 = t[:32]
-        line2 = t[32:64] if len(t) > 32 else ""
+        line1, line2 = split_title_lines(t)
         subtext = art.get("subtext") or "Материал платформы SmartContractum"
-        cover_image = generate_svg_cover(badge_text, line1, line2, subtext)
+        is_question = (art.get("materialType") == "question")
+        cover_image = None if is_question else generate_svg_cover(badge_text, line1, line2, subtext)
 
         pub_settings = {
             "author": art["author"],
@@ -1060,19 +1131,34 @@ def seed_article_likes(conn: sqlite3.Connection):
 
 
 def seed_article_comments(conn: sqlite3.Connection):
-    """Seeds comments for articles with timestamps for rich discussions."""
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) AS cnt FROM article_comments")
-    if cur.fetchone()["cnt"] >= 10:
-        return
-
+    """Seeds comments and answers for articles with timestamps for rich discussions."""
     comments_data = [
-        ("comm-seed-04", "art-06", "reader_05", "Павел Белов", None, "Read-only reentrancy — одна из самых коварных ошибок, спасибо за подробный PoC.", "published", "2026-09-28T08:15:00Z"),
-        ("comm-seed-05", "art-06", "reader_06", "Татьяна Ильина", None, "Применяется ли подобная защита в продакшене?", "published", "2026-09-28T08:45:00Z"),
-        ("comm-seed-06", "art-05", "reader_04", "Ольга Васильева", None, "Очень вовремя! Как раз проектируем пул с высокой частотой вызовов.", "published", "2026-09-28T10:15:00Z"),
-        ("comm-seed-07", "art-07", "reader_07", "Артем Ковалев", None, "Двухфазный коммит отлично закрывает риски рассинхронизации.", "published", "2026-09-27T21:00:00Z"),
+        ("comm-seed-04", "art-06", "reader_05", "Павел Белов", None, "Read-only reentrancy — одна из самых коварных ошибок, спасибо за подробный PoC.", "published", "comment", 0, "2026-09-28T08:15:00Z"),
+        ("comm-seed-05", "art-06", "reader_06", "Татьяна Ильина", None, "Применяется ли подобная защита в продакшене?", "published", "comment", 0, "2026-09-28T08:45:00Z"),
+        ("comm-seed-06", "art-05", "reader_04", "Ольга Васильева", None, "Очень вовремя! Как раз проектируем пул с высокой частотой вызовов.", "published", "comment", 0, "2026-09-28T10:15:00Z"),
+        ("comm-seed-07", "art-07", "reader_07", "Артем Ковалев", None, "Двухфазный коммит отлично закрывает риски рассинхронизации.", "published", "comment", 0, "2026-09-27T21:00:00Z"),
+        ("comm-seed-08", "art-24", "reader_01", "Иван Соколов", None, "Мы перешли на Foundry около 6 месяцев назад. Скорость прогона тестов выросла примерно в 7 раз по сравнению с hardhat/ts. Возможность писать тесты на Solidity и фаззинг из коробки — главное преимущество.", "published", "answer", 0, "2026-09-28T09:00:00Z"),
+        ("comm-seed-09", "art-24", "reader_02", "Анна Куликова", None, "Уточните, как вы решаете задачу деплоймент-скриптов с интеграцией в корпоративный CI/CD на gitlab?", "published", "comment", 0, "2026-09-28T09:30:00Z"),
+        ("comm-seed-10", "art-30", "author_fedorov", "Сергей Федоров", None, "Рекомендую перейти на pull-паттерн (Claiming) с использованием SafeMath и ReentrancyGuard: смарт-контракт фиксирует общую сумму и номер транша, а каждый держатель самостоятельно забирает причитающуюся сумму отдельной транзакцией, либо через генерацию Merkle proof. Это снижает сложность до O(1) на стороне эмитента и полностью исключает блокировку блока.", "published", "answer", 1, "2026-09-27T14:30:00Z"),
     ]
     conn.executemany("""
-        INSERT OR IGNORE INTO article_comments (id, article_id, user_id, author_name, author_avatar, content, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO article_comments (id, article_id, user_id, author_name, author_avatar, content, status, comment_type, is_solution, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, comments_data)
+
+
+def seed_user_profiles(conn: sqlite3.Connection):
+    """Seeds initial user profiles."""
+    profiles = [
+        ("author_smirnov", "Алексей Смирнов", "Lead Blockchain Developer", "InnoTech", "Архитектура смарт-контрактов, EVM и корпоративные блокчейн-системы. Автор открытых библиотек для ЦФА.", None),
+        ("author_morozova", "Елена Морозова", "Руководитель направления смарт-контрактов", "Fintech Lab", "Специализация на программируемых расчетах в цифровых рублях и токенизации прав требований.", None),
+        ("author_fedorov", "Сергей Федоров", "Эксперт по безопасности смарт-контрактов", "АО «Блокчейн Аудит Лаб»", "Формальная верификация, безопасность кода смарт-контрактов и аудит протоколов.", None),
+        ("author_kuznetsov", "Михаил Кузнецов", "Архитектор решений", "Клуб «Архитекторы ПКСК»", "Моделирование корпоративных смарт-контрактов и разработка стандартов взаимодействия.", None)
+    ]
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    for uid, name, spec, comp, bio, avatar in profiles:
+        conn.execute("""
+            INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uid, name, spec, comp, bio, avatar, now_iso, now_iso))
+

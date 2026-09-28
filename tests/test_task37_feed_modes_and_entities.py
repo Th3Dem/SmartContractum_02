@@ -136,46 +136,31 @@ class TestSubnavAndHeaderLayout(TestTask37Base):
 
     def test_strict_visual_order_of_subnav_elements(self):
         """
-        Strict order of subnav elements:
-        Написать → В фокусе → Топ → Новое → Подписки → Клубы → Компании → Направления → Поиск → Фильтры
+        Task 38 strict order of subnav elements:
+        Создать + → Все публикации → Вопросы → Подписки → Сохраненные
         """
         subnav_start = self.feed_html.find('id="feedSubnavBar"')
         self.assertNotEqual(subnav_start, -1, "#feedSubnavBar must exist in feed.html")
         subnav_end = self.feed_html.find('</nav>', subnav_start)
         subnav_chunk = self.feed_html[subnav_start:subnav_end]
 
-        idx_write = subnav_chunk.find('id="btnHeroWrite"') if 'id="btnHeroWrite"' in subnav_chunk else subnav_chunk.find('feed-subnav-write-btn')
-        idx_focus = subnav_chunk.find('id="tabFeedFocus"')
-        idx_top = subnav_chunk.find('id="tabFeedTop"')
-        idx_new = subnav_chunk.find('id="tabFeedNew"')
+        idx_create = subnav_chunk.find('id="btnCreateDropdown"') if 'id="btnCreateDropdown"' in subnav_chunk else subnav_chunk.find('id="btnHeroWrite"')
+        idx_all = subnav_chunk.find('id="tabFeedAll"')
+        idx_questions = subnav_chunk.find('id="tabFeedQuestions"')
         idx_subs = subnav_chunk.find('id="tabFeedSubscriptions"')
-        idx_clubs = subnav_chunk.find('id="tabFeedClubs"')
-        idx_companies = subnav_chunk.find('id="tabFeedCompanies"')
-        idx_directions = subnav_chunk.find('id="tabFeedDirections"')
-        idx_search = subnav_chunk.find('feed-subnav-search-box')
-        idx_filters = subnav_chunk.find('id="btnFeedFiltersToggle"')
+        idx_saved = subnav_chunk.find('id="feedSavedTab"')
 
-        self.assertNotEqual(idx_write, -1, "Write button must exist in subnav")
-        self.assertNotEqual(idx_focus, -1, "Focus tab must exist in subnav")
-        self.assertNotEqual(idx_top, -1, "Top tab must exist in subnav")
-        self.assertNotEqual(idx_new, -1, "New tab must exist in subnav")
+        self.assertNotEqual(idx_create, -1, "Create button must exist in subnav")
+        self.assertNotEqual(idx_all, -1, "All publications tab must exist in subnav")
+        self.assertNotEqual(idx_questions, -1, "Questions tab must exist in subnav")
         self.assertNotEqual(idx_subs, -1, "Subscriptions tab must exist in subnav")
-        self.assertNotEqual(idx_clubs, -1, "Clubs tab must exist in subnav")
-        self.assertNotEqual(idx_companies, -1, "Companies tab must exist in subnav")
-        self.assertNotEqual(idx_directions, -1, "Directions tab must exist in subnav")
-        self.assertNotEqual(idx_search, -1, "Search box must exist in subnav")
-        self.assertNotEqual(idx_filters, -1, "Filters toggle button must exist in subnav")
+        self.assertNotEqual(idx_saved, -1, "Saved tab must exist in subnav")
 
-        # Verify strict sequence
-        self.assertLess(idx_write, idx_focus, "Написать must precede В фокусе")
-        self.assertLess(idx_focus, idx_top, "В фокусе must precede Топ")
-        self.assertLess(idx_top, idx_new, "Топ must precede Новое")
-        self.assertLess(idx_new, idx_subs, "Новое must precede Подписки")
-        self.assertLess(idx_subs, idx_clubs, "Подписки must precede Клубы")
-        self.assertLess(idx_clubs, idx_companies, "Клубы must precede Компании")
-        self.assertLess(idx_companies, idx_directions, "Компании must precede Направления")
-        self.assertLess(idx_directions, idx_search, "Направления must precede Поиск")
-        self.assertLess(idx_search, idx_filters, "Поиск must precede Фильтры")
+        # Verify strict sequence: Создать + → Все публикации → Вопросы → Подписки → Сохраненные
+        self.assertLess(idx_create, idx_all, "Создать + must precede Все публикации")
+        self.assertLess(idx_all, idx_questions, "Все публикации must precede Вопросы")
+        self.assertLess(idx_questions, idx_subs, "Вопросы must precede Подписки")
+        self.assertLess(idx_subs, idx_saved, "Подписки must precede Сохраненные")
 
     def test_rename_my_feed_to_subscriptions(self):
         """Visible label must be 'Подписки'."""
@@ -184,24 +169,24 @@ class TestSubnavAndHeaderLayout(TestTask37Base):
 
     def test_write_button_is_primary_accent(self):
         """Write button in subnav must have btn-primary accent class."""
-        self.assertIn('class="btn btn-primary feed-subnav-write-btn"', self.feed_html)
+        self.assertTrue('btn-primary' in self.feed_html and ('feed-create-btn' in self.feed_html or 'feed-subnav-write-btn' in self.feed_html))
 
     def test_relocated_saved_button_in_app_header(self):
         """
-        'Сохраненные' (#feedSavedTab, #feedSavedCount) must be inside #appHeader right before #headerLoginBtn / user bar.
+        Task 38: 'Сохраненные' (#feedSavedTab, #feedSavedCount) is moved to Subnav Level 2.
+        Header Level 1 (#appHeader) must contain #headerNotificationsBtn and #headerLoginBtn, but NOT #feedSavedTab.
         """
         header_start = self.feed_html.find('id="appHeader"')
         header_end = self.feed_html.find('</header>', header_start)
         header_chunk = self.feed_html[header_start:header_end]
 
-        idx_saved = header_chunk.find('id="feedSavedTab"')
-        idx_count = header_chunk.find('id="feedSavedCount"')
+        idx_notif = header_chunk.find('id="headerNotificationsBtn"')
         idx_login = header_chunk.find('id="headerLoginBtn"')
+        idx_saved_in_header = header_chunk.find('id="feedSavedTab"')
 
-        self.assertNotEqual(idx_saved, -1, "#feedSavedTab must exist inside #appHeader")
-        self.assertNotEqual(idx_count, -1, "#feedSavedCount must exist inside #appHeader")
+        self.assertNotEqual(idx_notif, -1, "#headerNotificationsBtn must exist inside #appHeader")
         self.assertNotEqual(idx_login, -1, "#headerLoginBtn must exist inside #appHeader")
-        self.assertLess(idx_saved, idx_login, "#feedSavedTab must precede #headerLoginBtn in header")
+        self.assertEqual(idx_saved_in_header, -1, "#feedSavedTab must NOT exist inside #appHeader in Task 38")
 
     def test_unified_header_markup_identity(self):
         """

@@ -76,6 +76,14 @@
       this.bindEvents();
       this.initEntityOptions();
       this.updateReadinessUI();
+
+      // Check ?type=question from URL
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('type') === 'question') {
+          this.setMaterialType('question');
+        }
+      } catch (e) {}
     }
 
     /* ==========================================================================
@@ -999,6 +1007,37 @@
     setMaterialType(type) {
       this.materialType = type || 'article';
       this.renderMaterialTypes();
+
+      // Question scenarios: prompts & security warning
+      const questionGuidancePrompts = '1. Что вы пытались сделать?\n2. Что пошло не так (ошибка или неожиданное поведение)?\n3. Какой результат ожидался?';
+      const questionSecurityWarning = 'Внимание: никогда не публикуйте приватные ключи, seed-фразы кошельков и боевые секреты смарт-контрактов.';
+
+      const descInput = document.getElementById('pub-description');
+      let questionSecWarning = document.getElementById('pub-question-security-warning');
+
+      if (type === 'question' || this.materialType === 'question') {
+        if (descInput) {
+          descInput.placeholder = questionGuidancePrompts;
+        }
+        if (!questionSecWarning && descInput && descInput.parentNode) {
+          questionSecWarning = document.createElement('div');
+          questionSecWarning.id = 'pub-question-security-warning';
+          questionSecWarning.className = 'feed-settings-error-msg';
+          questionSecWarning.style.cssText = 'background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; padding: 10px 14px; border-radius: 6px; font-size: 0.82rem; margin-top: 10px; display: block;';
+          questionSecWarning.textContent = questionSecurityWarning;
+          descInput.parentNode.insertBefore(questionSecWarning, descInput.nextSibling);
+        } else if (questionSecWarning) {
+          questionSecWarning.style.display = 'block';
+        }
+      } else {
+        if (descInput) {
+          descInput.placeholder = 'Краткое описание (лид) публикации...';
+        }
+        if (questionSecWarning) {
+          questionSecWarning.style.display = 'none';
+        }
+      }
+
       this.updateCardPreview();
     }
 

@@ -381,7 +381,8 @@
 
   function renderCommentItem(comment) {
     const el = document.createElement('div');
-    el.className = 'comment-item';
+    const isSol = Boolean(comment.isSolution || comment.is_solution);
+    el.className = 'comment-item' + (isSol ? ' is-solution-comment' : '');
     el.setAttribute('data-id', comment.id);
 
     const authorName = comment.authorName || 'Пользователь';
@@ -393,17 +394,83 @@
         : authorName.substring(0, 2).toUpperCase();
     }
 
-    const dateText = formatCommentDate(comment.createdAt);
+    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+
+    let solutionBadgeHtml = '';
+    if (isSol) {
+      solutionBadgeHtml =
+        '<div class="solution-badge">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+            '<polyline points="20 6 9 17 4 12"></polyline>' +
+          '</svg>' +
+          '<span>Решение принято автором</span>' +
+        '</div>';
+    }
+
+    let solutionActionBtn = '';
+    const isQuestion = currentArticle && (currentArticle.materialType === 'question' || (currentArticle.publication_settings && currentArticle.publication_settings.materialType === 'question'));
+    const isAuthor = currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id);
+    if (isQuestion && isAuthor) {
+      solutionActionBtn =
+        '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          (isSol ? 'Снять отметку решения' : 'Отметить как решение') +
+        '</button>';
+    }
+
+    const isAnswer = comment.commentType === 'answer' || comment.comment_type === 'answer';
+    const commentTypeBadge = isAnswer ? '<span class="comment-type-badge answer-badge">Ответ</span>' : '';
 
     el.innerHTML =
-      '<div class="comment-item-header">' +
-        '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-        '<span class="comment-author-name">' + escapeHtml(authorName) + '</span>' +
-        '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
+        '<div style="display: flex; align-items: center; gap: 8px;">' +
+          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
+          '<span class="comment-author-name">' + escapeHtml(authorName) + '</span>' +
+          commentTypeBadge +
+          '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+        '</div>' +
+        solutionActionBtn +
       '</div>' +
-      '<p class="comment-text">' + escapeHtml(comment.content || '') + '</p>';
+      solutionBadgeHtml +
+      '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>';
+
+    const toggleBtn = el.querySelector('.btn-toggle-solution');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const cid = toggleBtn.getAttribute('data-comment-id');
+        toggleSolution(cid);
+      });
+    }
 
     return el;
+  }
+
+  function toggleSolution(commentId) {
+    if (!currentArticle) return;
+    const articleId = currentArticle.id;
+    fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments/' + encodeURIComponent(commentId) + '/solution', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+      .then(function (res) {
+        if (res.status === 403) {
+          showToast('Только автор вопроса может отмечать решение');
+          throw new Error('FORBIDDEN');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          showToast(data.isSolution ? 'Ответ отмечен как решение' : 'Отметка решения снята');
+          loadComments(articleId);
+        } else {
+          showToast((data && data.error) || 'Ошибка изменения статуса решения');
+        }
+      })
+      .catch(function (err) {
+        console.error('Failed to toggle solution:', err);
+      });
   }
 
   function renderCommentsList(comments) {
@@ -425,7 +492,16 @@
 
     if (emptyEl) emptyEl.style.display = 'none';
 
-    comments.forEach(function (c) {
+    // Put solution comment first if present
+    const sortedComments = comments.slice().sort(function (a, b) {
+      const aSol = Boolean(a.isSolution || a.is_solution);
+      const bSol = Boolean(b.isSolution || b.is_solution);
+      if (aSol && !bSol) return -1;
+      if (!aSol && bSol) return 1;
+      return 0;
+    });
+
+    sortedComments.forEach(function (c) {
       listEl.appendChild(renderCommentItem(c));
     });
   }
@@ -973,6 +1049,28 @@
     // Sync Like State
     syncLikeButtons(article.likesCount, Boolean(article.hasLiked || article.isLiked));
 
+    // Customize Comments / Answers section for Questions
+    const isQuestion = article.materialType === 'question' || (article.publication_settings && article.publication_settings.materialType === 'question');
+    const commentsTitle = document.getElementById('commentsTitle') || document.querySelector('.comments-title');
+    const commentInput = document.getElementById('commentTextInput');
+    const commentsEmptyTitle = document.getElementById('commentsEmptyTitle');
+
+    if (isQuestion) {
+      if (commentsTitle) {
+        const badge = commentsTitle.querySelector('#commentsCountBadge');
+        commentsTitle.childNodes[0].textContent = 'Ответы ';
+      }
+      if (commentInput) {
+        commentInput.placeholder = 'Напишите содержательный ответ или решение с кодом...';
+      }
+      if (commentsEmptyTitle) {
+        commentsEmptyTitle.textContent = 'Пока нет ответов на этот вопрос';
+      }
+    }
+
+    // Initialize code block copy buttons
+    initCodeBlockCopyButtons();
+
     // Reveal Comments Section & Load Comments
     const commentsSec = document.getElementById('comments');
     if (commentsSec) {
@@ -1041,11 +1139,133 @@
   ];
 
   // --------------------------------------------------------------------------
+  // 7b. Code Block Copy Buttons & Notifications
+  // --------------------------------------------------------------------------
+  function initCodeBlockCopyButtons() {
+    const codeBlocks = document.querySelectorAll('pre code, pre');
+    codeBlocks.forEach(function (codeEl) {
+      const pre = codeEl.tagName === 'PRE' ? codeEl : codeEl.closest('pre');
+      if (!pre || pre.querySelector('.btn-copy-code')) return;
+      pre.style.position = 'relative';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-copy-code';
+      btn.title = 'Скопировать код';
+      btn.textContent = 'Копировать';
+      btn.addEventListener('click', function () {
+        const text = pre.innerText || pre.textContent || '';
+        navigator.clipboard.writeText(text).then(function () {
+          btn.textContent = 'Скопировано!';
+          setTimeout(function () { btn.textContent = 'Копировать'; }, 2000);
+        }).catch(function () {
+          btn.textContent = 'Ошибка';
+        });
+      });
+      pre.appendChild(btn);
+    });
+  }
+
+  function initHeaderNotifications() {
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifPopup = document.getElementById('headerNotifPopup');
+    const notifList = document.getElementById('notifListContainer');
+    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+    const notifWrap = document.getElementById('headerNotifWrap');
+
+    if (!notifBtn || !notifPopup) return;
+
+    function loadNotifications() {
+      fetch('/api/notifications')
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data || !data.success) return;
+          const count = data.unreadCount || 0;
+          if (notifBadge) {
+            if (count > 0) {
+              notifBadge.textContent = count > 99 ? '99+' : count;
+              notifBadge.style.display = 'inline-flex';
+            } else {
+              notifBadge.style.display = 'none';
+            }
+          }
+          if (notifList) {
+            const list = data.notifications || [];
+            if (list.length === 0) {
+              notifList.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
+            } else {
+              notifList.innerHTML = '';
+              list.forEach(function (n) {
+                const item = document.createElement('a');
+                item.className = 'notif-item' + (n.is_read ? ' is-read' : ' is-unread');
+                item.href = n.article_id ? ('article.html?id=' + encodeURIComponent(n.article_id) + '#comments') : '#';
+                item.innerHTML =
+                  '<div class="notif-item-title">' + escapeHtml(n.title) + '</div>' +
+                  '<div class="notif-item-msg">' + escapeHtml(n.message) + '</div>' +
+                  '<div class="notif-item-time">' + escapeHtml(n.created_at ? n.created_at.substring(0, 16).replace('T', ' ') : '') + '</div>';
+                notifList.appendChild(item);
+              });
+            }
+          }
+        })
+        .catch(function () {});
+    }
+
+    notifBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const isVisible = notifPopup.style.display !== 'none';
+      if (isVisible) {
+        notifPopup.style.display = 'none';
+        notifBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        notifPopup.style.display = 'block';
+        notifBtn.setAttribute('aria-expanded', 'true');
+        loadNotifications();
+      }
+    });
+
+    if (markAllBtn) {
+      markAllBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        fetch('/api/notifications/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && data.success) {
+              if (notifBadge) notifBadge.style.display = 'none';
+              if (notifList) {
+                const items = notifList.querySelectorAll('.notif-item.is-unread');
+                items.forEach(function (el) {
+                  el.classList.remove('is-unread');
+                  el.classList.add('is-read');
+                });
+              }
+            }
+          })
+          .catch(function () {});
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      if (notifWrap && !notifWrap.contains(e.target)) {
+        notifPopup.style.display = 'none';
+        notifBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    loadNotifications();
+  }
+
+  // --------------------------------------------------------------------------
   // 8. DOM Ready Entry Point
   // --------------------------------------------------------------------------
   document.addEventListener('DOMContentLoaded', function () {
     initTheme();
     initAuthControls();
+    initHeaderNotifications();
     checkAuthStatus(function () {
       loadArticle();
     });

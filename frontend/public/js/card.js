@@ -129,14 +129,18 @@
       ? ('<span class="card-company-badge"' + (isPreview ? ' id="preview-card-company"' : '') + '>' + escapeHtml(item.companyName) + '</span>')
       : (isPreview ? '<span class="card-company-badge" id="preview-card-company" style="display: none;"></span>' : '');
 
-    // 1. Author (Date removed from author row per task-30 requirements)
+    // 1. Author
+    const authorId = item.authorId || item.author_id || item.userId || '';
     const authorHtml =
       '<div class="card-meta">' +
         '<div class="author-info">' +
           '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + escapeHtml(authorInitials) + '</div>' +
           '<div class="author-details">' +
             '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
-              '<span class="author-name"' + (isPreview ? ' id="preview-card-author"' : '') + '>' + escapeHtml(authorName) + '</span>' +
+              (isPreview
+                ? ('<span class="author-name" id="preview-card-author">' + escapeHtml(authorName) + '</span>')
+                : ('<button type="button" class="author-name btn-author-profile" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>')
+              ) +
               companyBadgeHtml +
             '</div>' +
             (cleanRole
@@ -148,40 +152,52 @@
       '</div>';
 
     // 2. Title
+    const isQuestion = (item.materialType === 'question' || item.type === 'question');
     const articleUrl = isPreview ? '#' : ('article.html?id=' + encodeURIComponent(item.id || ''));
     const titleTag = isPreview ? 'h3' : 'h2';
     const titleHtml =
-      '<' + titleTag + ' class="card-title' + (isPreview ? ' pub-feed-card-title' : '') + '"' + (isPreview ? ' id="preview-card-title"' : '') + '>' +
+      '<' + titleTag + ' class="card-title' + (isPreview ? ' pub-feed-card-title' : '') + (isQuestion ? ' question-card-title' : '') + '"' + (isPreview ? ' id="preview-card-title"' : '') + '>' +
         (isPreview
           ? escapeHtml(cleanTitle)
           : ('<a href="' + articleUrl + '">' + escapeHtml(cleanTitle) + '</a>')
         ) +
       '</' + titleTag + '>';
 
-    // 3. Badges: Topic & Format only (Complexity moved down, Demo removed)
-    const badgesHtml = getBadgesHtml(item, options);
+    // 3. Badges: Topic, Solved (for question), Format (for article)
+    let badgesHtml = getBadgesHtml(item, options);
+    if (isQuestion && item.hasSolution) {
+      badgesHtml = '<span class="meta-badge solved-badge">Решено</span>' + badgesHtml;
+    }
     const badgesContainerHtml =
       '<div class="card-meta-badges' + (isPreview ? ' pub-feed-card-meta' : '') + '"' + (isPreview ? ' id="preview-card-badges"' : '') + (badgesHtml ? '' : ' style="display: none;"') + '>' +
         badgesHtml +
       '</div>';
 
-    // 4. Cover Image: 100% full card width, 39:22 aspect ratio, zero site overlays!
+    // 4. Cover Image: Questions do NOT have covers. Articles have 100% full width cover if available.
     let coverHtml = '';
-    if (item.coverImage) {
+    if (!isQuestion && item.material_type !== 'question' && item.coverImage) {
       coverHtml =
         '<div class="card-cover-container is-loading' + (isPreview ? ' pub-feed-card-cover is-loaded' : '') + '"' + (isPreview ? ' id="preview-card-cover"' : '') + '>' +
           '<img class="card-cover-img pub-preview-img" src="' + escapeHtml(item.coverImage) + '" alt="' + escapeHtml(cleanTitle) + '" loading="lazy" ' +
             'onload="this.parentElement.classList.remove(\'is-loading\'); this.parentElement.classList.add(\'is-loaded\');" ' +
             'onerror="var c=this.closest(\'.card-cover-container\'); if(c) { c.style.display=\'none\'; c.remove(); }">' +
         '</div>';
-    } else if (isPreview) {
-      // In preview template, preserve empty hidden container with id="preview-card-cover"
+    } else if (isPreview && !isQuestion && item.material_type !== 'question') {
       coverHtml = '<div class="card-cover-container pub-feed-card-cover" id="preview-card-cover" style="display: none;"></div>';
     }
 
-    // 5. Description
+    // 5. Description & Matched Answer Snippet (if any)
     const descText = item.description || (isPreview ? 'Краткое описание публикации появится здесь...' : '');
     const leadHtml = '<p class="card-lead' + (isPreview ? ' pub-feed-card-desc' : '') + '"' + (isPreview ? ' id="preview-card-desc"' : '') + '>' + escapeHtml(descText) + '</p>';
+
+    let snippetHtml = '';
+    if (item.matchedAnswerSnippet) {
+      snippetHtml =
+        '<div class="card-matched-snippet">' +
+          '<span class="matched-snippet-label">Найдено в ответе:</span> ' +
+          '<span class="matched-snippet-text">' + escapeHtml(item.matchedAnswerSnippet) + '</span>' +
+        '</div>';
+    }
 
     // 6. Keywords (#hashtags)
     const tags = Array.isArray(item.keywords) ? item.keywords : [];
@@ -221,22 +237,29 @@
       '</div>';
 
     // 7. Bottom in 2 compact rows:
-    // Row 1: Service info (date, reading time, complexity)
     const readingTimeText = item.readingTime || (isPreview ? '~1 мин чтения' : '5 мин чтения');
     const complexityBadgeHtml = getComplexityBadgeHtml(item, options);
 
-    const subInfoHtml =
-      '<div class="card-sub-info card-meta-row-bottom">' +
-        '<span class="publish-date"' + (isPreview ? ' id="preview-card-date"' : '') + '>' + escapeHtml(dateText) + '</span>' +
-        '<span class="meta-dot"></span>' +
-        '<div class="reading-time">' +
-          '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
-          '<span' + (isPreview ? ' class="pub-feed-card-time" id="preview-card-time"' : '') + '>' + escapeHtml(readingTimeText) + '</span>' +
-        '</div>' +
-        (complexityBadgeHtml ? ('<span class="meta-dot"></span>' + complexityBadgeHtml) : '') +
-      '</div>';
+    let subInfoHtml = '';
+    if (isQuestion) {
+      subInfoHtml =
+        '<div class="card-sub-info card-meta-row-bottom">' +
+          '<span class="publish-date"' + (isPreview ? ' id="preview-card-date"' : '') + '>' + escapeHtml(dateText) + '</span>' +
+        '</div>';
+    } else {
+      subInfoHtml =
+        '<div class="card-sub-info card-meta-row-bottom">' +
+          '<span class="publish-date"' + (isPreview ? ' id="preview-card-date"' : '') + '>' + escapeHtml(dateText) + '</span>' +
+          '<span class="meta-dot"></span>' +
+          '<div class="reading-time">' +
+            '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
+            '<span' + (isPreview ? ' class="pub-feed-card-time" id="preview-card-time"' : '') + '>' + escapeHtml(readingTimeText) + '</span>' +
+          '</div>' +
+          (complexityBadgeHtml ? ('<span class="meta-dot"></span>' + complexityBadgeHtml) : '') +
+        '</div>';
+    }
 
-    // Row 2: Action row (like with count, comments with count, bookmark, "read more" on the right)
+    // Row 2: Action row
     const isLiked = typeof options.isLiked === 'function' ? options.isLiked(item.id) : Boolean(item.hasLiked || item.isLiked);
     const likesCount = item.likesCount !== undefined ? item.likesCount : 0;
     const commentsCount = item.commentsCount !== undefined ? item.commentsCount : 0;
@@ -280,11 +303,11 @@
         '</a>';
     }
 
-    const bookmarkTooltip = isBookmarked ? 'Убрать из сохраненного' : 'Сохранить статью';
+    const bookmarkTooltip = isBookmarked ? 'Убрать из сохраненного' : 'Сохранить';
     let bookmarkHtml = '';
     if (isPreview) {
       bookmarkHtml =
-        '<button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить статью" aria-label="Сохранить статью" disabled>' +
+        '<button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить" aria-label="Сохранить" disabled>' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
@@ -298,11 +321,35 @@
         '</button>';
     }
 
+    let footerLeftHtml = '';
+    let readMoreText = 'Читать далее';
+    if (isQuestion) {
+      const aCount = item.answersCount !== undefined ? item.answersCount : (item.commentsCount || 0);
+      let aText = 'без ответов';
+      if (aCount === 1) aText = '1 ответ';
+      else if (aCount >= 2 && aCount <= 4) aText = aCount + ' ответа';
+      else if (aCount >= 5) aText = aCount + ' ответов';
+
+      const answersClass = item.hasSolution ? 'is-solved' : (aCount > 0 ? 'has-answers' : 'no-answers');
+      const answersBtnHtml =
+        '<a href="' + commentsUrl + '" class="btn-card-answers ' + answersClass + '" title="Перейти к ответам">' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+          '<span>' + (item.hasSolution ? 'Решение принято • ' : '') + aText + '</span>' +
+        '</a>';
+      footerLeftHtml = answersBtnHtml + bookmarkHtml;
+      readMoreText = (aCount === 0 ? 'Ответить' : 'Смотреть вопрос');
+    } else {
+      footerLeftHtml = likeBtnHtml + commentsBtnHtml + bookmarkHtml;
+      readMoreText = 'Читать далее';
+    }
+
     let readMoreHtml = '';
     if (isPreview) {
       readMoreHtml =
         '<span class="card-read-more btn-read-more" style="opacity: 0.7;">' +
-          '<span>Читать далее</span>' +
+          '<span>' + readMoreText + '</span>' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<line x1="5" y1="12" x2="19" y2="12"></line>' +
             '<polyline points="12 5 19 12 12 19"></polyline>' +
@@ -310,8 +357,8 @@
         '</span>';
     } else {
       readMoreHtml =
-        '<a href="' + articleUrl + '" class="card-read-more btn-read-more" title="Читать публикацию полностью">' +
-          '<span>Читать далее</span>' +
+        '<a href="' + articleUrl + '" class="card-read-more btn-read-more" title="' + readMoreText + '">' +
+          '<span>' + readMoreText + '</span>' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<line x1="5" y1="12" x2="19" y2="12"></line>' +
             '<polyline points="12 5 19 12 12 19"></polyline>' +
@@ -323,9 +370,7 @@
       '<footer class="card-footer">' +
         '<div class="card-actions-row card-footer-actions">' +
           '<div class="card-footer-left">' +
-            likeBtnHtml +
-            commentsBtnHtml +
-            bookmarkHtml +
+            footerLeftHtml +
           '</div>' +
           '<div class="card-footer-right">' +
             readMoreHtml +
@@ -339,6 +384,7 @@
       badgesContainerHtml +
       coverHtml +
       leadHtml +
+      snippetHtml +
       tagsContainerHtml +
       subInfoHtml +
       footerHtml;

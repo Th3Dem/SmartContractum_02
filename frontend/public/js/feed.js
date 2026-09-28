@@ -256,19 +256,26 @@
       state.tab = 'companies';
       state.activeCompanyId = companyParam;
       state.savedOnly = false;
+    } else if (tabParam === 'questions') {
+      state.tab = 'questions';
+      state.savedOnly = false;
     } else if (tabParam === 'my' || tabParam === 'subscriptions') {
       state.tab = 'subscriptions';
       state.savedOnly = false;
     } else if (tabParam === 'saved' || savedParam === '1' || savedParam === 'true') {
       state.tab = 'saved';
       state.savedOnly = true;
-    } else if (['focus', 'top', 'new', 'clubs', 'companies', 'directions', 'all'].includes(tabParam)) {
-      state.tab = tabParam === 'all' ? 'focus' : tabParam;
+    } else if (tabParam === 'all' || tabParam === 'focus') {
+      state.tab = 'all';
+      state.savedOnly = false;
+    } else if (['top', 'new', 'clubs', 'companies', 'directions'].includes(tabParam)) {
+      state.tab = tabParam;
       state.savedOnly = false;
     } else {
-      state.tab = 'focus';
+      state.tab = 'all';
       state.savedOnly = false;
     }
+    state.questionStatus = params.get('questionStatus') || 'all';
 
     // Temporary filters from URL
     const typesParam = params.get('types');
@@ -845,6 +852,35 @@
     }
   }
 
+  const defaultFiltersState = {
+    types: [],
+    topics: [],
+    complexities: [],
+    period: 'all',
+    dateFrom: '',
+    dateTo: '',
+    format: 'all',
+    formats: [],
+    audience: 'all',
+    audiences: []
+  };
+
+  function cloneFilters(f) {
+    if (!f) return Object.assign({}, defaultFiltersState);
+    return {
+      types: Array.isArray(f.types) ? f.types.slice() : [],
+      topics: Array.isArray(f.topics) ? f.topics.slice() : [],
+      complexities: Array.isArray(f.complexities) ? f.complexities.slice() : [],
+      period: f.period || 'all',
+      dateFrom: f.dateFrom || '',
+      dateTo: f.dateTo || '',
+      format: f.format || 'all',
+      formats: Array.isArray(f.formats) ? f.formats.slice() : [],
+      audience: f.audience || 'all',
+      audiences: Array.isArray(f.audiences) ? f.audiences.slice() : []
+    };
+  }
+
   function initSubnavTabs() {
     const tabFocus = document.getElementById('tabFeedFocus');
     const tabTop = document.getElementById('tabFeedTop');
@@ -855,6 +891,7 @@
     const tabDirections = document.getElementById('tabFeedDirections');
 
     const tabAll = document.getElementById('tabFeedAll');
+    const tabQuestions = document.getElementById('tabFeedQuestions');
     const tabMy = document.getElementById('tabFeedMy');
     const tabSaved = document.getElementById('feedSavedTab');
     const btnFeedSettings = document.getElementById('btnFeedSettingsToggle');
@@ -875,9 +912,21 @@
       });
     }
 
+    if (tabAll) {
+      tabAll.addEventListener('click', function () {
+        switchTab('all');
+      });
+    }
+
+    if (tabQuestions) {
+      tabQuestions.addEventListener('click', function () {
+        switchTab('questions');
+      });
+    }
+
     if (tabFocus) {
       tabFocus.addEventListener('click', function () {
-        switchTab('focus');
+        switchTab('all');
       });
     }
 
@@ -897,7 +946,7 @@
       tabSubs.addEventListener('click', function () {
         if (state.tab === 'subscriptions' || state.tab === 'my') {
           showToast('Возврат ко всем публикациям');
-          switchTab('focus');
+          switchTab('all');
         } else if (!currentUser) {
           openAuthModal('subscriptions');
         } else {
@@ -924,17 +973,11 @@
       });
     }
 
-    if (tabAll) {
-      tabAll.addEventListener('click', function () {
-        switchTab('focus');
-      });
-    }
-
     if (tabMy) {
       tabMy.addEventListener('click', function () {
         if (state.tab === 'my' || state.tab === 'subscriptions') {
           showToast('Возврат ко всем публикациям');
-          switchTab('focus');
+          switchTab('all');
         } else if (!currentUser) {
           openAuthModal('subscriptions');
         } else {
@@ -971,18 +1014,53 @@
     const btnShowAllTopics = document.getElementById('btnShowAllTopics');
     if (btnShowAllTopics) {
       btnShowAllTopics.addEventListener('click', function () {
-        switchTab('directions');
+        if (typeof openTopicsCatalogModal === 'function') {
+          openTopicsCatalogModal();
+        } else {
+          switchTab('directions');
+        }
       });
     }
   }
 
   function switchTab(tabName) {
     if (tabName === 'my') tabName = 'subscriptions';
-    if (tabName === 'all') tabName = 'focus';
+    if (tabName === 'focus') tabName = 'all';
+
+    // Isolate filter state per tab
+    state.tabFilters = state.tabFilters || {};
+    if (state.tab) {
+      state.tabFilters[state.tab] = cloneFilters(state.filters);
+    }
 
     state.tab = tabName;
     state.savedOnly = (tabName === 'saved');
     state.offset = 0;
+
+    if (state.tabFilters[tabName]) {
+      state.filters = cloneFilters(state.tabFilters[tabName]);
+      if (typeof syncFilterFormUI === 'function') {
+        syncFilterFormUI();
+      }
+    }
+
+    // Adjust controls for Questions tab vs standard tabs
+    const questionsPills = document.getElementById('feedQuestionsStatusPills');
+    const searchInput = document.getElementById('feedSearchInput');
+    const typesFilterGroup = document.getElementById('feedFilterGroupTypes');
+    const compFilterGroup = document.getElementById('feedFilterGroupComplexity');
+
+    if (tabName === 'questions') {
+      if (questionsPills) questionsPills.style.display = 'inline-flex';
+      if (searchInput) searchInput.placeholder = 'Поиск по вопросам и ответам...';
+      if (typesFilterGroup) typesFilterGroup.style.display = 'none';
+      if (compFilterGroup) compFilterGroup.style.display = 'none';
+    } else {
+      if (questionsPills) questionsPills.style.display = 'none';
+      if (searchInput) searchInput.placeholder = 'Поиск по ленте...';
+      if (typesFilterGroup) typesFilterGroup.style.display = 'block';
+      if (compFilterGroup) compFilterGroup.style.display = 'block';
+    }
 
     if (tabName !== 'clubs') state.activeClubId = null;
     if (tabName !== 'companies') state.activeCompanyId = null;
@@ -1018,14 +1096,16 @@
   function updateFeedTitleUI() {
     const titleEl = document.querySelector('.feed-compact-title');
     const titles = {
-      focus: 'В фокусе — SmartContractum',
+      all: 'Все публикации — SmartContractum',
+      questions: 'Вопросы — SmartContractum',
+      focus: 'Все публикации — SmartContractum',
       top: 'Топ публикаций — SmartContractum',
       new: 'Новые публикации — SmartContractum',
       subscriptions: 'Мои подписки — SmartContractum',
       my: 'Мои подписки — SmartContractum',
       clubs: 'Клубы и сообщества — SmartContractum',
       companies: 'Компании — SmartContractum',
-      directions: 'Направления — SmartContractum',
+      directions: 'Темы — SmartContractum',
       saved: 'Сохраненные — SmartContractum'
     };
     const t = titles[state.tab] || 'Лента публикаций — SmartContractum';
@@ -1044,11 +1124,22 @@
     const tabCompanies = document.getElementById('tabFeedCompanies');
     const tabDirections = document.getElementById('tabFeedDirections');
     const tabAll = document.getElementById('tabFeedAll');
+    const tabQuestions = document.getElementById('tabFeedQuestions');
     const tabMy = document.getElementById('tabFeedMy');
     const tabSaved = document.getElementById('feedSavedTab');
 
     const cur = state.tab;
 
+    if (tabAll) {
+      const isAll = cur === 'all' || cur === 'focus';
+      tabAll.classList.toggle('active', isAll);
+      tabAll.setAttribute('aria-selected', isAll ? 'true' : 'false');
+    }
+    if (tabQuestions) {
+      const isQ = cur === 'questions';
+      tabQuestions.classList.toggle('active', isQ);
+      tabQuestions.setAttribute('aria-selected', isQ ? 'true' : 'false');
+    }
     if (tabFocus) {
       const isFocus = cur === 'focus' || cur === 'all';
       tabFocus.classList.toggle('active', isFocus);
@@ -1083,11 +1174,6 @@
       const isDir = cur === 'directions';
       tabDirections.classList.toggle('active', isDir);
       tabDirections.setAttribute('aria-selected', isDir ? 'true' : 'false');
-    }
-    if (tabAll) {
-      const isAll = cur === 'focus' || cur === 'all';
-      tabAll.classList.toggle('active', isAll);
-      tabAll.setAttribute('aria-selected', isAll ? 'true' : 'false');
     }
     if (tabMy) {
       const isMy = cur === 'subscriptions' || cur === 'my';
@@ -3399,8 +3485,12 @@
     const params = new URLSearchParams();
     let backendTab = state.tab;
     if (backendTab === 'my') backendTab = 'subscriptions';
-    if (backendTab === 'all') backendTab = 'focus';
+    if (backendTab === 'focus') backendTab = 'all';
     params.set('tab', backendTab);
+
+    if (backendTab === 'questions' && state.questionStatus) {
+      params.set('questionStatus', state.questionStatus);
+    }
 
     if (backendTab === 'top') {
       params.set('period', state.topPeriod || 'week');
@@ -5459,6 +5549,324 @@
   }
 
   // --------------------------------------------------------------------------
+  // 12b. Task 38 Community MVP Features (Navigation, Questions, Notifications)
+  // --------------------------------------------------------------------------
+  function initTask38CommunityFeatures() {
+    // 1. «Создать +» Dropdown in subnav
+    const btnCreate = document.getElementById('btnCreateDropdown');
+    const createMenu = document.getElementById('feedCreateMenu');
+    const createWrap = document.getElementById('feedCreateDropdownWrap');
+    if (btnCreate && createMenu) {
+      btnCreate.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isOpen = createMenu.style.display !== 'none';
+        createMenu.style.display = isOpen ? 'none' : 'flex';
+        btnCreate.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      });
+
+      document.addEventListener('click', function (e) {
+        if (createWrap && !createWrap.contains(e.target)) {
+          createMenu.style.display = 'none';
+          btnCreate.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
+    // 2. Questions Status Pills in feed toolbar
+    const statusPillsWrap = document.getElementById('feedQuestionsStatusPills');
+    if (statusPillsWrap) {
+      const pills = statusPillsWrap.querySelectorAll('.feed-status-pill');
+      pills.forEach(function (pill) {
+        pill.addEventListener('click', function () {
+          const s = pill.getAttribute('data-status') || 'all';
+          state.questionStatus = s;
+          pills.forEach(function (p) { p.classList.toggle('active', p === pill); });
+          state.offset = 0;
+          syncURL(false);
+          fetchFeed(true);
+        });
+      });
+    }
+
+    // 3. Dismissible Welcome Banner
+    const welcomeBanner = document.getElementById('feedWelcomeBanner');
+    const btnDismissWelcome = document.getElementById('btnDismissWelcomeBanner');
+    if (welcomeBanner) {
+      try {
+        if (localStorage.getItem('sc_welcome_dismissed') === '1') {
+          welcomeBanner.style.display = 'none';
+        } else {
+          welcomeBanner.style.display = 'flex';
+        }
+      } catch (e) {
+        welcomeBanner.style.display = 'flex';
+      }
+
+      if (btnDismissWelcome) {
+        btnDismissWelcome.addEventListener('click', function () {
+          try {
+            localStorage.setItem('sc_welcome_dismissed', '1');
+          } catch (e) {}
+          welcomeBanner.style.display = 'none';
+        });
+      }
+    }
+
+    // 4. Unanswered Questions Sidebar Widget
+    function loadUnansweredQuestions() {
+      const widget = document.getElementById('widgetUnansweredQuestions');
+      const listEl = document.getElementById('unansweredQuestionsList');
+      if (!widget || !listEl) return;
+
+      fetch('/api/questions/unanswered')
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data || !data.success || !Array.isArray(data.questions) || data.questions.length === 0) {
+            widget.style.display = 'none';
+            return;
+          }
+          widget.style.display = 'block';
+          listEl.innerHTML = '';
+          data.questions.slice(0, 3).forEach(function (q) {
+            const item = document.createElement('div');
+            item.className = 'unanswered-item';
+            const topicTitle = (window.PublicationConfig && window.PublicationConfig.TOPICS_MAP && window.PublicationConfig.TOPICS_MAP[q.topic]) || q.topic || '';
+            item.innerHTML =
+              '<a href="article.html?id=' + encodeURIComponent(q.id) + '" class="unanswered-item-title">' + escapeHtml(q.title) + '</a>' +
+              '<div class="unanswered-item-meta">' +
+                '<span>' + escapeHtml(q.author || 'Автор') + '</span>' +
+                (topicTitle ? '<span>• ' + escapeHtml(topicTitle) + '</span>' : '') +
+              '</div>';
+            listEl.appendChild(item);
+          });
+        })
+        .catch(function () {
+          widget.style.display = 'none';
+        });
+    }
+    loadUnansweredQuestions();
+
+    // 5. Topics Catalog Modal
+    const topicsModal = document.getElementById('topicsCatalogModal');
+    const btnShowAllTopics = document.getElementById('btnShowAllTopics');
+    const btnCloseTopicsModal = document.getElementById('btnCloseTopicsCatalogModal');
+    const topicsModalGrid = document.getElementById('topicsCatalogModalGrid');
+
+    window.openTopicsCatalogModal = function () {
+      if (!topicsModal || !topicsModalGrid) return;
+      topicsModalGrid.innerHTML = '';
+      const topics = (window.PublicationConfig && window.PublicationConfig.TOPICS) || [];
+      topics.forEach(function (t) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'topic-catalog-card';
+        const count = state.topicCounts[t.id] || 0;
+        card.innerHTML =
+          '<span class="topic-catalog-card-name">' + escapeHtml(t.title) + '</span>' +
+          '<span class="topic-catalog-card-count">' + count + ' ' + pluralize(count, 'статья', 'статьи', 'статей') + '</span>';
+        card.addEventListener('click', function () {
+          topicsModal.style.display = 'none';
+          state.filters.topics = [t.id];
+          state.offset = 0;
+          if (typeof syncFilterFormUI === 'function') {
+            syncFilterFormUI();
+          }
+          syncURL(false);
+          fetchFeed(true);
+        });
+        topicsModalGrid.appendChild(card);
+      });
+      topicsModal.style.display = 'flex';
+    };
+
+    if (btnShowAllTopics) {
+      btnShowAllTopics.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.openTopicsCatalogModal();
+      });
+    }
+
+    if (btnCloseTopicsModal && topicsModal) {
+      btnCloseTopicsModal.addEventListener('click', function () {
+        topicsModal.style.display = 'none';
+      });
+      topicsModal.addEventListener('click', function (e) {
+        if (e.target === topicsModal) topicsModal.style.display = 'none';
+      });
+    }
+
+    // 6. Header Notifications
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifPopup = document.getElementById('headerNotifPopup');
+    const notifList = document.getElementById('notifListContainer');
+    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+    const notifWrap = document.getElementById('headerNotifWrap');
+
+    function loadHeaderNotifications() {
+      if (!notifBtn) return;
+      fetch('/api/notifications')
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data || !data.success) return;
+          const count = data.unreadCount || 0;
+          if (notifBadge) {
+            if (count > 0) {
+              notifBadge.textContent = count > 99 ? '99+' : count;
+              notifBadge.style.display = 'inline-flex';
+            } else {
+              notifBadge.style.display = 'none';
+            }
+          }
+          if (notifList) {
+            const list = data.notifications || [];
+            if (list.length === 0) {
+              notifList.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
+            } else {
+              notifList.innerHTML = '';
+              list.forEach(function (n) {
+                const item = document.createElement('a');
+                item.className = 'notif-item' + (n.is_read ? ' is-read' : ' is-unread');
+                item.href = n.article_id ? ('article.html?id=' + encodeURIComponent(n.article_id) + '#comments') : '#';
+                item.innerHTML =
+                  '<div class="notif-item-title">' + escapeHtml(n.title) + '</div>' +
+                  '<div class="notif-item-msg">' + escapeHtml(n.message) + '</div>' +
+                  '<div class="notif-item-time">' + escapeHtml(n.created_at ? n.created_at.substring(0, 16).replace('T', ' ') : '') + '</div>';
+                notifList.appendChild(item);
+              });
+            }
+          }
+        })
+        .catch(function () {});
+    }
+
+    if (notifBtn && notifPopup) {
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isVisible = notifPopup.style.display !== 'none';
+        if (isVisible) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          notifPopup.style.display = 'block';
+          notifBtn.setAttribute('aria-expanded', 'true');
+          loadHeaderNotifications();
+        }
+      });
+
+      if (markAllBtn) {
+        markAllBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.success) {
+                if (notifBadge) notifBadge.style.display = 'none';
+                if (notifList) {
+                  const items = notifList.querySelectorAll('.notif-item.is-unread');
+                  items.forEach(function (el) {
+                    el.classList.remove('is-unread');
+                    el.classList.add('is-read');
+                  });
+                }
+              }
+            })
+            .catch(function () {});
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (notifWrap && !notifWrap.contains(e.target)) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      loadHeaderNotifications();
+    }
+
+    // 7. User Profile Modal
+    const userModal = document.getElementById('userProfileModal');
+    const btnCloseUserModal = document.getElementById('btnCloseUserProfileModal');
+    const userModalBody = document.getElementById('userProfileModalBody');
+
+    function openUserProfileModal(userId) {
+      if (!userModal || !userModalBody) return;
+      userModalBody.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted);">Загрузка профиля...</div>';
+      userModal.style.display = 'flex';
+
+      fetch('/api/users/' + encodeURIComponent(userId))
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data || !data.success || !data.user) {
+            userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Профиль пользователя не найден</div>';
+            return;
+          }
+          const u = data.user;
+          const initials = u.initials || (u.name ? u.name.split(' ').map(function (s) { return s[0]; }).join('').toUpperCase() : 'SC');
+          const stats = u.stats || {};
+          let articlesHtml = '';
+          if (Array.isArray(u.articles) && u.articles.length > 0) {
+            articlesHtml = '<div class="user-profile-articles-title">Публикации автора (' + u.articles.length + ')</div>' +
+              '<div class="user-profile-articles-list">' +
+              u.articles.map(function (a) {
+                return '<a href="article.html?id=' + encodeURIComponent(a.id) + '" class="user-profile-article-item">' +
+                  '<span>' + escapeHtml(a.title) + '</span>' +
+                  '<span style="color: var(--text-muted); font-size: 0.78rem;">' + (a.created_at ? a.created_at.substring(0, 10) : '') + '</span>' +
+                '</a>';
+              }).join('') +
+              '</div>';
+          }
+
+          userModalBody.innerHTML =
+            '<div class="user-profile-header">' +
+              '<div class="user-profile-avatar">' + escapeHtml(initials) + '</div>' +
+              '<div>' +
+                '<div class="user-profile-name">' + escapeHtml(u.name || userId) + '</div>' +
+                (u.specialization ? '<div class="user-profile-spec">' + escapeHtml(u.specialization) + '</div>' : '') +
+                (u.company ? '<div class="user-profile-company">' + escapeHtml(u.company) + '</div>' : '') +
+              '</div>' +
+            '</div>' +
+            (u.bio ? '<div class="user-profile-bio">' + escapeHtml(u.bio) + '</div>' : '') +
+            '<div class="user-profile-stats">' +
+              '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.articlesCount || 0) + '</span><span class="user-profile-stat-label">Публикаций</span></div>' +
+              '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.answersCount || 0) + '</span><span class="user-profile-stat-label">Ответов</span></div>' +
+              '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.solutionsCount || 0) + '</span><span class="user-profile-stat-label">Решений</span></div>' +
+            '</div>' +
+            articlesHtml;
+        })
+        .catch(function () {
+          userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Ошибка загрузки профиля</div>';
+        });
+    }
+
+    if (btnCloseUserModal && userModal) {
+      btnCloseUserModal.addEventListener('click', function () {
+        userModal.style.display = 'none';
+      });
+      userModal.addEventListener('click', function (e) {
+        if (e.target === userModal) userModal.style.display = 'none';
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      const authorBtn = e.target.closest('.btn-author-profile');
+      if (authorBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const authorId = authorBtn.getAttribute('data-author-id');
+        if (authorId) {
+          openUserProfileModal(authorId);
+        }
+      }
+    });
+  }
+
+  // --------------------------------------------------------------------------
   // 13. DOM Ready Entry Point
   // --------------------------------------------------------------------------
   document.addEventListener('DOMContentLoaded', function () {
@@ -5470,6 +5878,7 @@
     initFeedFiltersPanel();
     initAuthControls();
     initTask37Entities();
+    initTask38CommunityFeatures();
 
     checkAuthStatus(function () {
       parseURLParams();

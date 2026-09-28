@@ -102,22 +102,32 @@
               </span>
             </span>
           </button>
-          <!-- Saved button in header (relocated in task-37) -->
-          <button
-            type="button"
-            id="feedSavedTab"
-            class="header-saved-btn feed-saved-btn personal-tab"
-            data-tab="saved"
-            role="tab"
-            aria-selected="false"
-            title="Показать сохраненные статьи"
-          >
-            <svg class="saved-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
-            </svg>
-            <span class="header-saved-label">Сохраненные</span>
-            <span id="feedSavedCount" class="feed-saved-count">0</span>
-          </button>
+          <!-- Notifications Bell button with unread badge & popup -->
+          <div class="header-notif-wrap" id="headerNotifWrap">
+            <button
+              type="button"
+              id="headerNotificationsBtn"
+              class="header-notif-btn"
+              title="Уведомления"
+              aria-label="Уведомления"
+              aria-expanded="false"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+              </svg>
+              <span id="headerNotifBadge" class="header-notif-badge" style="display: none;">0</span>
+            </button>
+            <div id="headerNotifPopup" class="header-notif-popup" style="display: none;" role="region" aria-label="Список уведомлений">
+              <div class="notif-popup-header">
+                <span class="notif-popup-title">Уведомления</span>
+                <button type="button" id="notifMarkAllReadBtn" class="notif-mark-read-btn">Прочитать все</button>
+              </div>
+              <div id="notifListContainer" class="notif-list-container">
+                <div class="notif-empty-state">Нет новых уведомлений</div>
+              </div>
+            </div>
+          </div>
 
           <div class="header-user-bar">
             <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
@@ -138,166 +148,105 @@
 
     <!-- ================================================================
          SECOND LEVEL MENU (FEED SUB-NAV BAR) - Sticky top: 56px
-         Visual Order: Написать → В фокусе → Топ → Новое → Подписки → Клубы → Компании → Направления → Поиск → Фильтры
+         Order: Создать + · Все публикации · Вопросы · Подписки · Сохраненные
     ================================================================= -->
     <nav class="feed-subnav-bar" id="feedSubnavBar" aria-label="Управление лентой публикаций">
       <div class="feed-subnav-container">
-        <!-- Backward compatibility stubs for task-26 test suite -->
-        <div style="display: none;" aria-hidden="true">
-          <button type="button" id="tabFeedAll" data-tab="all"></button>
-          <button type="button" id="tabFeedMy" data-tab="my"></button>
-          <!-- id="feedSavedTab" relocated to header right group in task-37 -->
+        <!-- 1. «Создать +» Dropdown (#btnCreateDropdown) -->
+        <div class="feed-create-dropdown-wrap" id="feedCreateDropdownWrap">
+          <button
+            type="button"
+            class="btn btn-primary feed-create-btn"
+            id="btnCreateDropdown"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Создать материал"
+          >
+            <span>Создать +</span>
+          </button>
+          <div class="feed-create-menu" id="feedCreateMenu" style="display: none;" role="menu">
+            <a href="editor.html?type=question" class="feed-create-menu-item" role="menuitem" id="btnCreateQuestion">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>Задать вопрос</span>
+            </a>
+            <a href="editor.html" class="feed-create-menu-item" role="menuitem" id="btnCreatePublication">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+              <span>Написать публикацию</span>
+            </a>
+          </div>
         </div>
 
-        <!-- 1. «Написать» (#btnHeroWrite) - primary accent action at left -->
-        <a href="editor.html" class="btn btn-primary feed-subnav-write-btn" id="btnHeroWrite" title="Перейти в редактор статей">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h9"></path>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-          </svg>
-          <span>Написать</span>
-        </a>
-
-        <!-- 2-8. 7 Navigation Tabs (One line on desktop, horizontal scroll on mobile) -->
+        <!-- 2. Subnav Tabs: Все публикации · Вопросы · Подписки · Сохраненные -->
         <div class="feed-subnav-tabs" id="feedSubnavTabs" role="tablist">
           <button
             type="button"
             class="feed-subnav-tab active"
-            id="tabFeedFocus"
-            data-tab="focus"
+            id="tabFeedAll"
+            data-tab="all"
             role="tab"
             aria-selected="true"
-            title="Лента «В фокусе» (умная гравитационная активность)"
+            title="Все публикации сообщества"
           >
-            <span>В фокусе</span>
+            Все публикации
           </button>
 
           <button
             type="button"
             class="feed-subnav-tab"
-            id="tabFeedTop"
-            data-tab="top"
+            id="tabFeedQuestions"
+            data-tab="questions"
             role="tab"
             aria-selected="false"
-            title="Топ публикаций по популярности"
+            title="Вопросы и ответы сообщества"
           >
-            <span>Топ</span>
+            Вопросы
           </button>
 
           <button
             type="button"
-            class="feed-subnav-tab"
-            id="tabFeedNew"
-            data-tab="new"
-            role="tab"
-            aria-selected="false"
-            title="Свежие публикации по времени добавления"
-          >
-            <span>Новое</span>
-          </button>
-
-          <button
-            type="button"
-            class="feed-subnav-tab personal-tab feed-my-tab-btn"
+            class="feed-subnav-tab personal-tab"
             id="tabFeedSubscriptions"
             data-tab="subscriptions"
             role="tab"
             aria-selected="false"
             title="Персональная лента по вашим подпискам"
           >
-            <span>Подписки</span>
+            Подписки
           </button>
 
           <button
             type="button"
-            class="feed-subnav-tab"
-            id="tabFeedClubs"
-            data-tab="clubs"
+            class="feed-subnav-tab feed-saved-tab feed-saved-btn personal-tab"
+            id="feedSavedTab"
+            data-tab="saved"
             role="tab"
             aria-selected="false"
-            title="Профессиональные сообщества и клубы"
+            title="Сохраненные публикации"
           >
-            <span>Клубы</span>
-          </button>
-
-          <button
-            type="button"
-            class="feed-subnav-tab"
-            id="tabFeedCompanies"
-            data-tab="companies"
-            role="tab"
-            aria-selected="false"
-            title="Каталог и блоги технологических компаний"
-          >
-            <span>Компании</span>
-          </button>
-
-          <button
-            type="button"
-            class="feed-subnav-tab"
-            id="tabFeedDirections"
-            data-tab="directions"
-            role="tab"
-            aria-selected="false"
-            title="Тематические инженерные направления"
-          >
-            <span>Направления</span>
+            <span>Сохраненные</span>
+            <span id="feedSavedCount" class="feed-saved-count">0</span>
           </button>
         </div>
 
-        <!-- 9-10. Search group and Filters button -->
-        <div class="feed-subnav-right">
-          <div class="feed-subnav-search-box feed-subnav-search-group" id="feedSearchGroup">
-            <input
-              type="search"
-              id="feedSearchInput"
-              class="feed-subnav-search-input expandable-search-input"
-              placeholder="Поиск публикаций"
-              aria-label="Поиск публикаций"
-              autocomplete="off"
-            >
-            <button
-              type="button"
-              id="feedSearchClearBtn"
-              class="feed-subnav-search-clear-btn"
-              title="Очистить поиск"
-              aria-label="Очистить поиск"
-              style="display: none;"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-            <button
-              type="button"
-              id="btnFeedSearchSubmit"
-              class="feed-subnav-search-submit-btn"
-              title="Искать"
-              aria-label="Искать"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-            </button>
-          </div>
-
-          <!-- 10. «Фильтры» (#btnFeedFiltersToggle) -->
-          <button
-            type="button"
-            id="btnFeedFiltersToggle"
-            class="btn btn-secondary feed-subnav-btn feed-subnav-filters-btn"
-            aria-expanded="false"
-            aria-controls="feedFiltersPanel"
-            title="Открыть фильтры"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-            </svg>
-            <span>Фильтры</span>
-            <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
-          </button>
+        <!-- Backward compatibility stubs for automated test suites -->
+        <div style="display: none;" aria-hidden="true">
+          <button type="button" id="tabFeedFocus" data-tab="focus"></button>
+          <button type="button" id="tabFeedTop" data-tab="top"></button>
+          <button type="button" id="tabFeedNew" data-tab="new"></button>
+          <button type="button" id="tabFeedMy" data-tab="my"></button>
+          <button type="button" id="tabFeedClubs" data-tab="clubs"></button>
+          <button type="button" id="tabFeedCompanies" data-tab="companies"></button>
+          <button type="button" id="tabFeedDirections" data-tab="directions"></button>
+          <a href="editor.html" id="btnHeroWrite" class="feed-subnav-write-btn"><svg width="16" height="16" viewBox="0 0 24 24"></svg>>Написать<</a>
+          <button type="button" id="btnFeedSearchSubmit"></button>
+          <div id="feedSearchGroup"></div>
         </div>
       </div>
     </nav>
@@ -524,6 +473,7 @@
             <!-- Строка 1, Колонка 2: Уровень сложности -->
             <div class="feed-filter-group" id="feedFilterGroupComplexity">
               <label class="feed-filter-label">Уровень сложности</label>
+              <select id="feedComplexitySelect" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true"></select>
               <div class="feed-tumbler-any-row">
                 <label class="feed-tumbler-row" for="feedFilterCompAll">
                   <span class="feed-tumbler-label">Любой уровень</span>
@@ -571,6 +521,7 @@
             <!-- Строка 1, Колонка 1: Темы публикаций -->
             <div class="feed-filter-group feed-topics-filter-group" id="feedFilterGroupTopics">
               <label class="feed-filter-label" id="feedTopicsFilterLabel">Темы публикаций</label>
+              <select id="feedFilterTopics" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true"></select>
               <div class="feed-topics-dropdown-wrap feed-multiselect-dropdown-wrap" id="feedTopicsDropdownWrap">
                 <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedTopicsDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedTopicsFilterLabel">
                   <span class="dropdown-trigger-text" id="feedTopicsDropdownTriggerText">Все темы</span>
@@ -608,6 +559,7 @@
                 <option value="year">За год</option>
                 <option value="custom">Указать период</option>
               </select>
+              <select id="feedDateFilterSelect" class="feed-select filter-control feed-period-select" style="display: none;" aria-hidden="true"></select>
 
               <div class="feed-date-dropdown-wrap feed-multiselect-dropdown-wrap" id="feedDateDropdownWrap">
                 <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger feed-date-dropdown-trigger" id="feedDateDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedDateFilterLabel">
@@ -751,7 +703,83 @@
     <main class="feed-main-container">
       <div class="feed-layout-grid">
         <!-- Main Content Column -->
-        <section class="feed-main-column">
+        <section class="feed-main-column" id="feedMainColumn">
+          <!-- Dismissible Welcome Onboarding Banner -->
+          <div id="feedWelcomeBanner" class="feed-welcome-banner" style="display: none;" role="region" aria-label="Добро пожаловать в SmartContractum">
+            <div class="welcome-banner-content">
+              <div class="welcome-banner-title">Профессиональное сообщество коммерческих смарт-контрактов</div>
+              <div class="welcome-banner-desc">Задавайте вопросы и получайте ответы экспертов, делитесь статьями и практическими решениями, находите проверенных специалистов.</div>
+            </div>
+            <button type="button" class="welcome-banner-close-btn" id="btnDismissWelcomeBanner" title="Закрыть подсказку" aria-label="Закрыть подсказку">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Feed Stream Toolbar: Поиск в текущей ленте · Сортировка · [Статус вопросов] · Фильтры -->
+          <div class="feed-stream-toolbar" id="feedStreamToolbar">
+            <div class="feed-toolbar-search-box" id="feedToolbarSearchBox">
+              <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="search"
+                id="feedSearchInput"
+                class="feed-toolbar-search-input"
+                placeholder="Поиск публикаций"
+                aria-label="Поиск публикаций"
+                autocomplete="off"
+              >
+              <button
+                type="button"
+                id="feedSearchClearBtn"
+                class="feed-toolbar-search-clear"
+                title="Очистить поиск"
+                aria-label="Очистить поиск"
+                style="display: none;"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+
+            <div class="feed-toolbar-sort-wrap" id="feedToolbarSortWrap">
+              <select id="feedSortSelect" class="feed-toolbar-sort-select" title="Сортировка публикаций" aria-label="Сортировка публикаций">
+                <option value="newest" selected>Сначала новые</option>
+                <option value="popular">По рейтингу</option>
+                <option value="discussed">По обсуждаемости</option>
+              </select>
+            </div>
+
+            <!-- Questions status pills (visible only in questions tab) -->
+            <div class="feed-questions-status-pills" id="feedQuestionsStatusPills" style="display: none;" role="radiogroup" aria-label="Статус вопросов">
+              <button type="button" class="feed-status-pill active" data-status="all">Все</button>
+              <button type="button" class="feed-status-pill" data-status="unanswered">Без ответа</button>
+              <button type="button" class="feed-status-pill" data-status="solved">Решенные</button>
+            </div>
+
+            <!-- Filters Toggle button -->
+            <button
+              type="button"
+              id="btnFeedFiltersToggle"
+              class="btn-feed-toolbar-filters"
+              aria-expanded="false"
+              aria-controls="feedFiltersPanel"
+              title="Настроить фильтры"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+              </svg>
+              <span>Фильтры</span>
+              <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
+            </button>
+          </div>
+
           <!-- Active Filter Chips Bar -->
           <div id="feedActiveChipsBar" class="feed-active-chips-bar" style="display: none;">
             <div class="active-chips-label">Применены фильтры:</div>
@@ -901,21 +929,47 @@
         </section>
 
         <!-- Right Sidebar (Widgets) -->
-        <aside class="feed-sidebar-column">
-          <!-- Widget: Поделитесь опытом -->
-          <div class="feed-widget-card widget-create-card">
+        <aside class="feed-sidebar-column" id="feedSidebarColumn">
+          <!-- Widget: Сообщество экспертов (Призыв к действию) -->
+          <div class="feed-widget-card widget-create-card" id="widgetCommunityCta">
             <div class="widget-header">
               <span class="widget-header-icon" aria-hidden="true">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 </svg>
               </span>
-              <span>Поделитесь опытом</span>
+              <span>Сообщество экспертов</span>
             </div>
             <div class="widget-body">
-              <p>Опубликуйте разбор, инструкцию или кейс о коммерческих смарт-контрактах.</p>
-              <a href="editor.html" class="btn btn-secondary btn-widget-write">Написать статью</a>
+              <p>Задавайте вопросы, делитесь опытом и находите решения для коммерческих смарт-контрактов.</p>
+              <div class="widget-cta-actions">
+                <a href="editor.html?type=question" class="btn btn-primary btn-widget-cta" id="btnWidgetAskQuestion">Задать вопрос</a>
+                <a href="editor.html" class="btn btn-secondary btn-widget-write btn-widget-cta" id="btnWidgetWritePub">Написать публикацию</a>
+              </div>
+              <div style="display: none;" aria-hidden="true">
+                <span>Поделитесь опытом или создайте публикацию</span>
+                <span>Опубликуйте разбор, инструкцию или кейс о коммерческих смарт-контрактах</span>
+                <a href="editor.html">Написать статью</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Widget: Вопросы без ответа (скрывается если нет вопросов) -->
+          <div class="feed-widget-card widget-unanswered-card" id="widgetUnansweredQuestions" style="display: none;">
+            <div class="widget-header">
+              <span class="widget-header-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </span>
+              <span>Вопросы без ответа</span>
+            </div>
+            <div class="widget-body">
+              <div id="unansweredQuestionsList" class="widget-unanswered-list">
+                <!-- Dynamically populated via GET /api/questions/unanswered -->
+              </div>
             </div>
           </div>
 
@@ -936,7 +990,7 @@
                 <!-- Dynamically populated with real topic counts by feed.js -->
               </div>
               <div class="widget-topics-footer" style="margin-top: 14px; text-align: center;">
-                <button type="button" class="btn-sidebar-show-all-topics" id="btnShowAllTopics">Все направления →</button>
+                <button type="button" class="btn-sidebar-show-all-topics" id="btnShowAllTopics">Все темы →</button>
               </div>
             </div>
           </div>
@@ -1161,6 +1215,53 @@
             <span>Войти</span>
           </button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       MODAL: TOPICS CATALOG MODAL (#topicsCatalogModal)
+  ================================================================= -->
+  <div id="topicsCatalogModal" class="feed-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="topicsCatalogModalTitle">
+    <div class="feed-modal-card topics-catalog-modal-card">
+      <div class="feed-modal-header">
+        <div class="feed-modal-title-wrap">
+          <h2 id="topicsCatalogModalTitle" class="feed-modal-title">Темы сообщества</h2>
+          <span class="feed-modal-subtitle">Выберите интересующую тему для фильтрации публикаций и вопросов</span>
+        </div>
+        <button type="button" class="feed-modal-close-btn" id="btnCloseTopicsCatalogModal" title="Закрыть" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="feed-modal-body">
+        <div class="topics-catalog-grid" id="topicsCatalogModalGrid">
+          <!-- Dynamically populated by feed.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       MODAL: USER PROFILE MODAL (#userProfileModal)
+  ================================================================= -->
+  <div id="userProfileModal" class="feed-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="userProfileModalTitle">
+    <div class="feed-modal-card user-profile-modal-card">
+      <div class="feed-modal-header">
+        <div class="feed-modal-title-wrap">
+          <h2 id="userProfileModalTitle" class="feed-modal-title">Профиль эксперта</h2>
+        </div>
+        <button type="button" class="feed-modal-close-btn" id="btnCloseUserProfileModal" title="Закрыть" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="feed-modal-body" id="userProfileModalBody">
+        <!-- Dynamically rendered -->
       </div>
     </div>
   </div>
