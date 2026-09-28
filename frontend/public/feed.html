@@ -705,10 +705,10 @@
         <!-- Main Content Column -->
         <section class="feed-main-column" id="feedMainColumn">
           <!-- Dismissible Welcome Onboarding Banner -->
-          <div id="feedWelcomeBanner" class="feed-welcome-banner" style="display: none;" role="region" aria-label="Добро пожаловать в SmartContractum">
+          <div id="feedWelcomeBanner" class="feed-welcome-banner" style="display: none;" role="region" aria-label="Сообщество российских коммерческих смарт-контрактов">
             <div class="welcome-banner-content">
-              <div class="welcome-banner-title">Профессиональное сообщество коммерческих смарт-контрактов</div>
-              <div class="welcome-banner-desc">Задавайте вопросы и получайте ответы экспертов, делитесь статьями и практическими решениями, находите проверенных специалистов.</div>
+              <div class="welcome-banner-title">Сообщество российских коммерческих смарт-контрактов</div>
+              <div class="welcome-banner-desc">Задавайте вопросы, делитесь опытом разработки и применения смарт-контрактов, находите коллег.</div>
             </div>
             <button type="button" class="welcome-banner-close-btn" id="btnDismissWelcomeBanner" title="Закрыть подсказку" aria-label="Закрыть подсказку">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -930,7 +930,7 @@
 
         <!-- Right Sidebar (Widgets) -->
         <aside class="feed-sidebar-column" id="feedSidebarColumn">
-          <!-- Widget: Сообщество экспертов (Призыв к действию) -->
+          <!-- Widget: Нужна помощь? (Призыв к действию) -->
           <div class="feed-widget-card widget-create-card" id="widgetCommunityCta">
             <div class="widget-header">
               <span class="widget-header-icon" aria-hidden="true">
@@ -938,10 +938,10 @@
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 </svg>
               </span>
-              <span>Сообщество экспертов</span>
+              <span>Нужна помощь?</span>
             </div>
             <div class="widget-body">
-              <p>Задавайте вопросы, делитесь опытом и находите решения для коммерческих смарт-контрактов.</p>
+              <p>Опишите задачу — обсудим ее вместе.</p>
               <div class="widget-cta-actions">
                 <a href="editor.html?type=question" class="btn btn-primary btn-widget-cta" id="btnWidgetAskQuestion">Задать вопрос</a>
                 <a href="editor.html" class="btn btn-secondary btn-widget-write btn-widget-cta" id="btnWidgetWritePub">Написать публикацию</a>
@@ -970,6 +970,9 @@
               <div id="unansweredQuestionsList" class="widget-unanswered-list">
                 <!-- Dynamically populated via GET /api/questions/unanswered -->
               </div>
+              <div class="widget-unanswered-footer">
+                <a href="feed.html?tab=questions&questionStatus=unanswered" class="widget-unanswered-all-link" id="linkAllUnanswered">Все вопросы без ответа →</a>
+              </div>
             </div>
           </div>
 
@@ -985,12 +988,13 @@
               <span>Темы</span>
             </div>
             <div class="widget-body">
-              <div class="widget-subtitle">Количество опубликованных статей</div>
+              <div class="widget-subtitle">Количество публикаций</div>
+              <div style="display: none;" aria-hidden="true">Количество опубликованных статей</div>
               <div id="widgetTopicsList" class="widget-topics-list widget-tags-cloud">
                 <!-- Dynamically populated with real topic counts by feed.js -->
               </div>
               <div class="widget-topics-footer" style="margin-top: 14px; text-align: center;">
-                <button type="button" class="btn-sidebar-show-all-topics" id="btnShowAllTopics">Все темы →</button>
+                <button type="button" class="btn-sidebar-show-all-topics" id="btnShowAllTopics">Все темы · <span id="widgetTopicsTotalCount">13</span></button>
               </div>
             </div>
           </div>

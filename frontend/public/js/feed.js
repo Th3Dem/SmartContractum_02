@@ -1265,6 +1265,13 @@
         if (Array.isArray(s.complexityLevels) && s.complexityLevels.length > 0) {
           savedSettingsState.complexityLevels = s.complexityLevels.slice();
         }
+        if (s.welcomeDismissed) {
+          try {
+            localStorage.setItem('sc_welcome_dismissed', '1');
+            const wb = document.getElementById('feedWelcomeBanner');
+            if (wb) wb.style.display = 'none';
+          } catch (e) {}
+        }
       }
 
       if (subsDataRes && subsDataRes.success && subsDataRes.subscriptions) {
@@ -4253,6 +4260,13 @@
 
     function renderItems() {
       listEl.innerHTML = '';
+
+      // Update total topics count in footer button dynamically
+      const totalCountEl = document.getElementById('widgetTopicsTotalCount');
+      if (totalCountEl) {
+        totalCountEl.textContent = sortedTopics.length;
+      }
+
       // Short list: show ONLY topics with published articles (count > 0)
       const nonZeroTopics = sortedTopics.filter(function (t) {
         const count = (topicCounts && typeof topicCounts[t.id] === 'number') ? topicCounts[t.id] : 0;
@@ -4260,6 +4274,7 @@
       });
 
       const visible = isSidebarTopicsExpanded ? sortedTopics : nonZeroTopics.slice(0, initialVisible);
+      // Compatibility stub: btnToggleAllSidebarTopics unified into single footer button
 
       visible.forEach(function (t) {
         const count = (topicCounts && typeof topicCounts[t.id] === 'number') ? topicCounts[t.id] : 0;
@@ -4290,19 +4305,6 @@
 
         listEl.appendChild(btn);
       });
-
-      if (sortedTopics.length > visible.length || isSidebarTopicsExpanded) {
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'widget-topics-toggle-btn';
-        toggleBtn.id = 'btnToggleAllSidebarTopics';
-        toggleBtn.textContent = isSidebarTopicsExpanded ? 'Свернуть' : 'Показать все (' + sortedTopics.length + ')';
-        toggleBtn.addEventListener('click', function () {
-          isSidebarTopicsExpanded = !isSidebarTopicsExpanded;
-          renderItems();
-        });
-        listEl.appendChild(toggleBtn);
-      }
     }
 
     renderItems();
@@ -5608,6 +5610,13 @@
             localStorage.setItem('sc_welcome_dismissed', '1');
           } catch (e) {}
           welcomeBanner.style.display = 'none';
+          if (state.user && state.user.id) {
+            fetch('/api/user/feed-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ welcomeDismissed: true })
+            }).catch(function () {});
+          }
         });
       }
     }
@@ -5631,11 +5640,12 @@
             const item = document.createElement('div');
             item.className = 'unanswered-item';
             const topicTitle = (window.PublicationConfig && window.PublicationConfig.TOPICS_MAP && window.PublicationConfig.TOPICS_MAP[q.topic]) || q.topic || '';
+            const dateStr = q.date || '';
             item.innerHTML =
               '<a href="article.html?id=' + encodeURIComponent(q.id) + '" class="unanswered-item-title">' + escapeHtml(q.title) + '</a>' +
               '<div class="unanswered-item-meta">' +
-                '<span>' + escapeHtml(q.author || 'Автор') + '</span>' +
-                (topicTitle ? '<span>• ' + escapeHtml(topicTitle) + '</span>' : '') +
+                (dateStr ? '<span>' + escapeHtml(dateStr) + '</span>' : '') +
+                (topicTitle ? '<span>' + (dateStr ? ' • ' : '') + escapeHtml(topicTitle) + '</span>' : '') +
               '</div>';
             listEl.appendChild(item);
           });
@@ -5643,6 +5653,24 @@
         .catch(function () {
           widget.style.display = 'none';
         });
+
+      const allUnansweredLink = document.getElementById('linkAllUnanswered');
+      if (allUnansweredLink && !allUnansweredLink._boundClick) {
+        allUnansweredLink._boundClick = true;
+        allUnansweredLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          state.tab = 'questions';
+          state.questionStatus = 'unanswered';
+          state.offset = 0;
+          updateSubnavActiveTab('tabFeedQuestions');
+          const pills = document.querySelectorAll('#feedQuestionsStatusPills .feed-status-pill');
+          pills.forEach(function (p) {
+            p.classList.toggle('active', p.getAttribute('data-status') === 'unanswered');
+          });
+          syncURL(false);
+          fetchFeed(true);
+        });
+      }
     }
     loadUnansweredQuestions();
 

@@ -910,3 +910,34 @@ body {
   color: var(--text-muted, #64748b);
 }
 
+/* Author Profile Button inside Cards and Comments */
+button.author-name,
+.btn-author-profile {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  line-height: inherit;
+  display: inline;
+  transition: color var(--transition-fast, 0.15s ease);
+}
+
+button.author-name:hover,
+.btn-author-profile:hover {
+  color: var(--accent-color, #38bdf8);
+  text-decoration: underline;
+}
+
+button.author-name:focus-visible,
+.btn-author-profile:focus-visible {
+  outline: 2px solid var(--accent-color, #38bdf8);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+

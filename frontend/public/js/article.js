@@ -1078,11 +1078,28 @@
     }
     initComments(article.id);
 
-    // Scroll to #comments if specified in URL hash
-    if (window.location.hash === '#comments') {
+    // Scroll to #comments or #comment-form if specified in URL hash
+    const hash = window.location.hash;
+    if (hash === '#comments' || hash === '#comment-form' || hash === '#commentForm') {
       setTimeout(function () {
-        const c = document.getElementById('comments');
-        if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const formEl = document.getElementById('commentForm');
+        const guestPromptEl = document.getElementById('commentGuestPrompt');
+        if (hash === '#comment-form' || hash === '#commentForm') {
+          if (currentUser && formEl && formEl.style.display !== 'none') {
+            formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const ta = document.getElementById('commentTextInput');
+            if (ta) ta.focus();
+          } else if (!currentUser && guestPromptEl) {
+            guestPromptEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            openAuthModal();
+          } else {
+            const c = document.getElementById('comments');
+            if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        } else {
+          const c = document.getElementById('comments');
+          if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       }, 150);
     }
   }

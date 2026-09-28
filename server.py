@@ -352,6 +352,10 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
                 updated_at TEXT NOT NULL
             );
         """)
+        try:
+            conn.execute("ALTER TABLE user_feed_settings ADD COLUMN welcome_dismissed INTEGER DEFAULT 0;")
+        except Exception:
+            pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS clubs (
                 id TEXT PRIMARY KEY,
@@ -2390,10 +2394,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": True,
                 "settings": {
                     "materialTypes": default_material_types,
-                    "complexityLevels": default_complexity_levels
+                    "complexityLevels": default_complexity_levels,
+                    "welcomeDismissed": False
                 },
                 "materialTypes": default_material_types,
-                "complexityLevels": default_complexity_levels
+                "complexityLevels": default_complexity_levels,
+                "welcomeDismissed": False
             })
             return
 
@@ -2401,11 +2407,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         with conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT material_types, complexity_levels FROM user_feed_settings WHERE user_id = ?",
+                "SELECT material_types, complexity_levels, welcome_dismissed FROM user_feed_settings WHERE user_id = ?",
                 (user["id"],)
             )
             row = cur.fetchone()
 
+        is_welcome_dismissed = False
         if row:
             try:
                 m_types = json.loads(row["material_types"])
@@ -2415,6 +2422,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 c_levels = json.loads(row["complexity_levels"])
             except Exception:
                 c_levels = default_complexity_levels
+            if "welcome_dismissed" in row.keys() and row["welcome_dismissed"]:
+                is_welcome_dismissed = bool(row["welcome_dismissed"])
         else:
             m_types = default_material_types
             c_levels = default_complexity_levels
@@ -2423,17 +2432,19 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "success": True,
             "settings": {
                 "materialTypes": m_types,
-                "complexityLevels": c_levels
+                "complexityLevels": c_levels,
+                "welcomeDismissed": is_welcome_dismissed
             },
             "materialTypes": m_types,
-            "complexityLevels": c_levels
+            "complexityLevels": c_levels,
+            "welcomeDismissed": is_welcome_dismissed
         })
 
     def handle_post_feed_settings(self):
         """
         POST /api/user/feed-settings
         Saves user feed settings for authenticated user.
-        Body: { "materialTypes": [...], "complexityLevels": [...] }
+        Body: { "materialTypes": [...], "complexityLevels": [...], "welcomeDismissed": bool }
         Returns 401 if unauthenticated.
         Returns 400 if materialTypes is empty ("Выберите хотя бы один тип материала").
         """
@@ -2459,9 +2470,37 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         settings_obj = payload.get("settings") if isinstance(payload.get("settings"), dict) else payload
 
+        # Check for welcome dismissal toggle
+        welcome_dismissed = None
+        if "welcomeDismissed" in settings_obj:
+            welcome_dismissed = 1 if settings_obj["welcomeDismissed"] else 0
+        elif "welcome_dismissed" in settings_obj:
+            welcome_dismissed = 1 if settings_obj["welcome_dismissed"] else 0
+
         material_types = settings_obj.get("materialTypes")
         if material_types is None:
             material_types = settings_obj.get("material_types")
+
+        # If this is ONLY a welcomeDismissed toggle without materialTypes:
+        if material_types is None and welcome_dismissed is not None:
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            conn = self.get_db()
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT material_types, complexity_levels FROM user_feed_settings WHERE user_id = ?", (user["id"],))
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute("UPDATE user_feed_settings SET welcome_dismissed = ?, updated_at = ? WHERE user_id = ?", (welcome_dismissed, now_iso, user["id"]))
+                else:
+                    cur.execute(
+                        "INSERT INTO user_feed_settings (user_id, material_types, complexity_levels, welcome_dismissed, updated_at) VALUES (?, ?, ?, ?, ?)",
+                        (user["id"], json.dumps(["article", "post", "news", "question"]), json.dumps(["all"]), welcome_dismissed, now_iso)
+                    )
+            self.send_json_response(200, {
+                "success": True,
+                "welcomeDismissed": bool(welcome_dismissed)
+            })
+            return
 
         if material_types is None or not isinstance(material_types, list):
             self.send_json_response(400, {
@@ -2501,17 +2540,26 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         conn = self.get_db()
         with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT welcome_dismissed FROM user_feed_settings WHERE user_id = ?", (user["id"],))
+            ex_row = cur.fetchone()
+            curr_wel = ex_row["welcome_dismissed"] if (ex_row and "welcome_dismissed" in ex_row.keys()) else 0
+            if welcome_dismissed is not None:
+                curr_wel = welcome_dismissed
+
             conn.execute("""
-                INSERT INTO user_feed_settings (user_id, material_types, complexity_levels, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_feed_settings (user_id, material_types, complexity_levels, welcome_dismissed, updated_at)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     material_types = excluded.material_types,
                     complexity_levels = excluded.complexity_levels,
+                    welcome_dismissed = excluded.welcome_dismissed,
                     updated_at = excluded.updated_at
             """, (
                 user["id"],
                 json.dumps(valid_types, ensure_ascii=False),
                 json.dumps(clean_levels, ensure_ascii=False),
+                curr_wel,
                 now_iso
             ))
 
@@ -2942,7 +2990,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         article_html = payload.get("html") or payload.get("article_html") or payload.get("content")
         delta = payload.get("delta") or payload.get("article_delta")
         pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
-        author_id = payload.get("authorId") or payload.get("author_id") or "author_local"
+        curr_user = self.get_current_user()
+        author_id = payload.get("authorId") or payload.get("author_id") or (curr_user.get("id") if curr_user else None) or "author_local"
 
         # Status transition check: cannot transition if already approved or in terminal invalid state
         with conn:
@@ -3175,6 +3224,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         user = self.get_current_user()
         likes_count = 0
         comments_count = 0
+        answers_count = 0
+        has_solution = False
         has_liked = False
         with conn:
             cur = conn.cursor()
@@ -3182,6 +3233,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             likes_count = cur.fetchone()["cnt"]
             cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (row["id"],))
             comments_count = cur.fetchone()["cnt"]
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'answer'", (row["id"],))
+            answers_count = cur.fetchone()["cnt"]
+            cur.execute("SELECT 1 FROM article_comments WHERE article_id = ? AND status = 'published' AND is_solution = 1 LIMIT 1", (row["id"],))
+            has_solution = cur.fetchone() is not None
             if user:
                 cur.execute("SELECT 1 FROM article_likes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
                 has_liked = cur.fetchone() is not None
@@ -3212,6 +3267,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "likesCount": likes_count,
             "hasLiked": has_liked,
             "commentsCount": comments_count,
+            "answersCount": answers_count,
+            "hasSolution": has_solution,
             "materialType": mat_type,
             "type": mat_type,
             "html": article_html,

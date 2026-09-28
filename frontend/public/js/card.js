@@ -43,6 +43,17 @@
     const isPreview = Boolean(options.isPreview);
     let badgesHtml = '';
 
+    const isQuestion = Boolean(
+      item.materialType === 'question' ||
+      item.type === 'question' ||
+      item.material_type === 'question'
+    );
+
+    // Explicit Question Badge
+    if (isQuestion) {
+      badgesHtml += '<span class="meta-badge question-badge"' + (isPreview ? ' id="preview-card-badge-question"' : '') + '>Вопрос</span>';
+    }
+
     // 1. Topic Title & Badge
     let topicTitle = '';
     if (window.PublicationConfig && item.topic) {
@@ -55,18 +66,20 @@
       badgesHtml += '<span class="meta-badge topic-badge"' + (isPreview ? ' id="preview-card-badge-topic"' : '') + '>' + escapeHtml(topicTitle) + '</span>';
     }
 
-    // 2. Format Badge
-    let formatTitle = '';
-    if (window.PublicationConfig && item.format && item.format !== 'not_specified' && item.format !== 'none') {
-      const f = window.PublicationConfig.getFormatById(item.format);
-      if (f && f.title && f.title.toLowerCase() !== 'не указан') {
-        formatTitle = f.title;
+    // 2. Format Badge (only for standard publications, NOT questions)
+    if (!isQuestion) {
+      let formatTitle = '';
+      if (window.PublicationConfig && item.format && item.format !== 'not_specified' && item.format !== 'none') {
+        const f = window.PublicationConfig.getFormatById(item.format);
+        if (f && f.title && f.title.toLowerCase() !== 'не указан') {
+          formatTitle = f.title;
+        }
+      } else if (item.formatTitle) {
+        formatTitle = item.formatTitle;
       }
-    } else if (item.formatTitle) {
-      formatTitle = item.formatTitle;
-    }
-    if (formatTitle) {
-      badgesHtml += '<span class="meta-badge format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(formatTitle) + '</span>';
+      if (formatTitle) {
+        badgesHtml += '<span class="meta-badge format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(formatTitle) + '</span>';
+      }
     }
 
     if (item.clubTitle) {
@@ -323,6 +336,7 @@
 
     let footerLeftHtml = '';
     let readMoreText = 'Читать далее';
+    let actionTargetUrl = articleUrl;
     if (isQuestion) {
       const aCount = item.answersCount !== undefined ? item.answersCount : (item.commentsCount || 0);
       let aText = 'без ответов';
@@ -330,9 +344,10 @@
       else if (aCount >= 2 && aCount <= 4) aText = aCount + ' ответа';
       else if (aCount >= 5) aText = aCount + ' ответов';
 
+      const questionAnswerUrl = isPreview ? '#' : ('article.html?id=' + encodeURIComponent(item.id || '') + (aCount === 0 ? '#comment-form' : '#comments'));
       const answersClass = item.hasSolution ? 'is-solved' : (aCount > 0 ? 'has-answers' : 'no-answers');
       const answersBtnHtml =
-        '<a href="' + commentsUrl + '" class="btn-card-answers ' + answersClass + '" title="Перейти к ответам">' +
+        '<a href="' + questionAnswerUrl + '" class="btn-card-answers ' + answersClass + '" title="' + (aCount === 0 ? 'Ответить на вопрос' : 'Перейти к ответам') + '">' +
           '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
           '</svg>' +
@@ -340,9 +355,13 @@
         '</a>';
       footerLeftHtml = answersBtnHtml + bookmarkHtml;
       readMoreText = (aCount === 0 ? 'Ответить' : 'Смотреть вопрос');
+      if (aCount === 0) {
+        actionTargetUrl = questionAnswerUrl;
+      }
     } else {
       footerLeftHtml = likeBtnHtml + commentsBtnHtml + bookmarkHtml;
       readMoreText = 'Читать далее';
+      actionTargetUrl = articleUrl;
     }
 
     let readMoreHtml = '';
@@ -357,7 +376,7 @@
         '</span>';
     } else {
       readMoreHtml =
-        '<a href="' + articleUrl + '" class="card-read-more btn-read-more" title="' + readMoreText + '">' +
+        '<a href="' + actionTargetUrl + '" class="card-read-more btn-read-more" title="' + readMoreText + '">' +
           '<span>' + readMoreText + '</span>' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<line x1="5" y1="12" x2="19" y2="12"></line>' +
