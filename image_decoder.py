@@ -26,6 +26,7 @@ from typing import Any, Dict, Optional, Tuple
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 МБ
 MAX_IMAGE_PIXELS = 25_000_000       # 25 мегапикселей
+MAX_PNG_DECOMPRESSED_BYTES = 60 * 1024 * 1024  # 60 МБ (лимит декомпрессии IDAT от zip-бомб)
 TARGET_ASPECT_W = 39
 TARGET_ASPECT_H = 22
 TARGET_ASPECT_RATIO = TARGET_ASPECT_W / TARGET_ASPECT_H  # ~1.772727
@@ -85,13 +86,38 @@ def _decode_png(data: bytes) -> Dict[str, Any]:
     if not idat_chunks:
         raise ImageDecodeError("Файл PNG не содержит данных изображения (IDAT).")
 
-    # Verify IDAT decompression
+    # Verify IDAT decompression with streaming size limit (protection against zlib-bombs)
     try:
         combined_idat = b"".join(idat_chunks)
-        # Verify zlib header or decompress
         if len(combined_idat) > 2:
+            max_allowed = min(
+                MAX_PNG_DECOMPRESSED_BYTES,
+                max(height * (width * 8 + 1) + 65536, 1024 * 1024)
+            )
+            dobj = zlib.decompressobj()
+            decompressed_size = 0
+            chunk_size = 64 * 1024
+            buf = combined_idat
+
             try:
-                zlib.decompress(combined_idat)
+                while buf:
+                    out = dobj.decompress(buf, chunk_size)
+                    decompressed_size += len(out)
+                    if decompressed_size > max_allowed:
+                        raise ImageDecodeError(
+                            "Превышен лимит размера распакованных данных PNG (подозрение на zip-бомбу)."
+                        )
+                    buf = dobj.unconsumed_tail
+                    if not out and not buf:
+                        break
+                out = dobj.flush()
+                decompressed_size += len(out)
+                if decompressed_size > max_allowed:
+                    raise ImageDecodeError(
+                        "Превышен лимит размера распакованных данных PNG (подозрение на zip-бомбу)."
+                    )
+            except ImageDecodeError:
+                raise
             except Exception:
                 # Some minimal test stubs may use raw data or partial streams
                 if combined_idat[0] != 0x78:
