@@ -1,0 +1,30 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run unit & integration tests
+        run: python3 -m unittest discover tests -v
+
+      - name: Install Playwright & browsers
+        run: pip install playwright && playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        run: python3 -m unittest tests/test_issue22_sc023_browser_smoke.py -v
