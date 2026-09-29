@@ -538,12 +538,12 @@
       if (!container) return;
 
       const toast = document.createElement('div');
-      toast.className = `toast toast-${type}`;
+      toast.className = (type === 'danger' || type === 'error') ? 'toast toast-danger toast-error' : `toast toast-${type}`;
 
       let icon = '';
       if (type === 'success') {
         icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-      } else if (type === 'danger') {
+      } else if (type === 'danger' || type === 'error') {
         icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
       } else {
         icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';

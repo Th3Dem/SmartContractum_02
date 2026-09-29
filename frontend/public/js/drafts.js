@@ -109,7 +109,11 @@
       this.saveDebounceTimer = setTimeout(async () => {
         this.saveDebounceTimer = null;
         if (this.currentDraftId !== targetDraftId) return;
-        await this.saveCurrent({ isAuto: true });
+        try {
+          await this.saveCurrent({ isAuto: true });
+        } catch (e) {
+          console.warn('Autosave failed:', e);
+        }
       }, this.debounceDelay);
     }
 
@@ -140,8 +144,14 @@
         return;
       }
 
-      await this.saveCurrent({ isAuto: true });
-      this.isDirty = false;
+      try {
+        await this.saveCurrent({ isAuto: true });
+        this.isDirty = false;
+      } catch (err) {
+        this.isDirty = true;
+        this.setStatus('error');
+        throw err;
+      }
     }
 
     setStatus(state) {
@@ -253,6 +263,30 @@
       } catch (err) {
         console.error('Failed to save draft:', err);
         this.setStatus('error');
+        this.isDirty = true;
+
+        const isQuota = Boolean(
+          err && (
+            err.name === 'QuotaExceededError' ||
+            err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+            err.code === 22 ||
+            err.code === 1014 ||
+            (typeof err.message === 'string' && (
+              err.message.includes('QuotaExceededError') ||
+              err.message.includes('quota') ||
+              err.message.includes('Quota')
+            ))
+          )
+        );
+        const errMsg = isQuota
+          ? 'Ошибка: хранилище браузера переполнено'
+          : 'Ошибка сохранения черновика';
+
+        if (window.EditorApp && typeof window.EditorApp.showToast === 'function') {
+          window.EditorApp.showToast(errMsg, 'error');
+        }
+
+        throw err;
       }
     }
 
@@ -263,14 +297,9 @@
           const store = tx.objectStore(STORE_NAME);
           const req = store.put(draft);
           tx.oncomplete = () => resolve(req.result);
-          req.onsuccess = () => {
-            if (!('oncomplete' in tx) || tx.oncomplete === undefined) {
-              resolve(req.result);
-            }
-          };
-          tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error);
-          req.onerror = () => reject(req.error);
+          tx.onerror = () => reject(tx.error || new Error('Transaction failed'));
+          tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
+          req.onerror = () => reject(req.error || new Error('Put request failed'));
         } catch (err) {
           reject(err);
         }
@@ -284,6 +313,7 @@
         localStorage.setItem('ag_drafts_fallback', JSON.stringify(drafts));
       } catch (e) {
         console.warn('LocalStorage save failed:', e);
+        throw e;
       }
     }
 
@@ -355,7 +385,11 @@
       if (!draft || !draft.id) return;
 
       // Flush any pending changes of the active draft before loading another
-      await this.flush();
+      try {
+        await this.flush();
+      } catch (e) {
+        console.warn('Failed to flush active draft before loading another draft:', e);
+      }
 
       if (this.saveDebounceTimer) {
         clearTimeout(this.saveDebounceTimer);
@@ -406,7 +440,11 @@
 
     async createNewDraft() {
       // Flush any pending changes of the active draft before creating a new one
-      await this.flush();
+      try {
+        await this.flush();
+      } catch (e) {
+        console.warn('Failed to flush active draft before creating new draft:', e);
+      }
 
       if (this.saveDebounceTimer) {
         clearTimeout(this.saveDebounceTimer);
