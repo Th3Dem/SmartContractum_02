@@ -331,3 +331,4 @@
 [2026-09-29 12:02] | dev_bot | IMPLEMENTATION_START | Реализация Issue #2 (SC-007): синхронизация data-author-id в карточке и обработчике профиля (Task: issue-2-sc007-author-profile-click)
 [2026-09-29 12:08] | dev_bot | IMPLEMENTATION_COMPLETE | data-author-id синхронизирован, тесты пройдены 100% (Task: issue-2-sc007-author-profile-click)
 [2026-09-29 12:12] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #2 (Fixes #2) (Task: issue-2-sc007-author-profile-click)
+[2026-09-29 12:14] | pm_bot | TASK_DONE | Задача Issue #2 (SC-007) успешно завершена и объединена в main. Issue #2 на GitHub закрыт (Task: issue-2-sc007-author-profile-click)
