@@ -1930,6 +1930,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             art_id = parts[2] if len(parts) >= 6 else ""
             comm_id = parts[4] if len(parts) >= 6 else ""
             self.handle_comment_solution_toggle(art_id, comm_id)
+        elif path.startswith("/api/articles/") and path.endswith("/solution"):
+            art_id = path[len("/api/articles/"): -len("/solution")].strip("/")
+            self.handle_comment_solution_toggle(art_id, "")
         elif path.startswith("/api/comments/") and path.endswith("/solution"):
             parts = path.strip("/").split("/")
             comm_id = parts[2] if len(parts) >= 4 else ""
@@ -3469,9 +3472,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
-            comment_type = (payload.get("commentType") or payload.get("comment_type") or "").strip().lower()
-            if not comment_type:
-                comment_type = "answer" if material_type == "question" else "comment"
+            passed_comment_type = (payload.get("commentType") or payload.get("comment_type") or "").strip().lower()
+            if passed_comment_type == "answer" and material_type != "question":
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Ответ (answer) возможен только для публикаций с типом 'Вопрос' (materialType = 'question')."
+                })
+                return
+
+            if material_type == "question":
+                comment_type = passed_comment_type if passed_comment_type in ("answer", "comment") else "answer"
+            else:
+                comment_type = "comment"
 
             comment_id = f"comm_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -4204,7 +4216,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' GROUP BY article_id")
                 comments_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
-                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' AND (comment_type = 'answer' OR comment_type IS NULL) GROUP BY article_id")
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' AND comment_type = 'answer' GROUP BY article_id")
                 answers_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
                 cur.execute("SELECT DISTINCT article_id FROM article_comments WHERE status = 'published' AND is_solution = 1")
@@ -4357,7 +4369,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             if tab == "questions":
                 if art_type != "question":
                     continue
-                a_cnt = comments_counts.get(art_id, 0)
+                a_cnt = answers_counts.get(art_id, 0)
                 is_sol = (art_id in solved_article_ids)
                 if question_status == "unanswered" and a_cnt > 0:
                     continue
@@ -4484,7 +4496,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "likesCount": likes_counts.get(art_id, 0),
                 "hasLiked": art_id in user_likes,
                 "commentsCount": comments_counts.get(art_id, 0),
-                "answersCount": answers_counts.get(art_id, comments_counts.get(art_id, 0)),
+                "answersCount": answers_counts.get(art_id, 0),
                 "hasSolution": art_id in solved_article_ids,
                 "matchedAnswerSnippet": matched_answer_snippet,
                 "materialType": art_type,
@@ -4663,6 +4675,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
+        if not comm_id and raw_body:
+            try:
+                body_json = json.loads(raw_body.decode("utf-8"))
+                comm_id = body_json.get("commentId") or body_json.get("comment_id") or ""
+            except Exception:
+                pass
+
+        if not comm_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор комментария"
+            })
+            return
+
         conn = self.get_db()
         try:
             with conn:
@@ -4686,6 +4712,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     return
 
+                material_type = "article"
+                try:
+                    art_settings = json.loads(art_row["publication_settings"]) if art_row["publication_settings"] else {}
+                    material_type = (art_settings.get("materialType") or art_settings.get("type") or "article").strip().lower()
+                except Exception:
+                    pass
+
+                if material_type != "question":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Статус решения может быть установлен только для вопросов (materialType = 'question')."
+                    })
+                    return
+
                 is_admin = bool(user.get("role") == "admin" or user.get("isAdmin"))
                 is_author = (user.get("id") == art_row["author_id"])
                 if not is_author and not is_admin:
@@ -4699,6 +4739,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 new_is_sol = 0 if current_is_sol == 1 else 1
 
                 if new_is_sol == 1:
+                    comm_type = (comment["comment_type"] if "comment_type" in comment.keys() else "").strip().lower()
+                    if comm_type != "answer":
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Статус решения может быть установлен только ответу (comment_type = 'answer')."
+                        })
+                        return
+
                     cur.execute("UPDATE article_comments SET is_solution = 0 WHERE article_id = ?", (actual_art_id,))
                     cur.execute("UPDATE article_comments SET is_solution = 1 WHERE id = ?", (comm_id,))
 
@@ -4734,6 +4782,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
         finally:
             conn.close()
+
+    handle_post_article_solution = handle_comment_solution_toggle
 
     def handle_get_notifications(self):
         """
@@ -4848,7 +4898,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT ms.id, ms.draft_id, ms.title, ms.publication_settings, ms.created_at,
-                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published') AS ans_cnt
+                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published' AND ac.comment_type = 'answer') AS ans_cnt
                     FROM moderation_submissions ms
                     WHERE ms.status = 'approved'
                       AND (
@@ -4873,7 +4923,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "createdAt": r["created_at"],
                     "date": format_date_ru(r["created_at"]),
                     "topic": (st.get("topics") or [""])[0] if st.get("topics") else "",
-                    "answersCount": 0
+                    "answersCount": 0,
+                    "material_type": "question",
+                    "materialType": "question"
                 })
 
             self.send_json_response(200, {
