@@ -18,6 +18,9 @@
 
       this.db = null;
       this.currentDraftId = localStorage.getItem('ag_active_draft_id') || ('draft_' + Date.now());
+      this.currentRevision = 1;
+      this.lastSavedFingerprint = null;
+      this.currentDraft = null;
       this.saveDebounceTimer = null;
       this.debounceDelay = 2000; // 2 seconds
       this.isDirty = false;
@@ -231,10 +234,20 @@
         publicationSettings = window.publicationManager.getSettings();
       }
 
+      const currentFingerprint = this._computeFingerprint(title, delta, html, publicationSettings);
+
+      let newRevision = this.currentRevision || 1;
+      if (this.lastSavedFingerprint === null) {
+        newRevision = (typeof this.currentRevision === 'number' && this.currentRevision > 0) ? this.currentRevision : 1;
+      } else if (this.lastSavedFingerprint !== currentFingerprint || this.isDirty) {
+        newRevision = (this.currentRevision || 1) + 1;
+      }
+
       const draft = {
         id: this.currentDraftId,
         schema: 'antigravity-editor-v2',
         title: title || 'Без названия',
+        revision: newRevision,
         delta: delta,
         html: html,
         textSnippet: text.substring(0, 120),
@@ -252,6 +265,9 @@
           this.putToLocalStorage(draft);
         }
 
+        this.currentRevision = newRevision;
+        this.lastSavedFingerprint = currentFingerprint;
+        this.currentDraft = draft;
         localStorage.setItem('ag_active_draft_id', this.currentDraftId);
         this.setStatus('saved');
         this.isDirty = false;
@@ -437,6 +453,14 @@
 
       this.currentDraftId = draft.id;
       localStorage.setItem('ag_active_draft_id', draft.id);
+      this.currentRevision = (draft && typeof draft.revision === 'number' && draft.revision > 0) ? draft.revision : 1;
+      this.currentDraft = draft;
+      this.lastSavedFingerprint = this._computeFingerprint(
+        draft.title === 'Без названия' ? '' : (draft.title || ''),
+        draft.delta,
+        draft.html,
+        draft.publicationSettings
+      );
       this.isDirty = false;
 
       if (this.titleInput) {
@@ -492,6 +516,9 @@
 
       this.currentDraftId = 'draft_' + Date.now();
       localStorage.setItem('ag_active_draft_id', this.currentDraftId);
+      this.currentRevision = 1;
+      this.lastSavedFingerprint = null;
+      this.currentDraft = null;
       this.isDirty = false;
 
       if (this.titleInput) {
@@ -623,6 +650,29 @@
         });
 
         this.draftsListEl.appendChild(item);
+      });
+    }
+
+    getSubmissionIdempotencyKey() {
+      const rev = this.currentRevision || (this.currentDraft && (this.currentDraft.revision || this.currentDraft.updatedAt)) || 1;
+      return 'pub_' + this.currentDraftId + '_rev_' + rev;
+    }
+
+    _computeFingerprint(title, delta, html, publicationSettings) {
+      let filteredSettings = null;
+      if (publicationSettings && typeof publicationSettings === 'object') {
+        filteredSettings = {};
+        for (const key of Object.keys(publicationSettings).sort()) {
+          if (key !== 'status') {
+            filteredSettings[key] = publicationSettings[key];
+          }
+        }
+      }
+      return JSON.stringify({
+        title: (title || '').trim(),
+        delta: delta || null,
+        html: (html || '').trim(),
+        settings: filteredSettings
       });
     }
   }

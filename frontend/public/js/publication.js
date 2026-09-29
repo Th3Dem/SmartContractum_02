@@ -1796,8 +1796,23 @@
         <span>Отправляем…</span>
       `;
 
-      const idempotencyKey = 'pub_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
-      const draftId = (window.EditorApp && window.EditorApp.Drafts) ? window.EditorApp.Drafts.currentDraftId : ('draft_' + Date.now());
+      const draftsManager = (window.EditorApp && window.EditorApp.Drafts)
+        ? window.EditorApp.Drafts
+        : (this.draftsManager || null);
+      const draftId = draftsManager ? draftsManager.currentDraftId : ('draft_' + Date.now());
+
+      let idempotencyKey = '';
+      if (draftsManager && typeof draftsManager.getSubmissionIdempotencyKey === 'function') {
+        idempotencyKey = draftsManager.getSubmissionIdempotencyKey();
+      } else {
+        if (!this._fallbackIdempotencyKeys) {
+          this._fallbackIdempotencyKeys = {};
+        }
+        if (!this._fallbackIdempotencyKeys[draftId]) {
+          this._fallbackIdempotencyKeys[draftId] = 'pub_' + draftId + '_rev_' + Date.now();
+        }
+        idempotencyKey = this._fallbackIdempotencyKeys[draftId];
+      }
 
       const title = (this.titleInput ? this.titleInput.value : '').trim();
       const delta = this.editor ? this.editor.getContents() : null;
@@ -1828,7 +1843,12 @@
         });
 
         if (response.ok) {
-          this.status = 'in_moderation';
+          let resData = null;
+          try {
+            resData = await response.json();
+          } catch (_) {}
+
+          this.status = (resData && resData.status) ? resData.status : 'in_moderation';
 
           // Save draft locally with in_moderation status
           if (window.EditorApp && window.EditorApp.Drafts) {
@@ -1836,7 +1856,11 @@
           }
 
           if (window.EditorApp && window.EditorApp.showToast) {
-            window.EditorApp.showToast('Статья отправлена на модерацию', 'success');
+            if (resData && resData.isDuplicate) {
+              window.EditorApp.showToast('Статья уже находится на модерации', 'info');
+            } else {
+              window.EditorApp.showToast('Статья отправлена на модерацию', 'success');
+            }
           }
 
           this.closeModal(false);
