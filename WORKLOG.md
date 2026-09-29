@@ -397,3 +397,7 @@
 [2026-09-29 16:16] | dev_bot | IMPLEMENTATION_COMPLETE | Серверная фильтрация публикаций компаний до пагинации реализована, 100% тестов успешно пройдены (Task: issue-15-sc015-company-feed-server-filtering-pagination)
 [2026-09-29 16:18] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #15 (Fixes #15) (Task: issue-15-sc015-company-feed-server-filtering-pagination)
 [2026-09-29 16:20] | pm_bot | TASK_DONE | Задача Issue #15 (SC-015) успешно завершена и объединена в main. Issue #15 на GitHub закрыт (Task: issue-15-sc015-company-feed-server-filtering-pagination)
+[2026-09-29 16:26] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #16 (SC-016): унифицировать подсчет и инварианты сущностей «ответ», «комментарий» и «решение» (Task: issue-16-sc016-answers-comments-solutions-invariants)
+[2026-09-29 16:27] | py_bot | IMPLEMENTATION_START | Реализация Issue #16 (SC-016): унификация подсчета и инвариантов сущностей «ответ», «комментарий» и «решение» (Task: issue-16-sc016-answers-comments-solutions-invariants)
+[2026-09-29 16:35] | py_bot | IMPLEMENTATION_COMPLETE | Унификация подсчета и инвариантов сущностей «ответ», «комментарий» и «решение» реализована, 100% тестов успешно пройдены (Task: issue-16-sc016-answers-comments-solutions-invariants)
+[2026-09-29 16:38] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #16 (Fixes #16) (Task: issue-16-sc016-answers-comments-solutions-invariants)
