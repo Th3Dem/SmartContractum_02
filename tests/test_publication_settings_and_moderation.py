@@ -30,6 +30,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Optional
 
 import server
 from server import (
