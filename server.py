@@ -382,7 +382,7 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
                 logo TEXT,
                 directions TEXT,
                 owner_id TEXT NOT NULL,
-                is_verified INTEGER DEFAULT 1,
+                is_verified INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -2291,7 +2291,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             conn.execute("""
                 INSERT INTO companies (id, name, description, specialization, website, logo, directions, owner_id, is_verified, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             """, (
                 company_id, name, description, specialization, website, logo,
                 json.dumps(directions, ensure_ascii=False),
@@ -2314,13 +2314,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "logo": logo,
                 "directions": directions,
                 "ownerId": user["id"],
-                "isVerified": True,
+                "isVerified": False,
                 "articlesCount": 0,
                 "subscribersCount": 1,
                 "isSubscribed": True,
                 "createdAt": now_str
             }
         })
+
+    handle_create_company = handle_post_company
 
     def handle_get_directions(self, parsed_url):
         """GET /api/directions returns catalog of all standard directions / topics."""
