@@ -5830,21 +5830,23 @@
       fetch('/api/users/' + encodeURIComponent(userId))
         .then(function (res) { return res.ok ? res.json() : null; })
         .then(function (data) {
-          if (!data || !data.success || !data.user) {
+          const u = (data && (data.user || data.profile)) || data;
+          if (!data || !data.success || !u || (!u.name && !u.id)) {
             userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Профиль пользователя не найден</div>';
             return;
           }
-          const u = data.user;
           const initials = u.initials || (u.name ? u.name.split(' ').map(function (s) { return s[0]; }).join('').toUpperCase() : 'SC');
           const stats = u.stats || {};
+          const articlesList = u.articles || u.publications || [];
           let articlesHtml = '';
-          if (Array.isArray(u.articles) && u.articles.length > 0) {
-            articlesHtml = '<div class="user-profile-articles-title">Публикации автора (' + u.articles.length + ')</div>' +
+          if (Array.isArray(articlesList) && articlesList.length > 0) {
+            articlesHtml = '<div class="user-profile-articles-title">Публикации автора (' + articlesList.length + ')</div>' +
               '<div class="user-profile-articles-list">' +
-              u.articles.map(function (a) {
+              articlesList.map(function (a) {
+                const articleDate = a.created_at ? a.created_at.substring(0, 10) : (a.createdAt ? a.createdAt.substring(0, 10) : (a.date || ''));
                 return '<a href="article.html?id=' + encodeURIComponent(a.id) + '" class="user-profile-article-item">' +
                   '<span>' + escapeHtml(a.title) + '</span>' +
-                  '<span style="color: var(--text-muted); font-size: 0.78rem;">' + (a.created_at ? a.created_at.substring(0, 10) : '') + '</span>' +
+                  '<span style="color: var(--text-muted); font-size: 0.78rem;">' + escapeHtml(articleDate) + '</span>' +
                 '</a>';
               }).join('') +
               '</div>';
@@ -5861,7 +5863,7 @@
             '</div>' +
             (u.bio ? '<div class="user-profile-bio">' + escapeHtml(u.bio) + '</div>' : '') +
             '<div class="user-profile-stats">' +
-              '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.articlesCount || 0) + '</span><span class="user-profile-stat-label">Публикаций</span></div>' +
+              '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.articlesCount || stats.publicationsCount || 0) + '</span><span class="user-profile-stat-label">Публикаций</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.answersCount || 0) + '</span><span class="user-profile-stat-label">Ответов</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.solutionsCount || 0) + '</span><span class="user-profile-stat-label">Решений</span></div>' +
             '</div>' +
@@ -5886,7 +5888,7 @@
       if (authorBtn) {
         e.preventDefault();
         e.stopPropagation();
-        const authorId = authorBtn.getAttribute('data-author-id');
+        const authorId = authorBtn.getAttribute('data-author-id') || authorBtn.getAttribute('data-user-id');
         if (authorId) {
           openUserProfileModal(authorId);
         }

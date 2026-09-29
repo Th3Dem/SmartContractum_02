@@ -4242,6 +4242,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             resp_payload = {
                 "success": True,
                 "profile": profile_data,
+                "user": profile_data,
                 **profile_data
             }
             self.send_json_response(200, resp_payload)

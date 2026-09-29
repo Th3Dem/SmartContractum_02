@@ -152,7 +152,7 @@
             '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
               (isPreview
                 ? ('<span class="author-name" id="preview-card-author">' + escapeHtml(authorName) + '</span>')
-                : ('<button type="button" class="author-name btn-author-profile" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>')
+                : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>')
               ) +
               companyBadgeHtml +
             '</div>' +
