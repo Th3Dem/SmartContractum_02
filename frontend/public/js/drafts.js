@@ -20,6 +20,8 @@
       this.currentDraftId = localStorage.getItem('ag_active_draft_id') || ('draft_' + Date.now());
       this.saveDebounceTimer = null;
       this.debounceDelay = 2000; // 2 seconds
+      this.isDirty = false;
+      this.savePromise = null;
 
       this.statusEl = document.getElementById('save-status');
       this.statusTextEl = document.getElementById('save-status-text');
@@ -28,15 +30,15 @@
       this.draftsBadgeEl = document.getElementById('drafts-badge');
       this.newDraftBtn = document.getElementById('btn-new-draft');
 
-      this.initDB().then(() => {
+      this.initDB().then(async () => {
         this.bindEvents();
-        this.updateBadge();
-        this.autoRestore();
-      }).catch(err => {
+        await this.updateBadge();
+        await this.autoRestore();
+      }).catch(async (err) => {
         console.warn('IndexedDB unavailable, fallback to localStorage:', err);
         this.bindEvents();
-        this.updateBadge();
-        this.autoRestore();
+        await this.updateBadge();
+        await this.autoRestore();
       });
     }
 
@@ -73,11 +75,13 @@
 
     bindEvents() {
       // Autosave on Quill text-change
-      this.editor.on('text-change', (delta, oldDelta, source) => {
-        if (source === 'user') {
-          this.triggerAutosave();
-        }
-      });
+      if (this.editor && typeof this.editor.on === 'function') {
+        this.editor.on('text-change', (delta, oldDelta, source) => {
+          if (source === 'user') {
+            this.triggerAutosave();
+          }
+        });
+      }
 
       // Autosave on Title input change
       if (this.titleInput) {
@@ -88,20 +92,56 @@
 
       // New Draft button
       if (this.newDraftBtn) {
-        this.newDraftBtn.addEventListener('click', () => {
-          this.createNewDraft();
+        this.newDraftBtn.addEventListener('click', async () => {
+          await this.createNewDraft();
         });
       }
     }
 
     triggerAutosave() {
+      this.isDirty = true;
       this.setStatus('unsaved');
       if (this.saveDebounceTimer) {
         clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = null;
       }
-      this.saveDebounceTimer = setTimeout(() => {
-        this.saveCurrent({ isAuto: true });
+      const targetDraftId = this.currentDraftId;
+      this.saveDebounceTimer = setTimeout(async () => {
+        this.saveDebounceTimer = null;
+        if (this.currentDraftId !== targetDraftId) return;
+        await this.saveCurrent({ isAuto: true });
       }, this.debounceDelay);
+    }
+
+    async flush() {
+      const hadPendingTimer = Boolean(this.saveDebounceTimer);
+      if (this.saveDebounceTimer) {
+        clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = null;
+      }
+
+      if (this.savePromise) {
+        try {
+          await this.savePromise;
+        } catch (_) {}
+      }
+
+      if (!this.isDirty && !hadPendingTimer) {
+        return;
+      }
+
+      const title = this.titleInput ? this.titleInput.value.trim() : '';
+      const text = this.editor && typeof this.editor.getText === 'function' ? this.editor.getText().trim() : '';
+
+      // Don't save empty blank drafts automatically
+      if (!title && !text) {
+        this.isDirty = false;
+        this.setStatus('saved');
+        return;
+      }
+
+      await this.saveCurrent({ isAuto: true });
+      this.isDirty = false;
     }
 
     setStatus(state) {
@@ -136,14 +176,35 @@
        Draft Storage Operations
        ========================================================================== */
     async saveCurrent({ isAuto = false, isManual = false } = {}) {
+      if (this.saveDebounceTimer) {
+        clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = null;
+      }
+
+      if (this.savePromise) {
+        try {
+          await this.savePromise;
+        } catch (_) {}
+      }
+
+      this.savePromise = this._doSaveCurrent({ isAuto, isManual });
+      try {
+        await this.savePromise;
+      } finally {
+        this.savePromise = null;
+      }
+    }
+
+    async _doSaveCurrent({ isAuto = false, isManual = false } = {}) {
       const title = this.titleInput ? this.titleInput.value.trim() : '';
-      const text = this.editor.getText().trim();
-      const delta = this.editor.getContents();
-      const html = this.editor.root.innerHTML;
+      const text = this.editor && typeof this.editor.getText === 'function' ? this.editor.getText().trim() : '';
+      const delta = this.editor && typeof this.editor.getContents === 'function' ? this.editor.getContents() : null;
+      const html = this.editor && this.editor.root ? this.editor.root.innerHTML : '';
 
       // Don't save empty blank drafts automatically
       if (!title && !text && isAuto) {
         this.setStatus('saved');
+        this.isDirty = false;
         return;
       }
 
@@ -183,7 +244,8 @@
 
         localStorage.setItem('ag_active_draft_id', this.currentDraftId);
         this.setStatus('saved');
-        this.updateBadge();
+        this.isDirty = false;
+        await this.updateBadge();
 
         if (isManual && window.EditorApp && window.EditorApp.showToast) {
           window.EditorApp.showToast('Черновик успешно сохранен!', 'success');
@@ -196,11 +258,22 @@
 
     putToDB(draft) {
       return new Promise((resolve, reject) => {
-        const tx = this.db.transaction([STORE_NAME], 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put(draft);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        try {
+          const tx = this.db.transaction([STORE_NAME], 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put(draft);
+          tx.oncomplete = () => resolve(req.result);
+          req.onsuccess = () => {
+            if (!('oncomplete' in tx) || tx.oncomplete === undefined) {
+              resolve(req.result);
+            }
+          };
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+          req.onerror = () => reject(req.error);
+        } catch (err) {
+          reject(err);
+        }
       });
     }
 
@@ -217,15 +290,20 @@
     async getAllDrafts() {
       if (this.db) {
         return new Promise((resolve) => {
-          const tx = this.db.transaction([STORE_NAME], 'readonly');
-          const store = tx.objectStore(STORE_NAME);
-          const req = store.getAll();
-          req.onsuccess = () => {
-            const list = req.result || [];
-            list.sort((a, b) => b.updatedAt - a.updatedAt);
-            resolve(list);
-          };
-          req.onerror = () => resolve([]);
+          try {
+            const tx = this.db.transaction([STORE_NAME], 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.getAll();
+            req.onsuccess = () => {
+              const list = req.result || [];
+              list.sort((a, b) => b.updatedAt - a.updatedAt);
+              resolve(list);
+            };
+            req.onerror = () => resolve([]);
+            tx.onerror = () => resolve([]);
+          } catch (_) {
+            resolve([]);
+          }
         });
       } else {
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
@@ -252,11 +330,16 @@
       let draft = null;
       if (this.db) {
         draft = await new Promise((resolve) => {
-          const tx = this.db.transaction([STORE_NAME], 'readonly');
-          const store = tx.objectStore(STORE_NAME);
-          const req = store.get(activeId);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => resolve(null);
+          try {
+            const tx = this.db.transaction([STORE_NAME], 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.get(activeId);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+            tx.onerror = () => resolve(null);
+          } catch (_) {
+            resolve(null);
+          }
         });
       } else {
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
@@ -264,25 +347,38 @@
       }
 
       if (draft) {
-        this.loadDraft(draft, false);
+        await this.loadDraft(draft, false);
       }
     }
 
-    loadDraft(draft, notify = true) {
+    async loadDraft(draft, notify = true) {
+      if (!draft || !draft.id) return;
+
+      // Flush any pending changes of the active draft before loading another
+      await this.flush();
+
+      if (this.saveDebounceTimer) {
+        clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = null;
+      }
+
       this.currentDraftId = draft.id;
       localStorage.setItem('ag_active_draft_id', draft.id);
+      this.isDirty = false;
 
       if (this.titleInput) {
-        this.titleInput.value = draft.title === 'Без названия' ? '' : draft.title;
+        this.titleInput.value = draft.title === 'Без названия' ? '' : (draft.title || '');
         if (window.EditorApp && window.EditorApp.adjustTitleHeight) {
           window.EditorApp.adjustTitleHeight();
         }
       }
 
-      if (draft.delta && draft.delta.ops) {
+      if (draft.delta && draft.delta.ops && this.editor && typeof this.editor.setContents === 'function') {
         this.editor.setContents(draft.delta);
-      } else if (draft.html) {
+      } else if (draft.html && this.editor && this.editor.root) {
         this.editor.root.innerHTML = draft.html;
+      } else if (this.editor && typeof this.editor.setText === 'function') {
+        this.editor.setText('');
       }
 
       // Restore publication settings or reset if not present (backward compatibility)
@@ -300,16 +396,26 @@
         }
       }
 
+      this.isDirty = false;
       this.setSavingStatus(false);
 
       if (notify && window.EditorApp && window.EditorApp.showToast) {
-        window.EditorApp.showToast(`Черновик «${draft.title}» восстановлен`, 'info');
+        window.EditorApp.showToast(`Черновик «${draft.title || 'Без названия'}» восстановлен`, 'info');
       }
     }
 
     async createNewDraft() {
+      // Flush any pending changes of the active draft before creating a new one
+      await this.flush();
+
+      if (this.saveDebounceTimer) {
+        clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = null;
+      }
+
       this.currentDraftId = 'draft_' + Date.now();
       localStorage.setItem('ag_active_draft_id', this.currentDraftId);
+      this.isDirty = false;
 
       if (this.titleInput) {
         this.titleInput.value = '';
@@ -318,7 +424,9 @@
         }
       }
 
-      this.editor.setText('');
+      if (this.editor && typeof this.editor.setText === 'function') {
+        this.editor.setText('');
+      }
 
       // Reset publication settings for new draft
       if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.resetSettings === 'function') {
@@ -327,6 +435,7 @@
         window.publicationManager.resetSettings();
       }
 
+      this.isDirty = false;
       this.setSavingStatus(false);
 
       if (this.draftsModal) {
@@ -339,13 +448,27 @@
     }
 
     async deleteDraft(id) {
+      if (this.currentDraftId === id) {
+        if (this.saveDebounceTimer) {
+          clearTimeout(this.saveDebounceTimer);
+          this.saveDebounceTimer = null;
+        }
+        this.isDirty = false;
+      }
+
       if (this.db) {
         await new Promise((resolve) => {
-          const tx = this.db.transaction([STORE_NAME], 'readwrite');
-          const store = tx.objectStore(STORE_NAME);
-          const req = store.delete(id);
-          req.onsuccess = () => resolve();
-          req.onerror = () => resolve();
+          try {
+            const tx = this.db.transaction([STORE_NAME], 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.delete(id);
+            tx.oncomplete = () => resolve();
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            tx.onerror = () => resolve();
+          } catch (_) {
+            resolve();
+          }
         });
       } else {
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
@@ -354,14 +477,15 @@
       }
 
       if (this.currentDraftId === id) {
-        this.createNewDraft();
+        await this.createNewDraft();
       }
 
-      this.updateBadge();
-      this.renderDraftsList();
+      await this.updateBadge();
+      await this.renderDraftsList();
     }
 
     async openDraftsModal() {
+      await this.flush();
       await this.renderDraftsList();
       if (this.draftsModal) {
         this.draftsModal.classList.add('show');
@@ -408,16 +532,16 @@
           </div>
         `;
 
-        item.querySelector('.btn-load').addEventListener('click', (e) => {
+        item.querySelector('.btn-load').addEventListener('click', async (e) => {
           e.stopPropagation();
-          this.loadDraft(d, true);
+          await this.loadDraft(d, true);
           if (this.draftsModal) this.draftsModal.classList.remove('show');
         });
 
-        item.querySelector('.btn-delete').addEventListener('click', (e) => {
+        item.querySelector('.btn-delete').addEventListener('click', async (e) => {
           e.stopPropagation();
           if (confirm(`Удалить черновик «${d.title}»?`)) {
-            this.deleteDraft(d.id);
+            await this.deleteDraft(d.id);
           }
         });
 
