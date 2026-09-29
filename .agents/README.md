@@ -1,23 +1,12 @@
-# Каталог профилей и регламентов агентов (`.agents/`)
+# Antigravity Agents
 
-В данном каталоге сосредоточены регламенты взаимодействия и специализированные профили ролей мультиагентной команды разработки на платформе Antigravity.
+This directory contains the migrated agent profiles for the Amnezia-Web-Panel project.
+These files define the identity, workflow constraints, and processes for each automated subagent.
 
----
+- `pm_bot.md` - Project Manager & Orchestrator
+- `py_bot.md` - Python Developer
+- `dev_bot.md` - Go/General Developer
+- `git_bot.md` - Git & PR Operations
+- `ops_bot.md` - DevOps & Infrastructure Operations
 
-## Структура каталога
-
-- [`workflow.md`](workflow.md) — единый сквозной регламент разработки: жизненный цикл задач, правила проверок, артефакты передачи результатов (Handover), защита от зацикливания, правила Git и безопасность.
-- [`pm_bot.md`](pm_bot.md) — профиль сессионного оркестратора: планирование, декомпозиция, создание `TASK.md`, ведение `WORKLOG.md`.
-- [`py_bot.md`](py_bot.md) — профиль разработчика на Python: backend, API, unit/integration тесты.
-- [`dev_bot.md`](dev_bot.md) — профиль разработчика на Go и специалиста по Frontend: веб-интерфейс (HTML, CSS, JS/TS, UI).
-- [`qa_bot.md`](qa_bot.md) — профиль независимого контроля качества: аудит diff, верификация критериев приемки, запуск проверок и безопасности.
-- [`git_bot.md`](git_bot.md) — профиль работы с контролем версий: подготовка веток, атомарные коммиты, публикация, PR и мониторинг CI.
-- [`ops_bot.md`](ops_bot.md) — профиль операций с инфраструктурой: Docker, безопасное сетевое взаимодействие, деплой и health-check.
-
----
-
-## Иерархия применения и настройка
-
-1. **Единая точка входа**: ознакомление с правилами работы начинается с корневого файла [`AGENTS.md`](../AGENTS.md).
-2. **Приоритет регламента**: общий процесс и инварианты определяются [`workflow.md`](workflow.md). Профили агентов детализируют функции конкретной роли и не могут противоречить общему регламенту.
-3. **Модели агентов**: централизованно настраиваются в [`AGENTS.md`](../AGENTS.md) (предпочтения по ролям: `flash` для разработчиков, `glm-5.1:cloud` для `qa_bot`).
+The primary agent acting as `pm_bot` automatically reads from this directory when defining and invoking subagents on the Antigravity platform.
