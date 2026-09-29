@@ -362,3 +362,7 @@
 [2026-09-29 14:09] | py_bot | IMPLEMENTATION_COMPLETE | Потоковое ограничение размера тела и защита PNG от zlib-бомб реализованы, 100% тестов успешно пройдены (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
 [2026-09-29 14:10] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #8 (Fixes #8) (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
 [2026-09-29 14:13] | pm_bot | TASK_DONE | Задача Issue #8 (SC-005) успешно завершена и объединена в main. Issue #8 на GitHub закрыт. Спринт 2 завершен на 100% (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
+[2026-09-29 14:19] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #9 (SC-008): устранение гонки автосохранения и потери текста при переключении черновиков (Task: issue-9-sc008-drafts-autosave-race-condition)
+[2026-09-29 14:20] | dev_bot | IMPLEMENTATION_START | Реализация Issue #9 (SC-008): устранение гонки автосохранения черновиков (Task: issue-9-sc008-drafts-autosave-race-condition)
+[2026-09-29 14:28] | dev_bot | IMPLEMENTATION_COMPLETE | Гонка автосохранения устранена, метод flush реализован, 100% тестов успешно пройдены (Task: issue-9-sc008-drafts-autosave-race-condition)
+[2026-09-29 14:28] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #9 (Fixes #9) (Task: issue-9-sc008-drafts-autosave-race-condition)
