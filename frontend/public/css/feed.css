@@ -2228,6 +2228,7 @@ details[open] .summary-chevron {
 
 /* Secondary actions: Cancel, Reset */
 #btnCancelFeedSettings,
+#btnCancelFeedFilters,
 #feedResetFiltersBtn {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -2239,6 +2240,7 @@ details[open] .summary-chevron {
 }
 
 #btnCancelFeedSettings:hover,
+#btnCancelFeedFilters:hover,
 #feedResetFiltersBtn:hover {
   background: var(--bg-hover);
   border-color: var(--border-hover, #64748b);

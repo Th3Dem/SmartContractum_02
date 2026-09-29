@@ -2667,11 +2667,21 @@
 
   function initFeedFiltersPanel() {
     const closeBtn = document.getElementById('btnCloseFeedFilters');
+    const cancelBtn = document.getElementById('btnCancelFeedFilters');
     const applyBtn = document.getElementById('btnApplyFilters');
     const resetBtn = document.getElementById('feedResetFiltersBtn');
 
     if (closeBtn) {
       closeBtn.addEventListener('click', closeFeedFiltersPanel);
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        filtersDraftState = null;
+        syncFilterFormUI();
+        checkFiltersPanelUnappliedChanges();
+        closeFeedFiltersPanel();
+      });
     }
 
     // 1. Material Types tumblers with "Все типы"
