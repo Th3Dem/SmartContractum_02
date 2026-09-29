@@ -429,3 +429,7 @@
 [2026-09-29 18:34] | py_bot | IMPLEMENTATION_COMPLETE | Устранение двойного экранирования plain-text полей комментариев и профилей реализовано, 100% тестов успешно пройдены (Task: issue-21-sc021-eliminate-double-escaping)
 [2026-09-29 18:37] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #21 (Fixes #21) (Task: issue-21-sc021-eliminate-double-escaping)
 [2026-09-29 18:41] | pm_bot | TASK_DONE | Задача Issue #21 (SC-021) успешно завершена и объединена в main. Issue #21 на GitHub закрыт (Task: issue-21-sc021-eliminate-double-escaping)
+[2026-09-29 18:45] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #22 (SC-023): внедрить базовый GitHub Actions CI с реальными браузерными проверками (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 18:46] | py_bot | IMPLEMENTATION_START | Внедрение GitHub Actions CI и браузерных смоук-тестов (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 18:55] | py_bot | IMPLEMENTATION_COMPLETE | Внедрение GitHub Actions CI и браузерных смоук-тестов реализовано, 100% тестов успешно пройдены (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 18:56] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #22 (Fixes #22) (Task: issue-22-sc023-github-actions-ci)
