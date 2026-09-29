@@ -391,3 +391,4 @@
 [2026-09-29 15:48] | py_bot | IMPLEMENTATION_START | Реализация Issue #14 (SC-012): проверка полномочий пользователя на публикацию от имени компании (Task: issue-14-sc012-company-publication-authorization)
 [2026-09-29 16:00] | py_bot | IMPLEMENTATION_COMPLETE | Проверка полномочий пользователя на публикацию от имени компании реализована, 100% тестов успешно пройдены (Task: issue-14-sc012-company-publication-authorization)
 [2026-09-29 16:05] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #14 (Fixes #14) (Task: issue-14-sc012-company-publication-authorization)
+[2026-09-29 16:07] | pm_bot | TASK_DONE | Задача Issue #14 (SC-012) успешно завершена и объединена в main. Issue #14 на GitHub закрыт (Task: issue-14-sc012-company-publication-authorization)
