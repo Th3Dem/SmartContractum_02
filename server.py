@@ -3247,6 +3247,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "id": row["id"],
             "draftId": row["draft_id"],
             "title": row["title"],
+            "authorId": row["author_id"],
+            "author_id": row["author_id"],
             "author": author_name,
             "authorInitials": author_initials,
             "authorRole": author_role,
@@ -3279,6 +3281,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "success": True,
             "article": article_data
         })
+
+    handle_get_article_by_id = handle_get_article
 
     def handle_get_articles_list(self, parsed_url):
         """
@@ -3743,6 +3747,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "id": row["id"],
                 "draftId": row["draft_id"],
                 "title": row["title"],
+                "authorId": row["author_id"],
+                "author_id": row["author_id"],
                 "author": author_name,
                 "authorInitials": author_initials,
                 "authorRole": author_role,
