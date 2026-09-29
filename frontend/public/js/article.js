@@ -20,6 +20,114 @@
   }
 
   // --------------------------------------------------------------------------
+  // Client-side HTML Sanitizer (defense-in-depth against stored XSS)
+  // --------------------------------------------------------------------------
+  function sanitizeArticleHtml(dirtyHtml) {
+    if (!dirtyHtml || typeof dirtyHtml !== 'string') return '';
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(dirtyHtml, 'text/html');
+      const body = doc.body;
+
+      // Disallowed elements to remove completely with their content
+      const dropTags = [
+        'script', 'style', 'iframe', 'object', 'embed', 'applet',
+        'meta', 'link', 'base', 'form', 'input', 'button',
+        'textarea', 'noscript'
+      ];
+      dropTags.forEach(function (tag) {
+        const elements = body.querySelectorAll(tag);
+        elements.forEach(function (el) { el.remove(); });
+      });
+
+      // Allowed tags allowlist
+      const allowedTags = new Set([
+        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'blockquote', 'ul', 'ol', 'li', 'pre', 'code',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'img', 'a', 'strong', 'b', 'em', 'i', 'u', 's',
+        'del', 'strike', 'sub', 'sup', 'span', 'div',
+        'br', 'hr'
+      ]);
+
+      // Strip unallowed tags while unwrapping child nodes
+      const allElements = Array.from(body.querySelectorAll('*'));
+      allElements.forEach(function (el) {
+        const tagName = el.tagName.toLowerCase();
+        if (!allowedTags.has(tagName)) {
+          while (el.firstChild) {
+            el.parentNode.insertBefore(el.firstChild, el);
+          }
+          el.remove();
+          return;
+        }
+
+        // Sanitize attributes
+        const attrs = Array.from(el.attributes);
+        attrs.forEach(function (attr) {
+          const name = attr.name.toLowerCase();
+          const val = attr.value;
+
+          // Remove event handler attributes (onclick, onerror, onload, etc.)
+          if (name.startsWith('on')) {
+            el.removeAttribute(attr.name);
+            return;
+          }
+
+          // Validate a.href
+          if (tagName === 'a' && name === 'href') {
+            const clean = val.replace(/[\s\x00-\x1f\x7f-\x9f]/g, '').toLowerCase();
+            if (
+              clean.startsWith('javascript:') ||
+              clean.startsWith('vbscript:') ||
+              clean.startsWith('data:') ||
+              clean.startsWith('file:') ||
+              clean.startsWith('blob:')
+            ) {
+              el.removeAttribute(attr.name);
+            }
+            return;
+          }
+
+          // Validate img.src
+          if (tagName === 'img' && name === 'src') {
+            const clean = val.replace(/[\s\x00-\x1f\x7f-\x9f]/g, '').toLowerCase();
+            if (clean.startsWith('javascript:') || clean.startsWith('vbscript:')) {
+              el.removeAttribute(attr.name);
+            } else if (clean.startsWith('data:') && !clean.match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i)) {
+              el.removeAttribute(attr.name);
+            }
+            return;
+          }
+
+          // Validate a.target
+          if (tagName === 'a' && name === 'target') {
+            if (val !== '_blank' && val !== '_self') {
+              el.removeAttribute(attr.name);
+            }
+            return;
+          }
+
+          // Whitelist allowed attributes
+          const allowedAttrs = ['class', 'title', 'id'];
+          if (tagName === 'a') allowedAttrs.push('href', 'target', 'rel');
+          if (tagName === 'img') allowedAttrs.push('src', 'alt', 'width', 'height', 'loading');
+          if (tagName === 'th' || tagName === 'td') allowedAttrs.push('colspan', 'rowspan', 'scope');
+          if (tagName === 'pre' || tagName === 'code') allowedAttrs.push('data-language');
+
+          if (!allowedAttrs.includes(name)) {
+            el.removeAttribute(attr.name);
+          }
+        });
+      });
+
+      return body.innerHTML;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // 1. Theme Management & Syntax Highlighting Theme Sync
   // --------------------------------------------------------------------------
   function initTheme() {
@@ -1018,7 +1126,8 @@
     // Content Body
     const bodyEl = document.getElementById('articleBodyContent');
     if (bodyEl) {
-      bodyEl.innerHTML = article.html || '<p>Текст статьи пуст.</p>';
+      const sanitized = sanitizeArticleHtml(article.html || '');
+      bodyEl.innerHTML = sanitized || '<p>Текст статьи пуст.</p>';
       enhanceArticleContent(bodyEl);
       buildTableOfContents(bodyEl);
     }

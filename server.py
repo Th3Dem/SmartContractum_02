@@ -18,6 +18,7 @@ import base64
 import datetime
 import hashlib
 import html
+import html.parser
 import http.server
 import json
 import os
@@ -115,6 +116,238 @@ def slugify(text: str) -> str:
 
 
 
+class ArticleHTMLSanitizer(html.parser.HTMLParser):
+    """
+    Offline-first HTML sanitizer based on html.parser.HTMLParser.
+    Enforces a strict allowlist of Quill editor tags and attributes,
+    strips dangerous elements (<script>, <iframe>, <object>, etc.) along with their content,
+    removes all event handler attributes ('on*'), and validates link/image URIs against safe schemes.
+    """
+    ALLOWED_TAGS = {
+        "p", "h1", "h2", "h3", "h4", "h5", "h6",
+        "blockquote", "ul", "ol", "li", "pre", "code",
+        "table", "thead", "tbody", "tr", "th", "td",
+        "img", "a", "strong", "b", "em", "i", "u", "s",
+        "del", "strike", "sub", "sup", "span", "div",
+        "br", "hr",
+    }
+    DROP_CONTENT_TAGS = {
+        "script", "style", "iframe", "object", "embed", "applet",
+        "meta", "link", "base", "form", "input", "button",
+        "textarea", "noscript",
+    }
+    VOID_TAGS = {"img", "br", "hr"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.output: List[str] = []
+        self.open_tags: List[str] = []
+        self.drop_depth = 0
+
+    @staticmethod
+    def is_safe_href(url: str) -> bool:
+        if not url or not isinstance(url, str):
+            return False
+        cleaned = re.sub(r'[\s\x00-\x1f\x7f-\x9f]', '', url)
+        if not cleaned:
+            return False
+        unquoted = urllib.parse.unquote(cleaned).lower()
+        if unquoted.startswith(('javascript:', 'vbscript:', 'data:', 'file:', 'blob:')):
+            return False
+        lower_cleaned = cleaned.lower()
+        if lower_cleaned.startswith(('javascript:', 'vbscript:', 'data:', 'file:', 'blob:')):
+            return False
+        colon_idx = cleaned.find(':')
+        if colon_idx != -1:
+            scheme = cleaned[:colon_idx].lower()
+            if re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*$', scheme):
+                if scheme not in ('http', 'https', 'mailto'):
+                    return False
+        return True
+
+    @staticmethod
+    def is_safe_img_src(src: str) -> bool:
+        if not src or not isinstance(src, str):
+            return False
+        cleaned = re.sub(r'[\s\x00-\x1f\x7f-\x9f]', '', src)
+        if not cleaned:
+            return False
+        unquoted = urllib.parse.unquote(cleaned).lower()
+        if unquoted.startswith(('javascript:', 'vbscript:', 'file:', 'blob:')):
+            return False
+        lower_cleaned = cleaned.lower()
+        if lower_cleaned.startswith(('javascript:', 'vbscript:', 'file:', 'blob:')):
+            return False
+        if lower_cleaned.startswith(('http://', 'https://', '/media/')) or cleaned.startswith(('/', './', '../', '#')):
+            return True
+        if lower_cleaned.startswith('data:'):
+            return bool(re.match(r'^data:image/(?:png|jpeg|jpg|webp|gif);base64,[a-zA-Z0-9+/=]+$', cleaned, re.IGNORECASE))
+        colon_idx = cleaned.find(':')
+        if colon_idx != -1:
+            return False
+        return True
+
+    def is_valid_attr(self, tag: str, name: str, val: str) -> bool:
+        if name.startswith('on'):
+            return False
+        if tag == 'a':
+            if name == 'href':
+                return self.is_safe_href(val)
+            if name == 'target':
+                return val in ('_blank', '_self')
+            if name == 'rel':
+                return bool(re.match(r'^[a-zA-Z0-9_\-\s]+$', val))
+            if name == 'class':
+                return bool(re.match(r'^[a-zA-Z0-9_\-\s]+$', val))
+            if name == 'id':
+                return bool(re.match(r'^[a-zA-Z0-9_\-:]+$', val))
+            if name == 'title':
+                return True
+            return False
+        elif tag == 'img':
+            if name == 'src':
+                return self.is_safe_img_src(val)
+            if name in ('alt', 'title'):
+                return True
+            if name in ('width', 'height'):
+                return bool(re.match(r'^[0-9]+%?$|^auto$', val))
+            if name == 'loading':
+                return val in ('lazy', 'eager', 'auto')
+            if name == 'class':
+                return bool(re.match(r'^[a-zA-Z0-9_\-\s]+$', val))
+            if name == 'id':
+                return bool(re.match(r'^[a-zA-Z0-9_\-:]+$', val))
+            return False
+        elif tag in ('th', 'td'):
+            if name in ('colspan', 'rowspan'):
+                return bool(re.match(r'^[0-9]+$', val))
+            if name == 'scope' and tag == 'th':
+                return val in ('col', 'row', 'colgroup', 'rowgroup')
+            if name == 'class':
+                return bool(re.match(r'^[a-zA-Z0-9_\-\s]+$', val))
+            if name == 'id':
+                return bool(re.match(r'^[a-zA-Z0-9_\-:]+$', val))
+            if name == 'title':
+                return True
+            return False
+        else:
+            if name == 'class':
+                return bool(re.match(r'^[a-zA-Z0-9_\-\s]+$', val))
+            if name == 'id':
+                return bool(re.match(r'^[a-zA-Z0-9_\-:]+$', val))
+            if name == 'title':
+                return True
+            if name == 'data-language' and tag in ('pre', 'code'):
+                return bool(re.match(r'^[a-zA-Z0-9_\-\.\+]+$', val))
+            return False
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        tag = tag.lower()
+        if self.drop_depth > 0:
+            return
+        if tag in self.DROP_CONTENT_TAGS:
+            self.drop_depth += 1
+            return
+        if tag not in self.ALLOWED_TAGS:
+            return
+
+        clean_attrs = []
+        for name, val in attrs:
+            name = name.lower()
+            val_str = val if val is not None else ''
+            if self.is_valid_attr(tag, name, val_str):
+                clean_attrs.append((name, val_str))
+
+        if clean_attrs:
+            attrs_str = ' ' + ' '.join(
+                f'{k}="{html.escape(v, quote=True)}"'
+                for k, v in clean_attrs
+            )
+        else:
+            attrs_str = ''
+
+        # Handle HTML auto-closing elements
+        if tag == 'p' and self.open_tags and self.open_tags[-1] == 'p':
+            self.output.append('</p>')
+            self.open_tags.pop()
+        elif tag == 'li' and self.open_tags and self.open_tags[-1] == 'li':
+            self.output.append('</li>')
+            self.open_tags.pop()
+        elif tag == 'tr' and self.open_tags and self.open_tags[-1] in ('tr', 'td', 'th'):
+            while self.open_tags and self.open_tags[-1] in ('tr', 'td', 'th'):
+                popped = self.open_tags.pop()
+                self.output.append(f'</{popped}>')
+        elif tag in ('td', 'th') and self.open_tags and self.open_tags[-1] in ('td', 'th'):
+            popped = self.open_tags.pop()
+            self.output.append(f'</{popped}>')
+
+        self.output.append(f'<{tag}{attrs_str}>')
+        if tag not in self.VOID_TAGS:
+            self.open_tags.append(tag)
+
+    def handle_endtag(self, tag: str):
+        tag = tag.lower()
+        if tag in self.DROP_CONTENT_TAGS:
+            if self.drop_depth > 0:
+                self.drop_depth -= 1
+            return
+        if self.drop_depth > 0:
+            return
+        if tag in self.VOID_TAGS:
+            return
+        if tag not in self.ALLOWED_TAGS:
+            return
+        if tag in self.open_tags:
+            while self.open_tags:
+                popped = self.open_tags.pop()
+                self.output.append(f'</{popped}>')
+                if popped == tag:
+                    break
+
+    def handle_startendtag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        tag = tag.lower()
+        if tag in self.DROP_CONTENT_TAGS:
+            return
+        if tag in self.VOID_TAGS:
+            self.handle_starttag(tag, attrs)
+        else:
+            self.handle_starttag(tag, attrs)
+            self.handle_endtag(tag)
+
+    def handle_data(self, data: str):
+        if self.drop_depth == 0:
+            self.output.append(html.escape(data, quote=False))
+
+    def handle_entityref(self, name: str):
+        if self.drop_depth == 0:
+            self.output.append(f'&{name};')
+
+    def handle_charref(self, name: str):
+        if self.drop_depth == 0:
+            self.output.append(f'&#{name};')
+
+    def sanitize(self, raw_html: str) -> str:
+        self.feed(raw_html)
+        while self.open_tags:
+            popped = self.open_tags.pop()
+            self.output.append(f'</{popped}>')
+        return ''.join(self.output)
+
+
+HTMLSanitizer = ArticleHTMLSanitizer
+
+
+def sanitize_article_html(raw_html: str) -> str:
+    """
+    Sanitizes article HTML against stored XSS using a strict allowlist
+    of tags and attributes. Offline-first, standard library html.parser.
+    """
+    if not raw_html or not isinstance(raw_html, str):
+        return ''
+    sanitizer = ArticleHTMLSanitizer()
+    return sanitizer.sanitize(raw_html)
+
+
 def extract_article_text(html_content: str) -> str:
     """
     Extracts text content from HTML by stripping all tags, unescaping HTML entities,
@@ -122,8 +355,10 @@ def extract_article_text(html_content: str) -> str:
     """
     if not html_content or not isinstance(html_content, str):
         return ""
+    # Strip script, style, and similar non-content elements
+    cleaned = re.sub(r'<(?:script|style|iframe|object|embed|noscript)[^>]*>.*?</(?:script|style|iframe|object|embed|noscript)>', ' ', html_content, flags=re.IGNORECASE | re.DOTALL)
     # Strip HTML tags
-    cleaned = re.sub(r'<[^>]+>', ' ', html_content)
+    cleaned = re.sub(r'<[^>]+>', ' ', cleaned)
     # Unescape HTML entities (&nbsp;, &amp;, etc.)
     unescaped = html.unescape(cleaned)
     # Replace non-breaking spaces (\u00a0), zero-width spaces (\u200b, \ufeff, etc.)
@@ -139,7 +374,8 @@ def has_valid_article_text(html_content: str) -> bool:
     """
     if not html_content or not isinstance(html_content, str):
         return False
-    text = extract_article_text(html_content)
+    sanitized = sanitize_article_html(html_content)
+    text = extract_article_text(sanitized)
     return bool(re.search(r'[a-zA-Zа-яА-Я0-9]', text))
 
 
@@ -1146,8 +1382,19 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
 
     # 3. html
     article_html = payload.get("html") or payload.get("article_html") or payload.get("content")
-    if article_html is None or not isinstance(article_html, str) or not has_valid_article_text(article_html):
+    if article_html is None or not isinstance(article_html, str):
         field_errors["html"] = "Тело статьи должно содержать текст (буквы или цифры). Пустые блоки, пробелы и только изображения недопустимы."
+    else:
+        sanitized_html = sanitize_article_html(article_html)
+        if not has_valid_article_text(sanitized_html):
+            field_errors["html"] = "Тело статьи должно содержать текст (буквы или цифры). Пустые блоки, пробелы и только изображения недопустимы."
+        else:
+            if "html" in payload and isinstance(payload["html"], str):
+                payload["html"] = sanitized_html
+            elif "article_html" in payload and isinstance(payload["article_html"], str):
+                payload["article_html"] = sanitized_html
+            elif "content" in payload and isinstance(payload["content"], str):
+                payload["content"] = sanitized_html
 
     # 4. publicationSettings
     pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
@@ -3126,7 +3373,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             draft_id = payload.get("draftId") or payload.get("draft_id")
             title = payload.get("title").strip()
-            article_html = payload.get("html") or payload.get("article_html") or payload.get("content")
+            raw_html = payload.get("html") or payload.get("article_html") or payload.get("content") or ""
+            article_html = sanitize_article_html(raw_html)
             delta = payload.get("delta") or payload.get("article_delta")
             pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
             author_id = curr_user["id"]
