@@ -436,3 +436,7 @@
 [2026-09-29 19:02] | pm_bot | DEV_REWORK | Передача py_bot на доработку: устранение ModuleNotFoundError yaml и NameError Optional на Python 3.12 в CI (Task: issue-22-sc023-github-actions-ci)
 [2026-09-29 19:04] | py_bot | IMPLEMENTATION_COMPLETE | Устранены зависимости от внешних пакетов и NameError на Python 3.12, 100% тестов успешно пройдены (Task: issue-22-sc023-github-actions-ci)
 [2026-09-29 19:09] | git_bot | PR_CREATED | Зафиксированы исправления CI для Python 3.12 и объединены в main (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 19:15] | pm_bot | DEV_REWORK | Передача py_bot на доработку: устранение блокировки клика автора в card.js/feed.js и корректировка проверки DOM innerHTML в test_03 (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 19:17] | py_bot | IMPLEMENTATION_COMPLETE | Устранено поглощение клика автора в card.js и скорректирован ассерт innerHTML для текстовых узлов, 100% тестов успешно пройдены (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 19:24] | git_bot | PR_CREATED | Зафиксированы исправления клика автора в card.js/feed.js и сериализации innerHTML, изменения объединены в main (Task: issue-22-sc023-github-actions-ci)
+
