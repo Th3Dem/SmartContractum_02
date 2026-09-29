@@ -356,3 +356,4 @@
 [2026-09-29 13:37] | py_bot | IMPLEMENTATION_START | Реализация Issue #7 (SC-004): изоляция загрузок SVG и запрет исполнения активного содержимого (Task: issue-7-sc004-svg-upload-isolation)
 [2026-09-29 13:46] | py_bot | IMPLEMENTATION_COMPLETE | Изоляция загрузок SVG и заголовки CSP реализованы, 100% тестов успешно пройдены (Task: issue-7-sc004-svg-upload-isolation)
 [2026-09-29 13:48] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #7 (Fixes #7) (Task: issue-7-sc004-svg-upload-isolation)
+[2026-09-29 13:51] | pm_bot | TASK_DONE | Задача Issue #7 (SC-004) успешно завершена и объединена в main. Issue #7 на GitHub закрыт (Task: issue-7-sc004-svg-upload-isolation)
