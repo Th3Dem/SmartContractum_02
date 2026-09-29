@@ -1094,6 +1094,7 @@
     syncURL(false);
 
     if (tabName === 'clubs' || tabName === 'companies' || tabName === 'directions') {
+      hideOfflineBadge();
       if (feedAbortController) {
         feedAbortController.abort();
         feedAbortController = null;
@@ -3506,6 +3507,29 @@
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Offline Badge & Status Controls
+  // --------------------------------------------------------------------------
+  function showOfflineBadge() {
+    let badge = document.getElementById('feedOfflineBadge');
+    if (!badge) {
+      const container = document.getElementById('feedCardsContainer');
+      if (!container || !container.parentNode) return;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = '<div class="feed-offline-badge" id="feedOfflineBadge"><span class="feed-offline-dot"></span>Автономный режим (демо-данные)</div>';
+      badge = tmp.firstElementChild;
+      container.parentNode.insertBefore(badge, container);
+    }
+    badge.style.display = 'inline-flex';
+  }
+
+  function hideOfflineBadge() {
+    const badge = document.getElementById('feedOfflineBadge');
+    if (badge) {
+      badge.style.display = 'none';
+    }
+  }
+
   function fetchFeed(isInitial) {
     if (!isInitial && state.isLoading) return;
 
@@ -3608,13 +3632,18 @@
           openAuthModal('subscriptions');
           throw new Error('AUTH_REQUIRED');
         }
-        if (!res.ok) throw new Error('API status: ' + res.status);
+        if (!res.ok) {
+          const err = new Error('HTTP error ' + res.status);
+          err.status = res.status;
+          throw err;
+        }
         return res.json();
       })
       .then(function (data) {
         if (currentGeneration !== state.requestGeneration || !data) return;
         state.isLoading = false;
         if (data && data.success) {
+          hideOfflineBadge();
           const rawArticles = data.articles || [];
           const filtered = filterArticleList(rawArticles);
 
@@ -3636,6 +3665,7 @@
           renderFeedCards(isInitial);
           updateResultsCount();
         } else {
+          hideOfflineBadge();
           renderErrorState('Не удалось загрузить статьи: ' + (data ? data.error : 'Неизвестная ошибка'));
         }
       })
@@ -3645,10 +3675,27 @@
         }
         state.isLoading = false;
         if (err.message === 'AUTH_REQUIRED') return;
-        // Offline / file protocol fallback: provide fallback data
-        handleOfflineFallback(isInitial);
+        // handleOfflineFallback(isInitial) only when client is offline:
+        const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false) || (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
+        if (isOffline) {
+          showOfflineBadge();
+          handleOfflineFallback(isInitial);
+        } else {
+          hideOfflineBadge();
+          let message;
+          if (err && err.status && err.status >= 500) {
+            message = 'Ошибка сервера (' + err.status + '). Не удалось загрузить публикации.';
+          } else if (err && err.status && err.status >= 400) {
+            message = 'Ошибка запроса (' + err.status + '). Не удалось загрузить публикации.';
+          } else {
+            message = 'Ошибка сети при загрузке публикаций.';
+          }
+          renderErrorState(message);
+        }
       });
   }
+
+  const loadArticles = fetchFeed;
 
   function handleOfflineFallback(isInitial) {
     if (state.savedOnly) {
@@ -3938,10 +3985,18 @@
         '</svg>' +
         '<h3 class="empty-state-title">Ошибка загрузки</h3>' +
         '<p class="empty-state-desc">' + escapeHtml(message) + '</p>' +
-        '<button type="button" class="btn btn-secondary" onclick="window.location.reload()">' +
+        '<button type="button" class="btn btn-secondary" id="feedRetryBtn" onclick="if(window.FeedApp&&window.FeedApp.loadArticles){window.FeedApp.loadArticles(true);}else{window.location.reload();}">' +
           'Повторить попытку' +
         '</button>' +
       '</div>';
+
+    const retryBtn = document.getElementById('feedRetryBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        loadArticles(true);
+      });
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -5985,6 +6040,17 @@
     window.__updateQuestionStatusPillsUI = updateQuestionStatusPillsUI;
     window.__parseURLParams = parseURLParams;
     window.__syncURL = syncURL;
+    window.loadArticles = loadArticles;
+    window.fetchFeed = fetchFeed;
+    window.showOfflineBadge = showOfflineBadge;
+    window.hideOfflineBadge = hideOfflineBadge;
+    window.renderErrorState = renderErrorState;
+    window.handleOfflineFallback = handleOfflineFallback;
+    window.FeedApp = window.FeedApp || {};
+    window.FeedApp.loadArticles = loadArticles;
+    window.FeedApp.retryLoad = function () {
+      loadArticles(true);
+    };
   }
 
 })();
