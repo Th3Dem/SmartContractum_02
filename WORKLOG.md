@@ -424,3 +424,7 @@
 [2026-09-29 17:55] | dev_bot | IMPLEMENTATION_COMPLETE | Устранение подмены серверных ошибок ленты демо-статьями, кнопка повтора запроса и бейдж автономного режима реализованы, 100% тестов успешно пройдены (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
 [2026-09-29 17:58] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #20 (Fixes #20) (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
 [2026-09-29 18:00] | pm_bot | TASK_DONE | Задача Issue #20 (SC-020) успешно завершена и объединена в main. Issue #20 на GitHub закрыт (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
+[2026-09-29 18:05] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #21 (SC-021): устранить двойное экранирование plain-text полей (Task: issue-21-sc021-eliminate-double-escaping)
+[2026-09-29 18:06] | py_bot | IMPLEMENTATION_START | Устранение двойного экранирования plain-text полей комментариев и профилей (Task: issue-21-sc021-eliminate-double-escaping)
+[2026-09-29 18:34] | py_bot | IMPLEMENTATION_COMPLETE | Устранение двойного экранирования plain-text полей комментариев и профилей реализовано, 100% тестов успешно пройдены (Task: issue-21-sc021-eliminate-double-escaping)
+[2026-09-29 18:37] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #21 (Fixes #21) (Task: issue-21-sc021-eliminate-double-escaping)
