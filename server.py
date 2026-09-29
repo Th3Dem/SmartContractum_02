@@ -469,9 +469,10 @@ STANDARD_TOPICS = [
 TOPICS_TITLE_MAP = dict(STANDARD_TOPICS)
 
 
-def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
+def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlite3.Connection:
     """
-    Initializes the SQLite database and ensures the moderation_submissions table exists.
+    Initializes the SQLite database and ensures schema and tables exist.
+    Optionally seeds demo data if seed is True or environment/test defaults dictate.
     """
     target_path = db_path or os.environ.get("MODERATION_DB_PATH", DEFAULT_DB_PATH)
     if target_path != ":memory:":
@@ -660,26 +661,19 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);")
 
-        seed_approved_articles(conn)
-        seed_user_subscriptions(conn)
-        seed_article_comments(conn)
+    if seed is None:
+        if os.environ.get("SEED_ON_INIT") == "1":
+            seed = True
+        elif os.environ.get("SEED_ON_INIT") == "0":
+            seed = False
+        elif "unittest" in sys.modules:
+            seed = True
+        else:
+            seed = False
 
-        try:
-            import seed_data
-            seed_data.seed_clubs(conn)
-            seed_data.seed_companies(conn)
-            conn.execute("""
-                INSERT OR IGNORE INTO company_members (company_id, user_id, role, created_at)
-                SELECT id, owner_id, 'owner', created_at FROM companies WHERE owner_id IS NOT NULL AND owner_id != '';
-            """)
-            seed_data.seed_articles(conn)
-            seed_data.seed_user_subscriptions(conn)
-            seed_data.seed_article_likes(conn)
-            seed_data.seed_article_comments(conn)
-            if hasattr(seed_data, "seed_user_profiles"):
-                seed_data.seed_user_profiles(conn)
-        except Exception as e:
-            print(f"Warning: error seeding extended data: {e}", file=sys.stderr)
+    if seed:
+        seed_database(conn)
+
     return conn
 
 
@@ -1246,6 +1240,32 @@ def seed_article_comments(conn: sqlite3.Connection):
             id, article_id, user_id, author_name, author_avatar, content, status, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, demo_comments)
+
+
+def seed_database(conn: sqlite3.Connection) -> None:
+    """
+    Seeds initial demo data (articles, subscriptions, comments, clubs, companies, profiles).
+    """
+    with conn:
+        seed_approved_articles(conn)
+        seed_user_subscriptions(conn)
+        seed_article_comments(conn)
+        try:
+            import seed_data
+            seed_data.seed_clubs(conn)
+            seed_data.seed_companies(conn)
+            conn.execute("""
+                INSERT OR IGNORE INTO company_members (company_id, user_id, role, created_at)
+                SELECT id, owner_id, 'owner', created_at FROM companies WHERE owner_id IS NOT NULL AND owner_id != '';
+            """)
+            seed_data.seed_articles(conn)
+            seed_data.seed_user_subscriptions(conn)
+            seed_data.seed_article_likes(conn)
+            seed_data.seed_article_comments(conn)
+            if hasattr(seed_data, "seed_user_profiles"):
+                seed_data.seed_user_profiles(conn)
+        except Exception as e:
+            print(f"Warning: error seeding extended data: {e}", file=sys.stderr)
 
 
 def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
@@ -5099,11 +5119,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
-def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, directory: Optional[str] = None, media_dir: Optional[str] = None) -> http.server.ThreadingHTTPServer:
+def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, directory: Optional[str] = None, media_dir: Optional[str] = None, seed: Optional[bool] = None) -> http.server.ThreadingHTTPServer:
     """
     Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
-    init_db(db_path)
+    init_db(db_path, seed=seed)
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, ModerationRequestHandler)
     httpd.db_path = db_path or os.environ.get("MODERATION_DB_PATH", DEFAULT_DB_PATH)
@@ -5113,11 +5133,11 @@ def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str
     return httpd
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None):
+def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, seed: bool = False):
     """
     Starts the server loop listening on host:port.
     """
-    httpd = create_server(host=host, port=port, db_path=db_path)
+    httpd = create_server(host=host, port=port, db_path=db_path, seed=seed)
     print(f"Antigravity Moderation Server running at http://{host}:{port}/")
     print(f"Serving static files from {httpd.directory}")
     print(f"SQLite database at {httpd.db_path}")
@@ -5134,6 +5154,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=None, help="Port to listen on (default 8000)")
     parser.add_argument("--host", type=str, default=os.environ.get("HOST", "0.0.0.0"), help="Host to bind to (default 0.0.0.0)")
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
+    parser.add_argument("--seed", action="store_true", help="Seed database with demo data on startup")
     args = parser.parse_args()
     port = args.port or args.port_pos or int(os.environ.get("PORT", 8000))
-    run_server(host=args.host, port=port, db_path=args.db)
+    run_server(host=args.host, port=port, db_path=args.db, seed=args.seed)
