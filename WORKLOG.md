@@ -332,3 +332,7 @@
 [2026-09-29 12:08] | dev_bot | IMPLEMENTATION_COMPLETE | data-author-id синхронизирован, тесты пройдены 100% (Task: issue-2-sc007-author-profile-click)
 [2026-09-29 12:12] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #2 (Fixes #2) (Task: issue-2-sc007-author-profile-click)
 [2026-09-29 12:14] | pm_bot | TASK_DONE | Задача Issue #2 (SC-007) успешно завершена и объединена в main. Issue #2 на GitHub закрыт (Task: issue-2-sc007-author-profile-click)
+[2026-09-29 12:15] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #3 (SC-013): отключение автоматической верификации компаний при саморегистрации (Task: issue-3-sc013-disable-auto-verification-companies)
+[2026-09-29 12:16] | py_bot | IMPLEMENTATION_START | Реализация Issue #3 (SC-013): отключение авто-верификации компаний (Task: issue-3-sc013-disable-auto-verification-companies)
+[2026-09-29 12:22] | py_bot | IMPLEMENTATION_COMPLETE | Авто-верификация компаний отключена, 100% тестов успешно пройдены (Task: issue-3-sc013-disable-auto-verification-companies)
+[2026-09-29 12:24] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #3 (Fixes #3) (Task: issue-3-sc013-disable-auto-verification-companies)
