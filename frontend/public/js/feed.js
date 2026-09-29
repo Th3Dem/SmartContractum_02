@@ -194,6 +194,7 @@
     articles: [],
     topicCounts: {},
     isLoading: false,
+    requestGeneration: 0,
     noSubscriptions: false,
     feedSettings: {
       materialTypes: ['article', 'post', 'news', 'question'],
@@ -229,6 +230,7 @@
 
   let currentUser = null;
   let pendingTabAfterAuth = null;
+  let feedAbortController = null;
 
   function parseURLParams() {
     const params = new URLSearchParams(window.location.search);
@@ -1073,6 +1075,14 @@
     }
 
     syncURL(false);
+
+    if (tabName === 'clubs' || tabName === 'companies' || tabName === 'directions') {
+      if (feedAbortController) {
+        feedAbortController.abort();
+        feedAbortController = null;
+      }
+      state.requestGeneration = (state.requestGeneration || 0) + 1;
+    }
 
     if (tabName === 'clubs') {
       if (state.activeClubId) {
@@ -3480,13 +3490,22 @@
   }
 
   function fetchFeed(isInitial) {
-    if (state.isLoading) return;
-    state.isLoading = true;
+    if (!isInitial && state.isLoading) return;
 
     if (isInitial) {
+      if (feedAbortController) {
+        feedAbortController.abort();
+      }
+      feedAbortController = new AbortController();
       state.offset = 0;
       renderSkeletons();
+    } else if (!feedAbortController || feedAbortController.signal.aborted) {
+      feedAbortController = new AbortController();
     }
+
+    state.requestGeneration = (state.requestGeneration || 0) + 1;
+    const currentGeneration = state.requestGeneration;
+    state.isLoading = true;
 
     // Build API query
     const params = new URLSearchParams();
@@ -3564,8 +3583,9 @@
       params.set('ids', bookmarks.join(','));
     }
 
-    fetch('/api/articles?' + params.toString())
+    fetch('/api/articles?' + params.toString(), { signal: feedAbortController.signal })
       .then(function (res) {
+        if (currentGeneration !== state.requestGeneration) return;
         if (res.status === 401 && (state.tab === 'my' || state.tab === 'subscriptions')) {
           state.isLoading = false;
           openAuthModal('subscriptions');
@@ -3575,6 +3595,7 @@
         return res.json();
       })
       .then(function (data) {
+        if (currentGeneration !== state.requestGeneration || !data) return;
         state.isLoading = false;
         if (data && data.success) {
           const rawArticles = data.articles || [];
@@ -3602,6 +3623,9 @@
         }
       })
       .catch(function (err) {
+        if (err.name === 'AbortError' || currentGeneration !== state.requestGeneration) {
+          return;
+        }
         state.isLoading = false;
         if (err.message === 'AUTH_REQUIRED') return;
         // Offline / file protocol fallback: provide fallback data
@@ -5940,5 +5964,10 @@
       }
     });
   });
+
+  if (typeof window !== 'undefined') {
+    window.__getFeedAbortController = function () { return feedAbortController; };
+    window.__getFeedState = function () { return state; };
+  }
 
 })();
