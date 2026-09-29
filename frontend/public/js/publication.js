@@ -1654,6 +1654,7 @@
       }
 
       this.render();
+      this.setMaterialType(this.materialType);
       this.updateCardPreview();
       this.updateReadinessUI();
     }
@@ -1664,7 +1665,18 @@
       this.keywords = [];
       this.format = 'not_specified';
       this.complexity = 'none';
-      this.materialType = 'article';
+
+      let defaultMaterialType = 'article';
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.search) {
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('type') === 'question') {
+            defaultMaterialType = 'question';
+          }
+        }
+      } catch (_) {}
+
+      this.materialType = defaultMaterialType;
       this.description = '';
       this.isDescriptionCustom = false;
       this.coverDataUrl = null;
@@ -1683,6 +1695,7 @@
       if (this.clubSelect) this.clubSelect.value = '';
 
       this.render();
+      this.setMaterialType(defaultMaterialType);
       this.updateCardPreview();
       this.updateReadinessUI();
     }

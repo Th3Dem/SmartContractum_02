@@ -354,8 +354,24 @@
     }
 
     async autoRestore() {
+      let requestedType = null;
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.search) {
+          const urlParams = new URLSearchParams(window.location.search);
+          requestedType = urlParams.get('type');
+        }
+      } catch (_) {}
+
       const activeId = localStorage.getItem('ag_active_draft_id');
-      if (!activeId) return;
+      if (!activeId) {
+        if (requestedType === 'question') {
+          const pub = (window.EditorApp && window.EditorApp.Publication) || window.publicationManager;
+          if (pub && typeof pub.setMaterialType === 'function') {
+            pub.setMaterialType('question');
+          }
+        }
+        return;
+      }
 
       let draft = null;
       if (this.db) {
@@ -374,6 +390,29 @@
       } else {
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
         draft = drafts[activeId] || null;
+      }
+
+      if (requestedType === 'question') {
+        const activeMaterialType = draft && draft.publicationSettings
+          ? (draft.publicationSettings.materialType || draft.publicationSettings.type)
+          : null;
+
+        if (draft && activeMaterialType === 'question') {
+          await this.loadDraft(draft, false);
+          const pub = (window.EditorApp && window.EditorApp.Publication) || window.publicationManager;
+          if (pub && typeof pub.setMaterialType === 'function') {
+            pub.setMaterialType('question');
+          }
+        } else {
+          // If active draft is not a question (e.g. article) or draft does not exist:
+          // Do NOT restore it. Initialize fresh clean question draft.
+          await this.createNewDraft();
+          const pub = (window.EditorApp && window.EditorApp.Publication) || window.publicationManager;
+          if (pub && typeof pub.setMaterialType === 'function') {
+            pub.setMaterialType('question');
+          }
+        }
+        return;
       }
 
       if (draft) {
