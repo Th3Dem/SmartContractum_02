@@ -441,3 +441,7 @@
 [2026-09-29 19:24] | git_bot | PR_CREATED | Зафиксированы исправления клика автора в card.js/feed.js и сериализации innerHTML, изменения объединены в main (Task: issue-22-sc023-github-actions-ci)
 
 [2026-09-29 19:28] | pm_bot | TASK_DONE | Задача Issue #22 (SC-023) успешно завершена и объединена в main. CI Pipeline полностью зеленый (569 тестов + 14 браузерных тестов в Chromium). Issue #22 на GitHub закрыт (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 22:04] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #24 (SC-024.1): схема данных, атомарные инварианты, API ответов и обсуждений, транзакционные уведомления (Task: issue-24-sc024-data-and-api)
+[2026-09-29 22:06] | py_bot | IMPLEMENTATION_START | Реализация схемы данных, атомарных инвариантов, API ответов и обсуждений, транзакционных уведомлений (Task: issue-24-sc024-data-and-api)
+[2026-09-29 22:57] | py_bot | IMPLEMENTATION_COMPLETE | Схема данных, атомарные инварианты, API ответов и обсуждений, транзакционные уведомления реализованы, 100% тестов (574) успешно пройдены (Task: issue-24-sc024-data-and-api)
+[2026-09-29 23:00] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #24 (Fixes #24) (Task: issue-24-sc024-data-and-api)
