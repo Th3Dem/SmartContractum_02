@@ -15,9 +15,12 @@ image_decoder.py — Полноценный декодер и валидатор
 """
 
 import hashlib
+import html
 import os
 import re
 import struct
+import urllib.parse
+import xml.etree.ElementTree as ET
 import zlib
 from typing import Any, Dict, Optional, Tuple
 
@@ -354,23 +357,190 @@ def _decode_webp(data: bytes) -> Dict[str, Any]:
     }
 
 
+BANNED_SVG_TAGS = {
+    "script",
+    "foreignobject",
+    "object",
+    "embed",
+    "iframe",
+    "frame",
+    "frameset",
+    "applet",
+    "meta",
+    "link",
+    "base",
+    "form",
+    "input",
+    "button",
+    "select",
+    "textarea",
+    "audio",
+    "video",
+}
+
+
+def _is_svg(data: bytes) -> bool:
+    """Detects whether raw bytes represent an SVG document."""
+    if not data:
+        return False
+    stripped = data.lstrip()
+    if stripped.startswith(b"<svg") or b"<svg" in data[:4096].lower():
+        return True
+    if (stripped.startswith(b"<?xml") or stripped.startswith(b"<!DOCTYPE")) and b"<svg" in data[:65536].lower():
+        return True
+    return False
+
+
 def _decode_svg(data: bytes) -> Dict[str, Any]:
-    text = data.decode("utf-8", errors="ignore")
+    """
+    Decodes and strictly validates an SVG image without external libraries.
+    Protects against:
+    - Active JavaScript execution: <script>, <foreignObject>, on* event handlers, javascript: schemes.
+    - XXE and entity expansion: <!ENTITY, <!DOCTYPE SYSTEM/PUBLIC, internal DTD subsets [...], parameter entities.
+    - External resource references: <use> pointing outside the document.
+    - Unsafe styles: @import, expression(), javascript: in <style> or style attributes.
+    """
+    try:
+        text = data.decode("utf-8", errors="replace")
+    except Exception as e:
+        raise ImageDecodeError(f"Ошибка декодирования UTF-8 для SVG: {str(e)}")
+
+    if "\x00" in text:
+        raise ImageDecodeError("Файл SVG содержит недопустимые нулевые байты.")
+
     if "<svg" not in text.lower():
         raise ImageDecodeError("Файл SVG не содержит тега <svg>.")
 
+    # 1. Pre-parse DTD / XXE protection
+    if re.search(r'<!\s*ENTITY\b', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит запрещенные объявления XML сущностей (ENTITY/XXE).")
+
+    if re.search(r'<!\s*DOCTYPE\b[^>]*\bSYSTEM\b', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит внешние DTD объявления (SYSTEM/XXE).")
+
+    if re.search(r'<!\s*DOCTYPE\b[^>]*\[', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит встроенные DTD объявления (XXE).")
+
+    if re.search(r'<!\s*(ATTLIST|ELEMENT|NOTATION)\b', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит запрещенные DTD инструкции.")
+
+    # 2. Pre-parse regex screening for dangerous tags and attributes
+    if re.search(r'<\s*(?:[a-zA-Z0-9_\-]+:)?script\b', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит запрещенный тег <script>.")
+
+    if re.search(r'<\s*(?:[a-zA-Z0-9_\-]+:)?foreignObject\b', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит запрещенный тег <foreignObject>.")
+
+    if re.search(r'[<\s/]on[a-zA-Z]+\s*=', text, re.IGNORECASE):
+        raise ImageDecodeError("Файл SVG содержит запрещенный обработчик событий (on*).")
+
+    # 3. XML AST parsing and deep structure inspection
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as e:
+        raise ImageDecodeError(f"Файл SVG содержит синтаксические ошибки XML: {str(e)}")
+    except Exception as e:
+        raise ImageDecodeError(f"Не удалось распарсить XML в SVG: {str(e)}")
+
+    root_tag = root.tag.split("}")[-1].lower() if "}" in root.tag else root.tag.lower()
+    if root_tag != "svg":
+        raise ImageDecodeError("Корневой элемент SVG должен быть тегом <svg>.")
+
+    # Inspect all elements, attributes, and text
+    for elem in root.iter():
+        if not isinstance(elem.tag, str):
+            continue
+
+        tag_name = elem.tag.split("}")[-1].lower() if "}" in elem.tag else elem.tag.lower()
+        if tag_name in BANNED_SVG_TAGS:
+            raise ImageDecodeError(f"Файл SVG содержит запрещенный тег <{tag_name}>.")
+
+        # Check inline styles for dangerous expressions or imports
+        if tag_name == "style" and elem.text:
+            style_norm = re.sub(r'[\s\x00-\x20]', '', elem.text).lower()
+            if any(s in style_norm for s in ("javascript:", "vbscript:", "expression(", "@import", "-moz-binding", "behavior:")):
+                raise ImageDecodeError("Файл SVG содержит небезопасные стили в теге <style>.")
+
+        # Check all element attributes
+        for k, v in elem.attrib.items():
+            if not isinstance(v, str):
+                continue
+
+            attr_name = k.split("}")[-1].split(":")[-1].lower()
+
+            # Event handlers (onload, onerror, onclick, etc.)
+            if re.match(r"^on[a-z]", attr_name):
+                raise ImageDecodeError(f"Файл SVG содержит запрещенный обработчик событий '{attr_name}'.")
+
+            # SMIL animation targeting event handlers
+            if attr_name == "attributename" and v.strip().lower().startswith("on"):
+                raise ImageDecodeError(f"Файл SVG содержит анимацию обработчика событий '{v}'.")
+
+            # Restrict <use> tags strictly to local fragment identifiers (#id)
+            if tag_name == "use" and attr_name == "href":
+                v_clean = v.strip()
+                if not v_clean.startswith("#") or not re.match(r"^#[a-zA-Z0-9_\-\.:]+$", v_clean):
+                    raise ImageDecodeError(f"Файл SVG содержит тег <use> с внешней ссылкой: '{v}'.")
+
+            # Normalize attribute value to detect obfuscated protocols
+            raw_norm = re.sub(r'[\s\x00-\x20\\]', '', v).lower()
+            unescaped_v = html.unescape(v)
+            unquoted_v = urllib.parse.unquote(unescaped_v)
+            unquoted_norm = re.sub(r'[\s\x00-\x20\\]', '', unquoted_v).lower()
+
+            for check_val in (raw_norm, unquoted_norm):
+                if "javascript:" in check_val:
+                    raise ImageDecodeError("Файл SVG содержит запрещенную схему javascript:.")
+
+                if "vbscript:" in check_val:
+                    raise ImageDecodeError("Файл SVG содержит запрещенную схему vbscript:.")
+
+                if re.search(r"data:\s*(text/|application/|image/svg)", check_val):
+                    raise ImageDecodeError("Файл SVG содержит запрещенную схему data: с активным содержимым.")
+
+                if any(p in check_val for p in ("expression(", "-moz-binding", "behavior:")):
+                    raise ImageDecodeError(f"Файл SVG содержит запрещенные стили или выражения в атрибуте '{attr_name}'.")
+
+    # 4. Dimension extraction (viewBox or width/height)
     width = 780
     height = 440
-    vb_match = re.search(r'viewBox=["\']\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s*["\']', text, re.IGNORECASE)
-    if vb_match:
-        try:
-            vw = float(vb_match.group(3))
-            vh = float(vb_match.group(4))
-            if vw > 0 and vh > 0:
-                width = int(round(vw))
-                height = int(round(vh))
-        except Exception:
-            pass
+
+    vb = root.attrib.get("viewBox") or root.attrib.get("viewbox")
+    if not vb:
+        vb_match = re.search(
+            r'viewBox=["\']\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)\s*["\']',
+            text,
+            re.IGNORECASE
+        )
+        if vb_match:
+            vb = f"{vb_match.group(1)} {vb_match.group(2)} {vb_match.group(3)} {vb_match.group(4)}"
+
+    if vb:
+        parts = re.split(r'[\s,]+', vb.strip())
+        if len(parts) >= 4:
+            try:
+                vw = float(parts[2])
+                vh = float(parts[3])
+                if vw > 0 and vh > 0:
+                    width = int(round(vw))
+                    height = int(round(vh))
+            except Exception:
+                pass
+    else:
+        w_attr = root.attrib.get("width")
+        h_attr = root.attrib.get("height")
+        if w_attr and h_attr:
+            try:
+                w_clean = re.sub(r'[^\d.]', '', w_attr)
+                h_clean = re.sub(r'[^\d.]', '', h_attr)
+                if w_clean and h_clean:
+                    vw = float(w_clean)
+                    vh = float(h_clean)
+                    if vw > 0 and vh > 0:
+                        width = int(round(vw))
+                        height = int(round(vh))
+            except Exception:
+                pass
 
     return {
         "format": "svg",
@@ -410,7 +580,7 @@ def decode_and_validate_image(
             meta = _decode_gif(data)
         elif data.startswith(b"RIFF") and len(data) >= 12 and data[8:12] == b"WEBP":
             meta = _decode_webp(data)
-        elif b"<svg" in data[:4096].lower():
+        elif _is_svg(data):
             meta = _decode_svg(data)
         else:
             return False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.", None
