@@ -414,3 +414,7 @@
 [2026-09-29 17:14] | py_bot | IMPLEMENTATION_COMPLETE | Разделение запуска сервера и демонстрационного seed данных реализовано, 100% тестов успешно пройдены (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
 [2026-09-29 17:16] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #18 (Fixes #18) (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
 [2026-09-29 17:19] | pm_bot | TASK_DONE | Задача Issue #18 (SC-018) успешно завершена и объединена в main. Issue #18 на GitHub закрыт (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
+[2026-09-29 17:21] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #19 (SC-019): обработка невалидных JSON-типов без обрыва соединения (Task: issue-19-sc019-validate-root-json-type)
+[2026-09-29 17:22] | py_bot | IMPLEMENTATION_START | Валидация корневого JSON-объекта во всех POST/PUT обработчиках без обрыва соединения (Task: issue-19-sc019-validate-root-json-type)
+[2026-09-29 17:35] | py_bot | IMPLEMENTATION_COMPLETE | Валидация корневого JSON-объекта во всех POST/PUT обработчиках без обрыва соединения реализована, 100% тестов успешно пройдены (Task: issue-19-sc019-validate-root-json-type)
+[2026-09-29 17:38] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #19 (Fixes #19) (Task: issue-19-sc019-validate-root-json-type)
