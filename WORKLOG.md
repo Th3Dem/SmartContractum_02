@@ -408,3 +408,4 @@
 [2026-09-29 16:55] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #17 (Fixes #17) (Task: issue-17-sc017-question-status-url-history-sync)
 
 
+[2026-09-29 16:58] | pm_bot | TASK_DONE | Задача Issue #17 (SC-017) успешно завершена и объединена в main. Issue #17 на GitHub закрыт (Task: issue-17-sc017-question-status-url-history-sync)
