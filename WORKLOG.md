@@ -342,3 +342,7 @@
 [2026-09-29 12:45] | py_bot | IMPLEMENTATION_COMPLETE | Безопасная аутентификация и сессии в SQLite реализованы, 100% тестов успешно пройдены (Task: issue-4-sc001-secure-session-auth)
 [2026-09-29 12:47] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #4 (Fixes #4) (Task: issue-4-sc001-secure-session-auth)
 [2026-09-29 12:49] | pm_bot | TASK_DONE | Задача Issue #4 (SC-001) успешно завершена и объединена в main. Issue #4 на GitHub закрыт (Task: issue-4-sc001-secure-session-auth)
+[2026-09-29 12:53] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #5 (SC-002): ограничение доступа к очереди модерации и защита от подмены авторства (Task: issue-5-sc002-secure-moderation-access)
+[2026-09-29 12:54] | py_bot | IMPLEMENTATION_START | Реализация Issue #5 (SC-002): ограничение очереди модерации и защита авторства (Task: issue-5-sc002-secure-moderation-access)
+[2026-09-29 13:05] | py_bot | IMPLEMENTATION_COMPLETE | Очередь модерации защищена, подмена авторства исключена, 100% тестов успешно пройдены (Task: issue-5-sc002-secure-moderation-access)
+[2026-09-29 13:06] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #5 (Fixes #5) (Task: issue-5-sc002-secure-moderation-access)
