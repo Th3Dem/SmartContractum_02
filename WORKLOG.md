@@ -322,4 +322,7 @@
 [2026-09-28 20:26] | qa_bot | QA_APPROVED | Комплексный независимый аудит полировки сообщества и сквозного сценария двух пользователей успешно завершен, все 8 критериев приемки выполнены, 358/358 тестов пройдены (100% PASS), вердикт APPROVED (Task: task-39-community-mvp-ui-polish-and-qa-flow)
 [2026-09-28 20:27] | pm_bot | TASK_DONE | Задача task-39 успешно завершена в статусе Done-Done. Все 358 тестов пройдены (100% PASS) (Task: task-39-community-mvp-ui-polish-and-qa-flow)
 [2026-09-29 10:38] | git_bot | GIT_PUSH | Выполнен git push в origin/main на основании прямого указания пользователя (зафиксированы все 24 коммита до b3c8abb) (Task: task-39-community-mvp-ui-polish-and-qa-flow)
-
+[2026-09-29 11:47] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #1 (SC-006): возврат authorId в DTO статей (list и detail) (Task: issue-1-sc006-return-author-id-in-dto)
+[2026-09-29 11:48] | py_bot | IMPLEMENTATION_START | Реализация Issue #1 (SC-006): возврат authorId в DTO статей (Task: issue-1-sc006-return-author-id-in-dto)
+[2026-09-29 11:55] | py_bot | IMPLEMENTATION_COMPLETE | authorId добавлен в DTO статей (list и detail), тесты пройдены 100% (Task: issue-1-sc006-return-author-id-in-dto)
+[2026-09-29 11:58] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #1 (Fixes #1) (Task: issue-1-sc006-return-author-id-in-dto)
