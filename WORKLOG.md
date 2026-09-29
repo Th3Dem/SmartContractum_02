@@ -402,3 +402,9 @@
 [2026-09-29 16:35] | py_bot | IMPLEMENTATION_COMPLETE | Унификация подсчета и инвариантов сущностей «ответ», «комментарий» и «решение» реализована, 100% тестов успешно пройдены (Task: issue-16-sc016-answers-comments-solutions-invariants)
 [2026-09-29 16:38] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #16 (Fixes #16) (Task: issue-16-sc016-answers-comments-solutions-invariants)
 [2026-09-29 16:40] | pm_bot | TASK_DONE | Задача Issue #16 (SC-016) успешно завершена и объединена в main. Issue #16 на GitHub закрыт (Task: issue-16-sc016-answers-comments-solutions-invariants)
+[2026-09-29 16:44] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #17 (SC-017): сохранять фильтр статуса вопросов (questionStatus) в URL и истории (Task: issue-17-sc017-question-status-url-history-sync)
+[2026-09-29 16:45] | dev_bot | IMPLEMENTATION_START | Реализация Issue #17 (SC-017): сохранять фильтр статуса вопросов (questionStatus) в URL и истории (Task: issue-17-sc017-question-status-url-history-sync)
+[2026-09-29 16:52] | dev_bot | IMPLEMENTATION_COMPLETE | Фильтр статуса вопросов (questionStatus) в URL и истории реализован, 100% тестов успешно пройдены (Task: issue-17-sc017-question-status-url-history-sync)
+[2026-09-29 16:55] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #17 (Fixes #17) (Task: issue-17-sc017-question-status-url-history-sync)
+
+
