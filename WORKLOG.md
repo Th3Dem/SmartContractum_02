@@ -352,3 +352,7 @@
 [2026-09-29 13:20] | py_bot | IMPLEMENTATION_COMPLETE | Серверная allowlist-санитизация HTML публикаций реализована, 100% тестов успешно пройдены (Task: issue-6-sc003-server-html-sanitization)
 [2026-09-29 13:31] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #6 (Fixes #6) (Task: issue-6-sc003-server-html-sanitization)
 [2026-09-29 13:34] | pm_bot | TASK_DONE | Задача Issue #6 (SC-003) успешно завершена и объединена в main. Issue #6 на GitHub закрыт (Task: issue-6-sc003-server-html-sanitization)
+[2026-09-29 13:36] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #7 (SC-004): изоляция загрузок SVG и запрет исполнения активного содержимого в origin сайта (Task: issue-7-sc004-svg-upload-isolation)
+[2026-09-29 13:37] | py_bot | IMPLEMENTATION_START | Реализация Issue #7 (SC-004): изоляция загрузок SVG и запрет исполнения активного содержимого (Task: issue-7-sc004-svg-upload-isolation)
+[2026-09-29 13:46] | py_bot | IMPLEMENTATION_COMPLETE | Изоляция загрузок SVG и заголовки CSP реализованы, 100% тестов успешно пройдены (Task: issue-7-sc004-svg-upload-isolation)
+[2026-09-29 13:48] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #7 (Fixes #7) (Task: issue-7-sc004-svg-upload-isolation)
