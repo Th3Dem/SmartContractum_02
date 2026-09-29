@@ -423,3 +423,4 @@
 [2026-09-29 17:44] | dev_bot | IMPLEMENTATION_START | Устранение подмены серверных ошибок ленты демо-статьями, кнопка повтора запроса и бейдж автономного режима (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
 [2026-09-29 17:55] | dev_bot | IMPLEMENTATION_COMPLETE | Устранение подмены серверных ошибок ленты демо-статьями, кнопка повтора запроса и бейдж автономного режима реализованы, 100% тестов успешно пройдены (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
 [2026-09-29 17:58] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #20 (Fixes #20) (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
+[2026-09-29 18:00] | pm_bot | TASK_DONE | Задача Issue #20 (SC-020) успешно завершена и объединена в main. Issue #20 на GitHub закрыт (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
