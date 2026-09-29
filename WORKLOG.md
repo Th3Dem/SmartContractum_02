@@ -419,3 +419,7 @@
 [2026-09-29 17:35] | py_bot | IMPLEMENTATION_COMPLETE | Валидация корневого JSON-объекта во всех POST/PUT обработчиках без обрыва соединения реализована, 100% тестов успешно пройдены (Task: issue-19-sc019-validate-root-json-type)
 [2026-09-29 17:38] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #19 (Fixes #19) (Task: issue-19-sc019-validate-root-json-type)
 [2026-09-29 17:41] | pm_bot | TASK_DONE | Задача Issue #19 (SC-019) успешно завершена и объединена в main. Issue #19 на GitHub закрыт (Task: issue-19-sc019-validate-root-json-type)
+[2026-09-29 17:43] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #20 (SC-020): устранить подмену серверных ошибок ленты демонстрационными статьями (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
+[2026-09-29 17:44] | dev_bot | IMPLEMENTATION_START | Устранение подмены серверных ошибок ленты демо-статьями, кнопка повтора запроса и бейдж автономного режима (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
+[2026-09-29 17:55] | dev_bot | IMPLEMENTATION_COMPLETE | Устранение подмены серверных ошибок ленты демо-статьями, кнопка повтора запроса и бейдж автономного режима реализованы, 100% тестов успешно пройдены (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
+[2026-09-29 17:58] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #20 (Fixes #20) (Task: issue-20-sc020-feed-server-error-retry-and-offline-badge)
