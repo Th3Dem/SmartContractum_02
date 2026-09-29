@@ -1748,6 +1748,49 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         return b"".join(chunks)
 
+    def read_json_body(
+        self,
+        max_bytes: int = MAX_JSON_BODY_BYTES,
+        allow_empty: bool = False,
+        default_empty: Optional[dict] = None
+    ) -> Optional[dict]:
+        raw_body = self.read_request_body(max_bytes)
+        if raw_body is None:
+            return None
+
+        if not raw_body or not raw_body.strip():
+            if allow_empty:
+                return default_empty if default_empty is not None else {}
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Тело запроса не может быть пустым."
+            })
+            return None
+
+        try:
+            data = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            self.send_json_response(400, {
+                "success": False,
+                "error": f"Невалидный JSON: {str(e)}"
+            })
+            return None
+        except Exception as e:
+            self.send_json_response(400, {
+                "success": False,
+                "error": f"Ошибка декодирования запроса: {str(e)}"
+            })
+            return None
+
+        if not isinstance(data, dict):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Тело запроса должно быть JSON-объектом."
+            })
+            return None
+
+        return data
+
     def is_secure_request(self) -> bool:
         """Determines if the request was made over HTTPS or behind an HTTPS reverse proxy."""
         if self.headers.get("X-Forwarded-Proto", "").strip().lower() == "https":
@@ -1932,14 +1975,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path == "/api/companies":
             self.handle_post_company()
         elif path == "/api/likes/toggle":
-            raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-            if raw_body is None:
+            p = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+            if p is None:
                 return
-            try:
-                b = raw_body.decode("utf-8") if raw_body else "{}"
-                p = json.loads(b) if b else {}
-            except Exception:
-                p = {}
             art_id = p.get("articleId") or p.get("article_id") or ""
             self.handle_article_like_toggle(art_id, _body_already_read=True)
         elif path.startswith("/api/articles/") and path.endswith("/like"):
@@ -1991,16 +2029,29 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "error": "Method Not Allowed"
             })
 
-    def handle_auth_login(self):
-        """POST /api/auth/login generates secure session token, saves to sessions table, sets sc_session cookie."""
+    def do_PUT(self):
+        """Handle PUT requests safely with body consumption and 405 Method Not Allowed."""
         raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
         if raw_body is None:
             return
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            data = json.loads(body) if body else {}
-        except Exception:
-            data = {}
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path.startswith("/api/"):
+            self.send_json_response(405, {
+                "success": False,
+                "error": f"Method Not Allowed: PUT {path}"
+            })
+        else:
+            self.send_json_response(405, {
+                "success": False,
+                "error": "Method Not Allowed"
+            })
+
+    def handle_auth_login(self):
+        """POST /api/auth/login generates secure session token, saves to sessions table, sets sc_session cookie."""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None:
+            return
 
         user_id = (data.get("userId") or data.get("user_id") or data.get("authorId") or data.get("author_id") or "user_demo").strip()
         user_name = (data.get("name") or ("Демо Пользователь" if user_id == "user_demo" else user_id)).strip()
@@ -2146,20 +2197,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_subscriptions_toggle(self):
         """POST /api/subscriptions/toggle toggles subscription state."""
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if data is None:
             return
 
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            data = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {"success": False, "error": f"Invalid JSON payload: {e}"})
             return
 
         target_type = (data.get("targetType") or data.get("target_type") or "").strip().lower()
@@ -2219,20 +2263,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_exceptions_toggle(self):
         """POST /api/exceptions/toggle toggles exception state."""
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if data is None:
             return
 
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            data = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {"success": False, "error": f"Invalid JSON payload: {e}"})
             return
 
         target_type = (data.get("targetType") or data.get("target_type") or "").strip().lower()
@@ -2620,20 +2657,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_post_club(self):
         """POST /api/clubs creates a new club with current user as owner."""
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if data is None:
             return
 
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            data = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {"success": False, "error": f"Invalid JSON: {e}"})
             return
 
         title = (data.get("title") or "").strip()
@@ -2854,20 +2884,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_post_company(self):
         """POST /api/companies creates a new company profile with current user as owner."""
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if data is None:
             return
 
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Unauthorized", "requireAuth": True})
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            data = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {"success": False, "error": f"Invalid JSON: {e}"})
             return
 
         name = (data.get("name") or "").strip()
@@ -3066,8 +3089,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Returns 401 if unauthenticated.
         Returns 400 if materialTypes is empty ("Выберите хотя бы один тип материала").
         """
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
             return
 
         user = self.get_current_user()
@@ -3076,16 +3099,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": False,
                 "error": "Для сохранения настроек ленты необходимо войти",
                 "requireAuth": True
-            })
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            payload = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {
-                "success": False,
-                "error": f"Невалидный JSON: {str(e)}"
             })
             return
 
@@ -3282,15 +3295,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Returns { success: True, hasLiked: bool, likesCount: int }.
         """
         if not _body_already_read:
-            raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-            if raw_body is None:
+            payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+            if payload is None:
                 return
-            if not article_id and raw_body:
-                try:
-                    p = json.loads(raw_body.decode("utf-8"))
-                    article_id = p.get("articleId") or p.get("article_id") or ""
-                except Exception:
-                    pass
+            if not article_id:
+                article_id = payload.get("articleId") or payload.get("article_id") or ""
 
         user = self.get_current_user()
         if not user:
@@ -3417,8 +3426,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Validates content: non-empty, stripped, max 5000 chars. Escapes HTML.
         Returns newly added comment and updated commentsCount.
         """
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if payload is None:
             return
 
         user = self.get_current_user()
@@ -3427,16 +3436,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": False,
                 "error": "Для отправки комментария необходимо войти",
                 "requireAuth": True
-            })
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else ""
-            payload = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {
-                "success": False,
-                "error": f"Невалидный JSON: {str(e)}"
             })
             return
 
@@ -3592,10 +3591,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             body = raw_body.decode("utf-8")
             payload = json.loads(body)
-        except Exception as e:
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             self.send_json_response(400, {
                 "success": False,
                 "error": f"Невалидный JSON: {str(e)}",
+                "fieldErrors": {}
+            })
+            return
+        except Exception as e:
+            self.send_json_response(400, {
+                "success": False,
+                "error": f"Ошибка декодирования запроса: {str(e)}",
+                "fieldErrors": {}
+            })
+            return
+
+        if not isinstance(payload, dict):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Тело запроса должно быть JSON-объектом.",
                 "fieldErrors": {}
             })
             return
@@ -4644,23 +4658,31 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if "application/json" in content_type:
             try:
                 payload = json.loads(raw_body.decode("utf-8"))
-                image_val = payload.get("image") or payload.get("coverImage") or payload.get("file")
-                if not image_val or not isinstance(image_val, str):
-                    self.send_json_response(400, {"success": False, "error": "Поле image должно содержать Data URI или base64"})
-                    return
-                res = validate_cover_image(image_val, target_media_dir=media_root)
-                if not res.is_valid:
-                    self.send_json_response(400, {"success": False, "error": res.error_msg})
-                    return
-                self.send_json_response(200, {
-                    "success": True,
-                    "url": res.saved_url,
-                    "meta": res.meta
-                })
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                self.send_json_response(400, {"success": False, "error": f"Невалидный JSON: {str(e)}"})
                 return
             except Exception as e:
                 self.send_json_response(400, {"success": False, "error": f"Ошибка обработки JSON: {str(e)}"})
                 return
+
+            if not isinstance(payload, dict):
+                self.send_json_response(400, {"success": False, "error": "Тело запроса должно быть JSON-объектом."})
+                return
+
+            image_val = payload.get("image") or payload.get("coverImage") or payload.get("file")
+            if not image_val or not isinstance(image_val, str):
+                self.send_json_response(400, {"success": False, "error": "Поле image должно содержать Data URI или base64"})
+                return
+            res = validate_cover_image(image_val, target_media_dir=media_root)
+            if not res.is_valid:
+                self.send_json_response(400, {"success": False, "error": res.error_msg})
+                return
+            self.send_json_response(200, {
+                "success": True,
+                "url": res.saved_url,
+                "meta": res.meta
+            })
+            return
 
         # Direct binary image upload
         ok, err, meta = image_decoder.decode_and_validate_image(raw_body)
@@ -4682,8 +4704,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Allows the question author to mark or unmark an answer as the accepted solution.
         Requires authentication. Enforces 403 if user is not author of the question.
         """
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
             return
 
         user = self.get_current_user()
@@ -4695,12 +4717,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        if not comm_id and raw_body:
-            try:
-                body_json = json.loads(raw_body.decode("utf-8"))
-                comm_id = body_json.get("commentId") or body_json.get("comment_id") or ""
-            except Exception:
-                pass
+        if not comm_id:
+            comm_id = payload.get("commentId") or payload.get("comment_id") or ""
 
         if not comm_id:
             self.send_json_response(400, {
@@ -4868,8 +4886,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         POST /api/notifications/read
         Marks one or all notifications as read.
         """
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
             return
 
         user = self.get_current_user()
@@ -4880,12 +4898,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "requireAuth": True
             })
             return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            payload = json.loads(body) if body else {}
-        except Exception:
-            payload = {}
 
         notif_id = payload.get("notificationId") or payload.get("id")
         conn = self.get_db()
@@ -5060,8 +5072,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         POST /api/user/profile
         Updates specialization, company, bio, name for the authenticated user.
         """
-        raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
-        if raw_body is None:
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
             return
 
         user = self.get_current_user()
@@ -5071,13 +5083,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "error": "Для редактирования профиля необходимо войти",
                 "requireAuth": True
             })
-            return
-
-        try:
-            body = raw_body.decode("utf-8") if raw_body else "{}"
-            payload = json.loads(body) if body else {}
-        except Exception as e:
-            self.send_json_response(400, {"success": False, "error": f"Невалидный JSON: {e}"})
             return
 
         name = html.escape((payload.get("name") or user.get("name") or "").strip())
