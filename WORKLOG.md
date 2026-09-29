@@ -361,3 +361,4 @@
 [2026-09-29 13:53] | py_bot | IMPLEMENTATION_START | Реализация Issue #8 (SC-005): потоковое ограничение размера тела и защита PNG (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
 [2026-09-29 14:09] | py_bot | IMPLEMENTATION_COMPLETE | Потоковое ограничение размера тела и защита PNG от zlib-бомб реализованы, 100% тестов успешно пройдены (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
 [2026-09-29 14:10] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #8 (Fixes #8) (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
+[2026-09-29 14:13] | pm_bot | TASK_DONE | Задача Issue #8 (SC-005) успешно завершена и объединена в main. Issue #8 на GitHub закрыт. Спринт 2 завершен на 100% (Task: issue-8-sc005-streaming-body-limit-and-png-decompression)
