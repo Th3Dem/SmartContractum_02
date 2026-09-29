@@ -428,3 +428,4 @@
 [2026-09-29 18:06] | py_bot | IMPLEMENTATION_START | Устранение двойного экранирования plain-text полей комментариев и профилей (Task: issue-21-sc021-eliminate-double-escaping)
 [2026-09-29 18:34] | py_bot | IMPLEMENTATION_COMPLETE | Устранение двойного экранирования plain-text полей комментариев и профилей реализовано, 100% тестов успешно пройдены (Task: issue-21-sc021-eliminate-double-escaping)
 [2026-09-29 18:37] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #21 (Fixes #21) (Task: issue-21-sc021-eliminate-double-escaping)
+[2026-09-29 18:41] | pm_bot | TASK_DONE | Задача Issue #21 (SC-021) успешно завершена и объединена в main. Issue #21 на GitHub закрыт (Task: issue-21-sc021-eliminate-double-escaping)
