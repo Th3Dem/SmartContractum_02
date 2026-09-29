@@ -3423,7 +3423,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         POST /api/articles/<id>/comments
         Adds a comment to the specified article.
         Requires authentication (401 requireAuth).
-        Validates content: non-empty, stripped, max 5000 chars. Escapes HTML.
+        Validates content: non-empty, stripped, max 5000 chars. Stores plain-text.
         Returns newly added comment and updated commentsCount.
         """
         payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
@@ -3464,8 +3464,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "error": "Комментарий не должен превышать 5000 символов"
             })
             return
-
-        sanitized_content = html.escape(stripped_content)
 
         conn = self.get_db()
         with conn:
@@ -3513,7 +3511,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 ) VALUES (?, ?, ?, ?, ?, ?, 'published', ?, 0, ?)
             """, (
                 comment_id, real_id, user_id, author_name, author_avatar,
-                sanitized_content, comment_type, now_iso
+                stripped_content, comment_type, now_iso
             ))
 
             cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
@@ -3547,7 +3545,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "userId": user_id,
             "authorName": author_name,
             "authorAvatar": author_avatar,
-            "content": sanitized_content,
+            "content": stripped_content,
             "commentType": comment_type,
             "isSolution": False,
             "createdAt": now_iso
@@ -5085,10 +5083,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        name = html.escape((payload.get("name") or user.get("name") or "").strip())
-        specialization = html.escape((payload.get("specialization") or "").strip())
-        company = html.escape((payload.get("company") or "").strip())
-        bio = html.escape((payload.get("bio") or "").strip())
+        name = (payload.get("name") or user.get("name") or "").strip()
+        specialization = (payload.get("specialization") or "").strip()
+        company = (payload.get("company") or "").strip()
+        bio = (payload.get("bio") or "").strip()
         avatar = payload.get("avatar") or user.get("avatar")
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 

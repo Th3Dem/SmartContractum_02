@@ -2508,7 +2508,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
     1. Database schema initialization: article_likes, article_comments, user_feed_settings.
     2. Idempotent seeding of 3 demo comments for art-01.
     3. GET /api/articles/<id>/comments returns comments list and total count.
-    4. POST /api/articles/<id>/comments validates input (empty, max 5000 chars), escapes HTML, requires auth.
+    4. POST /api/articles/<id>/comments validates input (empty, max 5000 chars), stores plain-text, requires auth.
     5. Likes toggle: 1 like per user, increment/decrement, state sync.
     6. User feed settings GET/POST: saves materialTypes and complexityLevels, rejects empty materialTypes.
     7. Feed filtering: types/type, complexities/complexity (including unspecified).
@@ -2664,7 +2664,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(data_empty.get("comments"), [])
 
     def test_04_post_article_comments_endpoint(self):
-        """Verify POST /api/articles/<id>/comments enforces auth, validates length, escapes HTML, increments count."""
+        """Verify POST /api/articles/<id>/comments enforces auth, validates length, stores plain-text, increments count."""
         # 1. Unauthenticated guest -> 401 requireAuth
         status, data = self._post_json("/api/articles/art-01/comments", {"content": "Неавторизованный комментарий"})
         self.assertEqual(status, 401)
@@ -2686,7 +2686,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("5000", data.get("error", ""))
 
-        # 5. Valid content with HTML tags -> 201, HTML escaped, commentsCount updated
+        # 5. Valid content with HTML tags -> 201, stored raw plain-text, commentsCount updated
         raw_text = "Тестовый комментарий <script>alert('xss')</script> & <b>важный текст</b>"
         status, data = self._post_json("/api/articles/art-01/comments", {"content": raw_text}, headers=auth_headers)
         self.assertEqual(status, 201)
@@ -2694,9 +2694,9 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(data.get("commentsCount"), 4)
 
         comment = data["comment"]
-        self.assertNotIn("<script>", comment["content"])
-        self.assertIn("&lt;script&gt;", comment["content"])
-        self.assertIn("&amp;", comment["content"])
+        self.assertEqual(comment["content"], raw_text)
+        self.assertIn("<script>", comment["content"])
+        self.assertNotIn("&lt;script&gt;", comment["content"])
         self.assertEqual(comment["articleId"], "art-01")
 
         # 6. Check GET /api/articles/art-01/comments reflects new total
