@@ -347,3 +347,7 @@
 [2026-09-29 13:05] | py_bot | IMPLEMENTATION_COMPLETE | Очередь модерации защищена, подмена авторства исключена, 100% тестов успешно пройдены (Task: issue-5-sc002-secure-moderation-access)
 [2026-09-29 13:06] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #5 (Fixes #5) (Task: issue-5-sc002-secure-moderation-access)
 [2026-09-29 13:08] | pm_bot | TASK_DONE | Задача Issue #5 (SC-002) успешно завершена и объединена в main. Issue #5 на GitHub закрыт (Task: issue-5-sc002-secure-moderation-access)
+[2026-09-29 13:09] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #6 (SC-003): серверная allowlist-санитизация HTML публикаций от сохраненного XSS (Task: issue-6-sc003-server-html-sanitization)
+[2026-09-29 13:10] | py_bot | IMPLEMENTATION_START | Реализация Issue #6 (SC-003): серверная allowlist-санитизация HTML публикаций (Task: issue-6-sc003-server-html-sanitization)
+[2026-09-29 13:20] | py_bot | IMPLEMENTATION_COMPLETE | Серверная allowlist-санитизация HTML публикаций реализована, 100% тестов успешно пройдены (Task: issue-6-sc003-server-html-sanitization)
+[2026-09-29 13:31] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #6 (Fixes #6) (Task: issue-6-sc003-server-html-sanitization)
