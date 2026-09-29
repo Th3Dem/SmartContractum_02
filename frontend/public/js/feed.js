@@ -182,6 +182,7 @@
     search: '',
     sort: 'newest',
     tab: 'focus', // 'focus' | 'top' | 'new' | 'subscriptions' | 'clubs' | 'companies' | 'directions' | 'saved'
+    questionStatus: 'all', // 'all' | 'unanswered' | 'solved'
     topPeriod: 'week', // 'day' | 'week' | 'month' | 'all'
     activeClubId: null,
     activeCompanyId: null,
@@ -338,8 +339,20 @@
 
     updatePeriodVisibility();
     updateSubnavTabsUI();
+    updateQuestionStatusPillsUI();
     renderActiveChips();
     updateFilterBadge();
+  }
+
+  function updateQuestionStatusPillsUI() {
+    const wrap = document.getElementById('feedQuestionsStatusPills');
+    if (!wrap) return;
+    const current = state.questionStatus || 'all';
+    const pills = wrap.querySelectorAll('.feed-status-pill');
+    pills.forEach(function (pill) {
+      const s = pill.getAttribute('data-status') || 'all';
+      pill.classList.toggle('active', s === current);
+    });
   }
 
   function updatePeriodVisibility() {
@@ -353,6 +366,9 @@
     const params = new URLSearchParams();
     if (state.tab && state.tab !== 'focus') {
       params.set('tab', state.tab);
+    }
+    if (state.tab === 'questions' && state.questionStatus && state.questionStatus !== 'all') {
+      params.set('questionStatus', state.questionStatus);
     }
     if (state.tab === 'top' && state.topPeriod && state.topPeriod !== 'week') {
       params.set('period', state.topPeriod);
@@ -1057,6 +1073,7 @@
       if (searchInput) searchInput.placeholder = 'Поиск по вопросам и ответам...';
       if (typesFilterGroup) typesFilterGroup.style.display = 'none';
       if (compFilterGroup) compFilterGroup.style.display = 'none';
+      updateQuestionStatusPillsUI();
     } else {
       if (questionsPills) questionsPills.style.display = 'none';
       if (searchInput) searchInput.placeholder = 'Поиск по ленте...';
@@ -5606,7 +5623,7 @@
         pill.addEventListener('click', function () {
           const s = pill.getAttribute('data-status') || 'all';
           state.questionStatus = s;
-          pills.forEach(function (p) { p.classList.toggle('active', p === pill); });
+          updateQuestionStatusPillsUI();
           state.offset = 0;
           syncURL(false);
           fetchFeed(true);
@@ -5686,11 +5703,8 @@
           state.tab = 'questions';
           state.questionStatus = 'unanswered';
           state.offset = 0;
-          updateSubnavActiveTab('tabFeedQuestions');
-          const pills = document.querySelectorAll('#feedQuestionsStatusPills .feed-status-pill');
-          pills.forEach(function (p) {
-            p.classList.toggle('active', p.getAttribute('data-status') === 'unanswered');
-          });
+          updateSubnavTabsUI();
+          updateQuestionStatusPillsUI();
           syncURL(false);
           fetchFeed(true);
         });
@@ -5968,6 +5982,9 @@
   if (typeof window !== 'undefined') {
     window.__getFeedAbortController = function () { return feedAbortController; };
     window.__getFeedState = function () { return state; };
+    window.__updateQuestionStatusPillsUI = updateQuestionStatusPillsUI;
+    window.__parseURLParams = parseURLParams;
+    window.__syncURL = syncURL;
   }
 
 })();
