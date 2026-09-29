@@ -185,7 +185,7 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         raw_content = "Проверка <script>alert('xss')</script> & \"кавычки\" 'апостроф' > < &amp;"
         status, data = self._post_json(
             "/api/articles/art_test_21/comments",
-            {"content": raw_content},
+            {"content": raw_content, "commentType": "comment"},
             cookie=self.alice_cookie,
         )
         self.assertEqual(status, 201)
@@ -225,7 +225,7 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         content_with_padding = f"   \n{multiline_raw}\n   "
         status, data = self._post_json(
             "/api/articles/art_test_21/comments",
-            {"content": content_with_padding},
+            {"content": content_with_padding, "commentType": "comment"},
             cookie=self.alice_cookie,
         )
         self.assertEqual(status, 201)
@@ -237,7 +237,7 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         # Empty comment
         status, data = self._post_json(
             "/api/articles/art_test_21/comments",
-            {"content": "   "},
+            {"content": "   ", "commentType": "comment"},
             cookie=self.alice_cookie,
         )
         self.assertEqual(status, 400)
@@ -247,7 +247,7 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         boundary_5000 = "x" * 5000
         status_ok, data_ok = self._post_json(
             "/api/articles/art_test_21/comments",
-            {"content": boundary_5000},
+            {"content": boundary_5000, "commentType": "comment"},
             cookie=self.alice_cookie,
         )
         self.assertEqual(status_ok, 201)
@@ -257,7 +257,7 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         too_long = "x" * 5001
         status_fail, data_fail = self._post_json(
             "/api/articles/art_test_21/comments",
-            {"content": too_long},
+            {"content": too_long, "commentType": "comment"},
             cookie=self.alice_cookie,
         )
         self.assertEqual(status_fail, 400)

@@ -194,7 +194,7 @@ class TestIssue16AnswersCommentsSolutionsInvariants(unittest.TestCase):
         self.assertEqual(comment.get("commentType"), "comment")
         self.assertFalse(comment.get("isSolution"))
 
-    # 4. Default commentType: answer for questions, comment for articles
+    # 4. Strict commentType validation (superseded in Issue #24: omission returns 400)
     def test_04_default_comment_type_assignment(self):
         q_id = "test_q_04"
         art_id = "test_art_04"
@@ -202,19 +202,19 @@ class TestIssue16AnswersCommentsSolutionsInvariants(unittest.TestCase):
         self._create_publication(art_id, "author_art_4", "article", "Статья без типа комментария")
         cookie_user = self._login("user_generic_4", "Обычный пользователь")
 
-        # To question: defaults to answer
+        # To question without commentType -> 400 (strict validation)
         status, res_q = self._post_json(f"/api/articles/{q_id}/comments", {
             "content": "Ответ без явного указания commentType"
         }, cookie=cookie_user)
-        self.assertEqual(status, 201)
-        self.assertEqual(res_q.get("comment", {}).get("commentType"), "answer")
+        self.assertEqual(status, 400)
+        self.assertFalse(res_q.get("success"))
 
-        # To article: defaults to comment
+        # To article without commentType -> 400 (strict validation)
         status, res_art = self._post_json(f"/api/articles/{art_id}/comments", {
             "content": "Комментарий без явного указания commentType"
         }, cookie=cookie_user)
-        self.assertEqual(status, 201)
-        self.assertEqual(res_art.get("comment", {}).get("commentType"), "comment")
+        self.assertEqual(status, 400)
+        self.assertFalse(res_art.get("success"))
 
     # 5. Marking answer as solution succeeds (200, isSolution: True)
     def test_05_mark_answer_as_solution_succeeds(self):
@@ -311,10 +311,15 @@ class TestIssue16AnswersCommentsSolutionsInvariants(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertFalse(res_err.get("success"))
 
-        # Admin toggles solution -> 200
+        # Admin (non-author) attempts solution toggle -> 403 (admin bypass removed in Issue #24)
         status, res_adm = self._post_json(f"/api/articles/{q_id}/comments/{ans_id}/solution", {}, cookie=cookie_admin)
+        self.assertEqual(status, 403)
+        self.assertFalse(res_adm.get("success"))
+
+        # Author toggles solution -> 200
+        status, res_author = self._post_json(f"/api/articles/{q_id}/comments/{ans_id}/solution", {}, cookie=cookie_author)
         self.assertEqual(status, 200)
-        self.assertTrue(res_adm.get("isSolution"))
+        self.assertTrue(res_author.get("isSolution"))
 
     # 9. GET /api/questions/unanswered includes question with 1 comment and 0 answers
     def test_09_unanswered_widget_includes_question_with_comments_only(self):

@@ -668,7 +668,7 @@
         fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: content })
+          body: JSON.stringify({ content: content, commentType: 'comment' })
         })
           .then(function (res) {
             if (res.status === 401) {

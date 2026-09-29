@@ -2666,29 +2666,29 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
     def test_04_post_article_comments_endpoint(self):
         """Verify POST /api/articles/<id>/comments enforces auth, validates length, stores plain-text, increments count."""
         # 1. Unauthenticated guest -> 401 requireAuth
-        status, data = self._post_json("/api/articles/art-01/comments", {"content": "Неавторизованный комментарий"})
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": "Неавторизованный комментарий", "commentType": "comment"})
         self.assertEqual(status, 401)
         self.assertTrue(data.get("requireAuth"))
 
         # 2. Authenticated user with empty content -> 400
         auth_headers = {"Cookie": self._login("test_user_c")}
-        status, data = self._post_json("/api/articles/art-01/comments", {"content": ""}, headers=auth_headers)
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": "", "commentType": "comment"}, headers=auth_headers)
         self.assertEqual(status, 400)
         self.assertFalse(data.get("success"))
 
         # 3. Whitespace only -> 400
-        status, data = self._post_json("/api/articles/art-01/comments", {"content": "    \n\t  "}, headers=auth_headers)
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": "    \n\t  ", "commentType": "comment"}, headers=auth_headers)
         self.assertEqual(status, 400)
 
         # 4. Over 5000 characters -> 400
         long_content = "А" * 5001
-        status, data = self._post_json("/api/articles/art-01/comments", {"content": long_content}, headers=auth_headers)
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": long_content, "commentType": "comment"}, headers=auth_headers)
         self.assertEqual(status, 400)
         self.assertIn("5000", data.get("error", ""))
 
         # 5. Valid content with HTML tags -> 201, stored raw plain-text, commentsCount updated
         raw_text = "Тестовый комментарий <script>alert('xss')</script> & <b>важный текст</b>"
-        status, data = self._post_json("/api/articles/art-01/comments", {"content": raw_text}, headers=auth_headers)
+        status, data = self._post_json("/api/articles/art-01/comments", {"content": raw_text, "commentType": "comment"}, headers=auth_headers)
         self.assertEqual(status, 201)
         self.assertTrue(data.get("success"))
         self.assertEqual(data.get("commentsCount"), 4)
