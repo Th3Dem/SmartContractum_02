@@ -401,3 +401,4 @@
 [2026-09-29 16:27] | py_bot | IMPLEMENTATION_START | Реализация Issue #16 (SC-016): унификация подсчета и инвариантов сущностей «ответ», «комментарий» и «решение» (Task: issue-16-sc016-answers-comments-solutions-invariants)
 [2026-09-29 16:35] | py_bot | IMPLEMENTATION_COMPLETE | Унификация подсчета и инвариантов сущностей «ответ», «комментарий» и «решение» реализована, 100% тестов успешно пройдены (Task: issue-16-sc016-answers-comments-solutions-invariants)
 [2026-09-29 16:38] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #16 (Fixes #16) (Task: issue-16-sc016-answers-comments-solutions-invariants)
+[2026-09-29 16:40] | pm_bot | TASK_DONE | Задача Issue #16 (SC-016) успешно завершена и объединена в main. Issue #16 на GitHub закрыт (Task: issue-16-sc016-answers-comments-solutions-invariants)
