@@ -381,3 +381,4 @@
 [2026-09-29 15:04] | dev_bot | IMPLEMENTATION_START | Реализация Issue #12 (SC-011): изоляция черновиков вопросов от статей (Task: issue-12-sc011-isolate-ask-question-draft)
 [2026-09-29 15:10] | dev_bot | IMPLEMENTATION_COMPLETE | Изоляция действия «Задать вопрос» реализована, 100% тестов успешно пройдены (Task: issue-12-sc011-isolate-ask-question-draft)
 [2026-09-29 15:11] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #12 (Fixes #12) (Task: issue-12-sc011-isolate-ask-question-draft)
+[2026-09-29 15:15] | pm_bot | TASK_DONE | Задача Issue #12 (SC-011) успешно завершена и объединена в main. Issue #12 на GitHub закрыт (Task: issue-12-sc011-isolate-ask-question-draft)
