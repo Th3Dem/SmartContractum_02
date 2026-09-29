@@ -372,3 +372,7 @@
 [2026-09-29 14:40] | dev_bot | IMPLEMENTATION_COMPLETE | Честные статусы ошибок хранилища реализованы, 100% тестов успешно пройдены (Task: issue-10-sc009-drafts-storage-error-reporting)
 [2026-09-29 14:41] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #10 (Fixes #10) (Task: issue-10-sc009-drafts-storage-error-reporting)
 [2026-09-29 14:44] | pm_bot | TASK_DONE | Задача Issue #10 (SC-009) успешно завершена и объединена в main. Issue #10 на GitHub закрыт (Task: issue-10-sc009-drafts-storage-error-reporting)
+[2026-09-29 14:46] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #11 (SC-010): исключение гонок запросов в ленте через AbortController и генерации (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
+[2026-09-29 14:47] | dev_bot | IMPLEMENTATION_START | Реализация Issue #11 (SC-010): AbortController и поколения запросов ленты (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
+[2026-09-29 14:56] | dev_bot | IMPLEMENTATION_COMPLETE | Гонки запросов ленты устранены, AbortController и requestGeneration внедрены, 100% тестов успешно пройдены (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
+[2026-09-29 14:57] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #11 (Fixes #11) (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
