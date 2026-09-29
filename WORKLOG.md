@@ -327,4 +327,7 @@
 [2026-09-29 11:55] | py_bot | IMPLEMENTATION_COMPLETE | authorId добавлен в DTO статей (list и detail), тесты пройдены 100% (Task: issue-1-sc006-return-author-id-in-dto)
 [2026-09-29 11:58] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #1 (Fixes #1) (Task: issue-1-sc006-return-author-id-in-dto)
 [2026-09-29 12:00] | pm_bot | TASK_DONE | Задача Issue #1 (SC-006) успешно завершена и объединена в main. Issue #1 на GitHub закрыт (Task: issue-1-sc006-return-author-id-in-dto)
-
+[2026-09-29 12:01] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #2 (SC-007): синхронизация data-author-id в карточке и обработчике профиля автора (Task: issue-2-sc007-author-profile-click)
+[2026-09-29 12:02] | dev_bot | IMPLEMENTATION_START | Реализация Issue #2 (SC-007): синхронизация data-author-id в карточке и обработчике профиля (Task: issue-2-sc007-author-profile-click)
+[2026-09-29 12:08] | dev_bot | IMPLEMENTATION_COMPLETE | data-author-id синхронизирован, тесты пройдены 100% (Task: issue-2-sc007-author-profile-click)
+[2026-09-29 12:12] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #2 (Fixes #2) (Task: issue-2-sc007-author-profile-click)
