@@ -392,3 +392,7 @@
 [2026-09-29 16:00] | py_bot | IMPLEMENTATION_COMPLETE | Проверка полномочий пользователя на публикацию от имени компании реализована, 100% тестов успешно пройдены (Task: issue-14-sc012-company-publication-authorization)
 [2026-09-29 16:05] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #14 (Fixes #14) (Task: issue-14-sc012-company-publication-authorization)
 [2026-09-29 16:07] | pm_bot | TASK_DONE | Задача Issue #14 (SC-012) успешно завершена и объединена в main. Issue #14 на GitHub закрыт (Task: issue-14-sc012-company-publication-authorization)
+[2026-09-29 16:07] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #15 (SC-015): серверная фильтрация публикаций компаний до пагинации (Task: issue-15-sc015-company-feed-server-filtering-pagination)
+[2026-09-29 16:08] | dev_bot | IMPLEMENTATION_START | Начало реализации Issue #15 (SC-015): серверная фильтрация публикаций компаний до пагинации (Task: issue-15-sc015-company-feed-server-filtering-pagination)
+[2026-09-29 16:16] | dev_bot | IMPLEMENTATION_COMPLETE | Серверная фильтрация публикаций компаний до пагинации реализована, 100% тестов успешно пройдены (Task: issue-15-sc015-company-feed-server-filtering-pagination)
+[2026-09-29 16:18] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #15 (Fixes #15) (Task: issue-15-sc015-company-feed-server-filtering-pagination)
