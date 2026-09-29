@@ -395,11 +395,16 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
                 token TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 user_name TEXT NOT NULL,
+                user_role TEXT NOT NULL DEFAULT 'user',
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
                 is_revoked INTEGER DEFAULT 0
             );
         """)
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN user_role TEXT NOT NULL DEFAULT 'user';")
+        except Exception:
+            pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);")
 
@@ -1335,7 +1340,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         return None
 
-    def get_current_user(self) -> Optional[Dict[str, str]]:
+    def get_current_user(self) -> Optional[Dict[str, Any]]:
         """
         Extracts authenticated user by validating session token from Cookie or Authorization header against the sessions table.
         Rejects revoked or expired sessions. Ignores X-User-Id and query parameters.
@@ -1349,7 +1354,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             conn = self.get_db()
             cur = conn.cursor()
             cur.execute("""
-                SELECT user_id, user_name, expires_at, is_revoked
+                SELECT user_id, user_name, user_role, expires_at, is_revoked
                 FROM sessions
                 WHERE token = ?
             """, (token,))
@@ -1380,7 +1385,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             return None
 
-        return {"id": row["user_id"], "name": row["user_name"]}
+        return {
+            "id": row["user_id"],
+            "name": row["user_name"],
+            "role": row["user_role"] if "user_role" in row.keys() else "user"
+        }
+
+    def is_moderator_or_admin(self, user: Optional[Dict[str, Any]]) -> bool:
+        if not user:
+            return False
+        return user.get("role") in ("moderator", "admin") or bool(user.get("isAdmin"))
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -1536,7 +1550,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         user_id = (data.get("userId") or data.get("user_id") or data.get("authorId") or data.get("author_id") or "user_demo").strip()
         user_name = (data.get("name") or ("Демо Пользователь" if user_id == "user_demo" else user_id)).strip()
-        user = {"id": user_id, "name": user_name}
+        role = data.get("role") or ("admin" if user_id in ("admin", "user_admin") else "moderator" if user_id in ("moderator", "user_moderator") else "user")
+        user = {"id": user_id, "name": user_name, "role": role}
 
         token = secrets.token_hex(32)
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -1548,9 +1563,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             conn = self.get_db()
             with conn:
                 conn.execute("""
-                    INSERT INTO sessions (token, user_id, user_name, created_at, expires_at, is_revoked)
-                    VALUES (?, ?, ?, ?, ?, 0)
-                """, (token, user_id, user_name, created_at, expires_at))
+                    INSERT INTO sessions (token, user_id, user_name, user_role, created_at, expires_at, is_revoked)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                """, (token, user_id, user_name, role, created_at, expires_at))
         finally:
             if conn:
                 try:
@@ -3027,10 +3042,26 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
     def handle_moderation_submit(self):
         """
         POST /api/moderation/submit
-        Receives { draftId, title, html, delta, publicationSettings, idempotencyKey, authorId }.
+        Receives { draftId, title, html, delta, publicationSettings, idempotencyKey }.
         Validates payload, enforces idempotency, checks status transition,
         calculates SHA-256 snapshot hash, and stores immutable snapshot in SQLite.
+        Requires authenticated user. author_id is strictly bound to curr_user.
         """
+        curr_user = self.get_current_user()
+        if not curr_user:
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                if content_length > 0:
+                    self.rfile.read(content_length)
+            except Exception:
+                pass
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация для отправки материалов",
+                "requireAuth": True
+            })
+            return
+
         try:
             content_length = int(self.headers.get("Content-Length", 0))
         except ValueError:
@@ -3062,125 +3093,140 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             idempotency_key = None
 
         conn = self.get_db()
+        try:
+            # Idempotency check: if already processed, return existing submission immediately
+            if idempotency_key:
+                with conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "SELECT * FROM moderation_submissions WHERE idempotency_key = ? LIMIT 1",
+                        (idempotency_key,)
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        self.send_json_response(200, {
+                            "success": True,
+                            "status": existing["status"],
+                            "submissionId": existing["id"],
+                            "snapshotHash": existing["snapshot_hash"],
+                            "createdAt": existing["created_at"],
+                            "isDuplicate": True
+                        })
+                        return
 
-        # Idempotency check: if already processed, return existing submission immediately
-        if idempotency_key:
-            with conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT * FROM moderation_submissions WHERE idempotency_key = ? LIMIT 1",
-                    (idempotency_key,)
-                )
-                existing = cur.fetchone()
-                if existing:
-                    self.send_json_response(200, {
-                        "success": True,
-                        "status": existing["status"],
-                        "submissionId": existing["id"],
-                        "snapshotHash": existing["snapshot_hash"],
-                        "createdAt": existing["created_at"],
-                        "isDuplicate": True
-                    })
-                    return
-
-        # Validation check
-        is_valid, err_msg, field_errors = validate_submission_payload(payload)
-        if not is_valid:
-            self.send_json_response(400, {
-                "success": False,
-                "error": err_msg,
-                "fieldErrors": field_errors
-            })
-            return
-
-        draft_id = payload.get("draftId") or payload.get("draft_id")
-        title = payload.get("title").strip()
-        article_html = payload.get("html") or payload.get("article_html") or payload.get("content")
-        delta = payload.get("delta") or payload.get("article_delta")
-        pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
-        curr_user = self.get_current_user()
-        author_id = payload.get("authorId") or payload.get("author_id") or (curr_user.get("id") if curr_user else None) or "author_local"
-
-        # Status transition check: cannot transition if already approved or in terminal invalid state
-        with conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT id, status FROM moderation_submissions WHERE draft_id = ? ORDER BY created_at DESC LIMIT 1",
-                (draft_id,)
-            )
-            last_sub = cur.fetchone()
-            if last_sub and last_sub["status"] == "approved":
+            # Validation check
+            is_valid, err_msg, field_errors = validate_submission_payload(payload)
+            if not is_valid:
                 self.send_json_response(400, {
                     "success": False,
-                    "error": "Черновик уже одобрен модератором и не может быть отправлен повторно.",
-                    "fieldErrors": {
-                        "status": "Статья уже имеет статус 'approved'."
-                    }
+                    "error": err_msg,
+                    "fieldErrors": field_errors
                 })
                 return
 
-        # Compute deterministic SHA-256 snapshot hash
-        snapshot_hash = compute_snapshot_hash(title, article_html, pub_settings)
+            draft_id = payload.get("draftId") or payload.get("draft_id")
+            title = payload.get("title").strip()
+            article_html = payload.get("html") or payload.get("article_html") or payload.get("content")
+            delta = payload.get("delta") or payload.get("article_delta")
+            pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
+            author_id = curr_user["id"]
 
-        submission_id = f"sub_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        pub_settings_json = json.dumps(pub_settings, ensure_ascii=False)
-        article_delta_json = json.dumps(delta, ensure_ascii=False) if delta is not None else None
-
-        # Insert immutable snapshot row
-        try:
+            # Status transition check: cannot transition if already approved or in terminal invalid state
             with conn:
-                conn.execute("""
-                    INSERT INTO moderation_submissions (
-                        id, draft_id, title, author_id, status, publication_settings,
-                        article_html, article_delta, idempotency_key, snapshot_hash,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, 'pending_moderation', ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    submission_id, draft_id, title, author_id, pub_settings_json,
-                    article_html, article_delta_json, idempotency_key, snapshot_hash,
-                    now_iso, now_iso
-                ))
-        except sqlite3.IntegrityError:
-            # Race condition with identical idempotency_key
-            if idempotency_key:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT * FROM moderation_submissions WHERE idempotency_key = ? LIMIT 1",
-                    (idempotency_key,)
+                    "SELECT id, status FROM moderation_submissions WHERE draft_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (draft_id,)
                 )
-                dup_row = cur.fetchone()
-                if dup_row:
-                    self.send_json_response(200, {
-                        "success": True,
-                        "status": dup_row["status"],
-                        "submissionId": dup_row["id"],
-                        "snapshotHash": dup_row["snapshot_hash"],
-                        "createdAt": dup_row["created_at"],
-                        "isDuplicate": True
+                last_sub = cur.fetchone()
+                if last_sub and last_sub["status"] == "approved":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Черновик уже одобрен модератором и не может быть отправлен повторно.",
+                        "fieldErrors": {
+                            "status": "Статья уже имеет статус 'approved'."
+                        }
                     })
                     return
 
-            self.send_json_response(500, {
-                "success": False,
-                "error": "Ошибка сохранения заявки в базу данных (Integrity Error)",
-                "fieldErrors": {}
-            })
-            return
+            # Compute deterministic SHA-256 snapshot hash
+            snapshot_hash = compute_snapshot_hash(title, article_html, pub_settings)
 
-        self.send_json_response(200, {
-            "success": True,
-            "status": "pending_moderation",
-            "submissionId": submission_id,
-            "snapshotHash": snapshot_hash,
-            "createdAt": now_iso
-        })
+            submission_id = f"sub_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            pub_settings_json = json.dumps(pub_settings, ensure_ascii=False)
+            article_delta_json = json.dumps(delta, ensure_ascii=False) if delta is not None else None
+
+            # Insert immutable snapshot row
+            try:
+                with conn:
+                    conn.execute("""
+                        INSERT INTO moderation_submissions (
+                            id, draft_id, title, author_id, status, publication_settings,
+                            article_html, article_delta, idempotency_key, snapshot_hash,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, 'pending_moderation', ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        submission_id, draft_id, title, author_id, pub_settings_json,
+                        article_html, article_delta_json, idempotency_key, snapshot_hash,
+                        now_iso, now_iso
+                    ))
+            except sqlite3.IntegrityError:
+                # Race condition with identical idempotency_key
+                if idempotency_key:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "SELECT * FROM moderation_submissions WHERE idempotency_key = ? LIMIT 1",
+                        (idempotency_key,)
+                    )
+                    dup_row = cur.fetchone()
+                    if dup_row:
+                        self.send_json_response(200, {
+                            "success": True,
+                            "status": dup_row["status"],
+                            "submissionId": dup_row["id"],
+                            "snapshotHash": dup_row["snapshot_hash"],
+                            "createdAt": dup_row["created_at"],
+                            "isDuplicate": True
+                        })
+                        return
+
+                self.send_json_response(500, {
+                    "success": False,
+                    "error": "Ошибка сохранения заявки в базу данных (Integrity Error)",
+                    "fieldErrors": {}
+                })
+                return
+
+            self.send_json_response(200, {
+                "success": True,
+                "status": "pending_moderation",
+                "submissionId": submission_id,
+                "snapshotHash": snapshot_hash,
+                "createdAt": now_iso
+            })
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def handle_moderation_status(self, parsed_url):
         """
         GET /api/moderation/status?draftId=...
         Returns status of the latest submission for the draft.
+        Requires authentication. Allowed only for the submission author or moderator/admin.
         """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация для проверки статуса модерации",
+                "requireAuth": True
+            })
+            return
+
         query = urllib.parse.parse_qs(parsed_url.query)
         draft_id = query.get("draftId", [None])[0] or query.get("draft_id", [None])[0]
 
@@ -3193,75 +3239,112 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         conn = self.get_db()
-        with conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM moderation_submissions WHERE draft_id = ? ORDER BY created_at DESC LIMIT 1",
-                (draft_id,)
-            )
-            row = cur.fetchone()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT * FROM moderation_submissions WHERE draft_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (draft_id,)
+                )
+                row = cur.fetchone()
 
-        if not row:
-            self.send_json_response(404, {
-                "success": False,
-                "status": "draft",
-                "submissionId": None,
-                "error": "Заявка на модерацию для данного черновика не найдена"
-            })
-            return
+            if not row:
+                self.send_json_response(404, {
+                    "success": False,
+                    "status": "draft",
+                    "submissionId": None,
+                    "error": "Заявка на модерацию для данного черновика не найдена"
+                })
+                return
 
-        self.send_json_response(200, {
-            "success": True,
-            "status": row["status"],
-            "submissionId": row["id"],
-            "snapshotHash": row["snapshot_hash"],
-            "createdAt": row["created_at"],
-            "updatedAt": row["updated_at"]
-        })
+            if not self.is_moderator_or_admin(user) and row["author_id"] != user["id"]:
+                self.send_json_response(403, {
+                    "success": False,
+                    "error": "Доступ запрещен: вы можете просматривать статус только своих заявок"
+                })
+                return
 
-    def handle_moderation_list(self):
-        """
-        GET /api/moderation/list
-        Returns array of submissions in queue (for moderator access).
-        """
-        conn = self.get_db()
-        with conn:
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM moderation_submissions ORDER BY created_at DESC")
-            rows = cur.fetchall()
-
-        submissions = []
-        for row in rows:
-            try:
-                settings = json.loads(row["publication_settings"]) if row["publication_settings"] else {}
-            except Exception:
-                settings = {}
-
-            try:
-                delta = json.loads(row["article_delta"]) if row["article_delta"] else None
-            except Exception:
-                delta = None
-
-            submissions.append({
-                "id": row["id"],
-                "draftId": row["draft_id"],
-                "title": row["title"],
-                "authorId": row["author_id"],
+            self.send_json_response(200, {
+                "success": True,
                 "status": row["status"],
-                "publicationSettings": settings,
-                "articleHtml": row["article_html"],
-                "articleDelta": delta,
-                "idempotencyKey": row["idempotency_key"],
+                "submissionId": row["id"],
                 "snapshotHash": row["snapshot_hash"],
                 "createdAt": row["created_at"],
                 "updatedAt": row["updated_at"]
             })
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
-        self.send_json_response(200, {
-            "success": True,
-            "submissions": submissions,
-            "count": len(submissions)
-        })
+    def handle_moderation_list(self):
+        """
+        GET /api/moderation/list
+        Returns array of submissions in queue (for moderator or admin access only).
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация для доступа к очереди модерации",
+                "requireAuth": True
+            })
+            return
+
+        if not self.is_moderator_or_admin(user):
+            self.send_json_response(403, {
+                "success": False,
+                "error": "Доступ запрещен: требуется роль модератора или администратора"
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM moderation_submissions ORDER BY created_at DESC")
+                rows = cur.fetchall()
+
+            submissions = []
+            for row in rows:
+                try:
+                    settings = json.loads(row["publication_settings"]) if row["publication_settings"] else {}
+                except Exception:
+                    settings = {}
+
+                try:
+                    delta = json.loads(row["article_delta"]) if row["article_delta"] else None
+                except Exception:
+                    delta = None
+
+                submissions.append({
+                    "id": row["id"],
+                    "draftId": row["draft_id"],
+                    "title": row["title"],
+                    "authorId": row["author_id"],
+                    "status": row["status"],
+                    "publicationSettings": settings,
+                    "articleHtml": row["article_html"],
+                    "articleDelta": delta,
+                    "idempotencyKey": row["idempotency_key"],
+                    "snapshotHash": row["snapshot_hash"],
+                    "createdAt": row["created_at"],
+                    "updatedAt": row["updated_at"]
+                })
+
+            self.send_json_response(200, {
+                "success": True,
+                "submissions": submissions,
+                "count": len(submissions)
+            })
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def handle_articles_api(self, parsed_url):
         """

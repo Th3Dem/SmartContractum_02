@@ -1886,6 +1886,16 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         cls.server.server_close()
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
+    def _login(self, user_id: str = "user_demo", name: Optional[str] = None, role: str = "user") -> str:
+        login_payload = json.dumps({"userId": user_id, "name": name or user_id, "role": role}).encode('utf-8')
+        login_req = urllib.request.Request(
+            f"{self.base_url}/api/auth/login",
+            data=login_payload,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(login_req) as resp:
+            return resp.headers.get("Set-Cookie")
+
     def test_unified_cover_config_and_tokens(self):
         """
         Verify PublicationConfig.COVER in config.js (780x440, 39:22, max 10MB, formats)
@@ -2124,6 +2134,9 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         self.assertIn("coverImage", f_errs)
         self.assertIn("до 10 МБ", f_errs["coverImage"])
 
+        user_cookie = self._login("author_tester", "Тестовый Автор", role="user")
+        mod_cookie = self._login("moderator_t28", "Модератор", role="moderator")
+
         # 7. End-to-end HTTP POST /api/moderation/submit check
         p_submit_ok = json.loads(json.dumps(base_payload))
         p_submit_ok["draftId"] = "draft_t28_http_ok"
@@ -2133,7 +2146,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         req = urllib.request.Request(
             f"{self.base_url}/api/moderation/submit",
             data=post_data,
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json", "Cookie": user_cookie}
         )
         with urllib.request.urlopen(req) as resp:
             submit_res = json.loads(resp.read().decode('utf-8'))
@@ -2142,7 +2155,10 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
             sub_id = submit_res.get("submissionId")
 
         # Verify cover image is stored in snapshot
-        list_req = urllib.request.Request(f"{self.base_url}/api/moderation/list")
+        list_req = urllib.request.Request(
+            f"{self.base_url}/api/moderation/list",
+            headers={"Cookie": mod_cookie}
+        )
         with urllib.request.urlopen(list_req) as resp:
             list_res = json.loads(resp.read().decode('utf-8'))
             found = next((s for s in list_res["submissions"] if s["id"] == sub_id), None)
@@ -2158,7 +2174,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         req_bad = urllib.request.Request(
             f"{self.base_url}/api/moderation/submit",
             data=json.dumps(p_submit_bad).encode('utf-8'),
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json", "Cookie": user_cookie}
         )
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req_bad)
@@ -2232,6 +2248,16 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    def _login(self, user_id: str = "user_demo", name: Optional[str] = None, role: str = "user") -> str:
+        login_payload = json.dumps({"userId": user_id, "name": name or user_id, "role": role}).encode('utf-8')
+        login_req = urllib.request.Request(
+            f"{self.base_url}/api/auth/login",
+            data=login_payload,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(login_req) as resp:
+            return resp.headers.get("Set-Cookie")
 
     def test_tokens_and_fullwidth_cover_css(self):
         """Verify removal of 560px restriction and enforcement of full card content width."""
@@ -2409,11 +2435,14 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
             "authorId": "author_t29"
         }
 
+        user_cookie = self._login("author_t29", "Автор T29", role="user")
+        mod_cookie = self._login("moderator_t29", "Модератор T29", role="moderator")
+
         # 1. Submit to moderation
         sub_req = urllib.request.Request(
             f"{self.base_url}/api/moderation/submit",
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json", "Cookie": user_cookie}
         )
         with urllib.request.urlopen(sub_req) as resp:
             sub_res = json.loads(resp.read().decode("utf-8"))
@@ -2421,7 +2450,10 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
             sub_id = sub_res["submissionId"]
 
         # 2. Check stored snapshot in moderation list
-        list_req = urllib.request.Request(f"{self.base_url}/api/moderation/list")
+        list_req = urllib.request.Request(
+            f"{self.base_url}/api/moderation/list",
+            headers={"Cookie": mod_cookie}
+        )
         with urllib.request.urlopen(list_req) as resp:
             list_res = json.loads(resp.read().decode("utf-8"))
             found = next((s for s in list_res["submissions"] if s["id"] == sub_id), None)

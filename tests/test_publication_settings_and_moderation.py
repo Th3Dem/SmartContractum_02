@@ -358,13 +358,28 @@ class TestModerationServerIntegration(unittest.TestCase):
         cls.server_thread.join(timeout=2)
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
-    def _post_json(self, path: str, data: dict):
-        url = f"{self.base_url}{path}"
-        body = json.dumps(data).encode("utf-8")
+    def _login(self, user_id: str, name: str = "Test User", role: str = "user") -> str:
+        url = f"{self.base_url}/api/auth/login"
+        body = json.dumps({"userId": user_id, "name": name, "role": role}).encode("utf-8")
         req = urllib.request.Request(
             url,
             data=body,
             headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as resp:
+            return resp.headers.get("Set-Cookie")
+
+    def _post_json(self, path: str, data: dict, cookie: Optional[str] = None):
+        url = f"{self.base_url}{path}"
+        body = json.dumps(data).encode("utf-8")
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        if cookie:
+            headers["Cookie"] = cookie
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers=headers,
             method="POST"
         )
         try:
@@ -376,9 +391,12 @@ class TestModerationServerIntegration(unittest.TestCase):
             e.close()
             return e.code, json.loads(resp_body)
 
-    def _get_json(self, path: str):
+    def _get_json(self, path: str, cookie: Optional[str] = None):
         url = f"{self.base_url}{path}"
-        req = urllib.request.Request(url, method="GET")
+        headers = {}
+        if cookie:
+            headers["Cookie"] = cookie
+        req = urllib.request.Request(url, headers=headers, method="GET")
         try:
             with urllib.request.urlopen(req) as resp:
                 resp_body = resp.read().decode("utf-8")
@@ -414,7 +432,8 @@ class TestModerationServerIntegration(unittest.TestCase):
             "authorId": "author_ivan"
         }
 
-        status_code, data = self._post_json("/api/moderation/submit", payload)
+        cookie_ivan = self._login("author_ivan", "Иван Автор", role="user")
+        status_code, data = self._post_json("/api/moderation/submit", payload, cookie=cookie_ivan)
         self.assertEqual(status_code, 200)
         self.assertTrue(data.get("success"))
         self.assertEqual(data.get("status"), "pending_moderation")
@@ -468,15 +487,16 @@ class TestModerationServerIntegration(unittest.TestCase):
             "authorId": "author_qa"
         }
 
+        cookie_qa = self._login("author_qa", "QA Инженер", role="user")
         # First request
-        status1, data1 = self._post_json("/api/moderation/submit", payload)
+        status1, data1 = self._post_json("/api/moderation/submit", payload, cookie=cookie_qa)
         self.assertEqual(status1, 200)
         self.assertTrue(data1.get("success"))
         sub_id_1 = data1.get("submissionId")
         self.assertFalse(data1.get("isDuplicate", False))
 
         # Second request with same idempotencyKey
-        status2, data2 = self._post_json("/api/moderation/submit", payload)
+        status2, data2 = self._post_json("/api/moderation/submit", payload, cookie=cookie_qa)
         self.assertEqual(status2, 200)
         self.assertTrue(data2.get("success"))
         self.assertEqual(data2.get("submissionId"), sub_id_1)
@@ -507,24 +527,25 @@ class TestModerationServerIntegration(unittest.TestCase):
             "idempotencyKey": "status_isolated_key_001",
             "authorId": "author_isolated"
         }
-        post_status, post_data = self._post_json("/api/moderation/submit", payload)
+        cookie_iso = self._login("author_isolated", "Изолированный Автор", role="user")
+        post_status, post_data = self._post_json("/api/moderation/submit", payload, cookie=cookie_iso)
         self.assertEqual(post_status, 200)
 
         # 1. Existing draft
-        status_code, data = self._get_json(f"/api/moderation/status?draftId={draft_id}")
+        status_code, data = self._get_json(f"/api/moderation/status?draftId={draft_id}", cookie=cookie_iso)
         self.assertEqual(status_code, 200)
         self.assertTrue(data.get("success"))
         self.assertEqual(data.get("status"), "pending_moderation")
         self.assertEqual(data.get("submissionId"), post_data["submissionId"])
 
         # 2. Non-existent draft
-        status_code_404, data_404 = self._get_json("/api/moderation/status?draftId=non_existent_draft_999")
+        status_code_404, data_404 = self._get_json("/api/moderation/status?draftId=non_existent_draft_999", cookie=cookie_iso)
         self.assertEqual(status_code_404, 404)
         self.assertEqual(data_404.get("status"), "draft")
         self.assertIsNone(data_404.get("submissionId"))
 
         # 3. Missing draftId param
-        status_code_400, data_400 = self._get_json("/api/moderation/status")
+        status_code_400, data_400 = self._get_json("/api/moderation/status", cookie=cookie_iso)
         self.assertEqual(status_code_400, 400)
         self.assertFalse(data_400.get("success"))
 
@@ -543,9 +564,11 @@ class TestModerationServerIntegration(unittest.TestCase):
             },
             "idempotencyKey": "list_isolated_key_002",
         }
-        self._post_json("/api/moderation/submit", payload)
+        cookie_author = self._login("author_list", "Автор Списка", role="user")
+        cookie_mod = self._login("moderator_list", "Модератор Списка", role="moderator")
+        self._post_json("/api/moderation/submit", payload, cookie=cookie_author)
 
-        status_code, data = self._get_json("/api/moderation/list")
+        status_code, data = self._get_json("/api/moderation/list", cookie=cookie_mod)
         self.assertEqual(status_code, 200)
         self.assertTrue(data.get("success"))
         self.assertIsInstance(data.get("submissions"), list)
@@ -578,8 +601,9 @@ class TestModerationServerIntegration(unittest.TestCase):
             "authorId": "author_test"
         }
 
+        cookie_test = self._login("author_test", "Автор Теста", role="user")
         # 1. Initial submission
-        status1, data1 = self._post_json("/api/moderation/submit", payload)
+        status1, data1 = self._post_json("/api/moderation/submit", payload, cookie=cookie_test)
         self.assertEqual(status1, 200)
         sub_id = data1["submissionId"]
 
@@ -589,7 +613,7 @@ class TestModerationServerIntegration(unittest.TestCase):
 
         # 3. Attempt to submit again with different idempotency key
         payload2 = dict(payload, idempotencyKey="trans_key_2")
-        status2, data2 = self._post_json("/api/moderation/submit", payload2)
+        status2, data2 = self._post_json("/api/moderation/submit", payload2, cookie=cookie_test)
         self.assertEqual(status2, 400)
         self.assertFalse(data2["success"])
         self.assertIn("уже одобрен", data2["error"])
