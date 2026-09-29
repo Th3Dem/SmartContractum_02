@@ -413,3 +413,4 @@
 [2026-09-29 17:06] | py_bot | IMPLEMENTATION_START | Разделение запуска сервера и демонстрационного seed данных (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
 [2026-09-29 17:14] | py_bot | IMPLEMENTATION_COMPLETE | Разделение запуска сервера и демонстрационного seed данных реализовано, 100% тестов успешно пройдены (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
 [2026-09-29 17:16] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #18 (Fixes #18) (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
+[2026-09-29 17:19] | pm_bot | TASK_DONE | Задача Issue #18 (SC-018) успешно завершена и объединена в main. Issue #18 на GitHub закрыт (Task: issue-18-sc018-separate-server-startup-and-demo-seed)
