@@ -428,7 +428,9 @@
       const authorEl = card.querySelector('.author-info');
       if (authorEl) {
         authorEl.addEventListener('click', function (e) {
-          e.stopPropagation();
+          if (!e.target.closest('.btn-author-profile')) {
+            e.stopPropagation();
+          }
         });
       }
 

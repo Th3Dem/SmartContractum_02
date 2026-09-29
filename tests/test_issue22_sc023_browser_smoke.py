@@ -634,15 +634,23 @@ class TestBrowserSmoke(unittest.TestCase):
             )
 
             # SC-021 Invariant 2: Presence of valid single-escaped entities
+            self.assertIn(
+                "&lt;script&gt;",
+                inner_html,
+                "DOM innerHTML must contain single-escaped &lt;script&gt;"
+            )
             self.assertIn("&amp;", inner_html, "DOM innerHTML must contain single-escaped &amp;")
-            self.assertIn("&lt;", inner_html, "DOM innerHTML must contain single-escaped &lt;")
-            self.assertIn("&gt;", inner_html, "DOM innerHTML must contain single-escaped &gt;")
-            self.assertIn("&quot;", inner_html, "DOM innerHTML must contain single-escaped &quot;")
+            self.assertIn(
+                '"Цитата"',
+                inner_html,
+                "DOM innerHTML must contain raw quotes for text nodes"
+            )
 
-            # SC-021 Invariant 3: Rendered text in browser DOM contains raw unescaped visual characters
-            self.assertIn("&", text_content, "Rendered text must contain raw '&'")
-            self.assertIn("<script>", text_content, "Rendered text must contain raw '<script>'")
-            self.assertIn('"Цитата"', text_content, 'Rendered text must contain raw \'"Цитата"\'')
+            # SC-021 Invariant 3: Rendered text in browser DOM equals expected raw content
+            expected_raw_content = (
+                'Тест спецсимволов: Rock & Roll <script>alert("xss")</script> & "Цитата" \''
+            )
+            self.assertEqual(text_content, expected_raw_content)
         finally:
             page.close()
 
