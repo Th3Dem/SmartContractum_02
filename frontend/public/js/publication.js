@@ -412,7 +412,7 @@
       const preselectedCompany = urlParams.get('companyId') || urlParams.get('company');
 
       if (this.companySelect) {
-        fetch('/api/companies')
+        fetch('/api/companies?manageable=1')
           .then(res => res.json())
           .then(data => {
             if (data && data.success && data.companies) {
@@ -424,10 +424,15 @@
               });
               if (preselectedCompany) {
                 this.companySelect.value = preselectedCompany;
-                this.companyId = preselectedCompany;
-                const sel = this.companySelect.selectedOptions ? this.companySelect.selectedOptions[0] : null;
-                if (sel) this.companyName = sel.textContent;
-                this.updateCardPreview();
+                if (this.companySelect.value === preselectedCompany) {
+                  this.companyId = preselectedCompany;
+                  const sel = this.companySelect.selectedOptions ? this.companySelect.selectedOptions[0] : null;
+                  if (sel) this.companyName = sel.textContent;
+                  this.updateCardPreview();
+                } else {
+                  this.companyId = null;
+                  this.companyName = null;
+                }
               }
             }
           })

@@ -632,6 +632,17 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_companies_owner ON companies(owner_id);")
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS company_members (
+                company_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (company_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_company_members_user ON company_members(user_id);")
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 token TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -657,6 +668,10 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
             import seed_data
             seed_data.seed_clubs(conn)
             seed_data.seed_companies(conn)
+            conn.execute("""
+                INSERT OR IGNORE INTO company_members (company_id, user_id, role, created_at)
+                SELECT id, owner_id, 'owner', created_at FROM companies WHERE owner_id IS NOT NULL AND owner_id != '';
+            """)
             seed_data.seed_articles(conn)
             seed_data.seed_user_subscriptions(conn)
             seed_data.seed_article_likes(conn)
@@ -1243,20 +1258,105 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     return conn
 
 
+def can_user_publish_for_company(
+    conn: sqlite3.Connection,
+    user_id: Optional[str],
+    company_id: Optional[str],
+    user_role: str = "user"
+) -> bool:
+    """
+    Checks if a user is authorized to publish on behalf of a company.
+    Rules:
+    - If user_role == 'admin': return True
+    - If not company_id: return False
+    - Check if company exists in companies table. If not: return False
+    - If not user_id: return False
+    - If company['owner_id'] == user_id: return True
+    - Check company_members table: if (company_id, user_id) exists with role in
+      ('owner', 'admin', 'editor', 'author', 'member'): return True
+    - Otherwise return False
+    """
+    if user_role == "admin":
+        return True
+    if not company_id:
+        return False
+    cur = conn.cursor()
+    cur.execute("SELECT owner_id FROM companies WHERE id = ?", (company_id,))
+    comp = cur.fetchone()
+    if not comp:
+        return False
+    if not user_id:
+        return False
+    if comp["owner_id"] == user_id:
+        return True
+    cur.execute(
+        "SELECT role FROM company_members WHERE company_id = ? AND user_id = ?",
+        (company_id, user_id)
+    )
+    member = cur.fetchone()
+    if member and member["role"] in ("owner", "admin", "editor", "author", "member"):
+        return True
+    return False
+
+
 def update_submission_status(submission_id: str, new_status: str, db_path: Optional[str] = None) -> bool:
     """
     Helper to update submission status (e.g. for testing moderation decisions).
+    If new_status == 'approved':
+    Inspect submission's publication_settings. If companyId is specified, verify
+    that the submission's author_id has permission via can_user_publish_for_company.
+    If not, reject update (return False).
     """
     if new_status not in VALID_STATUSES:
         raise ValueError(f"Invalid status: {new_status}. Must be one of {VALID_STATUSES}")
     conn = get_db_connection(db_path)
-    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    with conn:
-        cur = conn.execute(
-            "UPDATE moderation_submissions SET status = ?, updated_at = ? WHERE id = ?",
-            (new_status, now_iso, submission_id)
-        )
-        return cur.rowcount > 0
+    try:
+        if new_status == "approved":
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT author_id, publication_settings FROM moderation_submissions WHERE id = ?",
+                (submission_id,)
+            )
+            sub_row = cur.fetchone()
+            if not sub_row:
+                return False
+            pub_settings_raw = sub_row["publication_settings"]
+            try:
+                pub_settings = json.loads(pub_settings_raw) if pub_settings_raw else {}
+            except Exception:
+                pub_settings = {}
+            comp_id = pub_settings.get("companyId") or pub_settings.get("company_id")
+            if comp_id:
+                # Check company exists
+                cur.execute("SELECT id FROM companies WHERE id = ?", (comp_id,))
+                if not cur.fetchone():
+                    return False
+
+                author_id = sub_row["author_id"]
+                author_role = "user"
+                try:
+                    cur.execute(
+                        "SELECT user_role FROM sessions WHERE user_id = ? AND is_revoked = 0 ORDER BY created_at DESC LIMIT 1",
+                        (author_id,)
+                    )
+                    sess_row = cur.fetchone()
+                    if sess_row and "user_role" in sess_row.keys() and sess_row["user_role"]:
+                        author_role = sess_row["user_role"]
+                except Exception:
+                    pass
+
+                if not can_user_publish_for_company(conn, author_id, comp_id, user_role=author_role):
+                    return False
+
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with conn:
+            cur = conn.execute(
+                "UPDATE moderation_submissions SET status = ?, updated_at = ? WHERE id = ?",
+                (new_status, now_iso, submission_id)
+            )
+            return cur.rowcount > 0
+    finally:
+        conn.close()
 
 
 MAX_COVER_DECODED_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -2579,10 +2679,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed_url.query)
         search_query = (query.get("search", [""])[0] or "").strip().lower()
         direction_filter = (query.get("direction", [""])[0] or query.get("topic", [""])[0] or "").strip()
+        manageable_param = (query.get("manageable", ["0"])[0] or "").strip().lower()
+        mine_param = (query.get("mine", ["0"])[0] or "").strip().lower()
+        only_manageable = manageable_param in ("1", "true", "yes") or mine_param in ("1", "true", "yes")
 
         user = self.get_current_user()
         user_subs = set()
         user_exceptions = set()
+        comps_list = []
         conn = self.get_db()
         with conn:
             cur = conn.cursor()
@@ -2609,41 +2713,50 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur.execute("SELECT target_id, COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'company' GROUP BY target_id")
             sub_counts = {r["target_id"]: r["cnt"] for r in cur.fetchall()}
 
-        comps_list = []
-        for r in comp_rows:
-            cid = r["id"]
-            name = r["name"]
-            desc = r["description"]
-            spec = r["specialization"]
-            website = r["website"]
-            directions = json.loads(r["directions"]) if r["directions"] else []
+            for r in comp_rows:
+                cid = r["id"]
+                name = r["name"]
+                desc = r["description"]
+                spec = r["specialization"]
+                website = r["website"]
+                directions = json.loads(r["directions"]) if r["directions"] else []
 
-            if direction_filter and direction_filter != "all":
-                if direction_filter not in directions:
+                can_publish = False
+                if user:
+                    can_publish = can_user_publish_for_company(
+                        conn, user["id"], cid, user_role=user.get("role", "user")
+                    )
+
+                if only_manageable and not can_publish:
                     continue
 
-            if search_query:
-                haystack = f"{name} {desc} {spec} {website or ''}".lower()
-                if not all(w in haystack for w in search_query.split()):
-                    continue
+                if direction_filter and direction_filter != "all":
+                    if direction_filter not in directions:
+                        continue
 
-            comps_list.append({
-                "id": cid,
-                "name": name,
-                "description": desc,
-                "specialization": spec,
-                "website": website,
-                "logo": r["logo"],
-                "directions": directions,
-                "ownerId": r["owner_id"],
-                "isVerified": bool(r["is_verified"]),
-                "articlesCount": article_counts.get(cid, 0),
-                "subscribersCount": sub_counts.get(cid, 0),
-                "isSubscribed": ("company", cid) in user_subs,
-                "isExcluded": ("company", cid) in user_exceptions,
-                "createdAt": r["created_at"],
-                "updatedAt": r["updated_at"]
-            })
+                if search_query:
+                    haystack = f"{name} {desc} {spec} {website or ''}".lower()
+                    if not all(w in haystack for w in search_query.split()):
+                        continue
+
+                comps_list.append({
+                    "id": cid,
+                    "name": name,
+                    "description": desc,
+                    "specialization": spec,
+                    "website": website,
+                    "logo": r["logo"],
+                    "directions": directions,
+                    "ownerId": r["owner_id"],
+                    "isVerified": bool(r["is_verified"]),
+                    "articlesCount": article_counts.get(cid, 0),
+                    "subscribersCount": sub_counts.get(cid, 0),
+                    "isSubscribed": ("company", cid) in user_subs,
+                    "isExcluded": ("company", cid) in user_exceptions,
+                    "canPublish": can_publish,
+                    "createdAt": r["created_at"],
+                    "updatedAt": r["updated_at"]
+                })
 
         self.send_json_response(200, {
             "success": True,
@@ -2684,6 +2797,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     pass
 
+            can_publish = False
+            if user:
+                can_publish = can_user_publish_for_company(
+                    conn, user["id"], company_id, user_role=user.get("role", "user")
+                )
+
         directions = json.loads(row["directions"]) if row["directions"] else []
 
         comp_data = {
@@ -2700,6 +2819,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "subscribersCount": sub_count,
             "isSubscribed": ("company", company_id) in user_subs,
             "isExcluded": ("company", company_id) in user_exceptions,
+            "canPublish": can_publish,
             "createdAt": row["created_at"],
             "updatedAt": row["updated_at"]
         }
@@ -2766,6 +2886,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             ))
 
             conn.execute("""
+                INSERT OR REPLACE INTO company_members (company_id, user_id, role, created_at)
+                VALUES (?, ?, 'owner', ?)
+            """, (company_id, user["id"], now_str))
+
+            conn.execute("""
                 INSERT OR IGNORE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
                 VALUES (?, 'company', ?, ?, ?)
             """, (user["id"], company_id, name, now_str))
@@ -2785,6 +2910,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "articlesCount": 0,
                 "subscribersCount": 1,
                 "isSubscribed": True,
+                "canPublish": True,
                 "createdAt": now_str
             }
         })
@@ -3487,6 +3613,35 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             delta = payload.get("delta") or payload.get("article_delta")
             pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
             author_id = curr_user["id"]
+
+            # Company publication authorization check
+            comp_id = pub_settings.get("companyId") or pub_settings.get("company_id")
+            if comp_id:
+                with conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT id FROM companies WHERE id = ?", (comp_id,))
+                    comp_row = cur.fetchone()
+                if not comp_row:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Указанная компания не найдена.",
+                        "fieldErrors": {
+                            "companyId": "Указанная компания не существует."
+                        }
+                    })
+                    return
+
+                user_role = curr_user.get("role", "user")
+                if not can_user_publish_for_company(conn, author_id, comp_id, user_role=user_role):
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Отказано в доступе: у вас нет прав на публикацию от имени выбранной компании.",
+                        "fieldErrors": {
+                            "companyId": "Вы не являетесь владельцем или участником этой компании."
+                        }
+                    })
+                    return
+                pub_settings["companyId"] = comp_id
 
             # Status transition check: cannot transition if already approved or in terminal invalid state
             with conn:
