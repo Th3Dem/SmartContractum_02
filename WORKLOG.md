@@ -377,3 +377,7 @@
 [2026-09-29 14:56] | dev_bot | IMPLEMENTATION_COMPLETE | Гонки запросов ленты устранены, AbortController и requestGeneration внедрены, 100% тестов успешно пройдены (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
 [2026-09-29 14:57] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #11 (Fixes #11) (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
 [2026-09-29 15:00] | pm_bot | TASK_DONE | Задача Issue #11 (SC-010) успешно завершена и объединена в main. Issue #11 на GitHub закрыт (Task: issue-11-sc010-feed-abort-controller-and-request-generations)
+[2026-09-29 15:03] | pm_bot | TASK_INIT | Назначение dev_bot реализации Issue #12 (SC-011): изоляция действия «Задать вопрос» от автовосстановления статей (Task: issue-12-sc011-isolate-ask-question-draft)
+[2026-09-29 15:04] | dev_bot | IMPLEMENTATION_START | Реализация Issue #12 (SC-011): изоляция черновиков вопросов от статей (Task: issue-12-sc011-isolate-ask-question-draft)
+[2026-09-29 15:10] | dev_bot | IMPLEMENTATION_COMPLETE | Изоляция действия «Задать вопрос» реализована, 100% тестов успешно пройдены (Task: issue-12-sc011-isolate-ask-question-draft)
+[2026-09-29 15:11] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #12 (Fixes #12) (Task: issue-12-sc011-isolate-ask-question-draft)
