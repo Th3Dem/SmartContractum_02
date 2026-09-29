@@ -4017,6 +4017,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         topics_filter = (query.get("topics", [""])[0] or query.get("topic", [""])[0] or direction_param).strip()
         club_filter = (query.get("club", [""])[0] or query.get("clubId", [""])[0] or "").strip()
         company_filter = (query.get("company", [""])[0] or query.get("companyId", [""])[0] or "").strip()
+        is_company_param = (query.get("isCompany", [""])[0] or query.get("is_company", [""])[0] or "").strip().lower()
+        is_company_filter = is_company_param in ("1", "true", "yes")
 
         # Audience filter (supports single or multiple, comma-separated or repeated)
         audiences_raw = query.get("audiences", []) + query.get("audience", [])
@@ -4184,7 +4186,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("SELECT * FROM moderation_submissions WHERE status = 'approved' ORDER BY created_at DESC")
+                query_sql = "SELECT * FROM moderation_submissions WHERE status = 'approved'"
+                query_params = []
+                if company_filter:
+                    query_sql += " AND json_extract(publication_settings, '$.companyId') = ?"
+                    query_params.append(company_filter)
+                elif is_company_filter:
+                    query_sql += " AND json_extract(publication_settings, '$.companyId') IS NOT NULL AND json_extract(publication_settings, '$.companyId') != ''"
+                query_sql += " ORDER BY created_at DESC"
+                cur.execute(query_sql, tuple(query_params))
                 rows = cur.fetchall()
 
                 # Pre-fetch counts for likes and comments
@@ -4281,6 +4291,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 continue
 
             # Company filter
+            if is_company_filter and not art_company_id:
+                continue
             if company_filter and art_company_id != company_filter:
                 continue
 

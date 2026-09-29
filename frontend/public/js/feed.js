@@ -4781,7 +4781,7 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           if (artGrid) artGrid.innerHTML = '';
-          const articles = (data && data.articles) ? data.articles.filter(function (a) { return Boolean(a.companyId || a.companyName); }) : [];
+          const articles = (data && Array.isArray(data.articles)) ? data.articles : [];
           if (articles.length > 0) {
             articles.forEach(function (art) {
               artGrid.appendChild(createCardElement(art));
