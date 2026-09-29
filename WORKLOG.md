@@ -387,3 +387,7 @@
 [2026-09-29 15:28] | dev_bot | IMPLEMENTATION_COMPLETE | Идемпотентность привязана к ревизии черновика, 100% тестов успешно пройдены (Task: issue-13-sc014-draft-revision-idempotency)
 [2026-09-29 15:30] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #13 (Fixes #13) (Task: issue-13-sc014-draft-revision-idempotency)
 [2026-09-29 15:33] | pm_bot | TASK_DONE | Задача Issue #13 (SC-014) успешно завершена и объединена в main. Issue #13 на GitHub закрыт. Спринт 3 завершен на 100% (Task: issue-13-sc014-draft-revision-idempotency)
+[2026-09-29 15:46] | pm_bot | TASK_INIT | Назначение py_bot реализации Issue #14 (SC-012): проверка полномочий пользователя на публикацию от имени компании (Task: issue-14-sc012-company-publication-authorization)
+[2026-09-29 15:48] | py_bot | IMPLEMENTATION_START | Реализация Issue #14 (SC-012): проверка полномочий пользователя на публикацию от имени компании (Task: issue-14-sc012-company-publication-authorization)
+[2026-09-29 16:00] | py_bot | IMPLEMENTATION_COMPLETE | Проверка полномочий пользователя на публикацию от имени компании реализована, 100% тестов успешно пройдены (Task: issue-14-sc012-company-publication-authorization)
+[2026-09-29 16:05] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #14 (Fixes #14) (Task: issue-14-sc012-company-publication-authorization)
