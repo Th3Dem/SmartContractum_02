@@ -396,3 +396,4 @@
 [2026-09-29 16:08] | dev_bot | IMPLEMENTATION_START | Начало реализации Issue #15 (SC-015): серверная фильтрация публикаций компаний до пагинации (Task: issue-15-sc015-company-feed-server-filtering-pagination)
 [2026-09-29 16:16] | dev_bot | IMPLEMENTATION_COMPLETE | Серверная фильтрация публикаций компаний до пагинации реализована, 100% тестов успешно пройдены (Task: issue-15-sc015-company-feed-server-filtering-pagination)
 [2026-09-29 16:18] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #15 (Fixes #15) (Task: issue-15-sc015-company-feed-server-filtering-pagination)
+[2026-09-29 16:20] | pm_bot | TASK_DONE | Задача Issue #15 (SC-015) успешно завершена и объединена в main. Issue #15 на GitHub закрыт (Task: issue-15-sc015-company-feed-server-filtering-pagination)
