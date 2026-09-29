@@ -433,3 +433,6 @@
 [2026-09-29 18:46] | py_bot | IMPLEMENTATION_START | Внедрение GitHub Actions CI и браузерных смоук-тестов (Task: issue-22-sc023-github-actions-ci)
 [2026-09-29 18:55] | py_bot | IMPLEMENTATION_COMPLETE | Внедрение GitHub Actions CI и браузерных смоук-тестов реализовано, 100% тестов успешно пройдены (Task: issue-22-sc023-github-actions-ci)
 [2026-09-29 18:56] | git_bot | PR_CREATED | Открыт и объединен PR для Issue #22 (Fixes #22) (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 19:02] | pm_bot | DEV_REWORK | Передача py_bot на доработку: устранение ModuleNotFoundError yaml и NameError Optional на Python 3.12 в CI (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 19:04] | py_bot | IMPLEMENTATION_COMPLETE | Устранены зависимости от внешних пакетов и NameError на Python 3.12, 100% тестов успешно пройдены (Task: issue-22-sc023-github-actions-ci)
+[2026-09-29 19:09] | git_bot | PR_CREATED | Зафиксированы исправления CI для Python 3.12 и объединены в main (Task: issue-22-sc023-github-actions-ci)
