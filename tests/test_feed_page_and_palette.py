@@ -1538,6 +1538,17 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         self.assertIn('/api/subscriptions', self.article_js)
         self.assertIn('/api/subscriptions/toggle', self.article_js)
 
+    def _login(self, user_id: str = "user_demo", name: Optional[str] = None) -> str:
+        login_payload = json.dumps({"userId": user_id, "name": name or user_id}).encode('utf-8')
+        login_req = urllib.request.Request(
+            f"{self.base_url}/api/auth/login",
+            data=login_payload,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(login_req) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return f"sc_session={data.get('sessionToken')}"
+
     def test_api_auth_lifecycle(self):
         """Verify GET /api/auth/status, POST /api/auth/login, and POST /api/auth/logout."""
         # 1. Status without cookie
@@ -1559,14 +1570,20 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
             self.assertTrue(login_data.get("success"))
             self.assertTrue(login_data.get("authenticated"))
             self.assertEqual(login_data["user"]["id"], "test_user_01")
+            token = login_data.get("sessionToken")
+            self.assertTrue(bool(token))
             cookie_header = resp.headers.get("Set-Cookie")
             self.assertIsNotNone(cookie_header)
-            self.assertIn("sc_session=test_user_01", cookie_header)
+            self.assertIn("sc_session=", cookie_header)
+            self.assertIn(token, cookie_header)
+            self.assertIn("HttpOnly", cookie_header)
+            self.assertIn("SameSite=Lax", cookie_header)
+            auth_cookie = f"sc_session={token}"
 
         # 3. Status with cookie
         status_req = urllib.request.Request(
             f"{self.base_url}/api/auth/status",
-            headers={"Cookie": "sc_session=test_user_01"}
+            headers={"Cookie": auth_cookie}
         )
         with urllib.request.urlopen(status_req) as resp:
             status_data = json.loads(resp.read().decode('utf-8'))
@@ -1577,7 +1594,7 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         logout_req = urllib.request.Request(
             f"{self.base_url}/api/auth/logout",
             data=b"{}",
-            headers={"Content-Type": "application/json", "Cookie": "sc_session=test_user_01"}
+            headers={"Content-Type": "application/json", "Cookie": auth_cookie}
         )
         with urllib.request.urlopen(logout_req) as resp:
             logout_data = json.loads(resp.read().decode('utf-8'))
@@ -1598,7 +1615,8 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 401)
 
         # 2. Toggle topic subscription for user_sub_test
-        auth_header = {"Cookie": "sc_session=user_sub_test", "Content-Type": "application/json"}
+        user_cookie = self._login("user_sub_test")
+        auth_header = {"Cookie": user_cookie, "Content-Type": "application/json"}
         toggle_req2 = urllib.request.Request(
             f"{self.base_url}/api/subscriptions/toggle",
             data=json.dumps({"targetType": "topic", "targetId": "smart-contracts-development", "targetTitle": "Разработка смарт-контрактов"}).encode('utf-8'),
@@ -1624,7 +1642,7 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         # 4. GET /api/subscriptions returns both
         subs_req = urllib.request.Request(
             f"{self.base_url}/api/subscriptions",
-            headers={"Cookie": "sc_session=user_sub_test"}
+            headers={"Cookie": user_cookie}
         )
         with urllib.request.urlopen(subs_req) as resp:
             subs_data = json.loads(resp.read().decode('utf-8'))
@@ -1636,7 +1654,7 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         # 5. GET /api/subscriptions/entities returns catalog with isSubscribed flags
         ent_req = urllib.request.Request(
             f"{self.base_url}/api/subscriptions/entities",
-            headers={"Cookie": "sc_session=user_sub_test"}
+            headers={"Cookie": user_cookie}
         )
         with urllib.request.urlopen(ent_req) as resp:
             ent_data = json.loads(resp.read().decode('utf-8'))
@@ -1656,9 +1674,10 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 401)
 
         # 2. Authenticated user with 0 subscriptions returns noSubscriptions: True
+        zero_cookie = self._login("user_zero_subs")
         zero_user_req = urllib.request.Request(
             f"{self.base_url}/api/articles?tab=my",
-            headers={"Cookie": "sc_session=user_zero_subs"}
+            headers={"Cookie": zero_cookie}
         )
         with urllib.request.urlopen(zero_user_req) as resp:
             zero_data = json.loads(resp.read().decode('utf-8'))
@@ -1667,9 +1686,10 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
             self.assertTrue(zero_data.get("noSubscriptions"))
 
         # 3. user_demo has seeded subscriptions and returns matched articles with subscriptionReason
+        demo_cookie = self._login("user_demo")
         demo_req = urllib.request.Request(
             f"{self.base_url}/api/articles?tab=my",
-            headers={"Cookie": "sc_session=user_demo"}
+            headers={"Cookie": demo_cookie}
         )
         with urllib.request.urlopen(demo_req) as resp:
             demo_data = json.loads(resp.read().decode('utf-8'))
@@ -2520,6 +2540,10 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
                 data = {"error": str(e)}
             return e.code, data
 
+    def _login(self, user_id: str = "user_demo", name: Optional[str] = None) -> str:
+        status, data = self._post_json("/api/auth/login", {"userId": user_id, "name": name or user_id})
+        return f"sc_session={data.get('sessionToken')}"
+
     def test_01_db_initialization_tables_and_indexes(self):
         """Verify article_likes, article_comments, and user_feed_settings tables and indexes exist."""
         conn = server.get_db_connection(self.db_path)
@@ -2615,7 +2639,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertTrue(data.get("requireAuth"))
 
         # 2. Authenticated user with empty content -> 400
-        auth_headers = {"Cookie": "sc_session=test_user_c"}
+        auth_headers = {"Cookie": self._login("test_user_c")}
         status, data = self._post_json("/api/articles/art-01/comments", {"content": ""}, headers=auth_headers)
         self.assertEqual(status, 400)
         self.assertFalse(data.get("success"))
@@ -2656,7 +2680,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertTrue(data.get("requireAuth"))
 
         # 2. User 1 likes art-02 -> ON (likesCount = 1)
-        u1_headers = {"Cookie": "sc_session=user_alice"}
+        u1_headers = {"Cookie": self._login("user_alice")}
         status, data = self._post_json("/api/articles/art-02/like", {}, headers=u1_headers)
         self.assertEqual(status, 200)
         self.assertTrue(data.get("hasLiked"))
@@ -2675,7 +2699,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(data.get("likesCount"), 1)
 
         # 5. User 2 likes art-02 -> ON (likesCount = 2)
-        u2_headers = {"Cookie": "sc_session=user_bob"}
+        u2_headers = {"Cookie": self._login("user_bob")}
         status, data = self._post_json("/api/articles/art-02/like", {}, headers=u2_headers)
         self.assertEqual(status, 200)
         self.assertTrue(data.get("hasLiked"))
@@ -2689,7 +2713,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertTrue(data1["article"]["hasLiked"])
 
         # User 3 hasLiked = False
-        u3_headers = {"Cookie": "sc_session=user_charlie"}
+        u3_headers = {"Cookie": self._login("user_charlie")}
         status, data3 = self._get_json("/api/articles/art-02", headers=u3_headers)
         self.assertEqual(status, 200)
         self.assertEqual(data3["article"]["likesCount"], 2)
@@ -2717,7 +2741,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertTrue(data.get("requireAuth"))
 
         # 3. Authenticated POST with empty materialTypes -> 400
-        user_headers = {"Cookie": "sc_session=user_feed_tester"}
+        user_headers = {"Cookie": self._login("user_feed_tester")}
         status, data = self._post_json("/api/user/feed-settings", {"materialTypes": []}, headers=user_headers)
         self.assertEqual(status, 400)
         self.assertIn("Выберите хотя бы один тип материала", data.get("error", ""))
@@ -2843,7 +2867,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertTrue(data.get("requireAuth"))
 
         # 2. User with 0 subscriptions -> total=0, noSubscriptions=True
-        status, data = self._get_json("/api/articles?tab=my", headers={"Cookie": "sc_session=user_without_subs"})
+        status, data = self._get_json("/api/articles?tab=my", headers={"Cookie": self._login("user_without_subs")})
         self.assertEqual(status, 200)
         self.assertEqual(data.get("total"), 0)
         self.assertEqual(data.get("articles"), [])
@@ -2851,7 +2875,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
 
         # 3. User subscribed to multiple entities matching art-01 (author + topic + tag)
         user_id = "user_multi_match"
-        user_headers = {"Cookie": f"sc_session={user_id}"}
+        user_headers = {"Cookie": self._login(user_id)}
         conn = server.get_db_connection(self.db_path)
         with conn:
             conn.execute("DELETE FROM user_subscriptions WHERE user_id = ?", (user_id,))
@@ -2972,6 +2996,10 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
                 data = {"error": str(e)}
             return e.code, data
 
+    def _login(self, user_id: str = "user_demo", name: Optional[str] = None) -> str:
+        status, data = self._post_json("/api/auth/login", {"userId": user_id, "name": name or user_id})
+        return f"sc_session={data.get('sessionToken')}"
+
     def test_01_db_initialization_tables_and_indexes(self):
         """Verify user_feed_exceptions table and indexes exist, along with all feed tables."""
         conn = server.get_db_connection(self.db_path)
@@ -3015,7 +3043,7 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
         self.assertTrue(data.get("requireAuth"))
 
         # 3. Authenticated validation errors
-        user_headers = {"Cookie": "sc_session=user_exc_tester"}
+        user_headers = {"Cookie": self._login("user_exc_tester")}
         # Invalid targetType
         status, data = self._post_json("/api/exceptions/toggle", {"targetType": "unknown", "targetId": "123"}, headers=user_headers)
         self.assertEqual(status, 400)
@@ -3174,7 +3202,7 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
     def test_04_exceptions_priority_over_subscriptions(self):
         """Verify priority of exceptions: publication is hidden if its topic/tag is excluded, even if subscribed to author."""
         user_id = "user_priority_tester"
-        user_headers = {"Cookie": f"sc_session={user_id}"}
+        user_headers = {"Cookie": self._login(user_id)}
 
         # Clear subscriptions and exceptions for this user
         conn = server.get_db_connection(self.db_path)
@@ -3263,7 +3291,7 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
     def test_05_exceptions_application_in_feed_and_direct_url_and_saved(self):
         """Verify exceptions hide articles in feed and search, but NOT in direct URL or saved bookmarks."""
         user_id = "user_direct_test"
-        user_headers = {"Cookie": f"sc_session={user_id}"}
+        user_headers = {"Cookie": self._login(user_id)}
 
         # Add author_smirnov to user's exceptions
         status, exc_resp = self._post_json("/api/exceptions/toggle", {
@@ -3473,7 +3501,7 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
 
     def test_07_batch_feed_settings_and_validation(self):
         """Verify POST /api/user/feed-settings batch updating with subscriptions and exceptions, and validation."""
-        user_headers = {"Cookie": "sc_session=user_batch_tester"}
+        user_headers = {"Cookie": self._login("user_batch_tester")}
 
         # Empty materialTypes rejected with 400
         status, data_err = self._post_json("/api/user/feed-settings", {

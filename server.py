@@ -22,6 +22,7 @@ import http.server
 import json
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import time
@@ -388,6 +389,19 @@ def init_db(db_path: Optional[str] = None) -> sqlite3.Connection:
             );
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_companies_owner ON companies(owner_id);")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                is_revoked INTEGER DEFAULT 0
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);")
 
         seed_approved_articles(conn)
         seed_user_subscriptions(conn)
@@ -1288,34 +1302,85 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def get_current_user(self) -> Optional[Dict[str, str]]:
+    def is_secure_request(self) -> bool:
+        """Determines if the request was made over HTTPS or behind an HTTPS reverse proxy."""
+        if self.headers.get("X-Forwarded-Proto", "").strip().lower() == "https":
+            return True
+        if hasattr(self, "connection") and hasattr(self.connection, "getpeercert"):
+            try:
+                if self.connection.getpeercert() is not None:
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def get_session_token(self) -> Optional[str]:
         """
-        Extracts authenticated user from cookies, X-User-Id header, Authorization header, or query params.
+        Extracts session token from Cookie 'sc_session' or Authorization 'Bearer <token>'.
         """
         cookie_header = self.headers.get("Cookie", "")
         if cookie_header:
-            cookies = urllib.parse.parse_qsl(cookie_header.replace("; ", "&"))
-            for k, v in cookies:
-                if k == "sc_session" and v:
-                    return {"id": v, "name": "Демо Пользователь" if v == "user_demo" else v}
-
-        x_user = self.headers.get("X-User-Id", "").strip()
-        if x_user:
-            return {"id": x_user, "name": "Демо Пользователь" if x_user == "user_demo" else x_user}
+            for part in cookie_header.split(";"):
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    if k.strip() == "sc_session" and v.strip():
+                        return v.strip()
 
         auth_header = self.headers.get("Authorization", "").strip()
         if auth_header:
-            token = auth_header.replace("Bearer ", "").strip()
-            if token:
-                return {"id": token, "name": "Демо Пользователь" if token == "user_demo" else token}
-
-        parsed = urllib.parse.urlparse(self.path)
-        qs = urllib.parse.parse_qs(parsed.query)
-        u_param = (qs.get("userId", [""])[0] or qs.get("authUser", [""])[0]).strip()
-        if u_param:
-            return {"id": u_param, "name": "Демо Пользователь" if u_param == "user_demo" else u_param}
+            if auth_header.lower().startswith("bearer "):
+                token = auth_header[7:].strip()
+                if token:
+                    return token
 
         return None
+
+    def get_current_user(self) -> Optional[Dict[str, str]]:
+        """
+        Extracts authenticated user by validating session token from Cookie or Authorization header against the sessions table.
+        Rejects revoked or expired sessions. Ignores X-User-Id and query parameters.
+        """
+        token = self.get_session_token()
+        if not token:
+            return None
+
+        conn = None
+        try:
+            conn = self.get_db()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT user_id, user_name, expires_at, is_revoked
+                FROM sessions
+                WHERE token = ?
+            """, (token,))
+            row = cur.fetchone()
+        except Exception:
+            return None
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+        if not row:
+            return None
+
+        if row["is_revoked"] != 0:
+            return None
+
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            exp_str = str(row["expires_at"]).replace("Z", "+00:00")
+            exp_dt = datetime.datetime.fromisoformat(exp_str)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=datetime.timezone.utc)
+            if exp_dt <= now_dt:
+                return None
+        except Exception:
+            return None
+
+        return {"id": row["user_id"], "name": row["user_name"]}
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -1461,7 +1526,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
 
     def handle_auth_login(self):
-        """POST /api/auth/login sets sc_session cookie and returns user."""
+        """POST /api/auth/login generates secure session token, saves to sessions table, sets sc_session cookie."""
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
@@ -1473,18 +1538,59 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         user_name = (data.get("name") or ("Демо Пользователь" if user_id == "user_demo" else user_id)).strip()
         user = {"id": user_id, "name": user_name}
 
+        token = secrets.token_hex(32)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        created_at = now.isoformat()
+        expires_at = (now + datetime.timedelta(days=7)).isoformat()
+
+        conn = None
+        try:
+            conn = self.get_db()
+            with conn:
+                conn.execute("""
+                    INSERT INTO sessions (token, user_id, user_name, created_at, expires_at, is_revoked)
+                    VALUES (?, ?, ?, ?, ?, 0)
+                """, (token, user_id, user_name, created_at, expires_at))
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+        secure_flag = "; Secure" if self.is_secure_request() else ""
+        cookie_header = f"sc_session={token}; Path=/; HttpOnly; SameSite=Lax{secure_flag}"
+
         self.send_json_response(200, {
             "success": True,
             "authenticated": True,
-            "user": user
-        }, extra_headers=[("Set-Cookie", f"sc_session={user_id}; Path=/; SameSite=Lax")])
+            "user": user,
+            "sessionToken": token
+        }, extra_headers=[("Set-Cookie", cookie_header)])
 
     def handle_auth_logout(self):
-        """POST /api/auth/logout clears sc_session cookie."""
+        """POST /api/auth/logout revokes session in DB and clears sc_session cookie."""
+        token = self.get_session_token()
+        if token:
+            conn = None
+            try:
+                conn = self.get_db()
+                with conn:
+                    conn.execute("UPDATE sessions SET is_revoked = 1 WHERE token = ?", (token,))
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+        secure_flag = "; Secure" if self.is_secure_request() else ""
+        cookie_header = f"sc_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure_flag}"
+
         self.send_json_response(200, {
             "success": True,
             "authenticated": False
-        }, extra_headers=[("Set-Cookie", "sc_session=; Path=/; Max-Age=0; SameSite=Lax")])
+        }, extra_headers=[("Set-Cookie", cookie_header)])
 
     def handle_get_subscriptions(self):
         """GET /api/subscriptions returns user's active subscriptions."""
