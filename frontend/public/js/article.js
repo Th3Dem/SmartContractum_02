@@ -523,6 +523,74 @@
     }
   }
 
+  function getRussianPlural(n, one, few, many) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) {
+      return one;
+    }
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+      return few;
+    }
+    return many;
+  }
+
+  function formatCommentTimeRelative(isoStr, nowMs) {
+    if (!isoStr) return 'Недавно';
+    try {
+      const d = new Date(isoStr);
+      const timeMs = d.getTime();
+      if (isNaN(timeMs)) return 'Недавно';
+
+      const now = (typeof nowMs === 'number' && !isNaN(nowMs)) ? nowMs : Date.now();
+      const diffMs = now - timeMs;
+
+      if (diffMs < 1000) {
+        return '1 секунду назад';
+      }
+
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 60) {
+        if (diffSec <= 1) return '1 секунду назад';
+        return diffSec + ' ' + getRussianPlural(diffSec, 'секунду', 'секунды', 'секунд') + ' назад';
+      }
+
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) {
+        return diffMin + ' ' + getRussianPlural(diffMin, 'минуту', 'минуты', 'минут') + ' назад';
+      }
+
+      if (diffSec <= 86400) {
+        const diffHours = Math.floor(diffSec / 3600);
+        return diffHours + ' ' + getRussianPlural(diffHours, 'час', 'часа', 'часов') + ' назад';
+      }
+
+      return formatCommentDate(isoStr);
+    } catch (e) {
+      return 'Недавно';
+    }
+  }
+
+  function updateCommentTimestamps() {
+    const timeElements = document.querySelectorAll('time.comment-time[datetime]');
+    if (!timeElements || timeElements.length === 0) return;
+    const now = Date.now();
+    timeElements.forEach(function (el) {
+      const iso = el.getAttribute('datetime');
+      if (iso) {
+        const rel = formatCommentTimeRelative(iso, now);
+        if (el.textContent !== rel) {
+          el.textContent = rel;
+        }
+      }
+    });
+  }
+
+  if (window._commentTimestampTimer) {
+    clearInterval(window._commentTimestampTimer);
+  }
+  window._commentTimestampTimer = setInterval(updateCommentTimestamps, 30000);
+
   function getAuthorInitials(name) {
     if (!name) return 'SC';
     const parts = name.trim().split(/\s+/);
@@ -531,122 +599,814 @@
       : name.substring(0, 2).toUpperCase();
   }
 
-  // Render a standard comment for articles (flat list)
-  function renderCommentItem(comment) {
+  // Global set of expanded comment IDs to preserve expansion state across re-renders
+  window._expandedCommentIds = window._expandedCommentIds || new Set();
+  window._commentDrilldownState = window._commentDrilldownState || { stack: [] };
+  window._commentDrafts = window._commentDrafts || {};
+
+  function getMaxWindowDepth() {
+    if (window.innerWidth < 680) {
+      return 3;
+    }
+    return 5;
+  }
+
+  function buildCommentTree(comments) {
+    const byId = {};
+    (comments || []).forEach(function (c) {
+      byId[c.id] = Object.assign({}, c, { children: [] });
+    });
+    const roots = [];
+    (comments || []).forEach(function (c) {
+      const node = byId[c.id];
+      if (c.parentCommentId && byId[c.parentCommentId]) {
+        byId[c.parentCommentId].children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+    return { roots: roots, byId: byId };
+  }
+
+  function countDescendants(node) {
+    let count = 0;
+    if (!node || !Array.isArray(node.children)) return 0;
+    node.children.forEach(function (child) {
+      if (!child.isDeleted) {
+        count += 1;
+      }
+      count += countDescendants(child);
+    });
+    return count;
+  }
+
+  function renderCommentNode(comment, depth, treeContext, isLastChild, hasContinuation) {
     const el = document.createElement('div');
     const isSol = Boolean(comment.isSolution || comment.is_solution);
-    el.className = 'comment-item' + (isSol ? ' is-solution-comment' : '');
+    const isClarification = Boolean(treeContext && treeContext.isQuestionClarification);
+    const isAnswerReply = Boolean(comment.parentAnswerId || comment.parent_answer_id || (treeContext && treeContext.isAnswerReply));
+    const isChild = depth > 0 || Boolean(comment.parentCommentId);
+    const totalDescendants = countDescendants(comment);
+    isLastChild = (isLastChild === undefined) ? true : Boolean(isLastChild);
+    hasContinuation = Boolean(hasContinuation);
+
+    const classList = ['comment-item'];
+    if (isSol) classList.push('is-solution-comment');
+    if (isClarification) {
+      classList.push('question-comment-item');
+      classList.push('question-clarification-item');
+    }
+    if (isAnswerReply) {
+      classList.push('answer-reply-item');
+    }
+    if (comment.isDeleted) {
+      classList.push('comment-deleted-placeholder');
+    }
+    if (isChild) {
+      classList.push('comment-child-node');
+    }
+    if (depth >= 3) {
+      classList.push('comment-thread-depth-limit');
+    }
+    el.className = classList.join(' ');
     el.setAttribute('data-id', comment.id);
     el.id = 'comm_' + comment.id;
+
+    // Reddit geometry continuous connectors for child comments
+    let elbow = null;
+    let stem = null;
+    let connector = null;
+    if (isChild) {
+      elbow = document.createElement('div');
+      elbow.className = 'comment-branch-elbow';
+      elbow.setAttribute('aria-hidden', 'true');
+      el.appendChild(elbow);
+
+      if (!isLastChild || hasContinuation) {
+        stem = document.createElement('div');
+        stem.className = 'comment-branch-stem';
+        stem.setAttribute('aria-hidden', 'true');
+        el.appendChild(stem);
+      }
+
+      // Backward compatible hidden marker
+      connector = document.createElement('div');
+      connector.className = 'comment-branch-connector';
+      connector.setAttribute('aria-hidden', 'true');
+      connector.style.display = 'none';
+      el.appendChild(connector);
+    }
 
     const authorName = comment.authorName || 'Пользователь';
     const authorId = comment.userId || comment.user_id || '';
     const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+    const rawDate = comment.createdAt || comment.created_at;
+    const absDateText = formatCommentDate(rawDate);
+    const relTimeText = formatCommentTimeRelative(rawDate);
 
-    let solutionBadgeHtml = '';
-    if (isSol) {
-      solutionBadgeHtml =
-        '<div class="solution-badge">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-            '<polyline points="20 6 9 17 4 12"></polyline>' +
-          '</svg>' +
-          '<span>Решение принято автором</span>' +
-        '</div>';
+    function scrollToParentComment(targetId) {
+      if (!targetId) return;
+      let targetEl = document.getElementById('comm_' + targetId);
+      if (!targetEl && window._commentDrilldownState && window._commentDrilldownState.stack.length > 0) {
+        while (window._commentDrilldownState.stack.length > 0 && !targetEl) {
+          window._commentDrilldownState.stack.pop();
+          if (treeContext && typeof treeContext.onReload === 'function') {
+            treeContext.onReload();
+          }
+          targetEl = document.getElementById('comm_' + targetId);
+        }
+      }
+
+      // Expand ancestors
+      let curr = window._allCommentsMap ? window._allCommentsMap[targetId] : null;
+      let visited = new Set();
+      while (curr) {
+        const pId = curr.parentCommentId || curr.parent_comment_id;
+        if (pId && !visited.has(pId)) {
+          visited.add(pId);
+          window._expandedCommentIds.add(pId);
+          const chCont = document.getElementById('thread_' + pId);
+          if (chCont) chCont.style.display = 'flex';
+          const tBtn = document.querySelector('[aria-controls="thread_' + pId + '"]');
+          if (tBtn) {
+            tBtn.setAttribute('aria-expanded', 'true');
+            tBtn.setAttribute('aria-label', 'Скрыть комментарии');
+            tBtn.setAttribute('title', 'Скрыть комментарии');
+            const minusSvg = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="0" y1="4.5" x2="9" y2="4.5"></line></svg>';
+            const iconEl = tBtn.querySelector('.thread-toggle-icon');
+            if (iconEl) iconEl.innerHTML = minusSvg + '<span class="sr-only">-</span>';
+            const txtEl = tBtn.querySelector('.toggle-thread-text');
+            if (txtEl) {
+              txtEl.className = 'toggle-thread-text sr-only';
+              txtEl.textContent = 'Скрыть комментарии';
+            }
+            const pRow = tBtn.closest('.comment-toggle-row');
+            if (pRow) pRow.classList.add('is-expanded');
+            const pThrough = pRow ? pRow.querySelector('.comment-stem-through') : null;
+            if (pThrough) pThrough.style.display = 'block';
+          }
+          curr = window._allCommentsMap[pId];
+        } else {
+          break;
+        }
+      }
+
+      setTimeout(function () {
+        const finalTarget = document.getElementById('comm_' + targetId);
+        if (finalTarget) {
+          finalTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          finalTarget.classList.add('comment-highlight');
+          setTimeout(function () {
+            finalTarget.classList.remove('comment-highlight');
+          }, 2500);
+        }
+      }, 100);
     }
 
-    let solutionActionBtn = '';
-    const isQuestion = Boolean(currentArticle && (
-      currentArticle.materialType === 'question' ||
-      currentArticle.material_type === 'question' ||
-      (currentArticle.publication_settings && (
-        currentArticle.publication_settings.materialType === 'question' ||
-        (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
-      ))
-    ));
-    const isAuthor = Boolean(currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
-    if (isQuestion && isAuthor) {
-      solutionActionBtn =
-        '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
-          (isSol ? 'Снять отметку решения' : 'Отметить как решение') +
-        '</button>';
+    function setTreePathHighlight(active) {
+      if (elbow) {
+        elbow.classList.toggle('is-tree-path-active', active);
+      }
+      if (stem) {
+        stem.classList.toggle('is-tree-path-active', active);
+      }
+      if (connector) {
+        connector.classList.toggle('is-connection-active', active);
+      }
+      const myAvatar = el.querySelector('.comment-main .comment-author-avatar');
+      if (myAvatar) {
+        myAvatar.classList.toggle('avatar-peer-highlight', active);
+      }
+      const myHeader = el.querySelector('.comment-item-header');
+      if (myHeader) {
+        myHeader.classList.toggle('connection-peer-highlight', active);
+      }
+
+      const parentThread = el.closest('.comment-thread-children');
+      if (!parentThread) return;
+      const parentItem = parentThread.closest('.comment-item');
+      if (!parentItem) return;
+
+      const parentUpper = parentItem.querySelector('.comment-main .comment-stem-upper');
+      if (parentUpper) {
+        parentUpper.classList.toggle('is-tree-path-active', active);
+      }
+
+      const parentToggleRow = parentItem.querySelector(':scope > .comment-toggle-row');
+      if (parentToggleRow) {
+        const pStemUpper = parentToggleRow.querySelector('.comment-toggle-stem-upper');
+        if (pStemUpper) pStemUpper.classList.toggle('is-tree-path-active', active);
+
+        const pStemThrough = parentToggleRow.querySelector('.comment-stem-through');
+        if (pStemThrough) pStemThrough.classList.toggle('is-tree-path-active', active);
+
+        const pToggleBtn = parentToggleRow.querySelector('.btn-toggle-thread');
+        if (pToggleBtn) pToggleBtn.classList.toggle('is-tree-path-active', active);
+
+        const pToggleIcon = parentToggleRow.querySelector('.thread-toggle-icon');
+        if (pToggleIcon) pToggleIcon.classList.toggle('is-tree-path-active', active);
+      }
+
+      const parentAvatar = parentItem.querySelector('.comment-main .comment-author-avatar');
+      if (parentAvatar) {
+        parentAvatar.classList.toggle('avatar-peer-highlight', active);
+      }
+      const parentHeader = parentItem.querySelector('.comment-item-header');
+      if (parentHeader) {
+        parentHeader.classList.toggle('connection-peer-highlight', active);
+      }
+
+      let prevSib = el.previousElementSibling;
+      while (prevSib) {
+        if (prevSib.classList.contains('comment-child-node')) {
+          const sibStem = prevSib.querySelector(':scope > .comment-branch-stem');
+          if (sibStem) {
+            sibStem.classList.toggle('is-tree-path-active', active);
+          }
+        }
+        prevSib = prevSib.previousElementSibling;
+      }
     }
 
-    const isAnswer = comment.commentType === 'answer' || comment.comment_type === 'answer';
-    const commentTypeBadge = isAnswer ? '<span class="comment-type-badge answer-badge">Ответ</span>' : '';
-
-    el.innerHTML =
-      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
-        '<div style="display: flex; align-items: center; gap: 8px;">' +
-          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-          commentTypeBadge +
-          '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
-        '</div>' +
-        solutionActionBtn +
-      '</div>' +
-      solutionBadgeHtml +
-      '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>';
-
-    const toggleBtn = el.querySelector('.btn-toggle-solution');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        toggleSolution(comment.id, !isSol);
+    if (elbow) {
+      elbow.addEventListener('mouseenter', function () { setTreePathHighlight(true); });
+      elbow.addEventListener('mouseleave', function () { setTreePathHighlight(false); });
+      elbow.addEventListener('focus', function () { setTreePathHighlight(true); });
+      elbow.addEventListener('blur', function () { setTreePathHighlight(false); });
+      elbow.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (comment.parentCommentId) {
+          scrollToParentComment(comment.parentCommentId);
+        }
       });
     }
 
+    if (stem) {
+      stem.addEventListener('mouseenter', function () { setTreePathHighlight(true); });
+      stem.addEventListener('mouseleave', function () { setTreePathHighlight(false); });
+    }
+
+    if (comment.isDeleted) {
+      const deletedMain = document.createElement('div');
+      deletedMain.className = 'comment-main';
+      deletedMain.innerHTML =
+        '<div class="comment-gutter comment-avatar-col">' +
+          '<div class="comment-author-avatar" style="opacity: 0.5;">?</div>' +
+          (totalDescendants > 0 ? '<div class="comment-stem-upper" aria-hidden="true"></div>' : '') +
+        '</div>' +
+        '<div class="comment-body-col">' +
+          '<div class="comment-text" style="font-style: italic; color: var(--text-muted);">' +
+            'Комментарий удален' +
+          '</div>' +
+        '</div>';
+      el.appendChild(deletedMain);
+    } else {
+      let solutionBadgeHtml = '';
+      if (isSol) {
+        solutionBadgeHtml =
+          '<div class="solution-badge">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="20 6 9 17 4 12"></polyline>' +
+            '</svg>' +
+            '<span>Решение принято автором</span>' +
+          '</div>';
+      }
+
+      let solutionActionBtn = '';
+
+      const isAnswer = comment.commentType === 'answer' || comment.comment_type === 'answer';
+      const commentTypeBadge = isAnswer ? '<span class="comment-type-badge answer-badge">Ответ</span>' : '';
+      const hasUpdated = Boolean(comment.updatedAt || comment.updated_at);
+      const updatedBadgeHtml = hasUpdated
+        ? '<span class="comment-updated-badge" style="font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;">(изменен)</span>'
+        : '';
+
+      let srOnlyReplyHtml = '';
+      if (comment.parentCommentId) {
+        const parentComment = (treeContext && treeContext.allCommentsById) ? treeContext.allCommentsById[comment.parentCommentId] : null;
+        const parentName = parentComment ? (parentComment.authorName || 'автору') : 'автору';
+        srOnlyReplyHtml = '<span class="sr-only">В ответ на комментарий @' + escapeHtml(parentName) + '</span>';
+      }
+
+      const isMyComment = Boolean(currentUser && (
+        currentUser.id === comment.userId ||
+        currentUser.id === comment.user_id
+      ));
+
+      let editBtnHtml = '';
+      if (isMyComment) {
+        editBtnHtml =
+          '<button type="button" class="btn-action-text btn-edit-comment">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
+            '<span>Редактировать</span>' +
+          '</button>';
+      }
+
+      const mainContainer = document.createElement('div');
+      mainContainer.className = 'comment-main';
+
+      const gutter = document.createElement('div');
+      gutter.className = 'comment-gutter comment-avatar-col';
+
+      const avatarEl = document.createElement('div');
+      avatarEl.className = 'comment-author-avatar';
+      avatarEl.textContent = initials;
+      gutter.appendChild(avatarEl);
+
+      let stemUpper = null;
+      if (totalDescendants > 0) {
+        stemUpper = document.createElement('div');
+        stemUpper.className = 'comment-stem-upper';
+        stemUpper.setAttribute('aria-hidden', 'true');
+        stemUpper.addEventListener('mouseenter', function () {
+          stemUpper.classList.add('is-tree-path-active');
+          if (avatarEl) avatarEl.classList.add('avatar-peer-highlight');
+          const pToggleRow = el.querySelector(':scope > .comment-toggle-row');
+          if (pToggleRow) {
+            const tBtn = pToggleRow.querySelector('.btn-toggle-thread');
+            if (tBtn) tBtn.classList.add('is-tree-path-active');
+            const tIcon = pToggleRow.querySelector('.thread-toggle-icon');
+            if (tIcon) tIcon.classList.add('is-tree-path-active');
+            const tStemUpper = pToggleRow.querySelector('.comment-toggle-stem-upper');
+            if (tStemUpper) tStemUpper.classList.add('is-tree-path-active');
+            const tStemThrough = pToggleRow.querySelector('.comment-stem-through');
+            if (tStemThrough) tStemThrough.classList.add('is-tree-path-active');
+          }
+        });
+        stemUpper.addEventListener('mouseleave', function () {
+          stemUpper.classList.remove('is-tree-path-active');
+          if (avatarEl) avatarEl.classList.remove('avatar-peer-highlight');
+          const pToggleRow = el.querySelector(':scope > .comment-toggle-row');
+          if (pToggleRow) {
+            const tBtn = pToggleRow.querySelector('.btn-toggle-thread');
+            if (tBtn) tBtn.classList.remove('is-tree-path-active');
+            const tIcon = pToggleRow.querySelector('.thread-toggle-icon');
+            if (tIcon) tIcon.classList.remove('is-tree-path-active');
+            const tStemUpper = pToggleRow.querySelector('.comment-toggle-stem-upper');
+            if (tStemUpper) tStemUpper.classList.remove('is-tree-path-active');
+            const tStemThrough = pToggleRow.querySelector('.comment-stem-through');
+            if (tStemThrough) tStemThrough.classList.remove('is-tree-path-active');
+          }
+        });
+        gutter.appendChild(stemUpper);
+      }
+      mainContainer.appendChild(gutter);
+
+      const bodyCol = document.createElement('div');
+      bodyCol.className = 'comment-body-col';
+      bodyCol.innerHTML =
+        '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
+          '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+            '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
+            commentTypeBadge +
+            '<time class="comment-date comment-time" datetime="' + escapeHtml(rawDate || '') + '" title="' + escapeHtml(absDateText) + '">' + escapeHtml(relTimeText) + '</time>' +
+            updatedBadgeHtml +
+            srOnlyReplyHtml +
+          '</div>' +
+          solutionActionBtn +
+        '</div>' +
+        solutionBadgeHtml +
+        '<div class="comment-content-wrap">' +
+          '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
+        '</div>' +
+        '<div class="comment-edit-wrap" style="display: none;">' +
+          '<textarea class="comment-textarea comment-edit-textarea" rows="3" maxlength="5000">' + escapeHtml(comment.content || '') + '</textarea>' +
+          '<div class="comment-form-footer" style="margin-top: 8px;">' +
+            '<span class="comment-char-counter"><span class="edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-comment-edit">Отмена</button>' +
+              '<button type="button" class="btn btn-primary btn-sm btn-save-comment-edit">Сохранить</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="comment-actions">' +
+          editBtnHtml +
+          '<button type="button" class="btn-action-text btn-reply-comment">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
+            '</svg>' +
+            '<span>Ответить</span>' +
+          '</button>' +
+        '</div>' +
+        '<div class="comment-reply-form-wrap" style="display: none;">' +
+          '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
+          '<textarea class="comment-textarea comment-reply-textarea" rows="2" maxlength="5000" placeholder="Написать ответ..."></textarea>' +
+          '<div class="comment-form-footer" style="margin-top: 8px;">' +
+            '<span class="comment-char-counter"><span class="reply-char-count">0</span> / 5000</span>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply-form">Отмена</button>' +
+              '<button type="button" class="btn btn-primary btn-sm btn-submit-reply-form">Отправить</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      mainContainer.appendChild(bodyCol);
+      el.appendChild(mainContainer);
+
+      // Inline edit handlers
+      const editBtn = el.querySelector('.btn-edit-comment');
+      const editWrap = el.querySelector('.comment-edit-wrap');
+      const contentWrap = el.querySelector('.comment-content-wrap');
+      const editTextarea = el.querySelector('.comment-edit-textarea');
+      const editCharCount = el.querySelector('.edit-char-count');
+      const cancelEditBtn = el.querySelector('.btn-cancel-comment-edit');
+      const saveEditBtn = el.querySelector('.btn-save-comment-edit');
+      const commentTextEl = el.querySelector('.comment-text');
+
+      const editDraftKey = 'edit_' + comment.id;
+      if (window._commentDrafts && window._commentDrafts[editDraftKey] && editTextarea) {
+        editTextarea.value = window._commentDrafts[editDraftKey];
+        if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+      }
+
+      if (editBtn && editWrap && contentWrap) {
+        editBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          contentWrap.style.display = 'none';
+          editWrap.style.display = 'block';
+          if (editTextarea) {
+            if (!editTextarea.value) {
+              editTextarea.value = comment.content || '';
+            }
+            editTextarea.focus();
+            if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+          }
+        });
+
+        if (cancelEditBtn) {
+          cancelEditBtn.addEventListener('click', function () {
+            if (window._commentDrafts) delete window._commentDrafts[editDraftKey];
+            editWrap.style.display = 'none';
+            contentWrap.style.display = 'block';
+            if (editTextarea) {
+              editTextarea.value = comment.content || '';
+              if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+            }
+          });
+        }
+
+        if (editTextarea && editCharCount) {
+          editTextarea.addEventListener('input', function () {
+            editCharCount.textContent = editTextarea.value.length;
+            window._commentDrafts = window._commentDrafts || {};
+            window._commentDrafts[editDraftKey] = editTextarea.value;
+          });
+        }
+
+        if (saveEditBtn && editTextarea) {
+          saveEditBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const newContent = editTextarea.value.trim();
+            if (!newContent) {
+              showToast('Комментарий не может быть пустым');
+              editTextarea.focus();
+              return;
+            }
+            if (newContent.length > 5000) {
+              showToast('Превышен лимит длины (максимум 5000 символов)');
+              return;
+            }
+
+            saveEditBtn.disabled = true;
+            const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
+
+            fetch('/api/articles/' + encodeURIComponent(targetArtId) + '/comments/' + encodeURIComponent(comment.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: newContent,
+                revision: comment.revision !== undefined ? comment.revision : 1
+              })
+            })
+              .then(function (res) {
+                return res.json().then(function (data) {
+                  return { status: res.status, data: data };
+                });
+              })
+              .then(function (result) {
+                saveEditBtn.disabled = false;
+                if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
+                  showToast('Комментарий был изменен в другой сессии. Пожалуйста, обновите страницу');
+                  return;
+                }
+
+                if (result.data && result.data.success && result.data.comment) {
+                  if (window._commentDrafts) delete window._commentDrafts[editDraftKey];
+                  const updated = result.data.comment;
+                  comment.content = updated.content;
+                  comment.revision = updated.revision;
+                  comment.updatedAt = updated.updatedAt;
+
+                  if (commentTextEl) {
+                    commentTextEl.innerHTML = escapeHtml(comment.content).replace(/\n/g, '<br>');
+                  }
+                  editWrap.style.display = 'none';
+                  contentWrap.style.display = 'block';
+                  showToast('Комментарий сохранен');
+                } else {
+                  showToast((result.data && result.data.error) || 'Ошибка при сохранении комментария');
+                }
+              })
+              .catch(function (err) {
+                saveEditBtn.disabled = false;
+                console.error('Failed to save comment edit:', err);
+                showToast('Не удалось сохранить комментарий');
+              });
+          });
+        }
+      }
+
+      // Inline reply handlers
+      const replyBtn = el.querySelector('.btn-reply-comment');
+      const replyWrap = el.querySelector('.comment-reply-form-wrap');
+      const replyTextarea = el.querySelector('.comment-reply-textarea');
+      const replyCharCount = el.querySelector('.reply-char-count');
+      const cancelReplyBtn = el.querySelector('.btn-cancel-reply-form');
+      const submitReplyBtn = el.querySelector('.btn-submit-reply-form');
+
+      const replyDraftKey = 'reply_' + comment.id;
+      if (window._commentDrafts && window._commentDrafts[replyDraftKey] && replyTextarea) {
+        replyTextarea.value = window._commentDrafts[replyDraftKey];
+        if (replyCharCount) replyCharCount.textContent = replyTextarea.value.length;
+        if (replyWrap) replyWrap.style.display = 'block';
+      }
+
+      if (replyBtn && replyWrap) {
+        replyBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы ответить на комментарий');
+            return;
+          }
+          const isShown = replyWrap.style.display === 'block';
+          replyWrap.style.display = isShown ? 'none' : 'block';
+          if (!isShown && replyTextarea) {
+            replyTextarea.focus();
+          }
+        });
+
+        if (cancelReplyBtn) {
+          cancelReplyBtn.addEventListener('click', function () {
+            if (window._commentDrafts) delete window._commentDrafts[replyDraftKey];
+            replyWrap.style.display = 'none';
+            if (replyTextarea) replyTextarea.value = '';
+          });
+        }
+
+        if (replyTextarea && replyCharCount) {
+          replyTextarea.addEventListener('input', function () {
+            replyCharCount.textContent = replyTextarea.value.length;
+            window._commentDrafts = window._commentDrafts || {};
+            window._commentDrafts[replyDraftKey] = replyTextarea.value;
+          });
+        }
+
+        if (submitReplyBtn && replyTextarea) {
+          submitReplyBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!currentUser) {
+              openAuthModal();
+              showToast('Войдите, чтобы оставить комментарий');
+              return;
+            }
+            const replyText = replyTextarea.value.trim();
+            if (!replyText) {
+              showToast('Комментарий не может быть пустым');
+              replyTextarea.focus();
+              return;
+            }
+            if (replyText.length > 5000) {
+              showToast('Превышен лимит длины (максимум 5000 символов)');
+              return;
+            }
+
+            submitReplyBtn.disabled = true;
+            const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
+            const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+            fetch('/api/articles/' + encodeURIComponent(targetArtId) + '/comments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: replyText,
+                commentType: 'comment',
+                parentCommentId: comment.id,
+                clientOperationId: clientOpId
+              })
+            })
+              .then(function (res) {
+                if (res.status === 401) {
+                  submitReplyBtn.disabled = false;
+                  openAuthModal();
+                  throw new Error('AUTH_REQUIRED');
+                }
+                return res.json();
+              })
+              .then(function (data) {
+                submitReplyBtn.disabled = false;
+                if (data && data.success && data.comment) {
+                  if (window._commentDrafts) delete window._commentDrafts[replyDraftKey];
+                  replyTextarea.value = '';
+                  if (replyCharCount) replyCharCount.textContent = '0';
+                  replyWrap.style.display = 'none';
+                  showToast('Ответ опубликован');
+
+                  // Make sure parent is expanded
+                  window._expandedCommentIds.add(comment.id);
+                  if (treeContext && typeof treeContext.onReload === 'function') {
+                    treeContext.onReload(data.comment.id);
+                  }
+                } else {
+                  showToast((data && data.error) || 'Ошибка при отправке ответа');
+                }
+              })
+              .catch(function (err) {
+                submitReplyBtn.disabled = false;
+                if (err.message !== 'AUTH_REQUIRED') {
+                  console.error('Failed to submit reply:', err);
+                  showToast('Не удалось отправить ответ');
+                }
+              });
+          });
+        }
+      }
+    }
+
+    // Children & Thread toggle / Drilldown continuation
+    if (totalDescendants > 0) {
+      const maxDepth = getMaxWindowDepth();
+      if (depth >= maxDepth) {
+        const continueBtn = document.createElement('button');
+        continueBtn.type = 'button';
+        continueBtn.className = 'btn btn-continue-thread';
+        continueBtn.setAttribute('data-comment-id', comment.id);
+        continueBtn.innerHTML =
+          '<span>Продолжить ветку (' + totalDescendants + ')</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<polyline points="9 18 15 12 9 6"></polyline>' +
+          '</svg>';
+
+        continueBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          window._commentDrilldownState = window._commentDrilldownState || { stack: [] };
+          window._commentDrilldownState.stack.push({
+            rootCommentId: comment.id,
+            scrollY: window.scrollY
+          });
+          if (treeContext && typeof treeContext.onReload === 'function') {
+            treeContext.onReload(comment.id);
+          }
+        });
+
+        el.appendChild(continueBtn);
+      } else {
+        const isExpanded = window._expandedCommentIds.has(comment.id);
+
+        const toggleRow = document.createElement('div');
+        toggleRow.className = 'comment-toggle-row' + (isExpanded ? ' is-expanded' : '');
+
+        const toggleStemUpper = document.createElement('div');
+        toggleStemUpper.className = 'comment-toggle-stem-upper';
+        toggleStemUpper.setAttribute('aria-hidden', 'true');
+        toggleRow.appendChild(toggleStemUpper);
+
+        const stemThrough = document.createElement('div');
+        stemThrough.className = 'comment-stem-through';
+        stemThrough.setAttribute('aria-hidden', 'true');
+        stemThrough.style.display = isExpanded ? 'block' : 'none';
+        toggleRow.appendChild(stemThrough);
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'btn-toggle-thread';
+        toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        toggleBtn.setAttribute('aria-controls', 'thread_' + comment.id);
+
+        const minusSvg = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="0" y1="4.5" x2="9" y2="4.5"></line></svg>';
+        const plusSvg = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="0" y1="4.5" x2="9" y2="4.5"></line><line x1="4.5" y1="0" x2="4.5" y2="9"></line></svg>';
+
+        function updateToggleContent(expanded) {
+          if (expanded) {
+            toggleBtn.innerHTML =
+              '<span class="thread-toggle-icon" aria-hidden="true">' +
+                minusSvg +
+                '<span class="sr-only">-</span>' +
+              '</span>' +
+              '<span class="toggle-thread-text sr-only">Скрыть комментарии</span>';
+            toggleBtn.setAttribute('aria-label', 'Скрыть комментарии');
+            toggleBtn.setAttribute('title', 'Скрыть комментарии');
+            toggleRow.classList.add('is-expanded');
+          } else {
+            toggleBtn.innerHTML =
+              '<span class="thread-toggle-icon" aria-hidden="true">' +
+                plusSvg +
+                '<span class="sr-only">+</span>' +
+              '</span>' +
+              '<span class="toggle-thread-text">Показать комментарии (' + totalDescendants + ')</span>';
+            toggleBtn.setAttribute('aria-label', 'Показать комментарии (' + totalDescendants + ')');
+            toggleBtn.setAttribute('title', 'Показать комментарии (' + totalDescendants + ')');
+            toggleRow.classList.remove('is-expanded');
+          }
+        }
+
+        updateToggleContent(isExpanded);
+        toggleRow.appendChild(toggleBtn);
+
+        function setLocalToggleHighlight(active) {
+          toggleBtn.classList.toggle('is-tree-path-active', active);
+          const tIcon = toggleBtn.querySelector('.thread-toggle-icon');
+          if (tIcon) tIcon.classList.toggle('is-tree-path-active', active);
+          toggleStemUpper.classList.toggle('is-tree-path-active', active);
+          stemThrough.classList.toggle('is-tree-path-active', active);
+          const upper = el.querySelector('.comment-main .comment-stem-upper');
+          if (upper) upper.classList.toggle('is-tree-path-active', active);
+          const av = el.querySelector('.comment-main .comment-author-avatar');
+          if (av) av.classList.toggle('avatar-peer-highlight', active);
+        }
+
+        toggleBtn.addEventListener('mouseenter', function () { setLocalToggleHighlight(true); });
+        toggleBtn.addEventListener('mouseleave', function () { setLocalToggleHighlight(false); });
+        toggleStemUpper.addEventListener('mouseenter', function () { setLocalToggleHighlight(true); });
+        toggleStemUpper.addEventListener('mouseleave', function () { setLocalToggleHighlight(false); });
+        stemThrough.addEventListener('mouseenter', function () { setLocalToggleHighlight(true); });
+        stemThrough.addEventListener('mouseleave', function () { setLocalToggleHighlight(false); });
+
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'comment-thread-children';
+        childrenContainer.id = 'thread_' + comment.id;
+        childrenContainer.style.display = isExpanded ? 'flex' : 'none';
+
+        const childList = comment.children || [];
+        childList.forEach(function (child, idx) {
+          const isLast = (idx === childList.length - 1);
+          childrenContainer.appendChild(renderCommentNode(child, depth + 1, treeContext, isLast, false));
+        });
+
+        toggleBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const currentlyExpanded = window._expandedCommentIds.has(comment.id);
+          if (currentlyExpanded) {
+            if (childrenContainer.contains(document.activeElement)) {
+              toggleBtn.focus();
+            }
+            window._expandedCommentIds.delete(comment.id);
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            updateToggleContent(false);
+            childrenContainer.style.display = 'none';
+            stemThrough.style.display = 'none';
+          } else {
+            window._expandedCommentIds.add(comment.id);
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            updateToggleContent(true);
+            childrenContainer.style.display = 'flex';
+            stemThrough.style.display = 'block';
+          }
+        });
+
+        el.appendChild(toggleRow);
+        el.appendChild(childrenContainer);
+      }
+    }
+
     return el;
   }
 
-  // Render question clarification item
+  function renderCommentItem(comment) {
+    return renderCommentNode(comment, 0, {
+      articleId: currentArticle ? currentArticle.id : '',
+      allCommentsById: window._allCommentsMap || {},
+      isQuestionClarification: false,
+      onReload: function (newId) {
+        if (currentArticle) loadComments(currentArticle.id);
+      }
+    });
+  }
+
   function renderQuestionClarificationItem(comment) {
-    const el = document.createElement('div');
-    el.className = 'question-clarification-item';
-    el.setAttribute('data-id', comment.id);
-    el.id = 'comm_' + comment.id;
-
-    const authorName = comment.authorName || 'Пользователь';
-    const authorId = comment.userId || comment.user_id || '';
-    const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
-
-    el.innerHTML =
-      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
-        '<div style="display: flex; align-items: center; gap: 8px;">' +
-          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-          '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>';
-
-    return el;
+    return renderCommentNode(comment, 0, {
+      articleId: currentArticle ? currentArticle.id : '',
+      allCommentsById: window._allCommentsMap || {},
+      isQuestionClarification: true,
+      onReload: function (newId) {
+        if (currentArticle) loadComments(currentArticle.id);
+      }
+    });
   }
 
-  // Render inline reply to answer
   function renderAnswerReplyItem(reply) {
-    const el = document.createElement('div');
-    el.className = 'answer-reply-item';
-    el.setAttribute('data-id', reply.id);
-    el.id = 'comm_' + reply.id;
-
-    const authorName = reply.authorName || 'Пользователь';
-    const authorId = reply.userId || reply.user_id || '';
-    const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(reply.createdAt || reply.created_at);
-
-    el.innerHTML =
-      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">' +
-        '<div style="display: flex; align-items: center; gap: 8px;">' +
-          '<div class="comment-author-avatar" style="width: 28px; height: 28px; font-size: 0.75rem;">' + escapeHtml(initials) + '</div>' +
-          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" style="font-size: 0.88rem;">' + escapeHtml(authorName) + '</button>' +
-          '<span class="comment-date" style="font-size: 0.76rem;">' + escapeHtml(dateText) + '</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="comment-text" style="font-size: 0.9rem;">' + (reply.content ? escapeHtml(reply.content).replace(/\n/g, '<br>') : '') + '</div>';
-
-    return el;
+    return renderCommentNode(reply, 1, {
+      articleId: currentArticle ? currentArticle.id : '',
+      allCommentsById: window._allCommentsMap || {},
+      isQuestionClarification: false,
+      isAnswerReply: true,
+      onReload: function (newId) {
+        if (currentArticle) loadComments(currentArticle.id);
+      }
+    });
   }
 
   // Render Answer Card (.answer-card)
@@ -660,7 +1420,9 @@
     const authorName = comment.authorName || 'Пользователь';
     const authorId = comment.userId || comment.user_id || '';
     const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+    const rawDate = comment.createdAt || comment.created_at;
+    const absDateText = formatCommentDate(rawDate);
+    const relTimeText = formatCommentTimeRelative(rawDate);
 
     const hasUpdated = Boolean(comment.updatedAt || comment.updated_at);
     const updatedBadgeHtml = hasUpdated
@@ -712,7 +1474,7 @@
           '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
           '<div class="answer-author-meta">' +
             '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+            '<time class="comment-date comment-time" datetime="' + escapeHtml(rawDate || '') + '" title="' + escapeHtml(absDateText) + '">' + escapeHtml(relTimeText) + '</time>' +
             '<span class="answer-updated-wrap">' + updatedBadgeHtml + '</span>' +
           '</div>' +
         '</div>' +
@@ -755,9 +1517,63 @@
     // Populate replies
     const repliesListEl = el.querySelector('.answer-replies-list');
     if (repliesListEl && replies.length > 0) {
-      replies.forEach(function (r) {
-        repliesListEl.appendChild(renderAnswerReplyItem(r));
-      });
+      const tree = buildCommentTree(replies);
+      const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+      let renderedDrilldown = false;
+      if (stack.length > 0) {
+        const currentFrame = stack[stack.length - 1];
+        const drilldownRoot = tree.byId[currentFrame.rootCommentId];
+        if (drilldownRoot) {
+          renderedDrilldown = true;
+          const drilldownBar = document.createElement('div');
+          drilldownBar.className = 'thread-drilldown-bar';
+          drilldownBar.innerHTML =
+            '<button type="button" class="btn-drilldown-back">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<polyline points="15 18 9 12 15 6"></polyline>' +
+              '</svg>' +
+              '<span>Назад к ответу</span>' +
+            '</button>' +
+            '<span class="thread-drilldown-title">Ветка обсуждения</span>';
+
+          const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+          if (backBtn) {
+            backBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              const popped = window._commentDrilldownState.stack.pop();
+              loadComments(articleId);
+              if (popped && typeof popped.scrollY === 'number') {
+                window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+              }
+            });
+          }
+          repliesListEl.appendChild(drilldownBar);
+          window._expandedCommentIds.add(drilldownRoot.id);
+          repliesListEl.appendChild(renderCommentNode(drilldownRoot, 0, {
+            articleId: articleId,
+            allCommentsById: window._allCommentsMap || tree.byId,
+            isQuestionClarification: false,
+            isAnswerReply: true,
+            onReload: function () {
+              loadComments(articleId);
+            }
+          }));
+        }
+      }
+
+      if (!renderedDrilldown) {
+        tree.roots.forEach(function (r) {
+          repliesListEl.appendChild(renderCommentNode(r, 0, {
+            articleId: articleId,
+            allCommentsById: window._allCommentsMap || tree.byId,
+            isQuestionClarification: false,
+            isAnswerReply: true,
+            onReload: function () {
+              loadComments(articleId);
+            }
+          }));
+        });
+      }
     }
 
     // Solution button handler
@@ -1018,11 +1834,74 @@
   function handleDeepLink() {
     const hash = window.location.hash;
     if (!hash) return;
-    if (hash.startsWith('#comm_')) {
-      const rawId = hash.substring(1);
-      const targetEl = document.getElementById(rawId) ||
-        document.querySelector('[data-id="' + rawId.replace(/^comm_/, '') + '"]') ||
-        document.querySelector('[data-id="' + rawId + '"]');
+    if (hash.startsWith('#comm_') || hash.startsWith('#comment-')) {
+      let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+      let item = window._allCommentsMap ? (window._allCommentsMap[rawTargetId] || window._allCommentsMap['comm_' + rawTargetId]) : null;
+      if (item) {
+        rawTargetId = item.id;
+      }
+      if (item) {
+        // Build ancestor chain from root down to this item
+        let path = [];
+        let curr = item;
+        let visited = new Set();
+        while (curr && !visited.has(curr.id)) {
+          visited.add(curr.id);
+          path.unshift(curr);
+          const pId = curr.parentCommentId || curr.parent_comment_id;
+          curr = pId ? window._allCommentsMap[pId] : null;
+        }
+
+        const maxDepth = getMaxWindowDepth();
+        if (path.length > maxDepth) {
+          const windowRoot = path[maxDepth - 1] || path[0];
+          if (windowRoot && windowRoot.id !== rawTargetId) {
+            window._commentDrilldownState.stack = [{
+              rootCommentId: windowRoot.id,
+              scrollY: window.scrollY
+            }];
+            if (window._rawCommentsData && currentArticle) {
+              renderCommentsList(window._rawCommentsData);
+            }
+          }
+        }
+
+        let parentId = item.parentCommentId || item.parent_comment_id;
+        visited = new Set();
+        while (parentId && !visited.has(parentId)) {
+          visited.add(parentId);
+          window._expandedCommentIds.add(parentId);
+          const childrenContainer = document.getElementById('thread_' + parentId);
+          if (childrenContainer) {
+            childrenContainer.style.display = 'flex';
+            const btn = document.querySelector('[aria-controls="thread_' + parentId + '"]');
+            if (btn) {
+              btn.setAttribute('aria-expanded', 'true');
+              const iconEl = btn.querySelector('.thread-toggle-icon');
+              if (iconEl) iconEl.textContent = '-';
+              const txtEl = btn.querySelector('.toggle-thread-text');
+              if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+            }
+          }
+          const parentObj = window._allCommentsMap[parentId];
+          parentId = parentObj ? (parentObj.parentCommentId || parentObj.parent_comment_id) : null;
+        }
+
+        const ansId = item.parentAnswerId || item.parent_answer_id;
+        if (ansId) {
+          const ansCard = document.getElementById('comm_' + ansId) || document.querySelector('[data-id="' + ansId + '"]');
+          if (ansCard) {
+            const repliesContainer = ansCard.querySelector('.answer-replies-container');
+            if (repliesContainer) {
+              repliesContainer.style.display = 'block';
+            }
+          }
+        }
+      }
+
+      const targetEl = document.getElementById('comm_' + rawTargetId) ||
+        document.getElementById(hash.substring(1)) ||
+        document.querySelector('[data-id="' + rawTargetId + '"]');
       if (targetEl) {
         setTimeout(function () {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1030,7 +1909,7 @@
           setTimeout(function () {
             targetEl.classList.remove('comment-highlight');
           }, 2500);
-        }, 100);
+        }, 150);
       }
     }
   }
@@ -1041,21 +1920,70 @@
     const emptyEl = document.getElementById('commentsEmpty');
 
     if (badgeEl) {
-      badgeEl.textContent = comments.length;
+      const activeComments = (comments || []).filter(function (c) { return !c.isDeleted; });
+      badgeEl.textContent = activeComments.length;
     }
 
     if (!listEl) return;
     listEl.innerHTML = '';
 
-    if (comments.length === 0) {
+    if (!comments || comments.length === 0) {
       if (emptyEl) emptyEl.style.display = 'block';
       return;
     }
 
     if (emptyEl) emptyEl.style.display = 'none';
 
+    window._rawCommentsData = comments;
+    const tree = buildCommentTree(comments);
+
+    // Drilldown Window mode
+    const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+    if (stack.length > 0) {
+      const currentFrame = stack[stack.length - 1];
+      const drilldownRoot = tree.byId[currentFrame.rootCommentId];
+      if (drilldownRoot) {
+        const drilldownBar = document.createElement('div');
+        drilldownBar.className = 'thread-drilldown-bar';
+        drilldownBar.innerHTML =
+          '<button type="button" class="btn-drilldown-back">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="15 18 9 12 15 6"></polyline>' +
+            '</svg>' +
+            '<span>Назад к обсуждению</span>' +
+          '</button>' +
+          '<span class="thread-drilldown-title">Ветка комментариев</span>';
+
+        const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+        if (backBtn) {
+          backBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const popped = window._commentDrilldownState.stack.pop();
+            renderCommentsList(comments);
+            if (popped && typeof popped.scrollY === 'number') {
+              window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+            }
+          });
+        }
+
+        listEl.appendChild(drilldownBar);
+        window._expandedCommentIds.add(drilldownRoot.id);
+        listEl.appendChild(renderCommentNode(drilldownRoot, 0, {
+          articleId: currentArticle ? currentArticle.id : '',
+          allCommentsById: window._allCommentsMap || tree.byId,
+          isQuestionClarification: false,
+          onReload: function (newId) {
+            if (currentArticle) {
+              loadComments(currentArticle.id);
+            }
+          }
+        }));
+        return;
+      }
+    }
+
     // Put solution comment first if present
-    const sortedComments = comments.slice().sort(function (a, b) {
+    const sortedRoots = tree.roots.slice().sort(function (a, b) {
       const aSol = Boolean(a.isSolution || a.is_solution);
       const bSol = Boolean(b.isSolution || b.is_solution);
       if (aSol && !bSol) return -1;
@@ -1063,8 +1991,27 @@
       return 0;
     });
 
-    sortedComments.forEach(function (c) {
-      listEl.appendChild(renderCommentItem(c));
+    sortedRoots.forEach(function (rootNode) {
+      listEl.appendChild(renderCommentNode(rootNode, 0, {
+        articleId: currentArticle ? currentArticle.id : '',
+        allCommentsById: window._allCommentsMap || tree.byId,
+        isQuestionClarification: false,
+        onReload: function (newId) {
+          if (currentArticle) {
+            loadComments(currentArticle.id);
+            if (newId) {
+              setTimeout(function () {
+                const target = document.getElementById('comm_' + newId);
+                if (target) {
+                  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  target.classList.add('comment-highlight');
+                  setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
+                }
+              }, 300);
+            }
+          }
+        }
+      }));
     });
   }
 
@@ -1075,6 +2022,30 @@
         if (!data || !data.success) {
           console.error('Failed to load comments:', data && data.error);
           return;
+        }
+
+        window._rawCommentsData = data.comments || [];
+        window._allCommentsMap = {};
+        (data.comments || []).forEach(function (c) {
+          window._allCommentsMap[c.id] = c;
+        });
+
+        // Pre-expand ancestors if navigating via deep link
+        const hash = window.location.hash;
+        if (hash && (hash.startsWith('#comm_') || hash.startsWith('#comment-'))) {
+          let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+          let curr = window._allCommentsMap ? (window._allCommentsMap[rawTargetId] || window._allCommentsMap['comm_' + rawTargetId]) : null;
+          let visited = new Set();
+          while (curr) {
+            const pId = curr.parentCommentId || curr.parent_comment_id;
+            if (pId && !visited.has(pId)) {
+              visited.add(pId);
+              window._expandedCommentIds.add(pId);
+              curr = window._allCommentsMap[pId];
+            } else {
+              break;
+            }
+          }
         }
 
         currentMyAnswerId = data.myAnswerId || null;
@@ -1101,13 +2072,13 @@
           if (qBadge) {
             qBadge.textContent = data.questionCommentsCount !== undefined
               ? data.questionCommentsCount
-              : (data.questionComments ? data.questionComments.length : 0);
+              : (data.questionComments ? data.questionComments.filter(function (q) { return !q.isDeleted; }).length : 0);
           }
           const aBadge = document.getElementById('answersCountBadge');
           if (aBadge) {
             aBadge.textContent = data.answersCount !== undefined
               ? data.answersCount
-              : (data.answers ? data.answers.length : 0);
+              : (data.answers ? data.answers.filter(function (a) { return !a.isDeleted; }).length : 0);
           }
 
           // Render Question Clarifications
@@ -1115,9 +2086,72 @@
           if (qList) {
             qList.innerHTML = '';
             const qComments = data.questionComments || [];
-            qComments.forEach(function (qc) {
-              qList.appendChild(renderQuestionClarificationItem(qc));
-            });
+            const qTree = buildCommentTree(qComments);
+
+            const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+            let renderedDrilldown = false;
+            if (stack.length > 0) {
+              const currentFrame = stack[stack.length - 1];
+              const drilldownRoot = qTree.byId[currentFrame.rootCommentId];
+              if (drilldownRoot) {
+                renderedDrilldown = true;
+                const drilldownBar = document.createElement('div');
+                drilldownBar.className = 'thread-drilldown-bar';
+                drilldownBar.innerHTML =
+                  '<button type="button" class="btn-drilldown-back">' +
+                    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                      '<polyline points="15 18 9 12 15 6"></polyline>' +
+                    '</svg>' +
+                    '<span>Назад к обсуждению</span>' +
+                  '</button>' +
+                  '<span class="thread-drilldown-title">Ветка уточнений</span>';
+
+                const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+                if (backBtn) {
+                  backBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const popped = window._commentDrilldownState.stack.pop();
+                    loadComments(articleId);
+                    if (popped && typeof popped.scrollY === 'number') {
+                      window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+                    }
+                  });
+                }
+                qList.appendChild(drilldownBar);
+                window._expandedCommentIds.add(drilldownRoot.id);
+                qList.appendChild(renderCommentNode(drilldownRoot, 0, {
+                  articleId: articleId,
+                  allCommentsById: window._allCommentsMap || qTree.byId,
+                  isQuestionClarification: true,
+                  onReload: function (newId) {
+                    loadComments(articleId);
+                  }
+                }));
+              }
+            }
+
+            if (!renderedDrilldown) {
+              qTree.roots.forEach(function (qc) {
+                qList.appendChild(renderCommentNode(qc, 0, {
+                  articleId: articleId,
+                  allCommentsById: window._allCommentsMap || qTree.byId,
+                  isQuestionClarification: true,
+                  onReload: function (newId) {
+                    loadComments(articleId);
+                    if (newId) {
+                      setTimeout(function () {
+                        const target = document.getElementById('comm_' + newId);
+                        if (target) {
+                          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          target.classList.add('comment-highlight');
+                          setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
+                        }
+                      }, 300);
+                    }
+                  }
+                }));
+              });
+            }
           }
 
           // Render Answers List
@@ -1216,11 +2250,12 @@
           }
 
           if (submitBtn) submitBtn.disabled = true;
+          const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, commentType: 'comment' })
+            body: JSON.stringify({ content: content, commentType: 'comment', clientOperationId: clientOpId })
           })
             .then(function (res) {
               if (res.status === 401) {
@@ -1302,11 +2337,12 @@
           }
 
           if (submitClarificationBtn) submitClarificationBtn.disabled = true;
+          const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, commentType: 'comment' })
+            body: JSON.stringify({ content: content, commentType: 'comment', clientOperationId: clientOpId })
           })
             .then(function (res) {
               if (res.status === 401) {
@@ -1714,7 +2750,7 @@
     if (contentWrap) contentWrap.style.display = 'block';
 
     // Page title
-    document.title = (article.title || 'Публикация') + ' — SmartContractum';
+    document.title = (article.title || 'Публикация') + ' - SmartContractum';
 
     // Title & Lead
     const titleEl = document.getElementById('articleTitle');

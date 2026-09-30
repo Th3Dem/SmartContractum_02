@@ -547,6 +547,8 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
                 comment_type TEXT NOT NULL DEFAULT 'comment',
                 is_solution INTEGER NOT NULL DEFAULT 0,
                 parent_answer_id TEXT NULL,
+                parent_comment_id TEXT NULL,
+                client_operation_id TEXT NULL,
                 updated_at TEXT NULL,
                 revision INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
@@ -557,6 +559,8 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             ("comment_type", "TEXT NOT NULL DEFAULT 'comment'"),
             ("is_solution", "INTEGER NOT NULL DEFAULT 0"),
             ("parent_answer_id", "TEXT NULL"),
+            ("parent_comment_id", "TEXT NULL"),
+            ("client_operation_id", "TEXT NULL"),
             ("updated_at", "TEXT NULL"),
             ("revision", "INTEGER NOT NULL DEFAULT 1")
         ]:
@@ -567,7 +571,9 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_article_id ON article_comments(article_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_solution ON article_comments(article_id, is_solution);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_parent_answer ON article_comments(parent_answer_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_parent_comment ON article_comments(parent_comment_id);")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_user_answer ON article_comments(article_id, user_id) WHERE comment_type = 'answer' AND status = 'published';")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_client_operation ON article_comments(user_id, client_operation_id) WHERE client_operation_id IS NOT NULL;")
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS user_notifications (
@@ -2073,6 +2079,36 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "error": "Method Not Allowed"
             })
 
+    def do_DELETE(self):
+        """Handle DELETE requests for comments and API fallback."""
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        if path.startswith("/api/articles/") and "/comments/" in path:
+            parts = path.strip("/").split("/")
+            if len(parts) >= 5:
+                art_id = parts[2]
+                comm_id = parts[4]
+                self.handle_delete_article_comment(art_id, comm_id)
+                return
+        elif path.startswith("/api/comments/"):
+            parts = path.strip("/").split("/")
+            if len(parts) >= 3:
+                comm_id = parts[2]
+                self.handle_delete_article_comment("", comm_id)
+                return
+
+        if path.startswith("/api/"):
+            self.send_json_response(405, {
+                "success": False,
+                "error": f"Method Not Allowed: DELETE {path}"
+            })
+        else:
+            self.send_json_response(405, {
+                "success": False,
+                "error": "Method Not Allowed"
+            })
+
     def handle_auth_login(self):
         """POST /api/auth/login generates secure session token, saves to sessions table, sets sc_session cookie."""
         data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
@@ -3387,6 +3423,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         GET /api/articles/<id>/comments
         Returns structured comments and discussions for the article/question. Accessible to guests.
         Includes answers with nested comments, questionComments, myAnswerId, counters, and flat comments array.
+        Enforces:
+        - parentCommentId included in DTO
+        - Accurate counters: answersCount, questionCommentsCount, commentsCount, discussionCount
+        - Deletion placeholders for deleted nodes with active published descendants
+        - Strict isolation: orphaned child comments excluded from questionComments
         """
         if not article_id:
             self.send_json_response(400, {
@@ -3404,15 +3445,34 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             cur.execute("""
                 SELECT id, article_id, user_id, author_name, author_avatar, content,
-                       comment_type, is_solution, parent_answer_id, updated_at, revision, created_at
+                       status, comment_type, is_solution, parent_answer_id, parent_comment_id,
+                       client_operation_id, updated_at, revision, created_at
                 FROM article_comments
-                WHERE article_id = ? AND status = 'published'
+                WHERE article_id = ? AND status IN ('published', 'deleted')
                 ORDER BY is_solution DESC, created_at ASC
             """, (real_id,))
             rows = cur.fetchall()
 
         curr_user = self.get_current_user()
         curr_user_id = curr_user["id"] if curr_user else None
+
+        row_map = {r["id"]: r for r in rows}
+        published_rows = [r for r in rows if r["status"] == "published"]
+
+        # Track ancestor IDs that are required to display published descendants
+        needed_ancestors = set()
+        for r in published_rows:
+            curr_pid = r["parent_comment_id"] if "parent_comment_id" in r.keys() else None
+            visited = set()
+            while curr_pid and curr_pid in row_map and curr_pid not in visited:
+                visited.add(curr_pid)
+                needed_ancestors.add(curr_pid)
+                p_row = row_map[curr_pid]
+                curr_pid = p_row["parent_comment_id"] if "parent_comment_id" in p_row.keys() else None
+
+            p_ans = r["parent_answer_id"] if "parent_answer_id" in r.keys() else None
+            if p_ans and p_ans in row_map:
+                needed_ancestors.add(p_ans)
 
         comments = []
         answers_map = {}
@@ -3423,57 +3483,93 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         solution_comment_id = None
 
         for r in rows:
-            is_sol = bool(r["is_solution"]) if "is_solution" in r.keys() and r["is_solution"] is not None else False
+            is_del = (r["status"] == "deleted")
+            # If deleted and not an ancestor of any published descendant, omit completely
+            if is_del and r["id"] not in needed_ancestors:
+                continue
+
             ctype = (r["comment_type"] if "comment_type" in r.keys() else None) or "comment"
+            is_sol = bool(r["is_solution"]) if "is_solution" in r.keys() and r["is_solution"] is not None else False
             rev = r["revision"] if "revision" in r.keys() and r["revision"] is not None else 1
             upd_at = r["updated_at"] if "updated_at" in r.keys() else None
             p_ans_id = r["parent_answer_id"] if "parent_answer_id" in r.keys() else None
+            p_comm_id = r["parent_comment_id"] if "parent_comment_id" in r.keys() else None
+            client_op_id = r["client_operation_id"] if "client_operation_id" in r.keys() else None
 
-            if is_sol:
+            if not is_del and is_sol and ctype == "answer":
                 has_solution = True
                 solution_comment_id = r["id"]
 
-            dto = {
-                "id": r["id"],
-                "articleId": r["article_id"],
-                "userId": r["user_id"],
-                "authorName": r["author_name"],
-                "authorAvatar": r["author_avatar"] or None,
-                "content": r["content"],
-                "commentType": ctype,
-                "isSolution": is_sol,
-                "parentAnswerId": p_ans_id,
-                "updatedAt": upd_at,
-                "revision": rev,
-                "createdAt": r["created_at"]
-            }
-            comments.append(dto)
+            if is_del:
+                dto = {
+                    "id": r["id"],
+                    "articleId": r["article_id"],
+                    "userId": r["user_id"],
+                    "authorName": "Удаленный комментарий",
+                    "authorAvatar": None,
+                    "content": "Комментарий удален",
+                    "commentType": ctype,
+                    "isSolution": False,
+                    "parentAnswerId": p_ans_id,
+                    "parentCommentId": p_comm_id,
+                    "clientOperationId": client_op_id,
+                    "isDeleted": True,
+                    "updatedAt": upd_at,
+                    "revision": rev,
+                    "createdAt": r["created_at"]
+                }
+            else:
+                dto = {
+                    "id": r["id"],
+                    "articleId": r["article_id"],
+                    "userId": r["user_id"],
+                    "authorName": r["author_name"],
+                    "authorAvatar": r["author_avatar"] or None,
+                    "content": r["content"],
+                    "commentType": ctype,
+                    "isSolution": is_sol,
+                    "parentAnswerId": p_ans_id,
+                    "parentCommentId": p_comm_id,
+                    "clientOperationId": client_op_id,
+                    "isDeleted": False,
+                    "updatedAt": upd_at,
+                    "revision": rev,
+                    "createdAt": r["created_at"]
+                }
 
             if ctype == "answer":
                 ans_obj = dict(dto)
                 ans_obj["comments"] = []
                 ans_obj["commentsCount"] = 0
                 answers_map[r["id"]] = ans_obj
-                if curr_user_id and r["user_id"] == curr_user_id and my_answer_id is None:
+                if not is_del and curr_user_id and r["user_id"] == curr_user_id and my_answer_id is None:
                     my_answer_id = r["id"]
+                comments.append(dto)
             else:
                 if p_ans_id:
                     child_comments.append(dto)
                 else:
+                    if p_comm_id is not None and p_comm_id not in row_map:
+                        # Orphaned comment without valid parent comment
+                        continue
                     question_comments.append(dto)
+                    comments.append(dto)
 
         for child in child_comments:
             pid = child["parentAnswerId"]
             if pid in answers_map:
                 answers_map[pid]["comments"].append(child)
-                answers_map[pid]["commentsCount"] += 1
+                if not child.get("isDeleted"):
+                    answers_map[pid]["commentsCount"] += 1
+                comments.append(child)
             else:
-                question_comments.append(child)
+                # Invariant: do NOT dump orphaned child comments into questionComments
+                pass
 
         answers_list = list(answers_map.values())
-        answers_count = len(answers_list)
-        question_comments_count = len([q for q in question_comments if not q.get("parentAnswerId")])
-        comments_count = len(comments) - answers_count
+        answers_count = sum(1 for a in answers_list if not a.get("isDeleted"))
+        question_comments_count = sum(1 for q in question_comments if not q.get("isDeleted") and q.get("parentAnswerId") is None)
+        comments_count = sum(1 for c in comments if c.get("commentType") == "comment" and not c.get("isDeleted"))
         discussion_count = answers_count + comments_count
 
         self.send_json_response(200, {
@@ -3498,11 +3594,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Requires authentication (401 requireAuth).
         Validates content: non-empty, stripped, max 5000 chars. Stores plain-text.
         Strictly validates commentType: must be 'comment' or 'answer' (400).
+        Supports parentCommentId and clientOperationId.
         Enforces invariants:
           - Only questions can receive answers (400).
           - Single active published answer per user per question (409 ANSWER_ALREADY_EXISTS).
-          - Validates parentAnswerId (must be published answer on same question).
-          - Atomic notifications in the same transaction.
+          - Validates parentCommentId (must be published comment on same publication, comment_type == 'comment').
+          - Automatically derives parentAnswerId from parent comment. Reject contradictory parentAnswerId (400).
+          - Cycle detection and depth check (depth limit 20 levels; 21st rejected with 400).
+          - Idempotency with clientOperationId: replay with same payload returns 200/201 without duplicate,
+            replay with conflicting payload returns 409 OPERATION_ID_CONFLICT.
+          - Atomic notifications in the same transaction (targeted to immediate parent author, no self-notifications).
         """
         payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
         if payload is None:
@@ -3552,6 +3653,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
+        raw_parent_comm = payload.get("parentCommentId") if "parentCommentId" in payload else payload.get("parent_comment_id")
+        raw_parent_ans = payload.get("parentAnswerId") if "parentAnswerId" in payload else payload.get("parent_answer_id")
+        raw_client_op = payload.get("clientOperationId") if "clientOperationId" in payload else payload.get("client_operation_id")
+
+        target_parent_comm_id = raw_parent_comm.strip() if isinstance(raw_parent_comm, str) and raw_parent_comm.strip() else None
+        target_parent_ans_id = raw_parent_ans.strip() if isinstance(raw_parent_ans, str) and raw_parent_ans.strip() else None
+        client_op_id = raw_client_op.strip() if isinstance(raw_client_op, str) and raw_client_op.strip() else None
+
         conn = self.get_db()
         with conn:
             cur = conn.cursor()
@@ -3576,14 +3685,21 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
-            target_parent_id = None
-            parent_answer_author_id = None
+            art_title = art_row["title"] or "Публикация"
+            art_author_id = art_row["author_id"]
 
             if comment_type == "answer":
                 if material_type != "question":
                     self.send_json_response(400, {
                         "success": False,
                         "error": "Ответ (answer) возможен только для публикаций с типом 'Вопрос' (materialType = 'question')."
+                    })
+                    return
+
+                if target_parent_comm_id is not None or target_parent_ans_id is not None:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Ответ не может иметь родительский комментарий или ответ."
                     })
                     return
 
@@ -3601,24 +3717,153 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "myAnswerId": existing_answer["id"]
                     })
                     return
+
+                notification_recipient_id = art_author_id
+                notification_type = "new_answer"
+                notification_title = "Новый ответ на ваш вопрос"
+                notification_message = f"Пользователь {author_name} ответил на ваш вопрос «{art_title[:60]}»"
             else:
-                raw_parent_id = payload.get("parentAnswerId") if "parentAnswerId" in payload else payload.get("parent_answer_id")
-                if raw_parent_id is not None:
-                    if isinstance(raw_parent_id, str) and raw_parent_id.strip():
-                        target_parent_id = raw_parent_id.strip()
-                        cur.execute("""
-                            SELECT id, user_id, article_id, comment_type, status
-                            FROM article_comments
-                            WHERE id = ? LIMIT 1
-                        """, (target_parent_id,))
-                        p_row = cur.fetchone()
-                        if not p_row or p_row["comment_type"] != "answer" or p_row["status"] != "published" or p_row["article_id"] != real_id:
+                # comment_type == 'comment'
+                if target_parent_comm_id is not None:
+                    cur.execute("""
+                        SELECT id, user_id, article_id, comment_type, status, parent_answer_id, parent_comment_id
+                        FROM article_comments
+                        WHERE id = ? LIMIT 1
+                    """, (target_parent_comm_id,))
+                    p_comm_row = cur.fetchone()
+                    if not p_comm_row or p_comm_row["status"] != "published":
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Указанный родительский комментарий не найден или не опубликован."
+                        })
+                        return
+
+                    if p_comm_row["article_id"] != real_id:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Родительский комментарий принадлежит другой публикации."
+                        })
+                        return
+
+                    if p_comm_row["comment_type"] != "comment":
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Родительский комментарий не может быть ответом. Для ответа на ответ используйте parentAnswerId."
+                        })
+                        return
+
+                    # Automatically derive parent_answer_id from parent comment
+                    derived_ans_id = p_comm_row["parent_answer_id"]
+                    if target_parent_ans_id is not None and target_parent_ans_id != derived_ans_id:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Указанный parentAnswerId противоречит родительскому комментарию."
+                        })
+                        return
+                    target_parent_ans_id = derived_ans_id
+
+                    # Cycle detection and depth check: walk up parent_comment_id chain
+                    depth = 1
+                    curr_anc_id = p_comm_row["parent_comment_id"]
+                    visited_anc = {target_parent_comm_id}
+                    while curr_anc_id is not None:
+                        depth += 1
+                        if curr_anc_id in visited_anc:
                             self.send_json_response(400, {
                                 "success": False,
-                                "error": "Указанный ответ не найден или не принадлежит данному вопросу"
+                                "error": "Обнаружен цикл в иерархии комментариев."
                             })
                             return
-                        parent_answer_author_id = p_row["user_id"]
+                        visited_anc.add(curr_anc_id)
+                        if depth >= 20:
+                            self.send_json_response(400, {
+                                "success": False,
+                                "error": "Превышена максимальная глубина вложенности комментариев (максимум 20 уровней)."
+                            })
+                            return
+                        cur.execute("SELECT parent_comment_id FROM article_comments WHERE id = ? LIMIT 1", (curr_anc_id,))
+                        anc_r = cur.fetchone()
+                        if not anc_r:
+                            break
+                        curr_anc_id = anc_r["parent_comment_id"]
+
+                    notification_recipient_id = p_comm_row["user_id"]
+                    notification_type = "new_reply"
+                    notification_title = "Новый ответ в обсуждении"
+                    notification_message = f"Пользователь {author_name} ответил на ваш комментарий к «{art_title[:60]}»"
+                elif target_parent_ans_id is not None:
+                    # Direct comment on answer
+                    cur.execute("""
+                        SELECT id, user_id, article_id, comment_type, status
+                        FROM article_comments
+                        WHERE id = ? LIMIT 1
+                    """, (target_parent_ans_id,))
+                    p_ans_row = cur.fetchone()
+                    if not p_ans_row or p_ans_row["comment_type"] != "answer" or p_ans_row["status"] != "published" or p_ans_row["article_id"] != real_id:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Указанный ответ не найден или не принадлежит данному вопросу."
+                        })
+                        return
+
+                    notification_recipient_id = p_ans_row["user_id"]
+                    notification_type = "new_reply"
+                    notification_title = "Новый ответ в обсуждении"
+                    notification_message = f"Пользователь {author_name} ответил на ваш ответ к «{art_title[:60]}»"
+                else:
+                    # Root comment on article or question
+                    notification_recipient_id = art_author_id
+                    notification_type = "new_reply"
+                    notification_title = "Новый комментарий"
+                    notification_message = f"Пользователь {author_name} оставил комментарий к «{art_title[:60]}»"
+
+            # Idempotency check with clientOperationId
+            if client_op_id:
+                cur.execute("""
+                    SELECT * FROM article_comments
+                    WHERE user_id = ? AND client_operation_id = ?
+                    LIMIT 1
+                """, (user_id, client_op_id))
+                existing_op = cur.fetchone()
+                if existing_op:
+                    same_art = (existing_op["article_id"] == real_id)
+                    same_content = (existing_op["content"] == stripped_content)
+                    same_type = (existing_op["comment_type"] == comment_type)
+                    same_p_comm = ((existing_op["parent_comment_id"] or None) == target_parent_comm_id)
+                    same_p_ans = ((existing_op["parent_answer_id"] or None) == target_parent_ans_id)
+
+                    if same_art and same_content and same_type and same_p_comm and same_p_ans:
+                        cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
+                        cnt = cur.fetchone()["cnt"]
+                        self.send_json_response(200, {
+                            "success": True,
+                            "comment": {
+                                "id": existing_op["id"],
+                                "articleId": existing_op["article_id"],
+                                "userId": existing_op["user_id"],
+                                "authorName": existing_op["author_name"],
+                                "authorAvatar": existing_op["author_avatar"] or None,
+                                "content": existing_op["content"],
+                                "commentType": existing_op["comment_type"],
+                                "isSolution": bool(existing_op["is_solution"]),
+                                "parentAnswerId": existing_op["parent_answer_id"],
+                                "parentCommentId": existing_op["parent_comment_id"],
+                                "clientOperationId": existing_op["client_operation_id"],
+                                "updatedAt": existing_op["updated_at"],
+                                "revision": existing_op["revision"] if "revision" in existing_op.keys() and existing_op["revision"] is not None else 1,
+                                "createdAt": existing_op["created_at"]
+                            },
+                            "commentsCount": cnt,
+                            "isDuplicate": True
+                        })
+                        return
+                    else:
+                        self.send_json_response(409, {
+                            "success": False,
+                            "error": "Запрос с данным clientOperationId уже обработан с другими параметрами.",
+                            "code": "OPERATION_ID_CONFLICT"
+                        })
+                        return
 
             comment_id = f"comm_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -3627,11 +3872,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute("""
                     INSERT INTO article_comments (
                         id, article_id, user_id, author_name, author_avatar, content, status,
-                        comment_type, is_solution, parent_answer_id, updated_at, revision, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'published', ?, 0, ?, NULL, 1, ?)
+                        comment_type, is_solution, parent_answer_id, parent_comment_id, client_operation_id,
+                        updated_at, revision, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'published', ?, 0, ?, ?, ?, NULL, 1, ?)
                 """, (
                     comment_id, real_id, user_id, author_name, author_avatar,
-                    stripped_content, comment_type, target_parent_id, now_iso
+                    stripped_content, comment_type, target_parent_ans_id,
+                    target_parent_comm_id, client_op_id, now_iso
                 ))
             except sqlite3.IntegrityError:
                 if comment_type == "answer":
@@ -3649,54 +3896,54 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "myAnswerId": my_id
                     })
                     return
+                if client_op_id:
+                    cur.execute("""
+                        SELECT * FROM article_comments
+                        WHERE user_id = ? AND client_operation_id = ?
+                        LIMIT 1
+                    """, (user_id, client_op_id))
+                    race_row = cur.fetchone()
+                    if race_row and race_row["content"] == stripped_content:
+                        cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
+                        cnt = cur.fetchone()["cnt"]
+                        self.send_json_response(200, {
+                            "success": True,
+                            "comment": {
+                                "id": race_row["id"],
+                                "articleId": race_row["article_id"],
+                                "userId": race_row["user_id"],
+                                "authorName": race_row["author_name"],
+                                "authorAvatar": race_row["author_avatar"] or None,
+                                "content": race_row["content"],
+                                "commentType": race_row["comment_type"],
+                                "isSolution": bool(race_row["is_solution"]),
+                                "parentAnswerId": race_row["parent_answer_id"],
+                                "parentCommentId": race_row["parent_comment_id"],
+                                "clientOperationId": race_row["client_operation_id"],
+                                "updatedAt": race_row["updated_at"],
+                                "revision": race_row["revision"] if "revision" in race_row.keys() and race_row["revision"] is not None else 1,
+                                "createdAt": race_row["created_at"]
+                            },
+                            "commentsCount": cnt,
+                            "isDuplicate": True
+                        })
+                        return
                 raise
 
             cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
             comments_count = cur.fetchone()["cnt"]
 
-            art_author_id = art_row["author_id"]
-            art_title = art_row["title"] or "Публикация"
-
-            if comment_type == "answer":
-                if art_author_id and art_author_id != user_id:
-                    notif_id = f"notif_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
-                    cur.execute("""
-                        INSERT INTO user_notifications (
-                            id, user_id, actor_id, actor_name, article_id, comment_id, type, title, message, is_read, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, 'new_answer', ?, ?, 0, ?)
-                    """, (
-                        notif_id, art_author_id, user_id, author_name, real_id, comment_id,
-                        "Новый ответ на ваш вопрос",
-                        f"Пользователь {author_name} ответил на ваш вопрос «{art_title[:60]}»",
-                        now_iso
-                    ))
-            else:
-                if target_parent_id:
-                    if parent_answer_author_id and parent_answer_author_id != user_id:
-                        notif_id = f"notif_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
-                        cur.execute("""
-                            INSERT INTO user_notifications (
-                                id, user_id, actor_id, actor_name, article_id, comment_id, type, title, message, is_read, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, 'new_reply', ?, ?, 0, ?)
-                        """, (
-                            notif_id, parent_answer_author_id, user_id, author_name, real_id, comment_id,
-                            "Новый ответ в обсуждении",
-                            f"Пользователь {author_name} ответил на ваш ответ к «{art_title[:60]}»",
-                            now_iso
-                        ))
-                else:
-                    if art_author_id and art_author_id != user_id:
-                        notif_id = f"notif_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
-                        cur.execute("""
-                            INSERT INTO user_notifications (
-                                id, user_id, actor_id, actor_name, article_id, comment_id, type, title, message, is_read, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, 'new_reply', ?, ?, 0, ?)
-                        """, (
-                            notif_id, art_author_id, user_id, author_name, real_id, comment_id,
-                            "Новый комментарий",
-                            f"Пользователь {author_name} оставил комментарий к «{art_title[:60]}»",
-                            now_iso
-                        ))
+            # Notification is sent only if recipient exists and is not the actor
+            if notification_recipient_id and notification_recipient_id != user_id:
+                notif_id = f"notif_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
+                cur.execute("""
+                    INSERT INTO user_notifications (
+                        id, user_id, actor_id, actor_name, article_id, comment_id, type, title, message, is_read, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                """, (
+                    notif_id, notification_recipient_id, user_id, author_name, real_id, comment_id,
+                    notification_type, notification_title, notification_message, now_iso
+                ))
 
         comment_data = {
             "id": comment_id,
@@ -3707,7 +3954,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "content": stripped_content,
             "commentType": comment_type,
             "isSolution": False,
-            "parentAnswerId": target_parent_id,
+            "parentAnswerId": target_parent_ans_id,
+            "parentCommentId": target_parent_comm_id,
+            "clientOperationId": client_op_id,
             "updatedAt": None,
             "revision": 1,
             "createdAt": now_iso
@@ -3722,9 +3971,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
     def handle_update_article_comment(self, art_id: str, comm_id: str):
         """
         PUT /api/articles/<art_id>/comments/<comm_id> or PUT /api/comments/<comm_id>
-        Allows the author of an answer to edit its content.
+        Allows the author of an answer or comment to edit its content.
         Enforces authentication (401), content validation (1..5000 chars),
-        answer-only restriction, author ownership (403), URL article matching (400),
+        published status check, author ownership (403), URL article matching (400),
+        immutability of relational bindings (400),
         and optimistic concurrency locking via revision (409 CONCURRENCY_CONFLICT).
         """
         payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
@@ -3735,7 +3985,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if not user:
             self.send_json_response(401, {
                 "success": False,
-                "error": "Для редактирования ответа необходимо войти",
+                "error": "Для редактирования необходимо войти",
                 "requireAuth": True
             })
             return
@@ -3753,7 +4003,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if content is None or not isinstance(content, str) or not content.strip():
             self.send_json_response(400, {
                 "success": False,
-                "error": "Ответ не может быть пустым"
+                "error": "Комментарий не может быть пустым"
             })
             return
 
@@ -3761,7 +4011,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if len(stripped_content) > 5000:
             self.send_json_response(400, {
                 "success": False,
-                "error": "Ответ не должен превышать 5000 символов"
+                "error": "Комментарий не должен превышать 5000 символов"
             })
             return
 
@@ -3783,16 +4033,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if not comment:
                     self.send_json_response(404, {
                         "success": False,
-                        "error": "Ответ не найден"
+                        "error": "Комментарий не найден"
                     })
                     return
 
                 comm_type = (comment["comment_type"] if "comment_type" in comment.keys() else "").strip().lower()
                 comm_status = (comment["status"] if "status" in comment.keys() else "").strip().lower()
-                if comm_type != "answer" or comm_status != "published":
+                if comm_type not in ("answer", "comment") or comm_status != "published":
                     self.send_json_response(400, {
                         "success": False,
-                        "error": "Редактирование доступно только для опубликованных ответов"
+                        "error": "Редактирование доступно только для опубликованных комментариев и ответов"
                     })
                     return
 
@@ -3810,15 +4060,72 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if user["id"] != comment["user_id"]:
                     self.send_json_response(403, {
                         "success": False,
-                        "error": "Вы можете редактировать только свой ответ"
+                        "error": "Вы можете редактировать только свой комментарий или ответ"
                     })
                     return
+
+                # Invariant: reject attempts to modify immutable bindings
+                if "articleId" in payload or "article_id" in payload:
+                    p_art = payload.get("articleId") or payload.get("article_id")
+                    cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (p_art, p_art))
+                    p_art_row = cur.fetchone()
+                    p_art_canonical = p_art_row["id"] if p_art_row else p_art
+                    if p_art_canonical != comment["article_id"]:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Запрещено изменять публикацию комментария"
+                        })
+                        return
+
+                if "commentType" in payload or "comment_type" in payload:
+                    p_ctype = payload.get("commentType") or payload.get("comment_type")
+                    if p_ctype != comment["comment_type"]:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Запрещено изменять тип комментария"
+                        })
+                        return
+
+                if "parentAnswerId" in payload or "parent_answer_id" in payload:
+                    p_ans = payload.get("parentAnswerId") if "parentAnswerId" in payload else payload.get("parent_answer_id")
+                    if isinstance(p_ans, str) and not p_ans.strip():
+                        p_ans = None
+                    c_ans = comment["parent_answer_id"] if "parent_answer_id" in comment.keys() else None
+                    if p_ans != c_ans:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Запрещено изменять родительский ответ комментария"
+                        })
+                        return
+
+                if "parentCommentId" in payload or "parent_comment_id" in payload:
+                    p_comm = payload.get("parentCommentId") if "parentCommentId" in payload else payload.get("parent_comment_id")
+                    if isinstance(p_comm, str) and not p_comm.strip():
+                        p_comm = None
+                    c_comm = comment["parent_comment_id"] if "parent_comment_id" in comment.keys() else None
+                    if p_comm != c_comm:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Запрещено изменять родительский комментарий"
+                        })
+                        return
+
+                if "isSolution" in payload or "is_solution" in payload:
+                    p_sol = payload.get("isSolution") if "isSolution" in payload else payload.get("is_solution")
+                    if p_sol is not None:
+                        c_sol = bool(comment["is_solution"]) if "is_solution" in comment.keys() and comment["is_solution"] is not None else False
+                        if bool(p_sol) != c_sol:
+                            self.send_json_response(400, {
+                                "success": False,
+                                "error": "Запрещено изменять статус решения через редактирование комментария"
+                            })
+                            return
 
                 current_revision = comment["revision"] if "revision" in comment.keys() and comment["revision"] is not None else 1
                 if revision_param is not None and revision_param != current_revision:
                     self.send_json_response(409, {
                         "success": False,
-                        "error": "Ответ был изменен в другой сессии. Пожалуйста, обновите страницу",
+                        "error": "Комментарий был изменен в другой сессии. Пожалуйста, обновите страницу",
                         "code": "CONCURRENCY_CONFLICT",
                         "currentRevision": current_revision,
                         "currentContent": comment["content"]
@@ -3840,7 +4147,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     latest_cnt = latest["content"] if latest else comment["content"]
                     self.send_json_response(409, {
                         "success": False,
-                        "error": "Ответ был изменен в другой сессии. Пожалуйста, обновите страницу",
+                        "error": "Комментарий был изменен в другой сессии. Пожалуйста, обновите страницу",
                         "code": "CONCURRENCY_CONFLICT",
                         "currentRevision": latest_rev,
                         "currentContent": latest_cnt
@@ -3860,10 +4167,77 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "commentType": comment["comment_type"],
                     "isSolution": bool(comment["is_solution"]),
                     "parentAnswerId": comment["parent_answer_id"] if "parent_answer_id" in comment.keys() else None,
+                    "parentCommentId": comment["parent_comment_id"] if "parent_comment_id" in comment.keys() else None,
+                    "clientOperationId": comment["client_operation_id"] if "client_operation_id" in comment.keys() else None,
                     "revision": new_revision,
                     "updatedAt": now_iso,
                     "createdAt": comment["created_at"]
                 }
+            })
+        finally:
+            conn.close()
+
+    def handle_delete_article_comment(self, art_id: str, comm_id: str):
+        """
+        DELETE /api/articles/<art_id>/comments/<comm_id> or DELETE /api/comments/<comm_id>
+        Soft-deletes a comment or answer by setting status = 'deleted'.
+        Requires authentication and ownership (or admin role).
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для удаления необходимо войти",
+                "requireAuth": True
+            })
+            return
+
+        if not comm_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор комментария"
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM article_comments WHERE id = ?", (comm_id,))
+                comment = cur.fetchone()
+                if not comment:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Комментарий не найден"
+                    })
+                    return
+
+                if art_id:
+                    cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (art_id, art_id))
+                    art_row = cur.fetchone()
+                    canonical_art_id = art_row["id"] if art_row else art_id
+                    if canonical_art_id != comment["article_id"]:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Идентификатор публикации не совпадает с комментарием"
+                        })
+                        return
+
+                user_id = user["id"]
+                user_role = user.get("role", "user")
+                if user_id != comment["user_id"] and user_role != "admin":
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Вы можете удалять только свои комментарии"
+                    })
+                    return
+
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute("UPDATE article_comments SET status = 'deleted', updated_at = ? WHERE id = ?", (now_iso, comm_id))
+
+            self.send_json_response(200, {
+                "success": True,
+                "commentId": comm_id
             })
         finally:
             conn.close()

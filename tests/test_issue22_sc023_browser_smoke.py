@@ -849,6 +849,165 @@ class TestBrowserSmoke(unittest.TestCase):
         finally:
             page.close()
 
+    def test_06_threaded_comments_ui_interactions(self) -> None:
+        """
+        Verifies Reddit geometry connectors, single collapse toggle, parent jump,
+        drilldown windowing, and mobile viewport zero horizontal scroll (Issue #27).
+        """
+        page = self.browser.new_page()
+        try:
+            # 1. Login user to create deep comments chain
+            page.goto(f"{self.base_url}/feed.html", wait_until="domcontentloaded")
+            page.evaluate("""async () => {
+                await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({userId: 'user_tree_tester', name: 'Дерево Тестер', role: 'user'})
+                });
+            }""")
+
+            # Build a 6-level comment chain via API
+            chain_ids = page.evaluate("""async () => {
+                const ids = [];
+                let parentId = null;
+                for (let lvl = 0; lvl <= 6; lvl++) {
+                    const payload = {
+                        content: 'Уровень вложенности ' + lvl,
+                        commentType: 'comment'
+                    };
+                    if (parentId) {
+                        payload.parentCommentId = parentId;
+                    }
+                    const res = await fetch('/api/articles/art_smoke_01/comments', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (data && data.comment) {
+                        ids.push(data.comment.id);
+                        parentId = data.comment.id;
+                    }
+                }
+                return ids;
+            }""")
+            self.assertEqual(len(chain_ids), 7, "Failed to seed 7-level comment chain")
+
+            # 2. Open article page
+            page.goto(f"{self.base_url}/article.html?id=art_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector(".comment-item", timeout=10000)
+
+            # 3. Verify Single collapse button (.btn-toggle-thread) with +/- on root comment
+            toggle_btns = page.locator(".btn-toggle-thread")
+            self.assertGreaterEqual(toggle_btns.count(), 1, "Expected .btn-toggle-thread in DOM")
+            first_toggle = toggle_btns.first
+            toggle_icon = first_toggle.locator(".thread-toggle-icon")
+            self.assertTrue(toggle_icon.is_visible(), "Expected .thread-toggle-icon in collapse button")
+            self.assertEqual((toggle_icon.text_content() or "").strip(), "+")
+
+            # Click to expand first level and verify switch to '-'
+            first_toggle.click()
+            page.wait_for_selector(".comment-child-node", state="visible", timeout=5000)
+            self.assertEqual((toggle_icon.text_content() or "").strip(), "-")
+
+            # 4. Verify absence of .btn-jump-to-parent and .comment-in-reply-to
+            self.assertEqual(
+                page.locator(".btn-jump-to-parent").count(),
+                0,
+                "Button .btn-jump-to-parent must be completely removed"
+            )
+            self.assertEqual(
+                page.locator(".comment-in-reply-to").count(),
+                0,
+                "Label .comment-in-reply-to must not be present"
+            )
+
+            # 5. Verify Reddit continuous geometry: .comment-branch-elbow, .comment-stem-upper, .thread-toggle-icon
+            elbows = page.locator(".comment-branch-elbow")
+            self.assertGreaterEqual(elbows.count(), 1, "Expected .comment-branch-elbow on child nodes")
+            self.assertTrue(elbows.first.is_visible(), "Expected .comment-branch-elbow to be visible")
+
+            stem_uppers = page.locator(".comment-stem-upper")
+            self.assertGreaterEqual(stem_uppers.count(), 1, "Expected .comment-stem-upper on parent node with children")
+
+            # Verify centering of toggle icon on avatar axis (x = 15px)
+            is_toggle_centered = page.evaluate("""() => {
+                const icon = document.querySelector('.thread-toggle-icon');
+                if (!icon) return false;
+                const style = window.getComputedStyle(icon);
+                return (style.marginLeft === '5px' && style.marginRight === '15px') || (style.marginLeft === '7px' && style.marginRight === '17px');
+            }""")
+            self.assertTrue(is_toggle_centered, "Toggle icon must be centered on x=15px avatar axis")
+
+            # Verify full path highlight (.is-tree-path-active) on elbow hover
+            elbows.first.hover()
+            page.wait_for_timeout(100)
+            active_paths_count = page.locator(".is-tree-path-active").count()
+            self.assertGreaterEqual(active_paths_count, 1, "Expected .is-tree-path-active elements on hover")
+            page.mouse.move(0, 0)
+
+            # 6. Sequentially expand intermediate levels down to depth >= 5 for drilldown windowing
+            for _ in range(6):
+                continue_btn = page.locator(".btn-continue-thread").first
+                if continue_btn.count() > 0 and continue_btn.is_visible():
+                    break
+                unexpanded_toggles = page.locator(".btn-toggle-thread[aria-expanded='false']")
+                clicked = False
+                for i in range(unexpanded_toggles.count()):
+                    cand = unexpanded_toggles.nth(i)
+                    if cand.is_visible():
+                        cand.click()
+                        page.wait_for_timeout(200)
+                        clicked = True
+                        break
+                if not clicked:
+                    break
+
+            continue_btns = page.locator(".btn-continue-thread")
+            self.assertGreaterEqual(continue_btns.count(), 1, "Expected .btn-continue-thread at depth >= 5")
+            self.assertTrue(continue_btns.first.is_visible(), "Expected .btn-continue-thread to be visible")
+            continue_text = continue_btns.first.text_content() or ""
+            self.assertIn("Продолжить ветку", continue_text)
+
+            # Click continue thread to enter drilldown window
+            continue_btns.first.click()
+            page.wait_for_selector(".thread-drilldown-bar", timeout=5000)
+            drilldown_bar = page.locator(".thread-drilldown-bar")
+            self.assertTrue(drilldown_bar.is_visible(), "Expected .thread-drilldown-bar to appear on drilldown")
+
+            back_btn = page.locator(".btn-drilldown-back")
+            self.assertTrue(back_btn.is_visible(), "Expected .btn-drilldown-back in drilldown bar")
+            self.assertIn("Назад", back_btn.text_content() or "")
+
+            # Click back to return to main tree
+            back_btn.click()
+            page.wait_for_function(
+                "document.querySelectorAll('.thread-drilldown-bar').length === 0",
+                timeout=5000
+            )
+
+            # 7. Mobile responsive viewport (360px) and zero horizontal scroll
+            page.set_viewport_size({"width": 360, "height": 640})
+            page.wait_for_timeout(300)
+            is_no_horizontal_scroll = page.evaluate("""() => {
+                const docScrollOk = document.documentElement.scrollWidth <= window.innerWidth + 2;
+                const commentsList = document.getElementById('commentsList');
+                const listScrollOk = !commentsList || (commentsList.scrollWidth <= document.documentElement.clientWidth + 2);
+                let childrenScrollOk = true;
+                document.querySelectorAll('.comment-thread-children').forEach(el => {
+                    if (el.scrollWidth > document.documentElement.clientWidth + 2) {
+                        childrenScrollOk = false;
+                    }
+                });
+                return docScrollOk && listScrollOk && childrenScrollOk;
+            }""")
+            self.assertTrue(
+                is_no_horizontal_scroll,
+                "Horizontal scroll detected on 360px viewport"
+            )
+        finally:
+            page.close()
+
 
 if __name__ == "__main__":
     unittest.main()

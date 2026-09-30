@@ -71,6 +71,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                 "answers_on_non_questions": 0,
                 "orphaned_replies": 0,
                 "mismatched_counters": 1,
+                "orphaned_comment_parents": 0,
+                "comment_tree_cycles_or_depth": 0,
             },
             "details": {
                 "duplicate_answers": [],
@@ -87,6 +89,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                         "actual_value": "file_not_found",
                     }
                 ],
+                "orphaned_comment_parents": [],
+                "comment_tree_cycles_or_depth": [],
             },
             "database": mask_path(db_path),
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -114,6 +118,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                     "answers_on_non_questions": 0,
                     "orphaned_replies": 0,
                     "mismatched_counters": 1,
+                    "orphaned_comment_parents": 0,
+                    "comment_tree_cycles_or_depth": 0,
                 },
                 "details": {
                     "duplicate_answers": [],
@@ -130,6 +136,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                             "actual_value": "missing_required_tables",
                         }
                     ],
+                    "orphaned_comment_parents": [],
+                    "comment_tree_cycles_or_depth": [],
                 },
                 "database": mask_path(db_path),
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -142,6 +150,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
             "answers_on_non_questions": [],
             "orphaned_replies": [],
             "mismatched_counters": [],
+            "orphaned_comment_parents": [],
+            "comment_tree_cycles_or_depth": [],
         }
 
         # Check 1: Duplicate active answers per user on questions
@@ -465,6 +475,94 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                             "actual_value": actual_sol,
                         })
 
+        # Check 7: Orphaned comment parents (parent_comment_id)
+        cur.execute("PRAGMA table_info(article_comments)")
+        ac_cols = {col["name"] for col in cur.fetchall()}
+
+        if "parent_comment_id" in ac_cols:
+            cur.execute("""
+                SELECT c.id, c.article_id, c.user_id, c.parent_comment_id, c.parent_answer_id,
+                       p.id AS parent_id, p.status AS parent_status,
+                       p.comment_type AS parent_type, p.article_id AS parent_article_id,
+                       p.parent_answer_id AS parent_parent_answer_id
+                FROM article_comments c
+                LEFT JOIN article_comments p ON c.parent_comment_id = p.id
+                WHERE c.parent_comment_id IS NOT NULL AND TRIM(c.parent_comment_id) != ''
+                  AND (
+                      p.id IS NULL
+                      OR p.status != 'published'
+                      OR p.comment_type != 'comment'
+                      OR p.article_id != c.article_id
+                      OR (c.parent_answer_id IS NOT NULL AND p.parent_answer_id != c.parent_answer_id)
+                      OR (c.parent_answer_id IS NULL AND p.parent_answer_id IS NOT NULL)
+                  )
+            """)
+            for r in cur.fetchall():
+                reasons = []
+                if r["parent_id"] is None:
+                    reasons.append("parent_missing")
+                else:
+                    if r["parent_status"] != "published":
+                        reasons.append(f"parent_status_{r['parent_status']}")
+                    if r["parent_type"] != "comment":
+                        reasons.append(f"parent_type_{r['parent_type']}")
+                    if r["parent_article_id"] != r["article_id"]:
+                        reasons.append("parent_article_mismatch")
+                    if (r["parent_answer_id"] or None) != (r["parent_parent_answer_id"] or None):
+                        reasons.append("parent_answer_mismatch")
+
+                details["orphaned_comment_parents"].append({
+                    "comment_id": r["id"],
+                    "article_id": r["article_id"],
+                    "user_id": r["user_id"],
+                    "parent_comment_id": r["parent_comment_id"],
+                    "reasons": reasons,
+                })
+
+            # Check 8: Comment tree cycles and depth limit violations (> 20 levels)
+            cur.execute("""
+                SELECT id, article_id, user_id, parent_comment_id
+                FROM article_comments
+                WHERE parent_comment_id IS NOT NULL AND TRIM(parent_comment_id) != ''
+            """)
+            all_children = cur.fetchall()
+
+            cur.execute("SELECT id, parent_comment_id FROM article_comments")
+            parent_comment_map = {r["id"]: r["parent_comment_id"] for r in cur.fetchall()}
+
+            for r in all_children:
+                cid = r["id"]
+                visited = [cid]
+                seen = {cid}
+                curr = r["parent_comment_id"]
+                has_cycle = False
+
+                while curr:
+                    if curr in seen:
+                        has_cycle = True
+                        visited.append(curr)
+                        break
+                    seen.add(curr)
+                    visited.append(curr)
+                    curr = parent_comment_map.get(curr)
+
+                if has_cycle:
+                    details["comment_tree_cycles_or_depth"].append({
+                        "comment_id": cid,
+                        "article_id": r["article_id"],
+                        "user_id": r["user_id"],
+                        "violation": "cycle_detected",
+                        "cycle_path": visited,
+                    })
+                elif len(visited) > 20:
+                    details["comment_tree_cycles_or_depth"].append({
+                        "comment_id": cid,
+                        "article_id": r["article_id"],
+                        "user_id": r["user_id"],
+                        "violation": "depth_exceeded",
+                        "depth": len(visited),
+                    })
+
         summary = {k: len(v) for k, v in details.items()}
         total_violations = sum(summary.values())
 
@@ -489,6 +587,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                 "answers_on_non_questions": 0,
                 "orphaned_replies": 0,
                 "mismatched_counters": 1,
+                "orphaned_comment_parents": 0,
+                "comment_tree_cycles_or_depth": 0,
             },
             "details": {
                 "duplicate_answers": [],
@@ -505,6 +605,8 @@ def run_diagnostic(db_path: str, verbose: bool = False) -> Dict[str, Any]:
                         "actual_value": str(exc),
                     }
                 ],
+                "orphaned_comment_parents": [],
+                "comment_tree_cycles_or_depth": [],
             },
             "database": mask_path(db_path),
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -540,6 +642,8 @@ def format_text_report(results: Dict[str, Any], verbose: bool = False) -> str:
     lines.append(f"- Answers on non-question materials: {summary.get('answers_on_non_questions', 0)}")
     lines.append(f"- Orphaned discussion replies: {summary.get('orphaned_replies', 0)}")
     lines.append(f"- Mismatched counters: {summary.get('mismatched_counters', 0)}")
+    lines.append(f"- Orphaned comment parents: {summary.get('orphaned_comment_parents', 0)}")
+    lines.append(f"- Comment tree cycles or depth violations: {summary.get('comment_tree_cycles_or_depth', 0)}")
     lines.append("======================================================================")
 
     if verbose and results.get("violations_count", 0) > 0:

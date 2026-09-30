@@ -230,14 +230,22 @@ class TestIssue18SeparateServerStartupAndSeed(unittest.TestCase):
             text=True,
         )
         try:
-            # Wait for server to print startup line
+            # Wait for server to initialize schema
             started = False
-            for _ in range(30):
+            for _ in range(60):
                 if proc.poll() is not None:
                     break
                 if os.path.exists(self.db_path):
-                    started = True
-                    break
+                    try:
+                        conn_chk = sqlite3.connect(self.db_path)
+                        cur_chk = conn_chk.cursor()
+                        cur_chk.execute("SELECT COUNT(*) FROM companies")
+                        cur_chk.fetchone()
+                        conn_chk.close()
+                        started = True
+                        break
+                    except Exception:
+                        pass
                 time.sleep(0.1)
 
             self.assertTrue(started, "Server did not initialize database in time")
@@ -273,18 +281,26 @@ class TestIssue18SeparateServerStartupAndSeed(unittest.TestCase):
             text=True,
         )
         try:
-            # Wait for server to initialize
+            # Wait for server to initialize and seed database
             started = False
-            for _ in range(30):
+            for _ in range(60):
                 if proc.poll() is not None:
                     break
                 if os.path.exists(self.db_path):
-                    started = True
-                    break
+                    try:
+                        conn_chk = sqlite3.connect(self.db_path)
+                        cur_chk = conn_chk.cursor()
+                        cur_chk.execute("SELECT COUNT(*) FROM moderation_submissions")
+                        row = cur_chk.fetchone()
+                        conn_chk.close()
+                        if row and row[0] > 0:
+                            started = True
+                            break
+                    except Exception:
+                        pass
                 time.sleep(0.1)
 
-            self.assertTrue(started, "Server did not initialize database in time")
-            time.sleep(0.2)
+            self.assertTrue(started, "Server did not seed database in time")
         finally:
             proc.terminate()
             try:
