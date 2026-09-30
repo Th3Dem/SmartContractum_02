@@ -475,3 +475,4 @@
 [2026-09-30 19:57] | git_bot | GIT_COMMITTED | Фиксация доработки браузерного теста в feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 20:02] | pm_bot | DEV_REWORK | Передача dev_bot на доработку: устранение горизонтального переполнения страницы и дерева комментариев на вьюпорте 360px (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 20:05] | dev_bot | IMPLEMENTATION_COMPLETE | Устранено горизонтальное переполнение на экранах 360px и скорректирован ассерт мобильного скролла дерева комментариев в test_06 (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 20:06] | git_bot | GIT_COMMITTED | Фиксация устранения горизонтального скролла на 360px в feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
