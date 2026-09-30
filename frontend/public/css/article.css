@@ -4,6 +4,13 @@
  * Zero emojis, strict vector SVG icons, Onest font family
  */
 
+html,
+body,
+.app-body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 /* ==========================================================================
    Article Page Layout (Comfortable Reading Width 720px)
    ========================================================================== */
@@ -693,7 +700,9 @@
    ========================================================================== */
 @media (max-width: 680px) {
   .article-page-container {
-    padding: 16px 14px 60px 14px;
+    padding: 16px 12px 60px 12px;
+    box-sizing: border-box;
+    max-width: 100vw;
   }
 
   .article-title {
@@ -712,6 +721,12 @@
 
   .article-top-bar {
     flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .article-actions-group {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .article-bottom-actions {

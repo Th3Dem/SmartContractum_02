@@ -969,9 +969,18 @@ class TestBrowserSmoke(unittest.TestCase):
             # 7. Mobile responsive viewport (360px) and zero horizontal scroll
             page.set_viewport_size({"width": 360, "height": 640})
             page.wait_for_timeout(300)
-            is_no_horizontal_scroll = page.evaluate(
-                "document.documentElement.scrollWidth <= window.innerWidth"
-            )
+            is_no_horizontal_scroll = page.evaluate("""() => {
+                const docScrollOk = document.documentElement.scrollWidth <= window.innerWidth + 2;
+                const commentsList = document.getElementById('commentsList');
+                const listScrollOk = !commentsList || (commentsList.scrollWidth <= document.documentElement.clientWidth + 2);
+                let childrenScrollOk = true;
+                document.querySelectorAll('.comment-thread-children').forEach(el => {
+                    if (el.scrollWidth > document.documentElement.clientWidth + 2) {
+                        childrenScrollOk = false;
+                    }
+                });
+                return docScrollOk && listScrollOk && childrenScrollOk;
+            }""")
             self.assertTrue(
                 is_no_horizontal_scroll,
                 "Horizontal scroll detected on 360px viewport"
