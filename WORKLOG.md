@@ -492,3 +492,8 @@
 [2026-10-01 01:18] | py_bot | IMPLEMENTATION_COMPLETE | Реализация серверной валидации revision, идемпотентности ответов и защиты от дублей (Task: issue-29-comments-idempotency-and-conflicts)
 [2026-10-01 01:27] | dev_bot | IMPLEMENTATION_COMPLETE | Клиентская идемпотентность, стабильные ключи операций и разрешение конфликта 409 без reload (Task: issue-29-comments-idempotency-and-conflicts)
 [2026-10-01 01:32] | git_bot | PR_CREATED | Открыт PR #32 для Issue #29 (Fixes #29), ветка feat/issue-29-comments-idempotency-and-conflicts (Task: issue-29-comments-idempotency-and-conflicts)
+[2026-10-01 01:45] | py_bot | IMPLEMENTATION_COMPLETE | Реализация единого контракта счетчиков commentsCount, answersCount и discussionCount для Issue #30 (Task: issue-30-comments-navigation-and-highlighting)
+[2026-10-01 01:55] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация навигации, динамического планировщика времени, точной подсветки путей и лимитов глубины окон для комментариев (Task: issue-30-comments-navigation-and-highlighting)
+[2026-10-01 01:57] | dev_bot | IMPLEMENTATION_COMPLETE | Визуальная полировка дерева комментариев: органичная кнопка продолжения ветки, спокойная метка (изменен), мягкие hover-кольца и стабильный переключатель (Task: issue-31-comments-visual-polish)
+[2026-10-01 01:58] | pm_bot | VERIFICATION_PASSED | Пройден Compilation Gate (645 тестов, 0 нарушений миграционной диагностики) и визуальная приемка Issue #30 и Issue #31 в Headless Chrome (Task: issue-30-comments-navigation-and-highlighting)
+[2026-10-01 01:59] | git_bot | GIT_COMMITTED | Фиксация коммита реализации Issue #30 и #31 в feat/issue-29-comments-idempotency-and-conflicts (Task: issue-30-comments-navigation-and-highlighting)

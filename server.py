@@ -3818,8 +3818,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     same_p_ans = ((existing_op["parent_answer_id"] or None) == target_parent_ans_id)
 
                     if same_art and same_content and same_type and same_p_comm and same_p_ans:
-                        cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
-                        cnt = cur.fetchone()["cnt"]
+                        cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'comment'", (real_id,))
+                        comments_count = cur.fetchone()["cnt"]
+                        cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'answer'", (real_id,))
+                        answers_count = cur.fetchone()["cnt"]
+                        discussion_count = comments_count + answers_count
                         self.send_json_response(200, {
                             "success": True,
                             "comment": {
@@ -3838,7 +3841,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                                 "revision": existing_op["revision"] if "revision" in existing_op.keys() and existing_op["revision"] is not None else 1,
                                 "createdAt": existing_op["created_at"]
                             },
-                            "commentsCount": cnt,
+                            "commentsCount": comments_count,
+                            "answersCount": answers_count,
+                            "discussionCount": discussion_count,
                             "isDuplicate": True
                         })
                         return
@@ -3896,8 +3901,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         same_p_comm = ((race_row["parent_comment_id"] or None) == target_parent_comm_id)
                         same_p_ans = ((race_row["parent_answer_id"] or None) == target_parent_ans_id)
                         if same_art and same_content and same_type and same_p_comm and same_p_ans:
-                            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
-                            cnt = cur.fetchone()["cnt"]
+                            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'comment'", (real_id,))
+                            comments_count = cur.fetchone()["cnt"]
+                            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'answer'", (real_id,))
+                            answers_count = cur.fetchone()["cnt"]
+                            discussion_count = comments_count + answers_count
                             self.send_json_response(200, {
                                 "success": True,
                                 "comment": {
@@ -3916,7 +3924,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                                     "revision": race_row["revision"] if "revision" in race_row.keys() and race_row["revision"] is not None else 1,
                                     "createdAt": race_row["created_at"]
                                 },
-                                "commentsCount": cnt,
+                                "commentsCount": comments_count,
+                                "answersCount": answers_count,
+                                "discussionCount": discussion_count,
                                 "isDuplicate": True
                             })
                             return
@@ -3944,8 +3954,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 raise
 
-            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (real_id,))
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'comment'", (real_id,))
             comments_count = cur.fetchone()["cnt"]
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'answer'", (real_id,))
+            answers_count = cur.fetchone()["cnt"]
+            discussion_count = comments_count + answers_count
 
             # Notification is sent only if recipient exists and is not the actor
             if notification_recipient_id and notification_recipient_id != user_id:
@@ -3979,7 +3992,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json_response(201, {
             "success": True,
             "comment": comment_data,
-            "commentsCount": comments_count
+            "commentsCount": comments_count,
+            "answersCount": answers_count,
+            "discussionCount": discussion_count
         })
 
     def handle_update_article_comment(self, art_id: str, comm_id: str):
@@ -4703,16 +4718,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         likes_count = 0
         comments_count = 0
         answers_count = 0
+        discussion_count = 0
         has_solution = False
         has_liked = False
         with conn:
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (row["id"],))
             likes_count = cur.fetchone()["cnt"]
-            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published'", (row["id"],))
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'comment'", (row["id"],))
             comments_count = cur.fetchone()["cnt"]
             cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'answer'", (row["id"],))
             answers_count = cur.fetchone()["cnt"]
+            discussion_count = comments_count + answers_count
             cur.execute("SELECT 1 FROM article_comments WHERE article_id = ? AND status = 'published' AND is_solution = 1 LIMIT 1", (row["id"],))
             has_solution = cur.fetchone() is not None
             if user:
@@ -4748,6 +4765,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "hasLiked": has_liked,
             "commentsCount": comments_count,
             "answersCount": answers_count,
+            "discussionCount": discussion_count,
             "hasSolution": has_solution,
             "materialType": mat_type,
             "type": mat_type,
@@ -4757,7 +4775,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         self.send_json_response(200, {
             "success": True,
-            "article": article_data
+            "article": article_data,
+            "commentsCount": comments_count,
+            "answersCount": answers_count,
+            "discussionCount": discussion_count
         })
 
     handle_get_article_by_id = handle_get_article
@@ -4976,7 +4997,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
                 likes_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
-                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' GROUP BY article_id")
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' AND comment_type = 'comment' GROUP BY article_id")
                 comments_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' AND comment_type = 'answer' GROUP BY article_id")
@@ -5260,6 +5281,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "hasLiked": art_id in user_likes,
                 "commentsCount": comments_counts.get(art_id, 0),
                 "answersCount": answers_counts.get(art_id, 0),
+                "discussionCount": comments_counts.get(art_id, 0) + answers_counts.get(art_id, 0),
                 "hasSolution": art_id in solved_article_ids,
                 "matchedAnswerSnippet": matched_answer_snippet,
                 "materialType": art_type,
@@ -5277,7 +5299,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             if sort_by in ("popular", "rating"):
                 filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("createdAt", "")), reverse=True)
             elif sort_by == "discussed":
-                filtered_articles.sort(key=lambda a: (a.get("commentsCount", 0), a.get("createdAt", "")), reverse=True)
+                filtered_articles.sort(key=lambda a: (a.get("discussionCount", a.get("commentsCount", 0)), a.get("createdAt", "")), reverse=True)
             elif sort_by in ("oldest", "asc"):
                 filtered_articles.reverse()
             elif sort_by in ("newest", "desc"):

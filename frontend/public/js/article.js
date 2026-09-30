@@ -573,23 +573,76 @@
 
   function updateCommentTimestamps() {
     const timeElements = document.querySelectorAll('time.comment-time[datetime]');
-    if (!timeElements || timeElements.length === 0) return;
     const now = Date.now();
-    timeElements.forEach(function (el) {
-      const iso = el.getAttribute('datetime');
-      if (iso) {
+    let minNextDelaySec = 60;
+
+    if (timeElements && timeElements.length > 0) {
+      timeElements.forEach(function (el) {
+        const iso = el.getAttribute('datetime');
+        if (!iso) return;
+        const timeMs = new Date(iso).getTime();
+        const diffSec = (!isNaN(timeMs) && timeMs > 0) ? Math.max(0, Math.floor((now - timeMs) / 1000)) : 86401;
+
         const rel = formatCommentTimeRelative(iso, now);
         if (el.textContent !== rel) {
           el.textContent = rel;
         }
-      }
-    });
+
+        if (diffSec < 60) {
+          minNextDelaySec = Math.min(minNextDelaySec, 1);
+        } else if (diffSec < 3600) {
+          const remMin = 60 - (diffSec % 60);
+          const delay = Math.max(1, Math.min(60, remMin));
+          minNextDelaySec = Math.min(minNextDelaySec, delay);
+        } else if (diffSec <= 86400) {
+          const remHour = 3600 - (diffSec % 3600);
+          const delay = Math.max(1, Math.min(60, remHour));
+          minNextDelaySec = Math.min(minNextDelaySec, delay);
+        }
+      });
+    }
+
+    return Math.max(1, Math.min(60, minNextDelaySec)) * 1000;
   }
 
-  if (window._commentTimestampTimer) {
-    clearInterval(window._commentTimestampTimer);
+  function runCommentTimestampScheduler() {
+    if (window._commentTimestampTimer) {
+      clearTimeout(window._commentTimestampTimer);
+      window._commentTimestampTimer = null;
+    }
+    const nextDelayMs = updateCommentTimestamps();
+    window._commentTimestampTimer = setTimeout(runCommentTimestampScheduler, nextDelayMs);
   }
-  window._commentTimestampTimer = setInterval(updateCommentTimestamps, 30000);
+
+  // Cleanup previous scheduler and event listeners on re-init
+  if (window._commentTimestampTimer) {
+    clearTimeout(window._commentTimestampTimer);
+    window._commentTimestampTimer = null;
+  }
+  if (window._commentTimestampVisibilityHandler) {
+    document.removeEventListener('visibilitychange', window._commentTimestampVisibilityHandler);
+    window._commentTimestampVisibilityHandler = null;
+  }
+  if (window._commentTimestampFocusHandler) {
+    window.removeEventListener('focus', window._commentTimestampFocusHandler);
+    window._commentTimestampFocusHandler = null;
+  }
+
+  window._commentTimestampVisibilityHandler = function () {
+    if (!document.hidden) {
+      runCommentTimestampScheduler();
+    }
+  };
+  document.addEventListener('visibilitychange', window._commentTimestampVisibilityHandler);
+
+  window._commentTimestampFocusHandler = function () {
+    runCommentTimestampScheduler();
+  };
+  window.addEventListener('focus', window._commentTimestampFocusHandler);
+
+  window.updateCommentTimestamps = updateCommentTimestamps;
+  window.runCommentTimestampScheduler = runCommentTimestampScheduler;
+  runCommentTimestampScheduler();
 
   function getAuthorInitials(name) {
     if (!name) return 'SC';
@@ -695,9 +748,9 @@
 
   function getMaxWindowDepth() {
     if (window.innerWidth < 680) {
-      return 3;
+      return 5;
     }
-    return 5;
+    return 8;
   }
 
   function buildCommentTree(comments) {
@@ -856,19 +909,12 @@
       if (elbow) {
         elbow.classList.toggle('is-tree-path-active', active);
       }
-      if (stem) {
-        stem.classList.toggle('is-tree-path-active', active);
-      }
       if (connector) {
         connector.classList.toggle('is-connection-active', active);
       }
       const myAvatar = el.querySelector('.comment-main .comment-author-avatar');
       if (myAvatar) {
         myAvatar.classList.toggle('avatar-peer-highlight', active);
-      }
-      const myHeader = el.querySelector('.comment-item-header');
-      if (myHeader) {
-        myHeader.classList.toggle('connection-peer-highlight', active);
       }
 
       const parentThread = el.closest('.comment-thread-children');
@@ -900,10 +946,6 @@
       if (parentAvatar) {
         parentAvatar.classList.toggle('avatar-peer-highlight', active);
       }
-      const parentHeader = parentItem.querySelector('.comment-item-header');
-      if (parentHeader) {
-        parentHeader.classList.toggle('connection-peer-highlight', active);
-      }
 
       let prevSib = el.previousElementSibling;
       while (prevSib) {
@@ -922,18 +964,21 @@
       elbow.addEventListener('mouseleave', function () { setTreePathHighlight(false); });
       elbow.addEventListener('focus', function () { setTreePathHighlight(true); });
       elbow.addEventListener('blur', function () { setTreePathHighlight(false); });
-      elbow.addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (comment.parentCommentId) {
-          scrollToParentComment(comment.parentCommentId);
-        }
-      });
     }
 
     if (stem) {
-      stem.addEventListener('mouseenter', function () { setTreePathHighlight(true); });
-      stem.addEventListener('mouseleave', function () { setTreePathHighlight(false); });
+      stem.addEventListener('mouseenter', function () {
+        if (el.nextElementSibling && typeof el.nextElementSibling._setTreePathHighlight === 'function') {
+          el.nextElementSibling._setTreePathHighlight(true);
+        }
+      });
+      stem.addEventListener('mouseleave', function () {
+        if (el.nextElementSibling && typeof el.nextElementSibling._setTreePathHighlight === 'function') {
+          el.nextElementSibling._setTreePathHighlight(false);
+        }
+      });
     }
+    el._setTreePathHighlight = setTreePathHighlight;
 
     if (comment.isDeleted) {
       const deletedMain = document.createElement('div');
@@ -1198,6 +1243,17 @@
                   if (commentTextEl) {
                     commentTextEl.innerHTML = escapeHtml(comment.content).replace(/\n/g, '<br>');
                   }
+                  let updatedBadge = el.querySelector('.comment-updated-badge');
+                  if (!updatedBadge) {
+                    const timeEl = el.querySelector('time.comment-time');
+                    if (timeEl) {
+                      const badgeSpan = document.createElement('span');
+                      badgeSpan.className = 'comment-updated-badge';
+                      badgeSpan.style.cssText = 'font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;';
+                      badgeSpan.textContent = '(изменен)';
+                      timeEl.insertAdjacentElement('afterend', badgeSpan);
+                    }
+                  }
                   editWrap.style.display = 'none';
                   contentWrap.style.display = 'block';
                   showToast('Комментарий сохранен');
@@ -1348,15 +1404,26 @@
     if (totalDescendants > 0) {
       const maxDepth = getMaxWindowDepth();
       if (depth >= maxDepth) {
+        const continueRow = document.createElement('div');
+        continueRow.className = 'comment-toggle-row comment-continue-row';
+
+        const toggleStemUpper = document.createElement('div');
+        toggleStemUpper.className = 'comment-toggle-stem-upper';
+        toggleStemUpper.setAttribute('aria-hidden', 'true');
+        continueRow.appendChild(toggleStemUpper);
+
         const continueBtn = document.createElement('button');
         continueBtn.type = 'button';
         continueBtn.className = 'btn btn-continue-thread';
         continueBtn.setAttribute('data-comment-id', comment.id);
+        continueBtn.setAttribute('aria-label', 'Продолжить ветку (' + totalDescendants + ')');
         continueBtn.innerHTML =
-          '<span>Продолжить ветку (' + totalDescendants + ')</span>' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-            '<polyline points="9 18 15 12 9 6"></polyline>' +
-          '</svg>';
+          '<span class="thread-toggle-icon continue-thread-icon" aria-hidden="true">' +
+            '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="3 1.5 6 4.5 3 7.5"></polyline>' +
+            '</svg>' +
+          '</span>' +
+          '<span class="continue-thread-text">Продолжить ветку (' + totalDescendants + ')</span>';
 
         continueBtn.addEventListener('click', function (e) {
           e.preventDefault();
@@ -1370,7 +1437,8 @@
           }
         });
 
-        el.appendChild(continueBtn);
+        continueRow.appendChild(continueBtn);
+        el.appendChild(continueRow);
       } else {
         const isExpanded = window._expandedCommentIds.has(comment.id);
 
@@ -1423,6 +1491,18 @@
 
         updateToggleContent(isExpanded);
         toggleRow.appendChild(toggleBtn);
+
+        const commentActions = el.querySelector('.comment-actions');
+        if (commentActions) {
+          toggleRow.appendChild(commentActions);
+        }
+
+        el.appendChild(toggleRow);
+
+        const replyWrap = el.querySelector('.comment-reply-form-wrap');
+        if (replyWrap) {
+          toggleRow.insertAdjacentElement('afterend', replyWrap);
+        }
 
         function setLocalToggleHighlight(active) {
           toggleBtn.classList.toggle('is-tree-path-active', active);
@@ -1534,7 +1614,7 @@
 
     const hasUpdated = Boolean(comment.updatedAt || comment.updated_at);
     const updatedBadgeHtml = hasUpdated
-      ? '<span class="comment-updated-badge">Изменено</span>'
+      ? '<span class="comment-updated-badge" style="font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;">(изменен)</span>'
       : '';
 
     let solutionBadgeHtml = '';
@@ -1649,7 +1729,11 @@
             backBtn.addEventListener('click', function (e) {
               e.preventDefault();
               const popped = window._commentDrilldownState.stack.pop();
-              loadComments(articleId);
+              if (window._commentsResponseData) {
+                renderCommentsData(window._commentsResponseData);
+              } else {
+                loadComments(articleId);
+              }
               if (popped && typeof popped.scrollY === 'number') {
                 window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
               }
@@ -1786,8 +1870,20 @@
                 if (textEl) {
                   textEl.innerHTML = escapeHtml(comment.content).replace(/\n/g, '<br>');
                 }
-                if (updatedWrap) {
-                  updatedWrap.innerHTML = '<span class="comment-updated-badge">Изменено</span>';
+                let updatedBadge = el.querySelector('.comment-updated-badge');
+                if (!updatedBadge) {
+                  const timeEl = el.querySelector('time.comment-time');
+                  if (timeEl) {
+                    const badgeSpan = document.createElement('span');
+                    badgeSpan.className = 'comment-updated-badge';
+                    badgeSpan.style.cssText = 'font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;';
+                    badgeSpan.textContent = '(изменен)';
+                    timeEl.insertAdjacentElement('afterend', badgeSpan);
+                  } else if (updatedWrap) {
+                    updatedWrap.innerHTML = '<span class="comment-updated-badge" style="font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;">(изменен)</span>';
+                  }
+                } else {
+                  updatedBadge.textContent = '(изменен)';
                 }
 
                 editWrap.style.display = 'none';
@@ -1976,16 +2072,20 @@
         }
 
         const maxDepth = getMaxWindowDepth();
-        if (path.length > maxDepth) {
-          const windowRoot = path[maxDepth - 1] || path[0];
-          if (windowRoot && windowRoot.id !== rawTargetId) {
-            window._commentDrilldownState.stack = [{
-              rootCommentId: windowRoot.id,
+        const targetIdx = path.length - 1;
+        if (targetIdx >= maxDepth) {
+          window._commentDrilldownState = window._commentDrilldownState || { stack: [] };
+          window._commentDrilldownState.stack = [];
+          for (let d = maxDepth; d <= targetIdx; d += maxDepth) {
+            window._commentDrilldownState.stack.push({
+              rootCommentId: path[d].id,
               scrollY: window.scrollY
-            }];
-            if (window._rawCommentsData && currentArticle) {
-              renderCommentsList(window._rawCommentsData);
-            }
+            });
+          }
+          if (window._commentsResponseData) {
+            renderCommentsData(window._commentsResponseData);
+          } else if (window._rawCommentsData && currentArticle) {
+            renderCommentsList(window._rawCommentsData);
           }
         }
 
@@ -2082,7 +2182,11 @@
           backBtn.addEventListener('click', function (e) {
             e.preventDefault();
             const popped = window._commentDrilldownState.stack.pop();
-            renderCommentsList(comments);
+            if (window._commentsResponseData) {
+              renderCommentsData(window._commentsResponseData);
+            } else {
+              renderCommentsList(comments);
+            }
             if (popped && typeof popped.scrollY === 'number') {
               window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
             }
@@ -2138,6 +2242,177 @@
     });
   }
 
+  function renderCommentsData(data) {
+    if (!data) return;
+    window._commentsResponseData = data;
+    window._rawCommentsData = data.comments || [];
+    window._allCommentsMap = {};
+    (data.comments || []).forEach(function (c) {
+      window._allCommentsMap[c.id] = c;
+    });
+
+    // Pre-expand ancestors if navigating via deep link
+    const hash = window.location.hash;
+    if (hash && (hash.startsWith('#comm_') || hash.startsWith('#comment-'))) {
+      let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+      let curr = window._allCommentsMap ? (window._allCommentsMap[rawTargetId] || window._allCommentsMap['comm_' + rawTargetId]) : null;
+      let visited = new Set();
+      while (curr) {
+        const pId = curr.parentCommentId || curr.parent_comment_id;
+        if (pId && !visited.has(pId)) {
+          visited.add(pId);
+          window._expandedCommentIds.add(pId);
+          curr = window._allCommentsMap[pId];
+        } else {
+          break;
+        }
+      }
+    }
+
+    currentMyAnswerId = data.myAnswerId || null;
+    updateAuthUI();
+
+    const isQuestion = Boolean(currentArticle && (
+      currentArticle.materialType === 'question' ||
+      currentArticle.material_type === 'question' ||
+      (currentArticle.publication_settings && (
+        currentArticle.publication_settings.materialType === 'question' ||
+        (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
+      ))
+    ));
+
+    const standardCommentsWrapper = document.getElementById('standardCommentsWrapper');
+    const questionCommentsWrapper = document.getElementById('questionCommentsWrapper');
+
+    if (isQuestion) {
+      if (standardCommentsWrapper) standardCommentsWrapper.style.display = 'none';
+      if (questionCommentsWrapper) questionCommentsWrapper.style.display = 'block';
+
+      // Update badges
+      const qBadge = document.getElementById('questionCommentsCountBadge');
+      if (qBadge) {
+        qBadge.textContent = data.questionCommentsCount !== undefined
+          ? data.questionCommentsCount
+          : (data.questionComments ? data.questionComments.filter(function (q) { return !q.isDeleted; }).length : 0);
+      }
+      const aBadge = document.getElementById('answersCountBadge');
+      if (aBadge) {
+        aBadge.textContent = data.answersCount !== undefined
+          ? data.answersCount
+          : (data.answers ? data.answers.filter(function (a) { return !a.isDeleted; }).length : 0);
+      }
+
+      // Render Question Clarifications
+      const qList = document.getElementById('questionCommentsList');
+      if (qList) {
+        qList.innerHTML = '';
+        const qComments = data.questionComments || [];
+        const qTree = buildCommentTree(qComments);
+
+        const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+        let renderedDrilldown = false;
+        if (stack.length > 0) {
+          const currentFrame = stack[stack.length - 1];
+          const drilldownRoot = qTree.byId[currentFrame.rootCommentId];
+          if (drilldownRoot) {
+            renderedDrilldown = true;
+            const drilldownBar = document.createElement('div');
+            drilldownBar.className = 'thread-drilldown-bar';
+            drilldownBar.innerHTML =
+              '<button type="button" class="btn-drilldown-back">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                  '<polyline points="15 18 9 12 15 6"></polyline>' +
+                '</svg>' +
+                '<span>Назад к обсуждению</span>' +
+              '</button>' +
+              '<span class="thread-drilldown-title">Ветка уточнений</span>';
+
+            const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+            if (backBtn) {
+              backBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const popped = window._commentDrilldownState.stack.pop();
+                if (window._commentsResponseData) {
+                  renderCommentsData(window._commentsResponseData);
+                } else if (currentArticle) {
+                  loadComments(currentArticle.id);
+                }
+                if (popped && typeof popped.scrollY === 'number') {
+                  window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+                }
+              });
+            }
+            qList.appendChild(drilldownBar);
+            window._expandedCommentIds.add(drilldownRoot.id);
+            qList.appendChild(renderCommentNode(drilldownRoot, 0, {
+              articleId: currentArticle ? currentArticle.id : '',
+              allCommentsById: window._allCommentsMap || qTree.byId,
+              isQuestionClarification: true,
+              onReload: function (newId) {
+                if (currentArticle) loadComments(currentArticle.id);
+              }
+            }));
+          }
+        }
+
+        if (!renderedDrilldown) {
+          qTree.roots.forEach(function (qc) {
+            qList.appendChild(renderCommentNode(qc, 0, {
+              articleId: currentArticle ? currentArticle.id : '',
+              allCommentsById: window._allCommentsMap || qTree.byId,
+              isQuestionClarification: true,
+              onReload: function (newId) {
+                if (currentArticle) loadComments(currentArticle.id);
+                if (newId) {
+                  setTimeout(function () {
+                    const target = document.getElementById('comm_' + newId);
+                    if (target) {
+                      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      target.classList.add('comment-highlight');
+                      setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
+                    }
+                  }, 300);
+                }
+              }
+            }));
+          });
+        }
+      }
+
+      // Render Answers List
+      const answersList = document.getElementById('answersList');
+      const answersEmpty = document.getElementById('answersEmpty');
+      const rawAnswers = data.answers || [];
+
+      const sortedAnswers = rawAnswers.slice().sort(function (a, b) {
+        const aSol = Boolean(a.isSolution || a.is_solution);
+        const bSol = Boolean(b.isSolution || b.is_solution);
+        if (aSol && !bSol) return -1;
+        if (!aSol && bSol) return 1;
+        const aTime = new Date(a.createdAt || a.created_at || 0).getTime();
+        const bTime = new Date(b.createdAt || b.created_at || 0).getTime();
+        return aTime - bTime;
+      });
+
+      if (answersEmpty) {
+        answersEmpty.style.display = sortedAnswers.length === 0 ? 'block' : 'none';
+      }
+
+      if (answersList) {
+        answersList.innerHTML = '';
+        const targetArtId = currentArticle ? currentArticle.id : '';
+        sortedAnswers.forEach(function (ans) {
+          answersList.appendChild(renderAnswerCard(ans, targetArtId, data.comments));
+        });
+      }
+    } else {
+      if (standardCommentsWrapper) standardCommentsWrapper.style.display = 'block';
+      if (questionCommentsWrapper) questionCommentsWrapper.style.display = 'none';
+
+      renderCommentsList(data.comments || []);
+    }
+  }
+
   function loadComments(articleId) {
     fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments')
       .then(function (res) { return res.json(); })
@@ -2147,168 +2422,7 @@
           return;
         }
 
-        window._rawCommentsData = data.comments || [];
-        window._allCommentsMap = {};
-        (data.comments || []).forEach(function (c) {
-          window._allCommentsMap[c.id] = c;
-        });
-
-        // Pre-expand ancestors if navigating via deep link
-        const hash = window.location.hash;
-        if (hash && (hash.startsWith('#comm_') || hash.startsWith('#comment-'))) {
-          let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
-          let curr = window._allCommentsMap ? (window._allCommentsMap[rawTargetId] || window._allCommentsMap['comm_' + rawTargetId]) : null;
-          let visited = new Set();
-          while (curr) {
-            const pId = curr.parentCommentId || curr.parent_comment_id;
-            if (pId && !visited.has(pId)) {
-              visited.add(pId);
-              window._expandedCommentIds.add(pId);
-              curr = window._allCommentsMap[pId];
-            } else {
-              break;
-            }
-          }
-        }
-
-        currentMyAnswerId = data.myAnswerId || null;
-        updateAuthUI();
-
-        const isQuestion = Boolean(currentArticle && (
-          currentArticle.materialType === 'question' ||
-          currentArticle.material_type === 'question' ||
-          (currentArticle.publication_settings && (
-            currentArticle.publication_settings.materialType === 'question' ||
-            (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
-          ))
-        ));
-
-        const standardCommentsWrapper = document.getElementById('standardCommentsWrapper');
-        const questionCommentsWrapper = document.getElementById('questionCommentsWrapper');
-
-        if (isQuestion) {
-          if (standardCommentsWrapper) standardCommentsWrapper.style.display = 'none';
-          if (questionCommentsWrapper) questionCommentsWrapper.style.display = 'block';
-
-          // Update badges
-          const qBadge = document.getElementById('questionCommentsCountBadge');
-          if (qBadge) {
-            qBadge.textContent = data.questionCommentsCount !== undefined
-              ? data.questionCommentsCount
-              : (data.questionComments ? data.questionComments.filter(function (q) { return !q.isDeleted; }).length : 0);
-          }
-          const aBadge = document.getElementById('answersCountBadge');
-          if (aBadge) {
-            aBadge.textContent = data.answersCount !== undefined
-              ? data.answersCount
-              : (data.answers ? data.answers.filter(function (a) { return !a.isDeleted; }).length : 0);
-          }
-
-          // Render Question Clarifications
-          const qList = document.getElementById('questionCommentsList');
-          if (qList) {
-            qList.innerHTML = '';
-            const qComments = data.questionComments || [];
-            const qTree = buildCommentTree(qComments);
-
-            const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
-            let renderedDrilldown = false;
-            if (stack.length > 0) {
-              const currentFrame = stack[stack.length - 1];
-              const drilldownRoot = qTree.byId[currentFrame.rootCommentId];
-              if (drilldownRoot) {
-                renderedDrilldown = true;
-                const drilldownBar = document.createElement('div');
-                drilldownBar.className = 'thread-drilldown-bar';
-                drilldownBar.innerHTML =
-                  '<button type="button" class="btn-drilldown-back">' +
-                    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                      '<polyline points="15 18 9 12 15 6"></polyline>' +
-                    '</svg>' +
-                    '<span>Назад к обсуждению</span>' +
-                  '</button>' +
-                  '<span class="thread-drilldown-title">Ветка уточнений</span>';
-
-                const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
-                if (backBtn) {
-                  backBtn.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    const popped = window._commentDrilldownState.stack.pop();
-                    loadComments(articleId);
-                    if (popped && typeof popped.scrollY === 'number') {
-                      window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
-                    }
-                  });
-                }
-                qList.appendChild(drilldownBar);
-                window._expandedCommentIds.add(drilldownRoot.id);
-                qList.appendChild(renderCommentNode(drilldownRoot, 0, {
-                  articleId: articleId,
-                  allCommentsById: window._allCommentsMap || qTree.byId,
-                  isQuestionClarification: true,
-                  onReload: function (newId) {
-                    loadComments(articleId);
-                  }
-                }));
-              }
-            }
-
-            if (!renderedDrilldown) {
-              qTree.roots.forEach(function (qc) {
-                qList.appendChild(renderCommentNode(qc, 0, {
-                  articleId: articleId,
-                  allCommentsById: window._allCommentsMap || qTree.byId,
-                  isQuestionClarification: true,
-                  onReload: function (newId) {
-                    loadComments(articleId);
-                    if (newId) {
-                      setTimeout(function () {
-                        const target = document.getElementById('comm_' + newId);
-                        if (target) {
-                          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          target.classList.add('comment-highlight');
-                          setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
-                        }
-                      }, 300);
-                    }
-                  }
-                }));
-              });
-            }
-          }
-
-          // Render Answers List
-          const answersList = document.getElementById('answersList');
-          const answersEmpty = document.getElementById('answersEmpty');
-          const rawAnswers = data.answers || [];
-
-          const sortedAnswers = rawAnswers.slice().sort(function (a, b) {
-            const aSol = Boolean(a.isSolution || a.is_solution);
-            const bSol = Boolean(b.isSolution || b.is_solution);
-            if (aSol && !bSol) return -1;
-            if (!aSol && bSol) return 1;
-            const aTime = new Date(a.createdAt || a.created_at || 0).getTime();
-            const bTime = new Date(b.createdAt || b.created_at || 0).getTime();
-            return aTime - bTime;
-          });
-
-          if (answersEmpty) {
-            answersEmpty.style.display = sortedAnswers.length === 0 ? 'block' : 'none';
-          }
-
-          if (answersList) {
-            answersList.innerHTML = '';
-            sortedAnswers.forEach(function (ans) {
-              answersList.appendChild(renderAnswerCard(ans, articleId, data.comments));
-            });
-          }
-        } else {
-          if (standardCommentsWrapper) standardCommentsWrapper.style.display = 'block';
-          if (questionCommentsWrapper) questionCommentsWrapper.style.display = 'none';
-
-          renderCommentsList(data.comments || []);
-        }
-
+        renderCommentsData(data);
         handleDeepLink();
       })
       .catch(function (err) {
