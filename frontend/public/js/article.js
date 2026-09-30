@@ -8,6 +8,7 @@
 
   let currentUser = null;
   let currentArticle = null;
+  let currentMyAnswerId = null;
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -295,6 +296,26 @@
         guestPrompt.style.display = 'flex';
       }
     }
+
+    const questionGuestPrompt = document.getElementById('questionGuestPrompt');
+    const myAnswerFormWrap = document.getElementById('myAnswerFormWrap');
+    const myAnswerBanner = document.getElementById('myAnswerBanner');
+    if (questionGuestPrompt) {
+      if (!currentUser) {
+        questionGuestPrompt.style.display = 'flex';
+        if (myAnswerFormWrap) myAnswerFormWrap.style.display = 'none';
+        if (myAnswerBanner) myAnswerBanner.style.display = 'none';
+      } else {
+        questionGuestPrompt.style.display = 'none';
+        if (currentMyAnswerId) {
+          if (myAnswerFormWrap) myAnswerFormWrap.style.display = 'none';
+          if (myAnswerBanner) myAnswerBanner.style.display = 'block';
+        } else {
+          if (myAnswerFormWrap) myAnswerFormWrap.style.display = 'block';
+          if (myAnswerBanner) myAnswerBanner.style.display = 'none';
+        }
+      }
+    }
   }
 
   function openAuthModal() {
@@ -318,8 +339,12 @@
               .then(function (res) { return res.json(); })
               .then(function () {
                 currentUser = null;
+                currentMyAnswerId = null;
                 updateAuthUI();
                 showToast('Вы вышли из системы');
+                if (currentArticle) {
+                  loadComments(currentArticle.id);
+                }
               });
           }
         } else {
@@ -361,6 +386,9 @@
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
+              if (currentArticle) {
+                loadComments(currentArticle.id);
+              }
             }
           });
       });
@@ -383,6 +411,9 @@
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
+              if (currentArticle) {
+                loadComments(currentArticle.id);
+              }
             }
           });
       });
@@ -391,6 +422,11 @@
     const guestLoginBtn = document.getElementById('btnCommentLogin');
     if (guestLoginBtn) {
       guestLoginBtn.addEventListener('click', openAuthModal);
+    }
+
+    const questionLoginBtn = document.getElementById('btnQuestionLogin');
+    if (questionLoginBtn) {
+      questionLoginBtn.addEventListener('click', openAuthModal);
     }
   }
 
@@ -487,21 +523,25 @@
     }
   }
 
+  function getAuthorInitials(name) {
+    if (!name) return 'SC';
+    const parts = name.trim().split(/\s+/);
+    return parts.length > 1
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : name.substring(0, 2).toUpperCase();
+  }
+
+  // Render a standard comment for articles (flat list)
   function renderCommentItem(comment) {
     const el = document.createElement('div');
     const isSol = Boolean(comment.isSolution || comment.is_solution);
     el.className = 'comment-item' + (isSol ? ' is-solution-comment' : '');
     el.setAttribute('data-id', comment.id);
+    el.id = 'comm_' + comment.id;
 
     const authorName = comment.authorName || 'Пользователь';
-    let initials = 'SC';
-    if (authorName) {
-      const parts = authorName.trim().split(/\s+/);
-      initials = parts.length > 1
-        ? (parts[0][0] + parts[1][0]).toUpperCase()
-        : authorName.substring(0, 2).toUpperCase();
-    }
-
+    const authorId = comment.userId || comment.user_id || '';
+    const initials = getAuthorInitials(authorName);
     const dateText = formatCommentDate(comment.createdAt || comment.created_at);
 
     let solutionBadgeHtml = '';
@@ -516,8 +556,15 @@
     }
 
     let solutionActionBtn = '';
-    const isQuestion = currentArticle && (currentArticle.materialType === 'question' || (currentArticle.publication_settings && currentArticle.publication_settings.materialType === 'question'));
-    const isAuthor = currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id);
+    const isQuestion = Boolean(currentArticle && (
+      currentArticle.materialType === 'question' ||
+      currentArticle.material_type === 'question' ||
+      (currentArticle.publication_settings && (
+        currentArticle.publication_settings.materialType === 'question' ||
+        (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
+      ))
+    ));
+    const isAuthor = Boolean(currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
     if (isQuestion && isAuthor) {
       solutionActionBtn =
         '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
@@ -532,7 +579,7 @@
       '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
         '<div style="display: flex; align-items: center; gap: 8px;">' +
           '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-          '<span class="comment-author-name">' + escapeHtml(authorName) + '</span>' +
+          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
           commentTypeBadge +
           '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
         '</div>' +
@@ -545,21 +592,406 @@
     if (toggleBtn) {
       toggleBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        const cid = toggleBtn.getAttribute('data-comment-id');
-        toggleSolution(cid);
+        toggleSolution(comment.id, !isSol);
       });
     }
 
     return el;
   }
 
-  function toggleSolution(commentId) {
+  // Render question clarification item
+  function renderQuestionClarificationItem(comment) {
+    const el = document.createElement('div');
+    el.className = 'question-clarification-item';
+    el.setAttribute('data-id', comment.id);
+    el.id = 'comm_' + comment.id;
+
+    const authorName = comment.authorName || 'Пользователь';
+    const authorId = comment.userId || comment.user_id || '';
+    const initials = getAuthorInitials(authorName);
+    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+
+    el.innerHTML =
+      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
+        '<div style="display: flex; align-items: center; gap: 8px;">' +
+          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
+          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
+          '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>';
+
+    return el;
+  }
+
+  // Render inline reply to answer
+  function renderAnswerReplyItem(reply) {
+    const el = document.createElement('div');
+    el.className = 'answer-reply-item';
+    el.setAttribute('data-id', reply.id);
+    el.id = 'comm_' + reply.id;
+
+    const authorName = reply.authorName || 'Пользователь';
+    const authorId = reply.userId || reply.user_id || '';
+    const initials = getAuthorInitials(authorName);
+    const dateText = formatCommentDate(reply.createdAt || reply.created_at);
+
+    el.innerHTML =
+      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">' +
+        '<div style="display: flex; align-items: center; gap: 8px;">' +
+          '<div class="comment-author-avatar" style="width: 28px; height: 28px; font-size: 0.75rem;">' + escapeHtml(initials) + '</div>' +
+          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" style="font-size: 0.88rem;">' + escapeHtml(authorName) + '</button>' +
+          '<span class="comment-date" style="font-size: 0.76rem;">' + escapeHtml(dateText) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="comment-text" style="font-size: 0.9rem;">' + (reply.content ? escapeHtml(reply.content).replace(/\n/g, '<br>') : '') + '</div>';
+
+    return el;
+  }
+
+  // Render Answer Card (.answer-card)
+  function renderAnswerCard(comment, articleId, allComments) {
+    const el = document.createElement('div');
+    const isSol = Boolean(comment.isSolution || comment.is_solution);
+    el.className = 'answer-card' + (isSol ? ' is-solution-answer' : '');
+    el.setAttribute('data-id', comment.id);
+    el.id = 'comm_' + comment.id;
+
+    const authorName = comment.authorName || 'Пользователь';
+    const authorId = comment.userId || comment.user_id || '';
+    const initials = getAuthorInitials(authorName);
+    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+
+    const hasUpdated = Boolean(comment.updatedAt || comment.updated_at);
+    const updatedBadgeHtml = hasUpdated
+      ? '<span class="comment-updated-badge">Изменено</span>'
+      : '';
+
+    let solutionBadgeHtml = '';
+    if (isSol) {
+      solutionBadgeHtml =
+        '<div class="solution-badge">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+            '<polyline points="20 6 9 17 4 12"></polyline>' +
+          '</svg>' +
+          '<span>Решение принято автором</span>' +
+        '</div>';
+    }
+
+    const isAuthor = Boolean(currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
+
+    let solutionActionBtn = '';
+    if (isAuthor) {
+      solutionActionBtn =
+        '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          (isSol ? 'Снять отметку решения' : 'Отметить как решение') +
+        '</button>';
+    }
+
+    const isMyAnswer = Boolean(currentUser && (
+      currentUser.id === comment.userId ||
+      currentUser.id === comment.user_id
+    ));
+
+    let editBtnHtml = '';
+    if (isMyAnswer) {
+      editBtnHtml = '<button type="button" class="btn btn-secondary btn-sm btn-edit-answer">Редактировать</button>';
+    }
+
+    let replies = comment.comments;
+    if (!Array.isArray(replies) && Array.isArray(allComments)) {
+      replies = allComments.filter(function (c) {
+        return c.parentAnswerId === comment.id || c.parent_answer_id === comment.id;
+      });
+    }
+    if (!Array.isArray(replies)) replies = [];
+
+    el.innerHTML =
+      '<div class="answer-header">' +
+        '<div class="answer-author-info">' +
+          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
+          '<div class="answer-author-meta">' +
+            '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
+            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+            '<span class="answer-updated-wrap">' + updatedBadgeHtml + '</span>' +
+          '</div>' +
+        '</div>' +
+        solutionActionBtn +
+      '</div>' +
+      solutionBadgeHtml +
+      '<div class="answer-content">' +
+        '<div class="answer-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
+      '</div>' +
+      '<div class="answer-edit-form-wrap" style="display: none;">' +
+        '<textarea class="comment-textarea answer-edit-textarea" rows="4" maxlength="5000" placeholder="Редактировать ответ...">' + escapeHtml(comment.content || '') + '</textarea>' +
+        '<div class="comment-form-footer" style="margin-top: 8px;">' +
+          '<span class="comment-char-counter"><span class="answer-edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
+          '<div style="display: flex; gap: 8px;">' +
+            '<button type="button" class="btn btn-secondary btn-sm btn-cancel-answer-edit">Отмена</button>' +
+            '<button type="button" class="btn btn-primary btn-sm btn-save-answer-edit">Сохранить</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="answer-actions">' +
+        editBtnHtml +
+        '<button type="button" class="btn btn-secondary btn-sm btn-reply-answer">Комментировать ответ</button>' +
+      '</div>' +
+      '<div class="answer-replies-container" style="' + (replies.length > 0 ? '' : 'display: none;') + '">' +
+        '<div class="answer-replies-list"></div>' +
+        '<form class="comment-form answer-reply-form" style="display: none;">' +
+          '<div class="comment-textarea-wrap">' +
+            '<textarea class="comment-textarea answer-reply-textarea" placeholder="Написать комментарий к ответу..." maxlength="5000" rows="2" required></textarea>' +
+            '<div class="comment-form-footer">' +
+              '<span class="comment-char-counter"><span class="answer-reply-char-count">0</span> / 5000</span>' +
+              '<div style="display: flex; gap: 8px;">' +
+                '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply">Отмена</button>' +
+                '<button type="submit" class="btn btn-primary btn-sm btn-submit-reply">Отправить</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</form>' +
+      '</div>';
+
+    // Populate replies
+    const repliesListEl = el.querySelector('.answer-replies-list');
+    if (repliesListEl && replies.length > 0) {
+      replies.forEach(function (r) {
+        repliesListEl.appendChild(renderAnswerReplyItem(r));
+      });
+    }
+
+    // Solution button handler
+    const toggleBtn = el.querySelector('.btn-toggle-solution');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        toggleSolution(comment.id, !isSol);
+      });
+    }
+
+    // Inline edit handlers
+    const editBtn = el.querySelector('.btn-edit-answer');
+    const editWrap = el.querySelector('.answer-edit-form-wrap');
+    const contentWrap = el.querySelector('.answer-content');
+    const actionsWrap = el.querySelector('.answer-actions');
+    const editTextarea = el.querySelector('.answer-edit-textarea');
+    const editCharCount = el.querySelector('.answer-edit-char-count');
+    const cancelEditBtn = el.querySelector('.btn-cancel-answer-edit');
+    const saveEditBtn = el.querySelector('.btn-save-answer-edit');
+    const textEl = el.querySelector('.answer-text');
+    const updatedWrap = el.querySelector('.answer-updated-wrap');
+
+    if (editBtn && editWrap && contentWrap && actionsWrap) {
+      editBtn.addEventListener('click', function () {
+        contentWrap.style.display = 'none';
+        actionsWrap.style.display = 'none';
+        editWrap.style.display = 'block';
+        if (editTextarea) {
+          editTextarea.value = comment.content || '';
+          editTextarea.focus();
+          if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+        }
+      });
+
+      if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', function () {
+          editWrap.style.display = 'none';
+          contentWrap.style.display = 'block';
+          actionsWrap.style.display = 'flex';
+          if (editTextarea) {
+            editTextarea.value = comment.content || '';
+            if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+          }
+        });
+      }
+
+      if (editTextarea && editCharCount) {
+        editTextarea.addEventListener('input', function () {
+          editCharCount.textContent = editTextarea.value.length;
+        });
+      }
+
+      if (saveEditBtn && editTextarea) {
+        saveEditBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const newContent = editTextarea.value.trim();
+          if (!newContent) {
+            showToast('Ответ не может быть пустым');
+            editTextarea.focus();
+            return;
+          }
+          if (newContent.length > 5000) {
+            showToast('Превышен лимит длины (максимум 5000 символов)');
+            return;
+          }
+
+          saveEditBtn.disabled = true;
+
+          fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments/' + encodeURIComponent(comment.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: newContent,
+              revision: comment.revision !== undefined ? comment.revision : 1
+            })
+          })
+            .then(function (res) {
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
+            })
+            .then(function (result) {
+              saveEditBtn.disabled = false;
+              if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
+                // Keep input text, do not clear
+                showToast('Ответ был изменен в другой сессии. Пожалуйста, обновите страницу');
+                return;
+              }
+
+              if (result.data && result.data.success && result.data.comment) {
+                const updated = result.data.comment;
+                comment.content = updated.content;
+                comment.revision = updated.revision;
+                comment.updatedAt = updated.updatedAt;
+
+                if (textEl) {
+                  textEl.innerHTML = escapeHtml(comment.content).replace(/\n/g, '<br>');
+                }
+                if (updatedWrap) {
+                  updatedWrap.innerHTML = '<span class="comment-updated-badge">Изменено</span>';
+                }
+
+                editWrap.style.display = 'none';
+                contentWrap.style.display = 'block';
+                actionsWrap.style.display = 'flex';
+                showToast('Ответ обновлен');
+              } else {
+                showToast((result.data && result.data.error) || 'Ошибка при сохранении ответа');
+              }
+            })
+            .catch(function (err) {
+              saveEditBtn.disabled = false;
+              console.error('Failed to update answer:', err);
+              showToast('Не удалось обновить ответ');
+            });
+        });
+      }
+    }
+
+    // Reply handlers
+    const replyBtn = el.querySelector('.btn-reply-answer');
+    const repliesContainer = el.querySelector('.answer-replies-container');
+    const replyForm = el.querySelector('.answer-reply-form');
+    const replyTextarea = el.querySelector('.answer-reply-textarea');
+    const replyCharCount = el.querySelector('.answer-reply-char-count');
+    const cancelReplyBtn = el.querySelector('.btn-cancel-reply');
+    const submitReplyBtn = el.querySelector('.btn-submit-reply');
+
+    if (replyBtn && replyForm && repliesContainer) {
+      replyBtn.addEventListener('click', function () {
+        if (!currentUser) {
+          openAuthModal();
+          showToast('Войдите, чтобы оставить комментарий');
+          return;
+        }
+        repliesContainer.style.display = 'block';
+        replyForm.style.display = 'block';
+        if (replyTextarea) {
+          replyTextarea.focus();
+        }
+      });
+
+      if (cancelReplyBtn) {
+        cancelReplyBtn.addEventListener('click', function () {
+          replyForm.style.display = 'none';
+          if (replyTextarea) replyTextarea.value = '';
+          if (replyCharCount) replyCharCount.textContent = '0';
+          if (replies.length === 0) {
+            repliesContainer.style.display = 'none';
+          }
+        });
+      }
+
+      if (replyTextarea && replyCharCount) {
+        replyTextarea.addEventListener('input', function () {
+          replyCharCount.textContent = replyTextarea.value.length;
+        });
+      }
+
+      if (replyForm) {
+        replyForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы оставить комментарий');
+            return;
+          }
+          const replyContent = replyTextarea ? replyTextarea.value.trim() : '';
+          if (!replyContent) {
+            showToast('Комментарий не может быть пустым');
+            if (replyTextarea) replyTextarea.focus();
+            return;
+          }
+          if (replyContent.length > 5000) {
+            showToast('Превышен лимит длины (максимум 5000 символов)');
+            return;
+          }
+
+          if (submitReplyBtn) submitReplyBtn.disabled = true;
+
+          fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: replyContent,
+              commentType: 'comment',
+              parentAnswerId: comment.id
+            })
+          })
+            .then(function (res) {
+              if (res.status === 401) {
+                if (submitReplyBtn) submitReplyBtn.disabled = false;
+                openAuthModal();
+                throw new Error('AUTH_REQUIRED');
+              }
+              return res.json();
+            })
+            .then(function (data) {
+              if (submitReplyBtn) submitReplyBtn.disabled = false;
+              if (data && data.success) {
+                if (replyTextarea) replyTextarea.value = '';
+                if (replyCharCount) replyCharCount.textContent = '0';
+                replyForm.style.display = 'none';
+                showToast('Комментарий опубликован');
+                loadComments(articleId);
+              } else {
+                showToast((data && data.error) || 'Ошибка при отправке комментария');
+              }
+            })
+            .catch(function (err) {
+              if (submitReplyBtn) submitReplyBtn.disabled = false;
+              if (err.message !== 'AUTH_REQUIRED') {
+                console.error('Failed to submit reply:', err);
+                showToast('Не удалось отправить комментарий');
+              }
+            });
+        });
+      }
+    }
+
+    return el;
+  }
+
+  function toggleSolution(commentId, targetIsSolution) {
     if (!currentArticle) return;
     const articleId = currentArticle.id;
+    const bodyPayload = typeof targetIsSolution === 'boolean'
+      ? { isSolution: targetIsSolution }
+      : {};
     fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments/' + encodeURIComponent(commentId) + '/solution', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify(bodyPayload)
     })
       .then(function (res) {
         if (res.status === 403) {
@@ -577,8 +1009,30 @@
         }
       })
       .catch(function (err) {
-        console.error('Failed to toggle solution:', err);
+        if (err.message !== 'FORBIDDEN') {
+          console.error('Failed to toggle solution:', err);
+        }
       });
+  }
+
+  function handleDeepLink() {
+    const hash = window.location.hash;
+    if (!hash) return;
+    if (hash.startsWith('#comm_')) {
+      const rawId = hash.substring(1);
+      const targetEl = document.getElementById(rawId) ||
+        document.querySelector('[data-id="' + rawId.replace(/^comm_/, '') + '"]') ||
+        document.querySelector('[data-id="' + rawId + '"]');
+      if (targetEl) {
+        setTimeout(function () {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetEl.classList.add('comment-highlight');
+          setTimeout(function () {
+            targetEl.classList.remove('comment-highlight');
+          }, 2500);
+        }, 100);
+      }
+    }
   }
 
   function renderCommentsList(comments) {
@@ -618,9 +1072,87 @@
     fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments')
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        if (data && data.success) {
+        if (!data || !data.success) {
+          console.error('Failed to load comments:', data && data.error);
+          return;
+        }
+
+        currentMyAnswerId = data.myAnswerId || null;
+        updateAuthUI();
+
+        const isQuestion = Boolean(currentArticle && (
+          currentArticle.materialType === 'question' ||
+          currentArticle.material_type === 'question' ||
+          (currentArticle.publication_settings && (
+            currentArticle.publication_settings.materialType === 'question' ||
+            (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
+          ))
+        ));
+
+        const standardCommentsWrapper = document.getElementById('standardCommentsWrapper');
+        const questionCommentsWrapper = document.getElementById('questionCommentsWrapper');
+
+        if (isQuestion) {
+          if (standardCommentsWrapper) standardCommentsWrapper.style.display = 'none';
+          if (questionCommentsWrapper) questionCommentsWrapper.style.display = 'block';
+
+          // Update badges
+          const qBadge = document.getElementById('questionCommentsCountBadge');
+          if (qBadge) {
+            qBadge.textContent = data.questionCommentsCount !== undefined
+              ? data.questionCommentsCount
+              : (data.questionComments ? data.questionComments.length : 0);
+          }
+          const aBadge = document.getElementById('answersCountBadge');
+          if (aBadge) {
+            aBadge.textContent = data.answersCount !== undefined
+              ? data.answersCount
+              : (data.answers ? data.answers.length : 0);
+          }
+
+          // Render Question Clarifications
+          const qList = document.getElementById('questionCommentsList');
+          if (qList) {
+            qList.innerHTML = '';
+            const qComments = data.questionComments || [];
+            qComments.forEach(function (qc) {
+              qList.appendChild(renderQuestionClarificationItem(qc));
+            });
+          }
+
+          // Render Answers List
+          const answersList = document.getElementById('answersList');
+          const answersEmpty = document.getElementById('answersEmpty');
+          const rawAnswers = data.answers || [];
+
+          const sortedAnswers = rawAnswers.slice().sort(function (a, b) {
+            const aSol = Boolean(a.isSolution || a.is_solution);
+            const bSol = Boolean(b.isSolution || b.is_solution);
+            if (aSol && !bSol) return -1;
+            if (!aSol && bSol) return 1;
+            const aTime = new Date(a.createdAt || a.created_at || 0).getTime();
+            const bTime = new Date(b.createdAt || b.created_at || 0).getTime();
+            return aTime - bTime;
+          });
+
+          if (answersEmpty) {
+            answersEmpty.style.display = sortedAnswers.length === 0 ? 'block' : 'none';
+          }
+
+          if (answersList) {
+            answersList.innerHTML = '';
+            sortedAnswers.forEach(function (ans) {
+              answersList.appendChild(renderAnswerCard(ans, articleId, data.comments));
+            });
+          }
+        } else {
+          if (standardCommentsWrapper) standardCommentsWrapper.style.display = 'block';
+          if (questionCommentsWrapper) questionCommentsWrapper.style.display = 'none';
+
           renderCommentsList(data.comments || []);
         }
+
+        handleDeepLink();
       })
       .catch(function (err) {
         console.error('Failed to load comments:', err);
@@ -635,87 +1167,297 @@
     const form = document.getElementById('commentForm');
     const submitBtn = document.getElementById('btnSubmitComment');
 
-    if (textarea && charCountEl && !isCommentsInitialized) {
-      textarea.addEventListener('input', function () {
-        charCountEl.textContent = textarea.value.length;
-      });
-    }
+    // Question clarification elements
+    const addClarificationBtn = document.getElementById('btnAddQuestionClarification');
+    const clarificationForm = document.getElementById('questionClarificationForm');
+    const clarificationInput = document.getElementById('questionClarificationInput');
+    const clarificationCharCount = document.getElementById('clarificationCharCount');
+    const cancelClarificationBtn = document.getElementById('btnCancelClarification');
+    const submitClarificationBtn = document.getElementById('btnSubmitClarification');
 
-    if (form && !isCommentsInitialized) {
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
+    // Question answer submission elements
+    const answerForm = document.getElementById('questionAnswerForm');
+    const answerTextInput = document.getElementById('answerTextInput');
+    const answerCharCount = document.getElementById('answerCharCount');
+    const submitAnswerBtn = document.getElementById('btnSubmitAnswer');
 
-        if (!currentUser) {
-          openAuthModal();
-          showToast('Войдите, чтобы оставить комментарий');
-          return;
-        }
+    // My answer banner buttons
+    const btnGoToMyAnswer = document.getElementById('btnGoToMyAnswer');
+    const btnEditMyAnswer = document.getElementById('btnEditMyAnswer');
 
-        const content = textarea ? textarea.value.trim() : '';
-        if (!content) {
-          showToast('Комментарий не может быть пустым');
-          if (textarea) textarea.focus();
-          return;
-        }
+    if (!isCommentsInitialized) {
+      // 1. Standard comments listeners
+      if (textarea && charCountEl) {
+        textarea.addEventListener('input', function () {
+          charCountEl.textContent = textarea.value.length;
+        });
+      }
 
-        if (content.length > 5000) {
-          showToast('Превышен лимит длины (максимум 5000 символов)');
-          return;
-        }
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
 
-        if (submitBtn) submitBtn.disabled = true;
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы оставить комментарий');
+            return;
+          }
 
-        fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: content, commentType: 'comment' })
-        })
-          .then(function (res) {
-            if (res.status === 401) {
-              openAuthModal();
-              throw new Error('AUTH_REQUIRED');
-            }
-            return res.json();
+          const content = textarea ? textarea.value.trim() : '';
+          if (!content) {
+            showToast('Комментарий не может быть пустым');
+            if (textarea) textarea.focus();
+            return;
+          }
+
+          if (content.length > 5000) {
+            showToast('Превышен лимит длины (максимум 5000 символов)');
+            return;
+          }
+
+          if (submitBtn) submitBtn.disabled = true;
+
+          fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, commentType: 'comment' })
           })
-          .then(function (data) {
-            if (submitBtn) submitBtn.disabled = false;
-            if (data && data.success && data.comment) {
-              if (textarea) textarea.value = '';
-              if (charCountEl) charCountEl.textContent = '0';
+            .then(function (res) {
+              if (res.status === 401) {
+                if (submitBtn) submitBtn.disabled = false;
+                openAuthModal();
+                throw new Error('AUTH_REQUIRED');
+              }
+              return res.json();
+            })
+            .then(function (data) {
+              if (submitBtn) submitBtn.disabled = false;
+              if (data && data.success) {
+                if (textarea) textarea.value = '';
+                if (charCountEl) charCountEl.textContent = '0';
+                showToast('Комментарий опубликован');
+                loadComments(articleId);
+              } else {
+                showToast((data && data.error) || 'Ошибка при отправке комментария');
+              }
+            })
+            .catch(function (err) {
+              if (submitBtn) submitBtn.disabled = false;
+              if (err.message !== 'AUTH_REQUIRED') {
+                showToast('Не удалось отправить комментарий');
+              }
+            });
+        });
+      }
 
-              const listEl = document.getElementById('commentsList');
-              const emptyEl = document.getElementById('commentsEmpty');
-              const badgeEl = document.getElementById('commentsCountBadge');
+      // 2. Question clarification listeners
+      if (addClarificationBtn && clarificationForm) {
+        addClarificationBtn.addEventListener('click', function () {
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы оставить уточнение');
+            return;
+          }
+          clarificationForm.style.display = clarificationForm.style.display === 'none' ? 'block' : 'none';
+          if (clarificationForm.style.display === 'block' && clarificationInput) {
+            clarificationInput.focus();
+          }
+        });
+      }
 
-              if (emptyEl) emptyEl.style.display = 'none';
+      if (cancelClarificationBtn && clarificationForm) {
+        cancelClarificationBtn.addEventListener('click', function () {
+          clarificationForm.style.display = 'none';
+          if (clarificationInput) clarificationInput.value = '';
+          if (clarificationCharCount) clarificationCharCount.textContent = '0';
+        });
+      }
 
-              if (listEl) {
-                const newCommentEl = renderCommentItem(data.comment);
-                listEl.appendChild(newCommentEl);
+      if (clarificationInput && clarificationCharCount) {
+        clarificationInput.addEventListener('input', function () {
+          clarificationCharCount.textContent = clarificationInput.value.length;
+        });
+      }
+
+      if (clarificationForm) {
+        clarificationForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы оставить уточнение');
+            return;
+          }
+
+          const content = clarificationInput ? clarificationInput.value.trim() : '';
+          if (!content) {
+            showToast('Уточнение не может быть пустым');
+            if (clarificationInput) clarificationInput.focus();
+            return;
+          }
+
+          if (content.length > 5000) {
+            showToast('Превышен лимит длины (максимум 5000 символов)');
+            return;
+          }
+
+          if (submitClarificationBtn) submitClarificationBtn.disabled = true;
+
+          fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, commentType: 'comment' })
+          })
+            .then(function (res) {
+              if (res.status === 401) {
+                if (submitClarificationBtn) submitClarificationBtn.disabled = false;
+                openAuthModal();
+                throw new Error('AUTH_REQUIRED');
+              }
+              return res.json();
+            })
+            .then(function (data) {
+              if (submitClarificationBtn) submitClarificationBtn.disabled = false;
+              if (data && data.success) {
+                if (clarificationInput) clarificationInput.value = '';
+                if (clarificationCharCount) clarificationCharCount.textContent = '0';
+                clarificationForm.style.display = 'none';
+                showToast('Уточнение опубликовано');
+                loadComments(articleId);
+              } else {
+                showToast((data && data.error) || 'Ошибка при отправке уточнения');
+              }
+            })
+            .catch(function (err) {
+              if (submitClarificationBtn) submitClarificationBtn.disabled = false;
+              if (err.message !== 'AUTH_REQUIRED') {
+                console.error('Failed to submit clarification:', err);
+                showToast('Не удалось отправить уточнение');
+              }
+            });
+        });
+      }
+
+      // 3. Question answer submission listeners
+      if (answerTextInput && answerCharCount) {
+        answerTextInput.addEventListener('input', function () {
+          answerCharCount.textContent = answerTextInput.value.length;
+        });
+      }
+
+      if (answerForm) {
+        answerForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы ответить на вопрос');
+            return;
+          }
+
+          const content = answerTextInput ? answerTextInput.value.trim() : '';
+          if (!content) {
+            showToast('Ответ не может быть пустым');
+            if (answerTextInput) answerTextInput.focus();
+            return;
+          }
+
+          if (content.length > 5000) {
+            showToast('Превышен лимит длины (максимум 5000 символов)');
+            return;
+          }
+
+          if (submitAnswerBtn) submitAnswerBtn.disabled = true;
+
+          fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, commentType: 'answer' })
+          })
+            .then(function (res) {
+              if (res.status === 401) {
+                if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+                openAuthModal();
+                throw new Error('AUTH_REQUIRED');
+              }
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
+            })
+            .then(function (result) {
+              if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+              const data = result.data;
+              if (result.status === 409 || (data && data.code === 'ANSWER_ALREADY_EXISTS')) {
+                // Do NOT erase typed text in answerTextInput!
+                showToast((data && data.error) || 'Вы уже опубликовали ответ на этот вопрос');
+                if (data && data.myAnswerId) {
+                  currentMyAnswerId = data.myAnswerId;
+                  updateAuthUI();
+                }
+                return;
               }
 
-              if (badgeEl) {
-                const currentBadge = parseInt(badgeEl.textContent || '0', 10) || 0;
-                badgeEl.textContent = data.commentsCount !== undefined ? data.commentsCount : (currentBadge + 1);
+              if (data && data.success) {
+                if (answerTextInput) answerTextInput.value = '';
+                if (answerCharCount) answerCharCount.textContent = '0';
+                if (data.comment && data.comment.id) {
+                  currentMyAnswerId = data.comment.id;
+                }
+                showToast('Ответ опубликован');
+                loadComments(articleId);
+              } else {
+                showToast((data && data.error) || 'Ошибка при отправке ответа');
               }
+            })
+            .catch(function (err) {
+              if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+              if (err.message !== 'AUTH_REQUIRED') {
+                console.error('Failed to submit answer:', err);
+                showToast('Не удалось отправить ответ');
+              }
+            });
+        });
+      }
 
-              showToast('Комментарий опубликован');
-            } else {
-              showToast((data && data.error) || 'Ошибка при отправке комментария');
+      // 4. My answer banner buttons
+      if (btnGoToMyAnswer) {
+        btnGoToMyAnswer.addEventListener('click', function () {
+          if (!currentMyAnswerId) return;
+          const targetEl = document.getElementById('comm_' + currentMyAnswerId) ||
+            document.querySelector('[data-id="' + currentMyAnswerId + '"]');
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.add('comment-highlight');
+            setTimeout(function () {
+              targetEl.classList.remove('comment-highlight');
+            }, 2500);
+          }
+        });
+      }
+
+      if (btnEditMyAnswer) {
+        btnEditMyAnswer.addEventListener('click', function () {
+          if (!currentMyAnswerId) return;
+          const targetEl = document.getElementById('comm_' + currentMyAnswerId) ||
+            document.querySelector('[data-id="' + currentMyAnswerId + '"]');
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const editBtn = targetEl.querySelector('.btn-edit-answer');
+            if (editBtn) {
+              editBtn.click();
             }
-          })
-          .catch(function (err) {
-            if (submitBtn) submitBtn.disabled = false;
-            if (err.message !== 'AUTH_REQUIRED') {
-              showToast('Не удалось отправить комментарий');
-            }
-          });
-      });
+          }
+        });
+      }
+
+      window.addEventListener('hashchange', handleDeepLink);
+
       isCommentsInitialized = true;
     }
 
     loadComments(articleId);
   }
+
 
   // --------------------------------------------------------------------------
   // 5. Navigation & Actions Binding
@@ -1159,21 +1901,24 @@
     syncLikeButtons(article.likesCount, Boolean(article.hasLiked || article.isLiked));
 
     // Customize Comments / Answers section for Questions
-    const isQuestion = article.materialType === 'question' || (article.publication_settings && article.publication_settings.materialType === 'question');
-    const commentsTitle = document.getElementById('commentsTitle') || document.querySelector('.comments-title');
-    const commentInput = document.getElementById('commentTextInput');
-    const commentsEmptyTitle = document.getElementById('commentsEmptyTitle');
+    const isQuestion = Boolean(
+      article.materialType === 'question' ||
+      article.material_type === 'question' ||
+      (article.publication_settings && (
+        article.publication_settings.materialType === 'question' ||
+        (typeof article.publication_settings === 'string' && article.publication_settings.indexOf('"materialType":"question"') !== -1)
+      ))
+    );
+    const standardCommentsWrapper = document.getElementById('standardCommentsWrapper');
+    const questionCommentsWrapper = document.getElementById('questionCommentsWrapper');
 
-    if (isQuestion) {
-      if (commentsTitle) {
-        const badge = commentsTitle.querySelector('#commentsCountBadge');
-        commentsTitle.childNodes[0].textContent = 'Ответы ';
-      }
-      if (commentInput) {
-        commentInput.placeholder = 'Напишите содержательный ответ или решение с кодом...';
-      }
-      if (commentsEmptyTitle) {
-        commentsEmptyTitle.textContent = 'Пока нет ответов на этот вопрос';
+    if (standardCommentsWrapper && questionCommentsWrapper) {
+      if (isQuestion) {
+        standardCommentsWrapper.style.display = 'none';
+        questionCommentsWrapper.style.display = 'block';
+      } else {
+        standardCommentsWrapper.style.display = 'block';
+        questionCommentsWrapper.style.display = 'none';
       }
     }
 

@@ -305,43 +305,147 @@
            COMMENTS SECTION (#comments)
       ================================================================= -->
       <section class="article-comments-section" id="comments" aria-label="Комментарии к публикации" style="display: none;">
-        <div class="comments-header">
-          <div class="comments-title-wrap">
-            <h2 class="comments-title">
-              Комментарии <span class="comments-count-badge" id="commentsCountBadge">0</span>
-            </h2>
-          </div>
-        </div>
-
-        <!-- Logged-in Comment Submission Form -->
-        <form class="comment-form" id="commentForm">
-          <div class="comment-textarea-wrap">
-            <textarea class="comment-textarea" id="commentTextInput" placeholder="Написать комментарий..." maxlength="5000" rows="3" required></textarea>
-            <div class="comment-form-footer">
-              <span class="comment-char-counter"><span id="commentCharCount">0</span> / 5000</span>
-              <button type="submit" class="btn btn-primary btn-submit-comment" id="btnSubmitComment">
-                <span>Отправить</span>
-              </button>
+        <!-- 1. Standard Article Comments (materialType !== 'question') -->
+        <div id="standardCommentsWrapper">
+          <div class="comments-header">
+            <div class="comments-title-wrap">
+              <h2 class="comments-title">
+                Комментарии <span class="comments-count-badge" id="commentsCountBadge">0</span>
+              </h2>
             </div>
           </div>
-        </form>
 
-        <!-- Guest Prompt (when not logged in) -->
-        <div class="comment-guest-prompt" id="commentGuestPrompt" style="display: none;">
-          <p class="guest-prompt-text">Войдите в систему, чтобы участвовать в обсуждении и оставлять комментарии.</p>
-          <button type="button" class="btn btn-secondary btn-sm" id="btnCommentLogin">
-            <span>Войти</span>
-          </button>
+          <!-- Logged-in Comment Submission Form -->
+          <form class="comment-form" id="commentForm">
+            <div class="comment-textarea-wrap">
+              <textarea class="comment-textarea" id="commentTextInput" placeholder="Написать комментарий..." maxlength="5000" rows="3" required></textarea>
+              <div class="comment-form-footer">
+                <span class="comment-char-counter"><span id="commentCharCount">0</span> / 5000</span>
+                <button type="submit" class="btn btn-primary btn-submit-comment" id="btnSubmitComment">
+                  <span>Отправить</span>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Guest Prompt (when not logged in) -->
+          <div class="comment-guest-prompt" id="commentGuestPrompt" style="display: none;">
+            <p class="guest-prompt-text">Войдите в систему, чтобы участвовать в обсуждении и оставлять комментарии.</p>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCommentLogin">
+              <span>Войти</span>
+            </button>
+          </div>
+
+          <!-- Comments List -->
+          <div class="comments-list" id="commentsList">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Empty state when no comments -->
+          <div class="comments-empty" id="commentsEmpty" style="display: none;">
+            <p class="comments-empty-text">Пока нет ни одного комментария. Оставьте свой отзыв первым!</p>
+          </div>
         </div>
 
-        <!-- Comments List -->
-        <div class="comments-list" id="commentsList">
-          <!-- Rendered dynamically -->
-        </div>
+        <!-- 2. Structured Q&A Discussion (materialType === 'question') -->
+        <div id="questionCommentsWrapper" style="display: none;">
+          <!-- Section 1: Question Clarifications -->
+          <section class="question-clarifications-section" aria-label="Уточнения к вопросу">
+            <div class="clarifications-header">
+              <h3 class="clarifications-title">
+                Уточнения к вопросу <span class="comments-count-badge" id="questionCommentsCountBadge">0</span>
+              </h3>
+              <button type="button" class="btn btn-secondary btn-sm btn-add-clarification" id="btnAddQuestionClarification">
+                Комментировать вопрос
+              </button>
+            </div>
 
-        <!-- Empty state when no comments -->
-        <div class="comments-empty" id="commentsEmpty" style="display: none;">
-          <p class="comments-empty-text">Пока нет ни одного комментария. Оставьте свой отзыв первым!</p>
+            <!-- Clarification Form -->
+            <form class="comment-form clarification-form" id="questionClarificationForm" style="display: none;">
+              <div class="comment-textarea-wrap">
+                <textarea class="comment-textarea" id="questionClarificationInput" placeholder="Напишите уточнение к вопросу..." maxlength="5000" rows="2" required></textarea>
+                <div class="comment-form-footer">
+                  <span class="comment-char-counter"><span id="clarificationCharCount">0</span> / 5000</span>
+                  <div class="clarification-actions-wrap" style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnCancelClarification">Отмена</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitClarification">Отправить</button>
+                  </div>
+                </div>
+              </div>
+            </form>
+
+            <!-- Clarifications list -->
+            <div class="question-comments-list" id="questionCommentsList">
+              <!-- Rendered dynamically -->
+            </div>
+          </section>
+
+          <!-- Section 2: Answers List -->
+          <section class="question-answers-section" aria-label="Ответы на вопрос">
+            <div class="comments-header">
+              <div class="comments-title-wrap">
+                <h2 class="comments-title">
+                  Ответы <span class="comments-count-badge" id="answersCountBadge">0</span>
+                </h2>
+              </div>
+            </div>
+
+            <div class="answers-list" id="answersList">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <div class="comments-empty answers-empty" id="answersEmpty" style="display: none;">
+              <p class="comments-empty-text">Пока нет ответов на этот вопрос. Будьте первым, кто ответит!</p>
+            </div>
+          </section>
+
+          <!-- Section 3: Answer Form / My Answer Banner -->
+          <section class="question-answer-submission-section" id="answerSubmissionSection">
+            <!-- Guest Prompt -->
+            <div class="comment-guest-prompt" id="questionGuestPrompt" style="display: none;">
+              <p class="guest-prompt-text">Войдите в систему, чтобы ответить на вопрос.</p>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnQuestionLogin">
+                <span>Войти</span>
+              </button>
+            </div>
+
+            <!-- Form for user without an answer -->
+            <div class="my-answer-form-wrap" id="myAnswerFormWrap" style="display: none;">
+              <h3 class="answer-form-title">Ваш ответ на вопрос</h3>
+              <form class="comment-form" id="questionAnswerForm">
+                <div class="comment-textarea-wrap">
+                  <textarea class="comment-textarea" id="answerTextInput" placeholder="Напишите ваш ответ на вопрос..." maxlength="5000" rows="5" required></textarea>
+                  <div class="comment-form-footer">
+                    <span class="comment-char-counter"><span id="answerCharCount">0</span> / 5000</span>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAnswer">
+                      <span>Отправить ответ</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- Banner for user who already answered -->
+            <div class="my-answer-banner" id="myAnswerBanner" style="display: none;">
+              <div class="my-answer-banner-content">
+                <div class="my-answer-banner-info">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  <span class="my-answer-banner-text">Вы уже ответили на этот вопрос</span>
+                </div>
+                <div class="my-answer-banner-actions">
+                  <button type="button" class="btn btn-secondary btn-sm btn-go-to-my-answer" id="btnGoToMyAnswer">
+                    Перейти к ответу
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm btn-edit-my-answer" id="btnEditMyAnswer">
+                    Редактировать ответ
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </section>
     </main>
