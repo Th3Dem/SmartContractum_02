@@ -910,21 +910,41 @@ class TestBrowserSmoke(unittest.TestCase):
             page.wait_for_selector(".comment-child-node", state="visible", timeout=5000)
             self.assertEqual((toggle_icon.text_content() or "").strip(), "-")
 
-            # 4. Verify Reddit geometry connectors (.comment-branch-connector) on visible child
-            connectors = page.locator(".comment-branch-connector")
-            self.assertGreaterEqual(connectors.count(), 1, "Expected .comment-branch-connector elements in DOM")
-            first_connector = connectors.first
-            self.assertTrue(first_connector.is_visible())
+            # 4. Verify absence of .btn-jump-to-parent and .comment-in-reply-to
+            self.assertEqual(
+                page.locator(".btn-jump-to-parent").count(),
+                0,
+                "Button .btn-jump-to-parent must be completely removed"
+            )
+            self.assertEqual(
+                page.locator(".comment-in-reply-to").count(),
+                0,
+                "Label .comment-in-reply-to must not be present"
+            )
 
-            # 5. Verify 'К родителю' button (.btn-jump-to-parent) and its attributes
-            jump_btns = page.locator(".btn-jump-to-parent")
-            self.assertGreaterEqual(jump_btns.count(), 1, "Expected .btn-jump-to-parent on nested comments")
-            first_jump = jump_btns.first
-            self.assertTrue(first_jump.is_visible())
-            aria_label = first_jump.get_attribute("aria-label") or ""
-            self.assertTrue(aria_label.startswith("К комментарию"), f"Unexpected aria-label: {aria_label}")
-            parent_id_attr = first_jump.get_attribute("data-parent-id")
-            self.assertTrue(bool(parent_id_attr), "Expected data-parent-id attribute on jump button")
+            # 5. Verify Reddit continuous geometry: .comment-branch-elbow, .comment-stem-upper, .thread-toggle-icon
+            elbows = page.locator(".comment-branch-elbow")
+            self.assertGreaterEqual(elbows.count(), 1, "Expected .comment-branch-elbow on child nodes")
+            self.assertTrue(elbows.first.is_visible(), "Expected .comment-branch-elbow to be visible")
+
+            stem_uppers = page.locator(".comment-stem-upper")
+            self.assertGreaterEqual(stem_uppers.count(), 1, "Expected .comment-stem-upper on parent node with children")
+
+            # Verify centering of toggle icon on avatar axis (x = 15px)
+            is_toggle_centered = page.evaluate("""() => {
+                const icon = document.querySelector('.thread-toggle-icon');
+                if (!icon) return false;
+                const style = window.getComputedStyle(icon);
+                return style.marginLeft === '7px' && style.marginRight === '17px';
+            }""")
+            self.assertTrue(is_toggle_centered, "Toggle icon must be centered on x=15px avatar axis")
+
+            # Verify full path highlight (.is-tree-path-active) on elbow hover
+            elbows.first.hover()
+            page.wait_for_timeout(100)
+            active_paths_count = page.locator(".is-tree-path-active").count()
+            self.assertGreaterEqual(active_paths_count, 1, "Expected .is-tree-path-active elements on hover")
+            page.mouse.move(0, 0)
 
             # 6. Sequentially expand intermediate levels down to depth >= 5 for drilldown windowing
             for _ in range(6):

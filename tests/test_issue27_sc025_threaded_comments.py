@@ -476,13 +476,12 @@ class TestIssue27VisualRefinementContracts(unittest.TestCase):
 
     def test_01_css_design_tokens_and_themes(self) -> None:
         """Verify tree line color tokens in :root and [data-theme='dark']."""
-        self.assertIn("--tree-line-color: #e2e8f0;", self.article_css)
-        self.assertIn("--tree-line-hover: #38bdf8;", self.article_css)
-        self.assertIn("--tree-highlight-bg: rgba(56, 189, 248, 0.08);", self.article_css)
+        self.assertIn("--tree-line-color: #cbd5e1;", self.article_css)
+        self.assertIn("--tree-line-active: #475569;", self.article_css)
 
         self.assertIn('[data-theme="dark"]', self.article_css)
         self.assertIn("--tree-line-color: #334155;", self.article_css)
-        self.assertIn("--tree-highlight-bg: rgba(56, 189, 248, 0.15);", self.article_css)
+        self.assertIn("--tree-line-active: #94a3b8;", self.article_css)
 
     def test_02_neutralized_comments_and_card_styling(self) -> None:
         """Verify neutralization of nested comments and retention of answer card styling."""
@@ -496,38 +495,39 @@ class TestIssue27VisualRefinementContracts(unittest.TestCase):
         self.assertIn("border: 1px solid var(--border-color);", self.article_css)
 
     def test_03_tree_layout_and_geometry_css_rules(self) -> None:
-        """Verify Reddit geometry rules: connector hit area, elbow curve, stem, and termination."""
+        """Verify Reddit geometry rules: upper stem, elbow curve, stem, and toggle alignment."""
         self.assertIn(".comment-main", self.article_css)
+        self.assertIn(".comment-gutter", self.article_css)
         self.assertIn(".comment-avatar-col", self.article_css)
         self.assertIn(".comment-body-col", self.article_css)
+        self.assertIn(".comment-stem-upper", self.article_css)
+        self.assertIn(".comment-toggle-row", self.article_css)
+        self.assertIn(".comment-stem-through", self.article_css)
         self.assertIn(".comment-thread-children", self.article_css)
-        self.assertIn("margin-left: 15px;", self.article_css)
 
         self.assertIn(".comment-child-node", self.article_css)
-        self.assertIn(".comment-branch-connector", self.article_css)
-        self.assertIn(".comment-branch-connector::before", self.article_css)
+        self.assertIn(".comment-branch-elbow", self.article_css)
         self.assertIn("border-bottom-left-radius: 8px;", self.article_css)
-
-        # Vertical stem for non-last child and termination for last-child
-        self.assertIn(".comment-child-node:not(:last-child) > .comment-branch-connector::after", self.article_css)
-        self.assertIn(".comment-child-node:last-child > .comment-branch-connector::after", self.article_css)
-        self.assertIn("content: none;", self.article_css)
+        self.assertIn(".comment-branch-stem", self.article_css)
 
     def test_04_connection_highlighting_classes(self) -> None:
-        """Verify connector active hover and peer highlight classes."""
-        self.assertIn(".comment-branch-connector.is-connection-active::before", self.article_css)
-        self.assertIn(".comment-branch-connector.is-connection-active::after", self.article_css)
-        self.assertIn(".connection-peer-highlight", self.article_css)
-        self.assertIn("var(--tree-line-hover)", self.article_css)
-        self.assertIn("var(--tree-highlight-bg)", self.article_css)
+        """Verify path highlighting and avatar peer highlight classes."""
+        self.assertIn(".is-tree-path-active", self.article_css)
+        self.assertIn(".avatar-peer-highlight", self.article_css)
+        self.assertIn("var(--tree-line-active)", self.article_css)
 
     def test_05_calm_collapse_toggle_and_parent_jump(self) -> None:
-        """Verify calm +/- collapse button and parent jump button styles."""
+        """Verify calm +/- collapse button and complete absence of parent jump button."""
         self.assertIn(".btn-toggle-thread", self.article_css)
         self.assertIn(".thread-toggle-icon", self.article_css)
-        self.assertIn("width: 18px;", self.article_css)
-        self.assertIn("height: 18px;", self.article_css)
-        self.assertIn(".btn-jump-to-parent", self.article_css)
+        self.assertIn("width: 16px;", self.article_css)
+        self.assertIn("height: 16px;", self.article_css)
+        self.assertIn("margin-left: 7px;", self.article_css)
+        self.assertIn("margin-right: 17px;", self.article_css)
+
+        # Complete removal of 'К родителю' and reply string
+        self.assertNotIn(".btn-jump-to-parent", self.article_css)
+        self.assertNotIn(".comment-in-reply-to", self.article_css)
 
     def test_06_drilldown_windowing_and_mobile_responsive_css(self) -> None:
         """Verify drilldown bar, continue button, and mobile rules (<680px)."""
@@ -536,7 +536,6 @@ class TestIssue27VisualRefinementContracts(unittest.TestCase):
         self.assertIn(".btn-continue-thread", self.article_css)
 
         self.assertIn("@media (max-width: 680px)", self.article_css)
-        self.assertIn("margin-left: 14px;", self.article_css)
         self.assertIn("min-height: 40px;", self.article_css)
 
     def test_07_article_js_code_contracts(self) -> None:
@@ -544,10 +543,15 @@ class TestIssue27VisualRefinementContracts(unittest.TestCase):
         self.assertIn("window._commentDrilldownState", self.article_js)
         self.assertIn("window._commentDrafts", self.article_js)
         self.assertIn("function getMaxWindowDepth()", self.article_js)
-        self.assertIn("comment-branch-connector", self.article_js)
-        self.assertIn("is-connection-active", self.article_js)
-        self.assertIn("connection-peer-highlight", self.article_js)
-        self.assertIn("btn-jump-to-parent", self.article_js)
+        self.assertIn("comment-branch-elbow", self.article_js)
+        self.assertIn("comment-branch-stem", self.article_js)
+        self.assertIn("comment-stem-upper", self.article_js)
+        self.assertIn("comment-toggle-row", self.article_js)
+        self.assertIn("is-tree-path-active", self.article_js)
+        self.assertIn("avatar-peer-highlight", self.article_js)
+        self.assertIn("sr-only", self.article_js)
+        self.assertNotIn("btn-jump-to-parent", self.article_js)
+        self.assertNotIn("comment-in-reply-to", self.article_js)
         self.assertIn("btn-continue-thread", self.article_js)
         self.assertIn("btn-drilldown-back", self.article_js)
         self.assertIn("thread-drilldown-bar", self.article_js)

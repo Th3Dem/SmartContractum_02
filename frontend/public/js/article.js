@@ -572,12 +572,15 @@
     return count;
   }
 
-  function renderCommentNode(comment, depth, treeContext) {
+  function renderCommentNode(comment, depth, treeContext, isLastChild, hasContinuation) {
     const el = document.createElement('div');
     const isSol = Boolean(comment.isSolution || comment.is_solution);
     const isClarification = Boolean(treeContext && treeContext.isQuestionClarification);
     const isAnswerReply = Boolean(comment.parentAnswerId || comment.parent_answer_id || (treeContext && treeContext.isAnswerReply));
     const isChild = depth > 0 || Boolean(comment.parentCommentId);
+    const totalDescendants = countDescendants(comment);
+    isLastChild = (isLastChild === undefined) ? true : Boolean(isLastChild);
+    hasContinuation = Boolean(hasContinuation);
 
     const classList = ['comment-item'];
     if (isSol) classList.push('is-solution-comment');
@@ -601,12 +604,28 @@
     el.setAttribute('data-id', comment.id);
     el.id = 'comm_' + comment.id;
 
-    // Reddit geometry branch connector for child comments
+    // Reddit geometry continuous connectors for child comments
+    let elbow = null;
+    let stem = null;
     let connector = null;
     if (isChild) {
+      elbow = document.createElement('div');
+      elbow.className = 'comment-branch-elbow';
+      elbow.setAttribute('aria-hidden', 'true');
+      el.appendChild(elbow);
+
+      if (!isLastChild || hasContinuation) {
+        stem = document.createElement('div');
+        stem.className = 'comment-branch-stem';
+        stem.setAttribute('aria-hidden', 'true');
+        el.appendChild(stem);
+      }
+
+      // Backward compatible hidden marker
       connector = document.createElement('div');
       connector.className = 'comment-branch-connector';
       connector.setAttribute('aria-hidden', 'true');
+      connector.style.display = 'none';
       el.appendChild(connector);
     }
 
@@ -664,29 +683,71 @@
       }, 100);
     }
 
-    function setConnectionHighlight(active) {
+    function setTreePathHighlight(active) {
+      if (elbow) {
+        elbow.classList.toggle('is-tree-path-active', active);
+      }
       if (connector) {
         connector.classList.toggle('is-connection-active', active);
+      }
+      const myAvatar = el.querySelector('.comment-main .comment-author-avatar');
+      if (myAvatar) {
+        myAvatar.classList.toggle('avatar-peer-highlight', active);
       }
       const myHeader = el.querySelector('.comment-item-header');
       if (myHeader) {
         myHeader.classList.toggle('connection-peer-highlight', active);
       }
-      if (comment.parentCommentId) {
-        const parentEl = document.getElementById('comm_' + comment.parentCommentId);
-        if (parentEl) {
-          const pHeader = parentEl.querySelector('.comment-item-header');
-          if (pHeader) {
-            pHeader.classList.toggle('connection-peer-highlight', active);
+
+      const parentThread = el.closest('.comment-thread-children');
+      if (!parentThread) return;
+      const parentItem = parentThread.closest('.comment-item');
+      if (!parentItem) return;
+
+      const parentUpper = parentItem.querySelector('.comment-main .comment-stem-upper');
+      if (parentUpper) {
+        parentUpper.classList.toggle('is-tree-path-active', active);
+      }
+
+      const parentToggleRow = parentItem.querySelector(':scope > .comment-toggle-row');
+      if (parentToggleRow) {
+        const pStemUpper = parentToggleRow.querySelector('.comment-toggle-stem-upper');
+        if (pStemUpper) pStemUpper.classList.toggle('is-tree-path-active', active);
+
+        const pStemThrough = parentToggleRow.querySelector('.comment-stem-through');
+        if (pStemThrough) pStemThrough.classList.toggle('is-tree-path-active', active);
+
+        const pToggleIcon = parentToggleRow.querySelector('.thread-toggle-icon');
+        if (pToggleIcon) pToggleIcon.classList.toggle('is-tree-path-active', active);
+      }
+
+      const parentAvatar = parentItem.querySelector('.comment-main .comment-author-avatar');
+      if (parentAvatar) {
+        parentAvatar.classList.toggle('avatar-peer-highlight', active);
+      }
+      const parentHeader = parentItem.querySelector('.comment-item-header');
+      if (parentHeader) {
+        parentHeader.classList.toggle('connection-peer-highlight', active);
+      }
+
+      let prevSib = el.previousElementSibling;
+      while (prevSib) {
+        if (prevSib.classList.contains('comment-child-node')) {
+          const sibStem = prevSib.querySelector(':scope > .comment-branch-stem');
+          if (sibStem) {
+            sibStem.classList.toggle('is-tree-path-active', active);
           }
         }
+        prevSib = prevSib.previousElementSibling;
       }
     }
 
-    if (connector) {
-      connector.addEventListener('mouseenter', function () { setConnectionHighlight(true); });
-      connector.addEventListener('mouseleave', function () { setConnectionHighlight(false); });
-      connector.addEventListener('click', function (e) {
+    if (elbow) {
+      elbow.addEventListener('mouseenter', function () { setTreePathHighlight(true); });
+      elbow.addEventListener('mouseleave', function () { setTreePathHighlight(false); });
+      elbow.addEventListener('focus', function () { setTreePathHighlight(true); });
+      elbow.addEventListener('blur', function () { setTreePathHighlight(false); });
+      elbow.addEventListener('click', function (e) {
         e.stopPropagation();
         if (comment.parentCommentId) {
           scrollToParentComment(comment.parentCommentId);
@@ -698,8 +759,9 @@
       const deletedMain = document.createElement('div');
       deletedMain.className = 'comment-main';
       deletedMain.innerHTML =
-        '<div class="comment-avatar-col">' +
+        '<div class="comment-gutter comment-avatar-col">' +
           '<div class="comment-author-avatar" style="opacity: 0.5;">?</div>' +
+          (totalDescendants > 0 ? '<div class="comment-stem-upper" aria-hidden="true"></div>' : '') +
         '</div>' +
         '<div class="comment-body-col">' +
           '<div class="comment-text" style="font-style: italic; color: var(--text-muted);">' +
@@ -728,18 +790,11 @@
         ? '<span class="comment-updated-badge" style="font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;">(изменен)</span>'
         : '';
 
-      let jumpToParentBtnHtml = '';
+      let srOnlyReplyHtml = '';
       if (comment.parentCommentId) {
         const parentComment = (treeContext && treeContext.allCommentsById) ? treeContext.allCommentsById[comment.parentCommentId] : null;
         const parentName = parentComment ? (parentComment.authorName || 'автору') : 'автору';
-        jumpToParentBtnHtml =
-          '<button type="button" class="btn-action-text btn-jump-to-parent" data-parent-id="' + escapeHtml(comment.parentCommentId) + '" aria-label="К комментарию @' + escapeHtml(parentName) + '">' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<polyline points="9 14 4 9 9 4"></polyline>' +
-              '<path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>' +
-            '</svg>' +
-            '<span>К родителю</span>' +
-          '</button>';
+        srOnlyReplyHtml = '<span class="sr-only">В ответ на комментарий @' + escapeHtml(parentName) + '</span>';
       }
 
       const isMyComment = Boolean(currentUser && (
@@ -754,67 +809,68 @@
 
       const mainContainer = document.createElement('div');
       mainContainer.className = 'comment-main';
-      mainContainer.innerHTML =
-        '<div class="comment-avatar-col">' +
-          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
+
+      const gutter = document.createElement('div');
+      gutter.className = 'comment-gutter comment-avatar-col';
+
+      const avatarEl = document.createElement('div');
+      avatarEl.className = 'comment-author-avatar';
+      avatarEl.textContent = initials;
+      gutter.appendChild(avatarEl);
+
+      if (totalDescendants > 0) {
+        const stemUpper = document.createElement('div');
+        stemUpper.className = 'comment-stem-upper';
+        stemUpper.setAttribute('aria-hidden', 'true');
+        gutter.appendChild(stemUpper);
+      }
+      mainContainer.appendChild(gutter);
+
+      const bodyCol = document.createElement('div');
+      bodyCol.className = 'comment-body-col';
+      bodyCol.innerHTML =
+        '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
+          '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+            '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
+            commentTypeBadge +
+            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+            updatedBadgeHtml +
+            srOnlyReplyHtml +
+          '</div>' +
+          solutionActionBtn +
         '</div>' +
-        '<div class="comment-body-col">' +
-          '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
-            '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
-              '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-              commentTypeBadge +
-              '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
-              updatedBadgeHtml +
-            '</div>' +
-            solutionActionBtn +
-          '</div>' +
-          solutionBadgeHtml +
-          '<div class="comment-content-wrap">' +
-            '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
-          '</div>' +
-          '<div class="comment-edit-wrap" style="display: none;">' +
-            '<textarea class="comment-textarea comment-edit-textarea" rows="3" maxlength="5000">' + escapeHtml(comment.content || '') + '</textarea>' +
-            '<div class="comment-form-footer" style="margin-top: 8px;">' +
-              '<span class="comment-char-counter"><span class="edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
-              '<div style="display: flex; gap: 8px;">' +
-                '<button type="button" class="btn btn-secondary btn-sm btn-cancel-comment-edit">Отмена</button>' +
-                '<button type="button" class="btn btn-primary btn-sm btn-save-comment-edit">Сохранить</button>' +
-              '</div>' +
+        solutionBadgeHtml +
+        '<div class="comment-content-wrap">' +
+          '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
+        '</div>' +
+        '<div class="comment-edit-wrap" style="display: none;">' +
+          '<textarea class="comment-textarea comment-edit-textarea" rows="3" maxlength="5000">' + escapeHtml(comment.content || '') + '</textarea>' +
+          '<div class="comment-form-footer" style="margin-top: 8px;">' +
+            '<span class="comment-char-counter"><span class="edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-comment-edit">Отмена</button>' +
+              '<button type="button" class="btn btn-primary btn-sm btn-save-comment-edit">Сохранить</button>' +
             '</div>' +
           '</div>' +
-          '<div class="comment-actions">' +
-            editBtnHtml +
-            '<button type="button" class="btn-action-text btn-reply-comment">Ответить</button>' +
-            jumpToParentBtnHtml +
-          '</div>' +
-          '<div class="comment-reply-form-wrap" style="display: none;">' +
-            '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
-            '<textarea class="comment-textarea comment-reply-textarea" rows="2" maxlength="5000" placeholder="Написать ответ..."></textarea>' +
-            '<div class="comment-form-footer" style="margin-top: 8px;">' +
-              '<span class="comment-char-counter"><span class="reply-char-count">0</span> / 5000</span>' +
-              '<div style="display: flex; gap: 8px;">' +
-                '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply-form">Отмена</button>' +
-                '<button type="button" class="btn btn-primary btn-sm btn-submit-reply-form">Отправить</button>' +
-              '</div>' +
+        '</div>' +
+        '<div class="comment-actions">' +
+          editBtnHtml +
+          '<button type="button" class="btn-action-text btn-reply-comment">Ответить</button>' +
+        '</div>' +
+        '<div class="comment-reply-form-wrap" style="display: none;">' +
+          '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
+          '<textarea class="comment-textarea comment-reply-textarea" rows="2" maxlength="5000" placeholder="Написать ответ..."></textarea>' +
+          '<div class="comment-form-footer" style="margin-top: 8px;">' +
+            '<span class="comment-char-counter"><span class="reply-char-count">0</span> / 5000</span>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply-form">Отмена</button>' +
+              '<button type="button" class="btn btn-primary btn-sm btn-submit-reply-form">Отправить</button>' +
             '</div>' +
           '</div>' +
         '</div>';
 
+      mainContainer.appendChild(bodyCol);
       el.appendChild(mainContainer);
-
-      // Jump to parent handler
-      const jumpBtn = el.querySelector('.btn-jump-to-parent');
-      if (jumpBtn) {
-        jumpBtn.addEventListener('mouseenter', function () { setConnectionHighlight(true); });
-        jumpBtn.addEventListener('mouseleave', function () { setConnectionHighlight(false); });
-        jumpBtn.addEventListener('focus', function () { setConnectionHighlight(true); });
-        jumpBtn.addEventListener('blur', function () { setConnectionHighlight(false); });
-        jumpBtn.addEventListener('click', function (e) {
-          e.preventDefault();
-          const pId = jumpBtn.getAttribute('data-parent-id');
-          scrollToParentComment(pId);
-        });
-      }
 
       // Inline edit handlers
       const editBtn = el.querySelector('.btn-edit-comment');
@@ -1076,6 +1132,21 @@
         el.appendChild(continueBtn);
       } else {
         const isExpanded = window._expandedCommentIds.has(comment.id);
+
+        const toggleRow = document.createElement('div');
+        toggleRow.className = 'comment-toggle-row';
+
+        const toggleStemUpper = document.createElement('div');
+        toggleStemUpper.className = 'comment-toggle-stem-upper';
+        toggleStemUpper.setAttribute('aria-hidden', 'true');
+        toggleRow.appendChild(toggleStemUpper);
+
+        const stemThrough = document.createElement('div');
+        stemThrough.className = 'comment-stem-through';
+        stemThrough.setAttribute('aria-hidden', 'true');
+        stemThrough.style.display = isExpanded ? 'block' : 'none';
+        toggleRow.appendChild(stemThrough);
+
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
         toggleBtn.className = 'btn-toggle-thread';
@@ -1084,14 +1155,17 @@
         toggleBtn.innerHTML =
           '<span class="thread-toggle-icon" aria-hidden="true">' + (isExpanded ? '-' : '+') + '</span>' +
           '<span class="toggle-thread-text">' + (isExpanded ? 'Скрыть комментарии' : ('Показать комментарии (' + totalDescendants + ')')) + '</span>';
+        toggleRow.appendChild(toggleBtn);
 
         const childrenContainer = document.createElement('div');
         childrenContainer.className = 'comment-thread-children';
         childrenContainer.id = 'thread_' + comment.id;
         childrenContainer.style.display = isExpanded ? 'flex' : 'none';
 
-        (comment.children || []).forEach(function (child) {
-          childrenContainer.appendChild(renderCommentNode(child, depth + 1, treeContext));
+        const childList = comment.children || [];
+        childList.forEach(function (child, idx) {
+          const isLast = (idx === childList.length - 1);
+          childrenContainer.appendChild(renderCommentNode(child, depth + 1, treeContext, isLast, false));
         });
 
         toggleBtn.addEventListener('click', function (e) {
@@ -1108,6 +1182,7 @@
             const txtEl = toggleBtn.querySelector('.toggle-thread-text');
             if (txtEl) txtEl.textContent = 'Показать комментарии (' + totalDescendants + ')';
             childrenContainer.style.display = 'none';
+            stemThrough.style.display = 'none';
           } else {
             window._expandedCommentIds.add(comment.id);
             toggleBtn.setAttribute('aria-expanded', 'true');
@@ -1116,10 +1191,11 @@
             const txtEl = toggleBtn.querySelector('.toggle-thread-text');
             if (txtEl) txtEl.textContent = 'Скрыть комментарии';
             childrenContainer.style.display = 'flex';
+            stemThrough.style.display = 'block';
           }
         });
 
-        el.appendChild(toggleBtn);
+        el.appendChild(toggleRow);
         el.appendChild(childrenContainer);
       }
     }

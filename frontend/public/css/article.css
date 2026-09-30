@@ -1457,15 +1457,30 @@ body,
    ========================================================================== */
 
 :root {
-  --tree-line-color: #e2e8f0;
-  --tree-line-hover: #38bdf8;
-  --tree-highlight-bg: rgba(56, 189, 248, 0.08);
+  --tree-line-color: #cbd5e1;
+  --tree-line-active: #475569;
+  --tree-line-hover: #475569;
+  --tree-highlight-bg: rgba(71, 85, 105, 0.08);
 }
 
 [data-theme="dark"] {
   --tree-line-color: #334155;
-  --tree-line-hover: #38bdf8;
-  --tree-highlight-bg: rgba(56, 189, 248, 0.15);
+  --tree-line-active: #94a3b8;
+  --tree-line-hover: #94a3b8;
+  --tree-highlight-bg: rgba(148, 163, 184, 0.12);
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Tree Node Layout */
@@ -1477,15 +1492,19 @@ body,
   transition: background-color var(--transition-fast);
 }
 
+.comment-gutter,
 .comment-avatar-col {
   width: 30px;
   min-width: 30px;
   max-width: 30px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
   flex-shrink: 0;
 }
 
+.comment-gutter .comment-author-avatar,
 .comment-avatar-col .comment-author-avatar {
   width: 30px;
   height: 30px;
@@ -1499,6 +1518,19 @@ body,
   font-weight: 700;
   font-size: 0.8rem;
   flex-shrink: 0;
+  transition: box-shadow var(--transition-fast);
+}
+
+.comment-stem-upper {
+  position: absolute;
+  left: 15px;
+  top: 30px;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--tree-line-color);
+  pointer-events: none;
+  z-index: 1;
+  transition: background-color var(--transition-fast);
 }
 
 .comment-body-col {
@@ -1516,84 +1548,37 @@ body,
   margin-bottom: 4px;
 }
 
-/* Tree Geometry */
-.comment-thread-children {
-  margin-left: 15px;
-  padding-left: 0;
-  border-left: none;
-  margin-top: 4px;
+/* Toggle Row & Center Alignment on x = 15px */
+.comment-toggle-row {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  position: relative;
+  align-items: center;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
 }
 
-.comment-thread-depth-limit .comment-thread-children {
-  margin-left: 15px;
-  border-left: none;
-  padding-left: 0;
-}
-
-.comment-child-node {
-  position: relative;
-  padding-left: 20px;
-}
-
-.comment-branch-connector {
+.comment-toggle-stem-upper {
   position: absolute;
-  left: -6px;
+  left: 15px;
   top: 0;
-  bottom: 0;
-  width: 14px;
-  cursor: pointer;
+  height: 4px;
+  width: 1px;
+  background-color: var(--tree-line-color);
+  pointer-events: none;
   z-index: 1;
+  transition: background-color var(--transition-fast);
 }
 
-.comment-branch-connector::before {
-  content: '';
+.comment-stem-through {
   position: absolute;
-  top: 0;
-  left: 6px;
-  width: 16px;
-  height: 15px;
-  border-left: 1px solid var(--tree-line-color);
-  border-bottom: 1px solid var(--tree-line-color);
-  border-bottom-left-radius: 8px;
-  box-sizing: border-box;
-  pointer-events: none;
-  transition: border-color var(--transition-fast);
-}
-
-.comment-child-node:not(:last-child) > .comment-branch-connector::after {
-  content: '';
-  position: absolute;
-  top: 15px;
+  left: 15px;
+  top: 20px;
   bottom: 0;
-  left: 6px;
-  border-left: 1px solid var(--tree-line-color);
-  box-sizing: border-box;
+  width: 1px;
+  background-color: var(--tree-line-color);
   pointer-events: none;
-  transition: border-color var(--transition-fast);
-}
-
-.comment-child-node:last-child > .comment-branch-connector::after {
-  content: none;
-  display: none;
-}
-
-/* Hover & Connection highlights */
-.comment-branch-connector.is-connection-active::before {
-  border-left-color: var(--tree-line-hover);
-  border-bottom-color: var(--tree-line-hover);
-}
-
-.comment-branch-connector.is-connection-active::after {
-  border-left-color: var(--tree-line-hover);
-}
-
-.connection-peer-highlight {
-  background-color: var(--tree-highlight-bg) !important;
-  border-radius: var(--radius-sm);
+  z-index: 1;
   transition: background-color var(--transition-fast);
 }
 
@@ -1601,36 +1586,38 @@ body,
 .btn-toggle-thread {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   background: transparent;
   border: none;
-  padding: 4px 8px;
-  margin-top: 6px;
+  padding: 0;
+  margin: 0;
   font-size: 0.82rem;
   font-weight: 500;
   font-family: inherit;
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  position: relative;
+  z-index: 2;
+  transition: color var(--transition-fast);
 }
 
 .btn-toggle-thread:hover {
-  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .btn-toggle-thread:focus-visible {
-  outline: 2px solid var(--accent-color);
+  outline: 2px solid var(--tree-line-active);
   outline-offset: 2px;
 }
 
 .thread-toggle-icon {
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin-left: 7px;
+  margin-right: 17px;
   border-radius: 50%;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--tree-line-color);
   background: var(--bg-surface);
   color: var(--text-secondary);
   display: inline-flex;
@@ -1641,12 +1628,97 @@ body,
   line-height: 1;
   transition: all var(--transition-fast);
   user-select: none;
+  box-sizing: border-box;
 }
 
-.btn-toggle-thread:hover .thread-toggle-icon {
-  border-color: var(--accent-color);
-  color: var(--accent-color);
-  background: var(--bg-hover);
+.btn-toggle-thread:hover .thread-toggle-icon,
+.btn-toggle-thread:focus-visible .thread-toggle-icon {
+  border-color: var(--tree-line-active);
+  color: var(--tree-line-active);
+}
+
+/* Continuous Tree Geometry: Children Container */
+.comment-thread-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-left: none;
+  position: relative;
+}
+
+.comment-child-node > .comment-thread-children {
+  margin-left: 28px;
+}
+
+.comment-child-node {
+  position: relative;
+  padding-left: 28px;
+  margin: 0;
+}
+
+/* Entry Elbow (radius 8px to x = 28px, y = 15px) */
+.comment-branch-elbow {
+  position: absolute;
+  left: 15px;
+  top: 0;
+  width: 13px;
+  height: 15px;
+  border-left: 1px solid var(--tree-line-color);
+  border-bottom: 1px solid var(--tree-line-color);
+  border-bottom-left-radius: 8px;
+  box-sizing: border-box;
+  cursor: pointer;
+  z-index: 2;
+  transition: border-color var(--transition-fast);
+}
+
+.comment-branch-elbow::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -6px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  z-index: 3;
+}
+
+/* Continuation Stem for siblings (top: 15px to bottom: 0) */
+.comment-branch-stem {
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--tree-line-color);
+  pointer-events: none;
+  z-index: 1;
+  transition: background-color var(--transition-fast);
+}
+
+/* Full Path Highlighting */
+.comment-stem-upper.is-tree-path-active,
+.comment-toggle-stem-upper.is-tree-path-active,
+.comment-stem-through.is-tree-path-active,
+.comment-branch-stem.is-tree-path-active {
+  background-color: var(--tree-line-active) !important;
+}
+
+.comment-branch-elbow.is-tree-path-active {
+  border-left-color: var(--tree-line-active) !important;
+  border-bottom-color: var(--tree-line-active) !important;
+}
+
+.thread-toggle-icon.is-tree-path-active {
+  border-color: var(--tree-line-active) !important;
+  color: var(--tree-line-active) !important;
+}
+
+.comment-author-avatar.avatar-peer-highlight {
+  box-shadow: 0 0 0 2px var(--tree-line-active);
+  transition: box-shadow var(--transition-fast);
 }
 
 .comment-actions {
@@ -1679,44 +1751,6 @@ body,
 .btn-action-text:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
-}
-
-.btn-jump-to-parent {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: none;
-  padding: 2px 6px;
-  font-family: inherit;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  text-decoration: none;
-  transition: color var(--transition-fast), background-color var(--transition-fast);
-}
-
-.btn-jump-to-parent:hover,
-.btn-jump-to-parent:focus-visible {
-  color: var(--accent-color);
-  background-color: var(--tree-highlight-bg);
-  text-decoration: none;
-}
-
-.btn-jump-to-parent:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 1px;
-}
-
-.comment-in-reply-to {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-bottom: 6px;
 }
 
 /* Windowing / Drilldown Navigation */
@@ -1814,45 +1848,58 @@ body,
 }
 
 @media (max-width: 680px) {
-  .comment-thread-children {
-    margin-left: 14px;
-    padding-left: 0;
-  }
-
-  .comment-child-node {
-    padding-left: 16px;
-  }
-
+  .comment-gutter,
   .comment-avatar-col {
     width: 28px;
     min-width: 28px;
     max-width: 28px;
   }
 
+  .comment-gutter .comment-author-avatar,
   .comment-avatar-col .comment-author-avatar {
     width: 28px;
     height: 28px;
     font-size: 0.75rem;
   }
 
-  .comment-branch-connector {
-    left: -5px;
-    width: 12px;
+  .comment-stem-upper {
+    left: 14px;
+    top: 28px;
   }
 
-  .comment-branch-connector::before {
-    left: 5px;
+  .comment-toggle-stem-upper {
+    left: 14px;
+  }
+
+  .comment-stem-through {
+    left: 14px;
+  }
+
+  .thread-toggle-icon {
+    margin-left: 6px;
+    margin-right: 14px;
+  }
+
+  .comment-child-node {
+    padding-left: 24px;
+  }
+
+  .comment-child-node > .comment-thread-children {
+    margin-left: 24px;
+  }
+
+  .comment-branch-elbow {
+    left: 14px;
+    width: 10px;
     height: 14px;
-    width: 14px;
   }
 
-  .comment-child-node:not(:last-child) > .comment-branch-connector::after {
-    left: 5px;
+  .comment-branch-stem {
+    left: 14px;
     top: 14px;
   }
 
   .btn-toggle-thread,
-  .btn-jump-to-parent,
   .btn-action-text,
   .btn-continue-thread,
   .btn-drilldown-back {
