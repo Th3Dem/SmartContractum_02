@@ -1103,7 +1103,6 @@
     }
 
     // Children & Thread toggle / Drilldown continuation
-    const totalDescendants = countDescendants(comment);
     if (totalDescendants > 0) {
       const maxDepth = getMaxWindowDepth();
       if (depth >= maxDepth) {
