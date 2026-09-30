@@ -849,6 +849,113 @@ class TestBrowserSmoke(unittest.TestCase):
         finally:
             page.close()
 
+    def test_06_threaded_comments_ui_interactions(self) -> None:
+        """
+        Verifies Reddit geometry connectors, single collapse toggle, parent jump,
+        drilldown windowing, and mobile viewport zero horizontal scroll (Issue #27).
+        """
+        page = self.browser.new_page()
+        try:
+            # 1. Login user to create deep comments chain
+            page.goto(f"{self.base_url}/feed.html", wait_until="domcontentloaded")
+            page.evaluate("""async () => {
+                await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({userId: 'user_tree_tester', name: 'Дерево Тестер', role: 'user'})
+                });
+            }""")
+
+            # Build a 6-level comment chain via API
+            chain_ids = page.evaluate("""async () => {
+                const ids = [];
+                let parentId = null;
+                for (let lvl = 0; lvl <= 6; lvl++) {
+                    const payload = {
+                        content: 'Уровень вложенности ' + lvl,
+                        commentType: 'comment'
+                    };
+                    if (parentId) {
+                        payload.parentCommentId = parentId;
+                    }
+                    const res = await fetch('/api/articles/art_smoke_01/comments', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (data && data.comment) {
+                        ids.push(data.comment.id);
+                        parentId = data.comment.id;
+                    }
+                }
+                return ids;
+            }""")
+            self.assertEqual(len(chain_ids), 7, "Failed to seed 7-level comment chain")
+
+            # 2. Open article page
+            page.goto(f"{self.base_url}/article.html?id=art_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector(".comment-item", timeout=10000)
+
+            # 3. Verify Reddit geometry connectors (.comment-branch-connector)
+            connectors = page.locator(".comment-branch-connector")
+            self.assertGreaterEqual(connectors.count(), 1, "Expected .comment-branch-connector elements in DOM")
+            first_connector = connectors.first
+            self.assertTrue(first_connector.is_visible())
+
+            # 4. Verify Single collapse button (.btn-toggle-thread) with +/-
+            toggle_btns = page.locator(".btn-toggle-thread")
+            self.assertGreaterEqual(toggle_btns.count(), 1, "Expected .btn-toggle-thread in DOM")
+            first_toggle = toggle_btns.first
+            toggle_icon = first_toggle.locator(".thread-toggle-icon")
+            self.assertTrue(toggle_icon.is_visible(), "Expected .thread-toggle-icon in collapse button")
+            self.assertIn(toggle_icon.text_content() or "", ["+", "-"])
+
+            # 5. Verify 'К родителю' button (.btn-jump-to-parent) and its attributes
+            jump_btns = page.locator(".btn-jump-to-parent")
+            self.assertGreaterEqual(jump_btns.count(), 1, "Expected .btn-jump-to-parent on nested comments")
+            first_jump = jump_btns.first
+            aria_label = first_jump.get_attribute("aria-label") or ""
+            self.assertTrue(aria_label.startswith("К комментарию"), f"Unexpected aria-label: {aria_label}")
+            parent_id_attr = first_jump.get_attribute("data-parent-id")
+            self.assertTrue(bool(parent_id_attr), "Expected data-parent-id attribute on jump button")
+
+            # 6. Verify Drilldown windowing ('Продолжить ветку') and back navigation
+            continue_btns = page.locator(".btn-continue-thread")
+            self.assertGreaterEqual(continue_btns.count(), 1, "Expected .btn-continue-thread at depth >= 5")
+            continue_text = continue_btns.first.text_content() or ""
+            self.assertIn("Продолжить ветку", continue_text)
+
+            # Click continue thread to enter drilldown window
+            continue_btns.first.click()
+            page.wait_for_selector(".thread-drilldown-bar", timeout=5000)
+            drilldown_bar = page.locator(".thread-drilldown-bar")
+            self.assertTrue(drilldown_bar.is_visible(), "Expected .thread-drilldown-bar to appear on drilldown")
+
+            back_btn = page.locator(".btn-drilldown-back")
+            self.assertTrue(back_btn.is_visible(), "Expected .btn-drilldown-back in drilldown bar")
+            self.assertIn("Назад", back_btn.text_content() or "")
+
+            # Click back to return to main tree
+            back_btn.click()
+            page.wait_for_function(
+                "document.querySelectorAll('.thread-drilldown-bar').length === 0",
+                timeout=5000
+            )
+
+            # 7. Mobile responsive viewport (360px) and zero horizontal scroll
+            page.set_viewport_size({"width": 360, "height": 640})
+            page.wait_for_timeout(300)
+            is_no_horizontal_scroll = page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            )
+            self.assertTrue(
+                is_no_horizontal_scroll,
+                "Horizontal scroll detected on 360px viewport"
+            )
+        finally:
+            page.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -533,6 +533,15 @@
 
   // Global set of expanded comment IDs to preserve expansion state across re-renders
   window._expandedCommentIds = window._expandedCommentIds || new Set();
+  window._commentDrilldownState = window._commentDrilldownState || { stack: [] };
+  window._commentDrafts = window._commentDrafts || {};
+
+  function getMaxWindowDepth() {
+    if (window.innerWidth < 680) {
+      return 3;
+    }
+    return 5;
+  }
 
   function buildCommentTree(comments) {
     const byId = {};
@@ -568,6 +577,7 @@
     const isSol = Boolean(comment.isSolution || comment.is_solution);
     const isClarification = Boolean(treeContext && treeContext.isQuestionClarification);
     const isAnswerReply = Boolean(comment.parentAnswerId || comment.parent_answer_id || (treeContext && treeContext.isAnswerReply));
+    const isChild = depth > 0 || Boolean(comment.parentCommentId);
 
     const classList = ['comment-item'];
     if (isSol) classList.push('is-solution-comment');
@@ -581,6 +591,9 @@
     if (comment.isDeleted) {
       classList.push('comment-deleted-placeholder');
     }
+    if (isChild) {
+      classList.push('comment-child-node');
+    }
     if (depth >= 3) {
       classList.push('comment-thread-depth-limit');
     }
@@ -588,16 +601,112 @@
     el.setAttribute('data-id', comment.id);
     el.id = 'comm_' + comment.id;
 
+    // Reddit geometry branch connector for child comments
+    let connector = null;
+    if (isChild) {
+      connector = document.createElement('div');
+      connector.className = 'comment-branch-connector';
+      connector.setAttribute('aria-hidden', 'true');
+      el.appendChild(connector);
+    }
+
     const authorName = comment.authorName || 'Пользователь';
     const authorId = comment.userId || comment.user_id || '';
     const initials = getAuthorInitials(authorName);
     const dateText = formatCommentDate(comment.createdAt || comment.created_at);
 
+    function scrollToParentComment(targetId) {
+      if (!targetId) return;
+      let targetEl = document.getElementById('comm_' + targetId);
+      if (!targetEl && window._commentDrilldownState && window._commentDrilldownState.stack.length > 0) {
+        while (window._commentDrilldownState.stack.length > 0 && !targetEl) {
+          window._commentDrilldownState.stack.pop();
+          if (treeContext && typeof treeContext.onReload === 'function') {
+            treeContext.onReload();
+          }
+          targetEl = document.getElementById('comm_' + targetId);
+        }
+      }
+
+      // Expand ancestors
+      let curr = window._allCommentsMap ? window._allCommentsMap[targetId] : null;
+      let visited = new Set();
+      while (curr) {
+        const pId = curr.parentCommentId || curr.parent_comment_id;
+        if (pId && !visited.has(pId)) {
+          visited.add(pId);
+          window._expandedCommentIds.add(pId);
+          const chCont = document.getElementById('thread_' + pId);
+          if (chCont) chCont.style.display = 'flex';
+          const tBtn = document.querySelector('[aria-controls="thread_' + pId + '"]');
+          if (tBtn) {
+            tBtn.setAttribute('aria-expanded', 'true');
+            const iconEl = tBtn.querySelector('.thread-toggle-icon');
+            if (iconEl) iconEl.textContent = '-';
+            const txtEl = tBtn.querySelector('.toggle-thread-text');
+            if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+          }
+          curr = window._allCommentsMap[pId];
+        } else {
+          break;
+        }
+      }
+
+      setTimeout(function () {
+        const finalTarget = document.getElementById('comm_' + targetId);
+        if (finalTarget) {
+          finalTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          finalTarget.classList.add('comment-highlight');
+          setTimeout(function () {
+            finalTarget.classList.remove('comment-highlight');
+          }, 2500);
+        }
+      }, 100);
+    }
+
+    function setConnectionHighlight(active) {
+      if (connector) {
+        connector.classList.toggle('is-connection-active', active);
+      }
+      const myHeader = el.querySelector('.comment-item-header');
+      if (myHeader) {
+        myHeader.classList.toggle('connection-peer-highlight', active);
+      }
+      if (comment.parentCommentId) {
+        const parentEl = document.getElementById('comm_' + comment.parentCommentId);
+        if (parentEl) {
+          const pHeader = parentEl.querySelector('.comment-item-header');
+          if (pHeader) {
+            pHeader.classList.toggle('connection-peer-highlight', active);
+          }
+        }
+      }
+    }
+
+    if (connector) {
+      connector.addEventListener('mouseenter', function () { setConnectionHighlight(true); });
+      connector.addEventListener('mouseleave', function () { setConnectionHighlight(false); });
+      connector.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (comment.parentCommentId) {
+          scrollToParentComment(comment.parentCommentId);
+        }
+      });
+    }
+
     if (comment.isDeleted) {
-      el.innerHTML =
-        '<div class="comment-text" style="font-style: italic; color: var(--text-muted);">' +
-          'Комментарий удален' +
+      const deletedMain = document.createElement('div');
+      deletedMain.className = 'comment-main';
+      deletedMain.innerHTML =
+        '<div class="comment-avatar-col">' +
+          '<div class="comment-author-avatar" style="opacity: 0.5;">?</div>' +
+        '</div>' +
+        '<div class="comment-body-col">' +
+          '<div class="comment-text" style="font-style: italic; color: var(--text-muted);">' +
+            'Комментарий удален' +
+          '</div>' +
         '</div>';
+      el.appendChild(deletedMain);
     } else {
       let solutionBadgeHtml = '';
       if (isSol) {
@@ -619,17 +728,18 @@
         ? '<span class="comment-updated-badge" style="font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;">(изменен)</span>'
         : '';
 
-      let inReplyToHtml = '';
-      if (depth >= 3 && comment.parentCommentId && treeContext && treeContext.allCommentsById) {
-        const parentComment = treeContext.allCommentsById[comment.parentCommentId];
+      let jumpToParentBtnHtml = '';
+      if (comment.parentCommentId) {
+        const parentComment = (treeContext && treeContext.allCommentsById) ? treeContext.allCommentsById[comment.parentCommentId] : null;
         const parentName = parentComment ? (parentComment.authorName || 'автору') : 'автору';
-        inReplyToHtml =
-          '<div class="comment-in-reply-to">' +
-            '<span>В ответ</span> ' +
-            '<button type="button" class="btn-jump-to-parent" data-parent-id="' + escapeHtml(comment.parentCommentId) + '">' +
-              '@' + escapeHtml(parentName) +
-            '</button>' +
-          '</div>';
+        jumpToParentBtnHtml =
+          '<button type="button" class="btn-action-text btn-jump-to-parent" data-parent-id="' + escapeHtml(comment.parentCommentId) + '" aria-label="К комментарию @' + escapeHtml(parentName) + '">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="9 14 4 9 9 4"></polyline>' +
+              '<path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>' +
+            '</svg>' +
+            '<span>К родителю</span>' +
+          '</button>';
       }
 
       const isMyComment = Boolean(currentUser && (
@@ -642,64 +752,67 @@
         editBtnHtml = '<button type="button" class="btn-action-text btn-edit-comment">Редактировать</button>';
       }
 
-      el.innerHTML =
-        '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
-          '<div style="display: flex; align-items: center; gap: 8px;">' +
-            '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-            '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-            commentTypeBadge +
-            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
-            updatedBadgeHtml +
+      const mainContainer = document.createElement('div');
+      mainContainer.className = 'comment-main';
+      mainContainer.innerHTML =
+        '<div class="comment-avatar-col">' +
+          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
+        '</div>' +
+        '<div class="comment-body-col">' +
+          '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
+            '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+              '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
+              commentTypeBadge +
+              '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+              updatedBadgeHtml +
+            '</div>' +
+            solutionActionBtn +
           '</div>' +
-          solutionActionBtn +
-        '</div>' +
-        inReplyToHtml +
-        solutionBadgeHtml +
-        '<div class="comment-content-wrap">' +
-          '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
-        '</div>' +
-        '<div class="comment-edit-wrap" style="display: none;">' +
-          '<textarea class="comment-textarea comment-edit-textarea" rows="3" maxlength="5000">' + escapeHtml(comment.content || '') + '</textarea>' +
-          '<div class="comment-form-footer" style="margin-top: 8px;">' +
-            '<span class="comment-char-counter"><span class="edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
-            '<div style="display: flex; gap: 8px;">' +
-              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-comment-edit">Отмена</button>' +
-              '<button type="button" class="btn btn-primary btn-sm btn-save-comment-edit">Сохранить</button>' +
+          solutionBadgeHtml +
+          '<div class="comment-content-wrap">' +
+            '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
+          '</div>' +
+          '<div class="comment-edit-wrap" style="display: none;">' +
+            '<textarea class="comment-textarea comment-edit-textarea" rows="3" maxlength="5000">' + escapeHtml(comment.content || '') + '</textarea>' +
+            '<div class="comment-form-footer" style="margin-top: 8px;">' +
+              '<span class="comment-char-counter"><span class="edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
+              '<div style="display: flex; gap: 8px;">' +
+                '<button type="button" class="btn btn-secondary btn-sm btn-cancel-comment-edit">Отмена</button>' +
+                '<button type="button" class="btn btn-primary btn-sm btn-save-comment-edit">Сохранить</button>' +
+              '</div>' +
             '</div>' +
           '</div>' +
-        '</div>' +
-        '<div class="comment-actions">' +
-          editBtnHtml +
-          '<button type="button" class="btn-action-text btn-reply-comment">Ответить</button>' +
-        '</div>' +
-        '<div class="comment-reply-form-wrap" style="display: none;">' +
-          '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
-          '<textarea class="comment-textarea comment-reply-textarea" rows="2" maxlength="5000" placeholder="Написать ответ..."></textarea>' +
-          '<div class="comment-form-footer" style="margin-top: 8px;">' +
-            '<span class="comment-char-counter"><span class="reply-char-count">0</span> / 5000</span>' +
-            '<div style="display: flex; gap: 8px;">' +
-              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply-form">Отмена</button>' +
-              '<button type="button" class="btn btn-primary btn-sm btn-submit-reply-form">Отправить</button>' +
+          '<div class="comment-actions">' +
+            editBtnHtml +
+            '<button type="button" class="btn-action-text btn-reply-comment">Ответить</button>' +
+            jumpToParentBtnHtml +
+          '</div>' +
+          '<div class="comment-reply-form-wrap" style="display: none;">' +
+            '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
+            '<textarea class="comment-textarea comment-reply-textarea" rows="2" maxlength="5000" placeholder="Написать ответ..."></textarea>' +
+            '<div class="comment-form-footer" style="margin-top: 8px;">' +
+              '<span class="comment-char-counter"><span class="reply-char-count">0</span> / 5000</span>' +
+              '<div style="display: flex; gap: 8px;">' +
+                '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply-form">Отмена</button>' +
+                '<button type="button" class="btn btn-primary btn-sm btn-submit-reply-form">Отправить</button>' +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</div>';
 
-
+      el.appendChild(mainContainer);
 
       // Jump to parent handler
       const jumpBtn = el.querySelector('.btn-jump-to-parent');
       if (jumpBtn) {
+        jumpBtn.addEventListener('mouseenter', function () { setConnectionHighlight(true); });
+        jumpBtn.addEventListener('mouseleave', function () { setConnectionHighlight(false); });
+        jumpBtn.addEventListener('focus', function () { setConnectionHighlight(true); });
+        jumpBtn.addEventListener('blur', function () { setConnectionHighlight(false); });
         jumpBtn.addEventListener('click', function (e) {
           e.preventDefault();
           const pId = jumpBtn.getAttribute('data-parent-id');
-          const targetEl = document.getElementById('comm_' + pId);
-          if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            targetEl.classList.add('comment-highlight');
-            setTimeout(function () {
-              targetEl.classList.remove('comment-highlight');
-            }, 2500);
-          }
+          scrollToParentComment(pId);
         });
       }
 
@@ -713,13 +826,21 @@
       const saveEditBtn = el.querySelector('.btn-save-comment-edit');
       const commentTextEl = el.querySelector('.comment-text');
 
+      const editDraftKey = 'edit_' + comment.id;
+      if (window._commentDrafts && window._commentDrafts[editDraftKey] && editTextarea) {
+        editTextarea.value = window._commentDrafts[editDraftKey];
+        if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+      }
+
       if (editBtn && editWrap && contentWrap) {
         editBtn.addEventListener('click', function (e) {
           e.preventDefault();
           contentWrap.style.display = 'none';
           editWrap.style.display = 'block';
           if (editTextarea) {
-            editTextarea.value = comment.content || '';
+            if (!editTextarea.value) {
+              editTextarea.value = comment.content || '';
+            }
             editTextarea.focus();
             if (editCharCount) editCharCount.textContent = editTextarea.value.length;
           }
@@ -727,6 +848,7 @@
 
         if (cancelEditBtn) {
           cancelEditBtn.addEventListener('click', function () {
+            if (window._commentDrafts) delete window._commentDrafts[editDraftKey];
             editWrap.style.display = 'none';
             contentWrap.style.display = 'block';
             if (editTextarea) {
@@ -739,6 +861,8 @@
         if (editTextarea && editCharCount) {
           editTextarea.addEventListener('input', function () {
             editCharCount.textContent = editTextarea.value.length;
+            window._commentDrafts = window._commentDrafts || {};
+            window._commentDrafts[editDraftKey] = editTextarea.value;
           });
         }
 
@@ -780,6 +904,7 @@
                 }
 
                 if (result.data && result.data.success && result.data.comment) {
+                  if (window._commentDrafts) delete window._commentDrafts[editDraftKey];
                   const updated = result.data.comment;
                   comment.content = updated.content;
                   comment.revision = updated.revision;
@@ -812,6 +937,13 @@
       const cancelReplyBtn = el.querySelector('.btn-cancel-reply-form');
       const submitReplyBtn = el.querySelector('.btn-submit-reply-form');
 
+      const replyDraftKey = 'reply_' + comment.id;
+      if (window._commentDrafts && window._commentDrafts[replyDraftKey] && replyTextarea) {
+        replyTextarea.value = window._commentDrafts[replyDraftKey];
+        if (replyCharCount) replyCharCount.textContent = replyTextarea.value.length;
+        if (replyWrap) replyWrap.style.display = 'block';
+      }
+
       if (replyBtn && replyWrap) {
         replyBtn.addEventListener('click', function (e) {
           e.preventDefault();
@@ -829,13 +961,17 @@
 
         if (cancelReplyBtn) {
           cancelReplyBtn.addEventListener('click', function () {
+            if (window._commentDrafts) delete window._commentDrafts[replyDraftKey];
             replyWrap.style.display = 'none';
+            if (replyTextarea) replyTextarea.value = '';
           });
         }
 
         if (replyTextarea && replyCharCount) {
           replyTextarea.addEventListener('input', function () {
             replyCharCount.textContent = replyTextarea.value.length;
+            window._commentDrafts = window._commentDrafts || {};
+            window._commentDrafts[replyDraftKey] = replyTextarea.value;
           });
         }
 
@@ -883,6 +1019,7 @@
               .then(function (data) {
                 submitReplyBtn.disabled = false;
                 if (data && data.success && data.comment) {
+                  if (window._commentDrafts) delete window._commentDrafts[replyDraftKey];
                   replyTextarea.value = '';
                   if (replyCharCount) replyCharCount.textContent = '0';
                   replyWrap.style.display = 'none';
@@ -909,57 +1046,82 @@
       }
     }
 
-    // Children & Thread toggle
+    // Children & Thread toggle / Drilldown continuation
     const totalDescendants = countDescendants(comment);
     if (totalDescendants > 0) {
-      const isExpanded = window._expandedCommentIds.has(comment.id);
-      const toggleBtn = document.createElement('button');
-      toggleBtn.type = 'button';
-      toggleBtn.className = 'btn-toggle-thread';
-      toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-      toggleBtn.setAttribute('aria-controls', 'thread_' + comment.id);
-      toggleBtn.innerHTML =
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-          '<polyline points="' + (isExpanded ? '18 15 12 9 6 15' : '6 9 12 15 18 9') + '"></polyline>' +
-        '</svg>' +
-        '<span class="toggle-thread-text">' + (isExpanded ? 'Скрыть комментарии' : ('Показать комментарии (' + totalDescendants + ')')) + '</span>';
+      const maxDepth = getMaxWindowDepth();
+      if (depth >= maxDepth) {
+        const continueBtn = document.createElement('button');
+        continueBtn.type = 'button';
+        continueBtn.className = 'btn btn-continue-thread';
+        continueBtn.setAttribute('data-comment-id', comment.id);
+        continueBtn.innerHTML =
+          '<span>Продолжить ветку (' + totalDescendants + ')</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<polyline points="9 18 15 12 9 6"></polyline>' +
+          '</svg>';
 
-      const childrenContainer = document.createElement('div');
-      childrenContainer.className = 'comment-thread-children';
-      childrenContainer.id = 'thread_' + comment.id;
-      childrenContainer.style.display = isExpanded ? 'flex' : 'none';
-
-      (comment.children || []).forEach(function (child) {
-        childrenContainer.appendChild(renderCommentNode(child, depth + 1, treeContext));
-      });
-
-      toggleBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        const currentlyExpanded = window._expandedCommentIds.has(comment.id);
-        if (currentlyExpanded) {
-          if (childrenContainer.contains(document.activeElement)) {
-            toggleBtn.focus();
+        continueBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          window._commentDrilldownState = window._commentDrilldownState || { stack: [] };
+          window._commentDrilldownState.stack.push({
+            rootCommentId: comment.id,
+            scrollY: window.scrollY
+          });
+          if (treeContext && typeof treeContext.onReload === 'function') {
+            treeContext.onReload(comment.id);
           }
-          window._expandedCommentIds.delete(comment.id);
-          toggleBtn.setAttribute('aria-expanded', 'false');
-          const txtEl = toggleBtn.querySelector('.toggle-thread-text');
-          if (txtEl) txtEl.textContent = 'Показать комментарии (' + totalDescendants + ')';
-          const polyline = toggleBtn.querySelector('svg polyline');
-          if (polyline) polyline.setAttribute('points', '6 9 12 15 18 9');
-          childrenContainer.style.display = 'none';
-        } else {
-          window._expandedCommentIds.add(comment.id);
-          toggleBtn.setAttribute('aria-expanded', 'true');
-          const txtEl = toggleBtn.querySelector('.toggle-thread-text');
-          if (txtEl) txtEl.textContent = 'Скрыть комментарии';
-          const polyline = toggleBtn.querySelector('svg polyline');
-          if (polyline) polyline.setAttribute('points', '18 15 12 9 6 15');
-          childrenContainer.style.display = 'flex';
-        }
-      });
+        });
 
-      el.appendChild(toggleBtn);
-      el.appendChild(childrenContainer);
+        el.appendChild(continueBtn);
+      } else {
+        const isExpanded = window._expandedCommentIds.has(comment.id);
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'btn-toggle-thread';
+        toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        toggleBtn.setAttribute('aria-controls', 'thread_' + comment.id);
+        toggleBtn.innerHTML =
+          '<span class="thread-toggle-icon" aria-hidden="true">' + (isExpanded ? '-' : '+') + '</span>' +
+          '<span class="toggle-thread-text">' + (isExpanded ? 'Скрыть комментарии' : ('Показать комментарии (' + totalDescendants + ')')) + '</span>';
+
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'comment-thread-children';
+        childrenContainer.id = 'thread_' + comment.id;
+        childrenContainer.style.display = isExpanded ? 'flex' : 'none';
+
+        (comment.children || []).forEach(function (child) {
+          childrenContainer.appendChild(renderCommentNode(child, depth + 1, treeContext));
+        });
+
+        toggleBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const currentlyExpanded = window._expandedCommentIds.has(comment.id);
+          if (currentlyExpanded) {
+            if (childrenContainer.contains(document.activeElement)) {
+              toggleBtn.focus();
+            }
+            window._expandedCommentIds.delete(comment.id);
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            const iconEl = toggleBtn.querySelector('.thread-toggle-icon');
+            if (iconEl) iconEl.textContent = '+';
+            const txtEl = toggleBtn.querySelector('.toggle-thread-text');
+            if (txtEl) txtEl.textContent = 'Показать комментарии (' + totalDescendants + ')';
+            childrenContainer.style.display = 'none';
+          } else {
+            window._expandedCommentIds.add(comment.id);
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            const iconEl = toggleBtn.querySelector('.thread-toggle-icon');
+            if (iconEl) iconEl.textContent = '-';
+            const txtEl = toggleBtn.querySelector('.toggle-thread-text');
+            if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+            childrenContainer.style.display = 'flex';
+          }
+        });
+
+        el.appendChild(toggleBtn);
+        el.appendChild(childrenContainer);
+      }
     }
 
     return el;
@@ -1106,17 +1268,62 @@
     const repliesListEl = el.querySelector('.answer-replies-list');
     if (repliesListEl && replies.length > 0) {
       const tree = buildCommentTree(replies);
-      tree.roots.forEach(function (r) {
-        repliesListEl.appendChild(renderCommentNode(r, 0, {
-          articleId: articleId,
-          allCommentsById: window._allCommentsMap || tree.byId,
-          isQuestionClarification: false,
-          isAnswerReply: true,
-          onReload: function () {
-            loadComments(articleId);
+      const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+      let renderedDrilldown = false;
+      if (stack.length > 0) {
+        const currentFrame = stack[stack.length - 1];
+        const drilldownRoot = tree.byId[currentFrame.rootCommentId];
+        if (drilldownRoot) {
+          renderedDrilldown = true;
+          const drilldownBar = document.createElement('div');
+          drilldownBar.className = 'thread-drilldown-bar';
+          drilldownBar.innerHTML =
+            '<button type="button" class="btn-drilldown-back">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<polyline points="15 18 9 12 15 6"></polyline>' +
+              '</svg>' +
+              '<span>Назад к ответу</span>' +
+            '</button>' +
+            '<span class="thread-drilldown-title">Ветка обсуждения</span>';
+
+          const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+          if (backBtn) {
+            backBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              const popped = window._commentDrilldownState.stack.pop();
+              loadComments(articleId);
+              if (popped && typeof popped.scrollY === 'number') {
+                window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+              }
+            });
           }
-        }));
-      });
+          repliesListEl.appendChild(drilldownBar);
+          window._expandedCommentIds.add(drilldownRoot.id);
+          repliesListEl.appendChild(renderCommentNode(drilldownRoot, 0, {
+            articleId: articleId,
+            allCommentsById: window._allCommentsMap || tree.byId,
+            isQuestionClarification: false,
+            isAnswerReply: true,
+            onReload: function () {
+              loadComments(articleId);
+            }
+          }));
+        }
+      }
+
+      if (!renderedDrilldown) {
+        tree.roots.forEach(function (r) {
+          repliesListEl.appendChild(renderCommentNode(r, 0, {
+            articleId: articleId,
+            allCommentsById: window._allCommentsMap || tree.byId,
+            isQuestionClarification: false,
+            isAnswerReply: true,
+            onReload: function () {
+              loadComments(articleId);
+            }
+          }));
+        });
+      }
     }
 
     // Solution button handler
@@ -1381,8 +1588,33 @@
       const rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
       const item = window._allCommentsMap ? window._allCommentsMap[rawTargetId] : null;
       if (item) {
-        let parentId = item.parentCommentId || item.parent_comment_id;
+        // Build ancestor chain from root down to this item
+        let path = [];
+        let curr = item;
         let visited = new Set();
+        while (curr && !visited.has(curr.id)) {
+          visited.add(curr.id);
+          path.unshift(curr);
+          const pId = curr.parentCommentId || curr.parent_comment_id;
+          curr = pId ? window._allCommentsMap[pId] : null;
+        }
+
+        const maxDepth = getMaxWindowDepth();
+        if (path.length > maxDepth) {
+          const windowRoot = path[maxDepth - 1] || path[0];
+          if (windowRoot && windowRoot.id !== rawTargetId) {
+            window._commentDrilldownState.stack = [{
+              rootCommentId: windowRoot.id,
+              scrollY: window.scrollY
+            }];
+            if (window._rawCommentsData && currentArticle) {
+              renderCommentsList(window._rawCommentsData);
+            }
+          }
+        }
+
+        let parentId = item.parentCommentId || item.parent_comment_id;
+        visited = new Set();
         while (parentId && !visited.has(parentId)) {
           visited.add(parentId);
           window._expandedCommentIds.add(parentId);
@@ -1392,10 +1624,10 @@
             const btn = document.querySelector('[aria-controls="thread_' + parentId + '"]');
             if (btn) {
               btn.setAttribute('aria-expanded', 'true');
+              const iconEl = btn.querySelector('.thread-toggle-icon');
+              if (iconEl) iconEl.textContent = '-';
               const txtEl = btn.querySelector('.toggle-thread-text');
               if (txtEl) txtEl.textContent = 'Скрыть комментарии';
-              const polyline = btn.querySelector('svg polyline');
-              if (polyline) polyline.setAttribute('points', '18 15 12 9 6 15');
             }
           }
           const parentObj = window._allCommentsMap[parentId];
@@ -1449,7 +1681,53 @@
 
     if (emptyEl) emptyEl.style.display = 'none';
 
+    window._rawCommentsData = comments;
     const tree = buildCommentTree(comments);
+
+    // Drilldown Window mode
+    const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+    if (stack.length > 0) {
+      const currentFrame = stack[stack.length - 1];
+      const drilldownRoot = tree.byId[currentFrame.rootCommentId];
+      if (drilldownRoot) {
+        const drilldownBar = document.createElement('div');
+        drilldownBar.className = 'thread-drilldown-bar';
+        drilldownBar.innerHTML =
+          '<button type="button" class="btn-drilldown-back">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="15 18 9 12 15 6"></polyline>' +
+            '</svg>' +
+            '<span>Назад к обсуждению</span>' +
+          '</button>' +
+          '<span class="thread-drilldown-title">Ветка комментариев</span>';
+
+        const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+        if (backBtn) {
+          backBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const popped = window._commentDrilldownState.stack.pop();
+            renderCommentsList(comments);
+            if (popped && typeof popped.scrollY === 'number') {
+              window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+            }
+          });
+        }
+
+        listEl.appendChild(drilldownBar);
+        window._expandedCommentIds.add(drilldownRoot.id);
+        listEl.appendChild(renderCommentNode(drilldownRoot, 0, {
+          articleId: currentArticle ? currentArticle.id : '',
+          allCommentsById: window._allCommentsMap || tree.byId,
+          isQuestionClarification: false,
+          onReload: function (newId) {
+            if (currentArticle) {
+              loadComments(currentArticle.id);
+            }
+          }
+        }));
+        return;
+      }
+    }
 
     // Put solution comment first if present
     const sortedRoots = tree.roots.slice().sort(function (a, b) {
@@ -1493,6 +1771,7 @@
           return;
         }
 
+        window._rawCommentsData = data.comments || [];
         window._allCommentsMap = {};
         (data.comments || []).forEach(function (c) {
           window._allCommentsMap[c.id] = c;
@@ -1555,26 +1834,71 @@
             qList.innerHTML = '';
             const qComments = data.questionComments || [];
             const qTree = buildCommentTree(qComments);
-            qTree.roots.forEach(function (qc) {
-              qList.appendChild(renderCommentNode(qc, 0, {
-                articleId: articleId,
-                allCommentsById: window._allCommentsMap || qTree.byId,
-                isQuestionClarification: true,
-                onReload: function (newId) {
-                  loadComments(articleId);
-                  if (newId) {
-                    setTimeout(function () {
-                      const target = document.getElementById('comm_' + newId);
-                      if (target) {
-                        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        target.classList.add('comment-highlight');
-                        setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
-                      }
-                    }, 300);
-                  }
+
+            const stack = (window._commentDrilldownState && window._commentDrilldownState.stack) || [];
+            let renderedDrilldown = false;
+            if (stack.length > 0) {
+              const currentFrame = stack[stack.length - 1];
+              const drilldownRoot = qTree.byId[currentFrame.rootCommentId];
+              if (drilldownRoot) {
+                renderedDrilldown = true;
+                const drilldownBar = document.createElement('div');
+                drilldownBar.className = 'thread-drilldown-bar';
+                drilldownBar.innerHTML =
+                  '<button type="button" class="btn-drilldown-back">' +
+                    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                      '<polyline points="15 18 9 12 15 6"></polyline>' +
+                    '</svg>' +
+                    '<span>Назад к обсуждению</span>' +
+                  '</button>' +
+                  '<span class="thread-drilldown-title">Ветка уточнений</span>';
+
+                const backBtn = drilldownBar.querySelector('.btn-drilldown-back');
+                if (backBtn) {
+                  backBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const popped = window._commentDrilldownState.stack.pop();
+                    loadComments(articleId);
+                    if (popped && typeof popped.scrollY === 'number') {
+                      window.scrollTo({ top: popped.scrollY, behavior: 'auto' });
+                    }
+                  });
                 }
-              }));
-            });
+                qList.appendChild(drilldownBar);
+                window._expandedCommentIds.add(drilldownRoot.id);
+                qList.appendChild(renderCommentNode(drilldownRoot, 0, {
+                  articleId: articleId,
+                  allCommentsById: window._allCommentsMap || qTree.byId,
+                  isQuestionClarification: true,
+                  onReload: function (newId) {
+                    loadComments(articleId);
+                  }
+                }));
+              }
+            }
+
+            if (!renderedDrilldown) {
+              qTree.roots.forEach(function (qc) {
+                qList.appendChild(renderCommentNode(qc, 0, {
+                  articleId: articleId,
+                  allCommentsById: window._allCommentsMap || qTree.byId,
+                  isQuestionClarification: true,
+                  onReload: function (newId) {
+                    loadComments(articleId);
+                    if (newId) {
+                      setTimeout(function () {
+                        const target = document.getElementById('comm_' + newId);
+                        if (target) {
+                          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          target.classList.add('comment-highlight');
+                          setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
+                        }
+                      }, 300);
+                    }
+                  }
+                }));
+              });
+            }
           }
 
           // Render Answers List
@@ -2173,7 +2497,7 @@
     if (contentWrap) contentWrap.style.display = 'block';
 
     // Page title
-    document.title = (article.title || 'Публикация') + ' — SmartContractum';
+    document.title = (article.title || 'Публикация') + ' - SmartContractum';
 
     // Title & Lead
     const titleEl = document.getElementById('articleTitle');

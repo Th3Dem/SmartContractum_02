@@ -461,5 +461,108 @@ class TestIssue27ThreadedCommentsBackend(unittest.TestCase):
         self.assertEqual(found_c["parentCommentId"], p_id)
 
 
+class TestIssue27VisualRefinementContracts(unittest.TestCase):
+    """Verifies visual refinement contracts, Reddit geometry, tokens, drilldown, and mobile CSS."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        css_path = os.path.join(FRONTEND_DIR, "css", "article.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            cls.article_css = f.read()
+
+        js_path = os.path.join(FRONTEND_DIR, "js", "article.js")
+        with open(js_path, "r", encoding="utf-8") as f:
+            cls.article_js = f.read()
+
+    def test_01_css_design_tokens_and_themes(self) -> None:
+        """Verify tree line color tokens in :root and [data-theme='dark']."""
+        self.assertIn("--tree-line-color: #e2e8f0;", self.article_css)
+        self.assertIn("--tree-line-hover: #38bdf8;", self.article_css)
+        self.assertIn("--tree-highlight-bg: rgba(56, 189, 248, 0.08);", self.article_css)
+
+        self.assertIn('[data-theme="dark"]', self.article_css)
+        self.assertIn("--tree-line-color: #334155;", self.article_css)
+        self.assertIn("--tree-highlight-bg: rgba(56, 189, 248, 0.15);", self.article_css)
+
+    def test_02_neutralized_comments_and_card_styling(self) -> None:
+        """Verify neutralization of nested comments and retention of answer card styling."""
+        # Neutralized comments: border none, background transparent
+        self.assertIn(".comment-item {", self.article_css)
+        self.assertIn(".question-clarification-item {", self.article_css)
+        self.assertIn(".answer-reply-item {", self.article_css)
+
+        # Retained answer card styling
+        self.assertIn(".answer-card {", self.article_css)
+        self.assertIn("border: 1px solid var(--border-color);", self.article_css)
+
+    def test_03_tree_layout_and_geometry_css_rules(self) -> None:
+        """Verify Reddit geometry rules: connector hit area, elbow curve, stem, and termination."""
+        self.assertIn(".comment-main", self.article_css)
+        self.assertIn(".comment-avatar-col", self.article_css)
+        self.assertIn(".comment-body-col", self.article_css)
+        self.assertIn(".comment-thread-children", self.article_css)
+        self.assertIn("margin-left: 15px;", self.article_css)
+
+        self.assertIn(".comment-child-node", self.article_css)
+        self.assertIn(".comment-branch-connector", self.article_css)
+        self.assertIn(".comment-branch-connector::before", self.article_css)
+        self.assertIn("border-bottom-left-radius: 8px;", self.article_css)
+
+        # Vertical stem for non-last child and termination for last-child
+        self.assertIn(".comment-child-node:not(:last-child) > .comment-branch-connector::after", self.article_css)
+        self.assertIn(".comment-child-node:last-child > .comment-branch-connector::after", self.article_css)
+        self.assertIn("content: none;", self.article_css)
+
+    def test_04_connection_highlighting_classes(self) -> None:
+        """Verify connector active hover and peer highlight classes."""
+        self.assertIn(".comment-branch-connector.is-connection-active::before", self.article_css)
+        self.assertIn(".comment-branch-connector.is-connection-active::after", self.article_css)
+        self.assertIn(".connection-peer-highlight", self.article_css)
+        self.assertIn("var(--tree-line-hover)", self.article_css)
+        self.assertIn("var(--tree-highlight-bg)", self.article_css)
+
+    def test_05_calm_collapse_toggle_and_parent_jump(self) -> None:
+        """Verify calm +/- collapse button and parent jump button styles."""
+        self.assertIn(".btn-toggle-thread", self.article_css)
+        self.assertIn(".thread-toggle-icon", self.article_css)
+        self.assertIn("width: 18px;", self.article_css)
+        self.assertIn("height: 18px;", self.article_css)
+        self.assertIn(".btn-jump-to-parent", self.article_css)
+
+    def test_06_drilldown_windowing_and_mobile_responsive_css(self) -> None:
+        """Verify drilldown bar, continue button, and mobile rules (<680px)."""
+        self.assertIn(".thread-drilldown-bar", self.article_css)
+        self.assertIn(".btn-drilldown-back", self.article_css)
+        self.assertIn(".btn-continue-thread", self.article_css)
+
+        self.assertIn("@media (max-width: 680px)", self.article_css)
+        self.assertIn("margin-left: 14px;", self.article_css)
+        self.assertIn("min-height: 40px;", self.article_css)
+
+    def test_07_article_js_code_contracts(self) -> None:
+        """Verify JavaScript contracts for drilldown state, depth limit, drafts, and DOM classes."""
+        self.assertIn("window._commentDrilldownState", self.article_js)
+        self.assertIn("window._commentDrafts", self.article_js)
+        self.assertIn("function getMaxWindowDepth()", self.article_js)
+        self.assertIn("comment-branch-connector", self.article_js)
+        self.assertIn("is-connection-active", self.article_js)
+        self.assertIn("connection-peer-highlight", self.article_js)
+        self.assertIn("btn-jump-to-parent", self.article_js)
+        self.assertIn("btn-continue-thread", self.article_js)
+        self.assertIn("btn-drilldown-back", self.article_js)
+        self.assertIn("thread-drilldown-bar", self.article_js)
+        self.assertIn("thread-toggle-icon", self.article_js)
+
+    def test_08_zero_emojis_and_no_em_dashes(self) -> None:
+        """Ensure zero emojis and zero em dashes in modified files."""
+        import re
+        emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]|[\u2600-\u26ff]|[\u2700-\u27bf]")
+        self.assertIsNone(emoji_pattern.search(self.article_css), "Emoji found in article.css")
+        self.assertIsNone(emoji_pattern.search(self.article_js), "Emoji found in article.js")
+
+        self.assertNotIn("\u2014", self.article_css, "Em dash found in article.css")
+        self.assertNotIn("\u2014", self.article_js, "Em dash found in article.js")
+
+
 if __name__ == "__main__":
     unittest.main()

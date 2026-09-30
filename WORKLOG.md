@@ -466,3 +466,6 @@
 [2026-09-30 17:58] | git_bot | GIT_COMMITTED | Добавление класса .answer-reply-item для древовидных ответов для совместимости с E2E CI (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 18:05] | dev_bot | BUGFIX_COMPLETE | Удалена кнопка решения с узлов комментариев (решением могут быть только ответы) и устранен race condition в subprocess тесте seed (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 18:06] | git_bot | GIT_COMMITTED | Ограничение отметки решения только ответами и устранение race condition в тесте seed (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 19:25] | pm_bot | TASK_REVISE | Визуальная доработка геометрии дерева комментариев, связей, подсветки и drilldown в PR #28 (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 19:25] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации геометрии Reddit, hover-подсветки, управления ветками, drilldown и E2E смоук-тестов (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 19:42] | dev_bot | IMPLEMENTATION_COMPLETE | Визуальная доработка геометрии комментариев Reddit, hover-подсветки, управления ветками и drilldown (Task: issue-27-sc025-threaded-comments)
