@@ -457,3 +457,7 @@
 [2026-09-30 15:18] | pm_bot | TASK_DONE | Задача Issue #26 (SC-024.3) и Epic #23 (SC-024) успешно завершены и объединены в main. Все 597 тестов пройдены (100%). Issue #26 и Epic #23 на GitHub закрыты (Task: issue-26-sc024-qa-ci-and-diagnostics)
 [2026-09-30 15:35] | pm_bot | TASK_INIT | Применение правил и условий из PR #6 (stop threshold, classification matrix, PR lifecycle) (Task: task-agents-workflow-update)
 [2026-09-30 15:36] | pm_bot | TASK_DONE | Обновление правил и инструкций мультиагентной системы завершено (Task: task-agents-workflow-update)
+[2026-09-30 16:57] | pm_bot | TASK_INIT | Инициализация задачи Issue #27 (SC-025): единые многоуровневые комментарии (вопросы, ответы, статьи) (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 17:22] | py_bot | IMPLEMENTATION_COMPLETE | Реализация бэкенда, инвариантов и диагностики многоуровневых комментариев (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 17:31] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация древовидного рендеринга комментариев, inline-ответов/редактирования, диплинкинга и адаптивных стилей (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 17:32] | pm_bot | TASK_READY_FOR_PR | Все 10 инвариантов доказаны, 605/605 тестов успешно пройдены (100% PASS), сформирован DEV_HANDOVER.md (Task: issue-27-sc025-threaded-comments)

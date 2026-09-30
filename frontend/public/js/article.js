@@ -531,11 +531,56 @@
       : name.substring(0, 2).toUpperCase();
   }
 
-  // Render a standard comment for articles (flat list)
-  function renderCommentItem(comment) {
+  // Global set of expanded comment IDs to preserve expansion state across re-renders
+  window._expandedCommentIds = window._expandedCommentIds || new Set();
+
+  function buildCommentTree(comments) {
+    const byId = {};
+    (comments || []).forEach(function (c) {
+      byId[c.id] = Object.assign({}, c, { children: [] });
+    });
+    const roots = [];
+    (comments || []).forEach(function (c) {
+      const node = byId[c.id];
+      if (c.parentCommentId && byId[c.parentCommentId]) {
+        byId[c.parentCommentId].children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+    return { roots: roots, byId: byId };
+  }
+
+  function countDescendants(node) {
+    let count = 0;
+    if (!node || !Array.isArray(node.children)) return 0;
+    node.children.forEach(function (child) {
+      if (!child.isDeleted) {
+        count += 1;
+      }
+      count += countDescendants(child);
+    });
+    return count;
+  }
+
+  function renderCommentNode(comment, depth, treeContext) {
     const el = document.createElement('div');
     const isSol = Boolean(comment.isSolution || comment.is_solution);
-    el.className = 'comment-item' + (isSol ? ' is-solution-comment' : '');
+    const isClarification = Boolean(treeContext && treeContext.isQuestionClarification);
+
+    const classList = ['comment-item'];
+    if (isSol) classList.push('is-solution-comment');
+    if (isClarification) {
+      classList.push('question-comment-item');
+      classList.push('question-clarification-item');
+    }
+    if (comment.isDeleted) {
+      classList.push('comment-deleted-placeholder');
+    }
+    if (depth >= 3) {
+      classList.push('comment-thread-depth-limit');
+    }
+    el.className = classList.join(' ');
     el.setAttribute('data-id', comment.id);
     el.id = 'comm_' + comment.id;
 
@@ -544,109 +589,431 @@
     const initials = getAuthorInitials(authorName);
     const dateText = formatCommentDate(comment.createdAt || comment.created_at);
 
-    let solutionBadgeHtml = '';
-    if (isSol) {
-      solutionBadgeHtml =
-        '<div class="solution-badge">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-            '<polyline points="20 6 9 17 4 12"></polyline>' +
-          '</svg>' +
-          '<span>Решение принято автором</span>' +
+    if (comment.isDeleted) {
+      el.innerHTML =
+        '<div class="comment-text" style="font-style: italic; color: var(--text-muted);">' +
+          'Комментарий удален' +
         '</div>';
-    }
+    } else {
+      let solutionBadgeHtml = '';
+      if (isSol) {
+        solutionBadgeHtml =
+          '<div class="solution-badge">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="20 6 9 17 4 12"></polyline>' +
+            '</svg>' +
+            '<span>Решение принято автором</span>' +
+          '</div>';
+      }
 
-    let solutionActionBtn = '';
-    const isQuestion = Boolean(currentArticle && (
-      currentArticle.materialType === 'question' ||
-      currentArticle.material_type === 'question' ||
-      (currentArticle.publication_settings && (
-        currentArticle.publication_settings.materialType === 'question' ||
-        (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
-      ))
-    ));
-    const isAuthor = Boolean(currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
-    if (isQuestion && isAuthor) {
-      solutionActionBtn =
-        '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
-          (isSol ? 'Снять отметку решения' : 'Отметить как решение') +
-        '</button>';
-    }
+      let solutionActionBtn = '';
+      const isQuestion = Boolean(currentArticle && (
+        currentArticle.materialType === 'question' ||
+        currentArticle.material_type === 'question' ||
+        (currentArticle.publication_settings && (
+          currentArticle.publication_settings.materialType === 'question' ||
+          (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
+        ))
+      ));
+      const isAuthor = Boolean(currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
+      if (isQuestion && isAuthor) {
+        solutionActionBtn =
+          '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
+            (isSol ? 'Снять отметку решения' : 'Отметить как решение') +
+          '</button>';
+      }
 
-    const isAnswer = comment.commentType === 'answer' || comment.comment_type === 'answer';
-    const commentTypeBadge = isAnswer ? '<span class="comment-type-badge answer-badge">Ответ</span>' : '';
+      const isAnswer = comment.commentType === 'answer' || comment.comment_type === 'answer';
+      const commentTypeBadge = isAnswer ? '<span class="comment-type-badge answer-badge">Ответ</span>' : '';
+      const hasUpdated = Boolean(comment.updatedAt || comment.updated_at);
+      const updatedBadgeHtml = hasUpdated
+        ? '<span class="comment-updated-badge" style="font-size: 0.74rem; color: var(--text-muted); margin-left: 6px;">(изменен)</span>'
+        : '';
 
-    el.innerHTML =
-      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
-        '<div style="display: flex; align-items: center; gap: 8px;">' +
-          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-          commentTypeBadge +
-          '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+      let inReplyToHtml = '';
+      if (depth >= 3 && comment.parentCommentId && treeContext && treeContext.allCommentsById) {
+        const parentComment = treeContext.allCommentsById[comment.parentCommentId];
+        const parentName = parentComment ? (parentComment.authorName || 'автору') : 'автору';
+        inReplyToHtml =
+          '<div class="comment-in-reply-to">' +
+            '<span>В ответ</span> ' +
+            '<button type="button" class="btn-jump-to-parent" data-parent-id="' + escapeHtml(comment.parentCommentId) + '">' +
+              '@' + escapeHtml(parentName) +
+            '</button>' +
+          '</div>';
+      }
+
+      const isMyComment = Boolean(currentUser && (
+        currentUser.id === comment.userId ||
+        currentUser.id === comment.user_id
+      ));
+
+      let editBtnHtml = '';
+      if (isMyComment) {
+        editBtnHtml = '<button type="button" class="btn-action-text btn-edit-comment">Редактировать</button>';
+      }
+
+      el.innerHTML =
+        '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
+          '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
+            '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
+            commentTypeBadge +
+            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+            updatedBadgeHtml +
+          '</div>' +
+          solutionActionBtn +
         '</div>' +
-        solutionActionBtn +
-      '</div>' +
-      solutionBadgeHtml +
-      '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>';
+        inReplyToHtml +
+        solutionBadgeHtml +
+        '<div class="comment-content-wrap">' +
+          '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>' +
+        '</div>' +
+        '<div class="comment-edit-wrap" style="display: none;">' +
+          '<textarea class="comment-textarea comment-edit-textarea" rows="3" maxlength="5000">' + escapeHtml(comment.content || '') + '</textarea>' +
+          '<div class="comment-form-footer" style="margin-top: 8px;">' +
+            '<span class="comment-char-counter"><span class="edit-char-count">' + (comment.content ? comment.content.length : 0) + '</span> / 5000</span>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-comment-edit">Отмена</button>' +
+              '<button type="button" class="btn btn-primary btn-sm btn-save-comment-edit">Сохранить</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="comment-actions">' +
+          editBtnHtml +
+          '<button type="button" class="btn-action-text btn-reply-comment">Ответить</button>' +
+        '</div>' +
+        '<div class="comment-reply-form-wrap" style="display: none;">' +
+          '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
+          '<textarea class="comment-textarea comment-reply-textarea" rows="2" maxlength="5000" placeholder="Написать ответ..."></textarea>' +
+          '<div class="comment-form-footer" style="margin-top: 8px;">' +
+            '<span class="comment-char-counter"><span class="reply-char-count">0</span> / 5000</span>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-cancel-reply-form">Отмена</button>' +
+              '<button type="button" class="btn btn-primary btn-sm btn-submit-reply-form">Отправить</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
 
-    const toggleBtn = el.querySelector('.btn-toggle-solution');
-    if (toggleBtn) {
+      // Solution toggle handler
+      const toggleSolBtn = el.querySelector('.btn-toggle-solution');
+      if (toggleSolBtn) {
+        toggleSolBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          toggleSolution(comment.id, !isSol);
+        });
+      }
+
+      // Jump to parent handler
+      const jumpBtn = el.querySelector('.btn-jump-to-parent');
+      if (jumpBtn) {
+        jumpBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const pId = jumpBtn.getAttribute('data-parent-id');
+          const targetEl = document.getElementById('comm_' + pId);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.add('comment-highlight');
+            setTimeout(function () {
+              targetEl.classList.remove('comment-highlight');
+            }, 2500);
+          }
+        });
+      }
+
+      // Inline edit handlers
+      const editBtn = el.querySelector('.btn-edit-comment');
+      const editWrap = el.querySelector('.comment-edit-wrap');
+      const contentWrap = el.querySelector('.comment-content-wrap');
+      const editTextarea = el.querySelector('.comment-edit-textarea');
+      const editCharCount = el.querySelector('.edit-char-count');
+      const cancelEditBtn = el.querySelector('.btn-cancel-comment-edit');
+      const saveEditBtn = el.querySelector('.btn-save-comment-edit');
+      const commentTextEl = el.querySelector('.comment-text');
+
+      if (editBtn && editWrap && contentWrap) {
+        editBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          contentWrap.style.display = 'none';
+          editWrap.style.display = 'block';
+          if (editTextarea) {
+            editTextarea.value = comment.content || '';
+            editTextarea.focus();
+            if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+          }
+        });
+
+        if (cancelEditBtn) {
+          cancelEditBtn.addEventListener('click', function () {
+            editWrap.style.display = 'none';
+            contentWrap.style.display = 'block';
+            if (editTextarea) {
+              editTextarea.value = comment.content || '';
+              if (editCharCount) editCharCount.textContent = editTextarea.value.length;
+            }
+          });
+        }
+
+        if (editTextarea && editCharCount) {
+          editTextarea.addEventListener('input', function () {
+            editCharCount.textContent = editTextarea.value.length;
+          });
+        }
+
+        if (saveEditBtn && editTextarea) {
+          saveEditBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const newContent = editTextarea.value.trim();
+            if (!newContent) {
+              showToast('Комментарий не может быть пустым');
+              editTextarea.focus();
+              return;
+            }
+            if (newContent.length > 5000) {
+              showToast('Превышен лимит длины (максимум 5000 символов)');
+              return;
+            }
+
+            saveEditBtn.disabled = true;
+            const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
+
+            fetch('/api/articles/' + encodeURIComponent(targetArtId) + '/comments/' + encodeURIComponent(comment.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: newContent,
+                revision: comment.revision !== undefined ? comment.revision : 1
+              })
+            })
+              .then(function (res) {
+                return res.json().then(function (data) {
+                  return { status: res.status, data: data };
+                });
+              })
+              .then(function (result) {
+                saveEditBtn.disabled = false;
+                if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
+                  showToast('Комментарий был изменен в другой сессии. Пожалуйста, обновите страницу');
+                  return;
+                }
+
+                if (result.data && result.data.success && result.data.comment) {
+                  const updated = result.data.comment;
+                  comment.content = updated.content;
+                  comment.revision = updated.revision;
+                  comment.updatedAt = updated.updatedAt;
+
+                  if (commentTextEl) {
+                    commentTextEl.innerHTML = escapeHtml(comment.content).replace(/\n/g, '<br>');
+                  }
+                  editWrap.style.display = 'none';
+                  contentWrap.style.display = 'block';
+                  showToast('Комментарий сохранен');
+                } else {
+                  showToast((result.data && result.data.error) || 'Ошибка при сохранении комментария');
+                }
+              })
+              .catch(function (err) {
+                saveEditBtn.disabled = false;
+                console.error('Failed to save comment edit:', err);
+                showToast('Не удалось сохранить комментарий');
+              });
+          });
+        }
+      }
+
+      // Inline reply handlers
+      const replyBtn = el.querySelector('.btn-reply-comment');
+      const replyWrap = el.querySelector('.comment-reply-form-wrap');
+      const replyTextarea = el.querySelector('.comment-reply-textarea');
+      const replyCharCount = el.querySelector('.reply-char-count');
+      const cancelReplyBtn = el.querySelector('.btn-cancel-reply-form');
+      const submitReplyBtn = el.querySelector('.btn-submit-reply-form');
+
+      if (replyBtn && replyWrap) {
+        replyBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы ответить на комментарий');
+            return;
+          }
+          const isShown = replyWrap.style.display === 'block';
+          replyWrap.style.display = isShown ? 'none' : 'block';
+          if (!isShown && replyTextarea) {
+            replyTextarea.focus();
+          }
+        });
+
+        if (cancelReplyBtn) {
+          cancelReplyBtn.addEventListener('click', function () {
+            replyWrap.style.display = 'none';
+          });
+        }
+
+        if (replyTextarea && replyCharCount) {
+          replyTextarea.addEventListener('input', function () {
+            replyCharCount.textContent = replyTextarea.value.length;
+          });
+        }
+
+        if (submitReplyBtn && replyTextarea) {
+          submitReplyBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!currentUser) {
+              openAuthModal();
+              showToast('Войдите, чтобы оставить комментарий');
+              return;
+            }
+            const replyText = replyTextarea.value.trim();
+            if (!replyText) {
+              showToast('Комментарий не может быть пустым');
+              replyTextarea.focus();
+              return;
+            }
+            if (replyText.length > 5000) {
+              showToast('Превышен лимит длины (максимум 5000 символов)');
+              return;
+            }
+
+            submitReplyBtn.disabled = true;
+            const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
+            const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+            fetch('/api/articles/' + encodeURIComponent(targetArtId) + '/comments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: replyText,
+                commentType: 'comment',
+                parentCommentId: comment.id,
+                clientOperationId: clientOpId
+              })
+            })
+              .then(function (res) {
+                if (res.status === 401) {
+                  submitReplyBtn.disabled = false;
+                  openAuthModal();
+                  throw new Error('AUTH_REQUIRED');
+                }
+                return res.json();
+              })
+              .then(function (data) {
+                submitReplyBtn.disabled = false;
+                if (data && data.success && data.comment) {
+                  replyTextarea.value = '';
+                  if (replyCharCount) replyCharCount.textContent = '0';
+                  replyWrap.style.display = 'none';
+                  showToast('Ответ опубликован');
+
+                  // Make sure parent is expanded
+                  window._expandedCommentIds.add(comment.id);
+                  if (treeContext && typeof treeContext.onReload === 'function') {
+                    treeContext.onReload(data.comment.id);
+                  }
+                } else {
+                  showToast((data && data.error) || 'Ошибка при отправке ответа');
+                }
+              })
+              .catch(function (err) {
+                submitReplyBtn.disabled = false;
+                if (err.message !== 'AUTH_REQUIRED') {
+                  console.error('Failed to submit reply:', err);
+                  showToast('Не удалось отправить ответ');
+                }
+              });
+          });
+        }
+      }
+    }
+
+    // Children & Thread toggle
+    const totalDescendants = countDescendants(comment);
+    if (totalDescendants > 0) {
+      const isExpanded = window._expandedCommentIds.has(comment.id);
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'btn-toggle-thread';
+      toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      toggleBtn.setAttribute('aria-controls', 'thread_' + comment.id);
+      toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline points="' + (isExpanded ? '18 15 12 9 6 15' : '6 9 12 15 18 9') + '"></polyline>' +
+        '</svg>' +
+        '<span class="toggle-thread-text">' + (isExpanded ? 'Скрыть комментарии' : ('Показать комментарии (' + totalDescendants + ')')) + '</span>';
+
+      const childrenContainer = document.createElement('div');
+      childrenContainer.className = 'comment-thread-children';
+      childrenContainer.id = 'thread_' + comment.id;
+      childrenContainer.style.display = isExpanded ? 'flex' : 'none';
+
+      (comment.children || []).forEach(function (child) {
+        childrenContainer.appendChild(renderCommentNode(child, depth + 1, treeContext));
+      });
+
       toggleBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        toggleSolution(comment.id, !isSol);
+        const currentlyExpanded = window._expandedCommentIds.has(comment.id);
+        if (currentlyExpanded) {
+          if (childrenContainer.contains(document.activeElement)) {
+            toggleBtn.focus();
+          }
+          window._expandedCommentIds.delete(comment.id);
+          toggleBtn.setAttribute('aria-expanded', 'false');
+          const txtEl = toggleBtn.querySelector('.toggle-thread-text');
+          if (txtEl) txtEl.textContent = 'Показать комментарии (' + totalDescendants + ')';
+          const polyline = toggleBtn.querySelector('svg polyline');
+          if (polyline) polyline.setAttribute('points', '6 9 12 15 18 9');
+          childrenContainer.style.display = 'none';
+        } else {
+          window._expandedCommentIds.add(comment.id);
+          toggleBtn.setAttribute('aria-expanded', 'true');
+          const txtEl = toggleBtn.querySelector('.toggle-thread-text');
+          if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+          const polyline = toggleBtn.querySelector('svg polyline');
+          if (polyline) polyline.setAttribute('points', '18 15 12 9 6 15');
+          childrenContainer.style.display = 'flex';
+        }
       });
+
+      el.appendChild(toggleBtn);
+      el.appendChild(childrenContainer);
     }
 
     return el;
   }
 
-  // Render question clarification item
-  function renderQuestionClarificationItem(comment) {
-    const el = document.createElement('div');
-    el.className = 'question-clarification-item';
-    el.setAttribute('data-id', comment.id);
-    el.id = 'comm_' + comment.id;
-
-    const authorName = comment.authorName || 'Пользователь';
-    const authorId = comment.userId || comment.user_id || '';
-    const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
-
-    el.innerHTML =
-      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between;">' +
-        '<div style="display: flex; align-items: center; gap: 8px;">' +
-          '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
-          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-          '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="comment-text">' + (comment.content ? escapeHtml(comment.content).replace(/\n/g, '<br>') : '') + '</div>';
-
-    return el;
+  function renderCommentItem(comment) {
+    return renderCommentNode(comment, 0, {
+      articleId: currentArticle ? currentArticle.id : '',
+      allCommentsById: window._allCommentsMap || {},
+      isQuestionClarification: false,
+      onReload: function (newId) {
+        if (currentArticle) loadComments(currentArticle.id);
+      }
+    });
   }
 
-  // Render inline reply to answer
+  function renderQuestionClarificationItem(comment) {
+    return renderCommentNode(comment, 0, {
+      articleId: currentArticle ? currentArticle.id : '',
+      allCommentsById: window._allCommentsMap || {},
+      isQuestionClarification: true,
+      onReload: function (newId) {
+        if (currentArticle) loadComments(currentArticle.id);
+      }
+    });
+  }
+
   function renderAnswerReplyItem(reply) {
-    const el = document.createElement('div');
-    el.className = 'answer-reply-item';
-    el.setAttribute('data-id', reply.id);
-    el.id = 'comm_' + reply.id;
-
-    const authorName = reply.authorName || 'Пользователь';
-    const authorId = reply.userId || reply.user_id || '';
-    const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(reply.createdAt || reply.created_at);
-
-    el.innerHTML =
-      '<div class="comment-item-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">' +
-        '<div style="display: flex; align-items: center; gap: 8px;">' +
-          '<div class="comment-author-avatar" style="width: 28px; height: 28px; font-size: 0.75rem;">' + escapeHtml(initials) + '</div>' +
-          '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" style="font-size: 0.88rem;">' + escapeHtml(authorName) + '</button>' +
-          '<span class="comment-date" style="font-size: 0.76rem;">' + escapeHtml(dateText) + '</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="comment-text" style="font-size: 0.9rem;">' + (reply.content ? escapeHtml(reply.content).replace(/\n/g, '<br>') : '') + '</div>';
-
-    return el;
+    return renderCommentNode(reply, 1, {
+      articleId: currentArticle ? currentArticle.id : '',
+      allCommentsById: window._allCommentsMap || {},
+      isQuestionClarification: false,
+      onReload: function (newId) {
+        if (currentArticle) loadComments(currentArticle.id);
+      }
+    });
   }
 
   // Render Answer Card (.answer-card)
@@ -755,8 +1122,16 @@
     // Populate replies
     const repliesListEl = el.querySelector('.answer-replies-list');
     if (repliesListEl && replies.length > 0) {
-      replies.forEach(function (r) {
-        repliesListEl.appendChild(renderAnswerReplyItem(r));
+      const tree = buildCommentTree(replies);
+      tree.roots.forEach(function (r) {
+        repliesListEl.appendChild(renderCommentNode(r, 0, {
+          articleId: articleId,
+          allCommentsById: window._allCommentsMap || tree.byId,
+          isQuestionClarification: false,
+          onReload: function () {
+            loadComments(articleId);
+          }
+        }));
       });
     }
 
@@ -1018,11 +1393,46 @@
   function handleDeepLink() {
     const hash = window.location.hash;
     if (!hash) return;
-    if (hash.startsWith('#comm_')) {
-      const rawId = hash.substring(1);
-      const targetEl = document.getElementById(rawId) ||
-        document.querySelector('[data-id="' + rawId.replace(/^comm_/, '') + '"]') ||
-        document.querySelector('[data-id="' + rawId + '"]');
+    if (hash.startsWith('#comm_') || hash.startsWith('#comment-')) {
+      const rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+      const item = window._allCommentsMap ? window._allCommentsMap[rawTargetId] : null;
+      if (item) {
+        let parentId = item.parentCommentId || item.parent_comment_id;
+        let visited = new Set();
+        while (parentId && !visited.has(parentId)) {
+          visited.add(parentId);
+          window._expandedCommentIds.add(parentId);
+          const childrenContainer = document.getElementById('thread_' + parentId);
+          if (childrenContainer) {
+            childrenContainer.style.display = 'flex';
+            const btn = document.querySelector('[aria-controls="thread_' + parentId + '"]');
+            if (btn) {
+              btn.setAttribute('aria-expanded', 'true');
+              const txtEl = btn.querySelector('.toggle-thread-text');
+              if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+              const polyline = btn.querySelector('svg polyline');
+              if (polyline) polyline.setAttribute('points', '18 15 12 9 6 15');
+            }
+          }
+          const parentObj = window._allCommentsMap[parentId];
+          parentId = parentObj ? (parentObj.parentCommentId || parentObj.parent_comment_id) : null;
+        }
+
+        const ansId = item.parentAnswerId || item.parent_answer_id;
+        if (ansId) {
+          const ansCard = document.getElementById('comm_' + ansId) || document.querySelector('[data-id="' + ansId + '"]');
+          if (ansCard) {
+            const repliesContainer = ansCard.querySelector('.answer-replies-container');
+            if (repliesContainer) {
+              repliesContainer.style.display = 'block';
+            }
+          }
+        }
+      }
+
+      const targetEl = document.getElementById('comm_' + rawTargetId) ||
+        document.getElementById(hash.substring(1)) ||
+        document.querySelector('[data-id="' + rawTargetId + '"]');
       if (targetEl) {
         setTimeout(function () {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1030,7 +1440,7 @@
           setTimeout(function () {
             targetEl.classList.remove('comment-highlight');
           }, 2500);
-        }, 100);
+        }, 150);
       }
     }
   }
@@ -1041,21 +1451,24 @@
     const emptyEl = document.getElementById('commentsEmpty');
 
     if (badgeEl) {
-      badgeEl.textContent = comments.length;
+      const activeComments = (comments || []).filter(function (c) { return !c.isDeleted; });
+      badgeEl.textContent = activeComments.length;
     }
 
     if (!listEl) return;
     listEl.innerHTML = '';
 
-    if (comments.length === 0) {
+    if (!comments || comments.length === 0) {
       if (emptyEl) emptyEl.style.display = 'block';
       return;
     }
 
     if (emptyEl) emptyEl.style.display = 'none';
 
+    const tree = buildCommentTree(comments);
+
     // Put solution comment first if present
-    const sortedComments = comments.slice().sort(function (a, b) {
+    const sortedRoots = tree.roots.slice().sort(function (a, b) {
       const aSol = Boolean(a.isSolution || a.is_solution);
       const bSol = Boolean(b.isSolution || b.is_solution);
       if (aSol && !bSol) return -1;
@@ -1063,8 +1476,27 @@
       return 0;
     });
 
-    sortedComments.forEach(function (c) {
-      listEl.appendChild(renderCommentItem(c));
+    sortedRoots.forEach(function (rootNode) {
+      listEl.appendChild(renderCommentNode(rootNode, 0, {
+        articleId: currentArticle ? currentArticle.id : '',
+        allCommentsById: window._allCommentsMap || tree.byId,
+        isQuestionClarification: false,
+        onReload: function (newId) {
+          if (currentArticle) {
+            loadComments(currentArticle.id);
+            if (newId) {
+              setTimeout(function () {
+                const target = document.getElementById('comm_' + newId);
+                if (target) {
+                  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  target.classList.add('comment-highlight');
+                  setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
+                }
+              }, 300);
+            }
+          }
+        }
+      }));
     });
   }
 
@@ -1075,6 +1507,29 @@
         if (!data || !data.success) {
           console.error('Failed to load comments:', data && data.error);
           return;
+        }
+
+        window._allCommentsMap = {};
+        (data.comments || []).forEach(function (c) {
+          window._allCommentsMap[c.id] = c;
+        });
+
+        // Pre-expand ancestors if navigating via deep link
+        const hash = window.location.hash;
+        if (hash && (hash.startsWith('#comm_') || hash.startsWith('#comment-'))) {
+          const rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+          let curr = window._allCommentsMap[rawTargetId];
+          let visited = new Set();
+          while (curr) {
+            const pId = curr.parentCommentId || curr.parent_comment_id;
+            if (pId && !visited.has(pId)) {
+              visited.add(pId);
+              window._expandedCommentIds.add(pId);
+              curr = window._allCommentsMap[pId];
+            } else {
+              break;
+            }
+          }
         }
 
         currentMyAnswerId = data.myAnswerId || null;
@@ -1101,13 +1556,13 @@
           if (qBadge) {
             qBadge.textContent = data.questionCommentsCount !== undefined
               ? data.questionCommentsCount
-              : (data.questionComments ? data.questionComments.length : 0);
+              : (data.questionComments ? data.questionComments.filter(function (q) { return !q.isDeleted; }).length : 0);
           }
           const aBadge = document.getElementById('answersCountBadge');
           if (aBadge) {
             aBadge.textContent = data.answersCount !== undefined
               ? data.answersCount
-              : (data.answers ? data.answers.length : 0);
+              : (data.answers ? data.answers.filter(function (a) { return !a.isDeleted; }).length : 0);
           }
 
           // Render Question Clarifications
@@ -1115,8 +1570,26 @@
           if (qList) {
             qList.innerHTML = '';
             const qComments = data.questionComments || [];
-            qComments.forEach(function (qc) {
-              qList.appendChild(renderQuestionClarificationItem(qc));
+            const qTree = buildCommentTree(qComments);
+            qTree.roots.forEach(function (qc) {
+              qList.appendChild(renderCommentNode(qc, 0, {
+                articleId: articleId,
+                allCommentsById: window._allCommentsMap || qTree.byId,
+                isQuestionClarification: true,
+                onReload: function (newId) {
+                  loadComments(articleId);
+                  if (newId) {
+                    setTimeout(function () {
+                      const target = document.getElementById('comm_' + newId);
+                      if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        target.classList.add('comment-highlight');
+                        setTimeout(function () { target.classList.remove('comment-highlight'); }, 2500);
+                      }
+                    }, 300);
+                  }
+                }
+              }));
             });
           }
 
@@ -1216,11 +1689,12 @@
           }
 
           if (submitBtn) submitBtn.disabled = true;
+          const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, commentType: 'comment' })
+            body: JSON.stringify({ content: content, commentType: 'comment', clientOperationId: clientOpId })
           })
             .then(function (res) {
               if (res.status === 401) {
@@ -1302,11 +1776,12 @@
           }
 
           if (submitClarificationBtn) submitClarificationBtn.disabled = true;
+          const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, commentType: 'comment' })
+            body: JSON.stringify({ content: content, commentType: 'comment', clientOperationId: clientOpId })
           })
             .then(function (res) {
               if (res.status === 401) {

@@ -1431,3 +1431,133 @@
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
+
+/* ==========================================================================
+   Threaded Comments Styles (Issue #27 / SC-025)
+   ========================================================================== */
+
+.comment-thread-children {
+  margin-left: 24px;
+  border-left: 2px solid var(--border-color);
+  padding-left: 16px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comment-thread-depth-limit .comment-thread-children {
+  margin-left: 0;
+  border-left: 2px solid var(--border-color);
+  padding-left: 10px;
+}
+
+.comment-in-reply-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.btn-jump-to-parent {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent-color);
+  font-weight: 600;
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-jump-to-parent:hover {
+  text-decoration: none;
+}
+
+.btn-toggle-thread {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--accent-color);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-toggle-thread:hover {
+  background: var(--bg-hover);
+}
+
+.btn-toggle-thread:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btn-action-text {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.btn-action-text:hover {
+  color: var(--text-primary);
+}
+
+.btn-action-text:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.comment-reply-form-wrap,
+.comment-edit-wrap {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.comment-reply-header {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.comment-deleted-placeholder {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 680px) {
+  .comment-thread-children {
+    margin-left: 12px;
+    padding-left: 10px;
+  }
+}
