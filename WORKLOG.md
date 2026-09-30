@@ -469,3 +469,4 @@
 [2026-09-30 19:25] | pm_bot | TASK_REVISE | Визуальная доработка геометрии дерева комментариев, связей, подсветки и drilldown в PR #28 (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 19:25] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации геометрии Reddit, hover-подсветки, управления ветками, drilldown и E2E смоук-тестов (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 19:42] | dev_bot | IMPLEMENTATION_COMPLETE | Визуальная доработка геометрии комментариев Reddit, hover-подсветки, управления ветками и drilldown (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 19:47] | git_bot | GIT_COMMITTED | Фиксация коммита d166b2e в ветку feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
