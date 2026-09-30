@@ -567,12 +567,16 @@
     const el = document.createElement('div');
     const isSol = Boolean(comment.isSolution || comment.is_solution);
     const isClarification = Boolean(treeContext && treeContext.isQuestionClarification);
+    const isAnswerReply = Boolean(comment.parentAnswerId || comment.parent_answer_id || (treeContext && treeContext.isAnswerReply));
 
     const classList = ['comment-item'];
     if (isSol) classList.push('is-solution-comment');
     if (isClarification) {
       classList.push('question-comment-item');
       classList.push('question-clarification-item');
+    }
+    if (isAnswerReply) {
+      classList.push('answer-reply-item');
     }
     if (comment.isDeleted) {
       classList.push('comment-deleted-placeholder');
@@ -1010,6 +1014,7 @@
       articleId: currentArticle ? currentArticle.id : '',
       allCommentsById: window._allCommentsMap || {},
       isQuestionClarification: false,
+      isAnswerReply: true,
       onReload: function (newId) {
         if (currentArticle) loadComments(currentArticle.id);
       }
@@ -1128,6 +1133,7 @@
           articleId: articleId,
           allCommentsById: window._allCommentsMap || tree.byId,
           isQuestionClarification: false,
+          isAnswerReply: true,
           onReload: function () {
             loadComments(articleId);
           }
