@@ -455,3 +455,5 @@
 [2026-09-30 15:15] | py_bot | IMPLEMENTATION_COMPLETE | Миграционная диагностика, интеграционный сьют инвариантов и E2E браузерный сценарий реализованы, 100% тестов (597) успешно пройдены (Task: issue-26-sc024-qa-ci-and-diagnostics)
 [2026-09-30 15:16] | git_bot | GIT_COMMITTED | Фиксация коммита 4b7c1dd и отправка в origin/main (Fixes #26, Closes #23) (Task: issue-26-sc024-qa-ci-and-diagnostics)
 [2026-09-30 15:18] | pm_bot | TASK_DONE | Задача Issue #26 (SC-024.3) и Epic #23 (SC-024) успешно завершены и объединены в main. Все 597 тестов пройдены (100%). Issue #26 и Epic #23 на GitHub закрыты (Task: issue-26-sc024-qa-ci-and-diagnostics)
+[2026-09-30 15:35] | pm_bot | TASK_INIT | Применение правил и условий из PR #6 (stop threshold, classification matrix, PR lifecycle) (Task: task-agents-workflow-update)
+[2026-09-30 15:36] | pm_bot | TASK_DONE | Обновление правил и инструкций мультиагентной системы завершено (Task: task-agents-workflow-update)

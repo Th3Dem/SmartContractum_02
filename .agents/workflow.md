@@ -2,63 +2,103 @@
 
 This document defines the strict, state-driven lifecycle of a feature request on the Antigravity platform. All subagents (`pm_bot`, `dev_bot`, `py_bot`, `git_bot`, `ops_bot`) operate in isolated contexts and communicate exclusively through file-based artifacts and standard operating procedures.
 
-#### 1. The End-to-End Process
-The lifecycle follows a deterministic, sequential state machine:
-0. **Agent Registration (`pm_bot`)**: Before any planning or work begins, `pm_bot` MUST register all specialist agents (`dev_bot`, `py_bot`, `git_bot`, `ops_bot`) using `define_subagent`, loading their roles, system prompts, and tool configurations from `.agents/<bot_name>.md`.
-1. **Intake, Issue Tracking & Planning (`pm_bot`)**: The orchestrator receives the human prompt, inspects existing GitHub Issues, and ensures the task is tracked by an existing issue, a sub-task, or a new issue created directly by `pm_bot` (`gh issue create`). The GitHub Issue tracker is the source of truth for planned and actionable work. Never silently implement a task without tracking it in GitHub Issues. The orchestrator decomposes the requirements and writes them to `tasks/<issue-folder>/TASK.md` referencing the tracking issue.
-2. **Delegation (`pm_bot` → Developer)**: `pm_bot` spawns the specialist agent (e.g., `py_bot` for Python or `dev_bot` for Go) via `invoke_subagent`, passing the `TASK.md` path and enforcing the `flash` model.
-3. **Execution & Compilation (`dev_bot`/`py_bot`)**: The developer executes TDD. They are blocked by a **Hard Compilation Gate** (linting, tests, security scans). Code is refactored locally until all exit codes are `0`.
-4. **Developer Handoff**: Once tests pass, the developer writes `DEV_HANDOVER.md` and updates the state.
-5. **Smoke Verification (`pm_bot`)**: The orchestrator runs a sanity compilation (e.g., `go build ./...`). If it fails, the task immediately bounces back to the developer.
-6. **Version Control (`git_bot`)**: Upon successful smoke verification, `pm_bot` spawns `git_bot`. It reads the state log, creates a branch, commits the delta, pushes to origin, opens a PR, and monitors the CI/CD pipeline.
-7. **Done-Done Reporting (`pm_bot`)**: The orchestrator confirms CI/CD success, updates global state, and returns control to the human.
+The system enforces a goal-driven loop:
+`FIND -> CLASSIFY -> PRIORITIZE -> DECIDE -> IMPLEMENT -> VERIFY -> MERGE`
 
-#### 2. State Management & Logging (`WORKLOG.md`)
-`WORKLOG.md` acts as the immutable global state machine and single source of truth for agent coordination.
-- **Purpose**: It prevents context degradation across isolated subagent boundaries, provides historical tracking, and governs loop limits.
-- **Lifecycle**:
-  - `pm_bot` initializes the cycle: `[TS] | pm_bot | PROJECT_START | <desc>`
-  - Developer claims task: `[TS] | dev_bot | IMPLEMENTATION_START | <desc>`
-  - Developer yields task: `[TS] | dev_bot | IMPLEMENTATION_COMPLETE | <desc>`
-  - Git operations: `[TS] | git_bot | PR_CREATED | <url>`
-  - Cycle completed: `[TS] | pm_bot | PROJECT_COMPLETED | <desc>`
-- **Loop Prevention**: `pm_bot` continuously parses `WORKLOG.md`. If it detects the `DEV_REWORK` state more than twice for the same task, it aborts the loop, halts the state machine, and triggers a human escalation.
+#### 1. The Issue and Implementation Lifecycle
+The lifecycle follows a deterministic state machine:
 
-#### 3. Handover Documents
-Subagents do not pass conversational context. Handovers are entirely payload-driven via standard Markdown schemas located in `tasks/<issue-folder>/`.
+0. **Agent Registration (`pm_bot`)**:
+   - Before any planning or work begins, `pm_bot` MUST register all specialist agents (`dev_bot`, `py_bot`, `git_bot`, `ops_bot`) using `define_subagent`, loading their roles, system prompts, and tool configurations from `.agents/<bot_name>.md`.
 
-**`TASK.md` (Initial Payload)**
-- **Author**: `pm_bot`
-- **Contents**: Architecture specs, scope constraints, database schemas, and explicit "Do Nots".
+1. **Issue: OPEN**:
+   - `pm_bot` inspects existing GitHub Issues.
+   - The issue defines the business problem, production impact, and explicit acceptance criteria based on business invariants.
+   - Never use the issue tracker as a dev scratchpad or journal of theoretical edge cases.
 
-**`DEV_HANDOVER.md` (Developer → Orchestrator & Git Payload)**
-- **Author**: `dev_bot` or `py_bot`
-- **Contents**: 
-  - *Files Changed*: Exact diff manifest.
-  - *Test Results*: Raw `stdout` of passing coverage targets (`pytest --cov` or `go test -cover`).
-  - *Linter/Security Output*: Raw `stdout` proving clean runs of `gosec`, `govulncheck`, `flake8`, `pip-audit`.
-  - *Notes / Verification Details*: Expected edge cases, concurrency models, and data validation assumptions.
+2. **Issue: IN_PROGRESS (Intake & Test Boundaries)**:
+   - `pm_bot` creates `tasks/<issue-folder>/TASK.md`.
+   - For concurrency or distributed logic, `TASK.md` MUST specify upfront **Test Boundaries** ("Must Prove" invariants list).
+   - `pm_bot` spawns the developer bot (`py_bot` or `dev_bot`) enforcing the `flash` model.
 
-#### 4. File Generation & Artifact Location Convention
-**STRICT CONSTRAINT**: All task-related work files, scratchpads, PR bodies, and intermediate artifacts MUST be saved inside the designated task folder (`tasks/<issue-folder>/`). They must NOT be saved in the repository root.
+3. **Issue: IMPLEMENTED (Execution & Hard Compilation Gate)**:
+   - The developer writes code and tests satisfying the "Must Prove" invariants.
+   - Blocked by the Hard Compilation Gate (linting, tests, security scans).
+   - Once tests pass, the developer writes `tasks/<issue-folder>/DEV_HANDOVER.md` documenting verified invariants and any residual risks.
+   - State: code is implemented locally, but NOT yet part of `main`.
 
-During a standard feature implementation cycle, the following non-source files are generated and stored strictly in the task folder:
-- `tasks/<issue-folder>/TASK.md` (Scope mapping)
-- `tasks/<issue-folder>/DEV_HANDOVER.md` (Execution evidence)
-- `tasks/<issue-folder>/pr_body.txt` (or any other git/PR related drafts)
+4. **Issue: VERIFIED (Smoke Check & PR Opening)**:
+   - `pm_bot` runs smoke verification.
+   - If clean, `pm_bot` spawns `git_bot`.
+   - `git_bot` creates a feature branch, commits, pushes, and opens a PR referencing `Fixes #<issue>`.
+   - Acceptance criteria in the issue reflect: `[ ] Invariant (Status: implemented in PR #..., awaiting merge)`.
+   - `git_bot` monitors CI/CD.
 
-The ONLY exceptions permitted in the repository root are:
-- `WORKLOG.md` (Global execution state)
-- `CICD_ERRORS.md` (Generated at root only if `git_bot` detects a remote pipeline failure post-push)
+5. **Issue: MERGED & CLOSED**:
+   - The PR is reviewed, verified, and merged into `main`.
+   - The issue is closed automatically via GitHub `Fixes #<issue>` or closed by `pm_bot` strictly after merge is confirmed.
+   - **RULE**: An issue is NEVER marked closed when a developer finishes coding. `CLOSED` strictly requires the code to be merged into `main`.
 
-**Privacy & Sanitization Rules**:
-- **Zero Server IP Exposure**: NEVER record, commit, or push real IP addresses of project servers. Always map IPs to logical server identifiers (`Server <ID>`, `Server 8`, etc.) and anonymize client IPs (`Client A`, `<client-ip>`).
-- **Zero Local Path Exposure**: NEVER record, commit, or push absolute local paths (`/home/...`, `/tmp/...`). All path references in task files, PR bodies, and commit messages must be relative to the repository root.
-- **Never Push Docs/Tasks**: Documentation and task folders (`docs/`, `tasks/`) are strictly local working directories and must NEVER be pushed to remote branches or opened as PRs.
+#### 2. Merge Readiness and Finding Classification Matrix
+To prevent endless edge-case discovery loops ("issue explosion"), all findings during implementation and review MUST be classified before taking action:
 
+| Classification | Definition | Action |
+|---|---|---|
+| **BLOCKER** | Direct violation of business invariant in normal operations (e.g. duplicate IP, lost peer, config corruption). | Must fix in current PR. Blocks merge. |
+| **HIGH** | Divergence or failure under probable network or process crash. | Must fix in current PR. |
+| **MEDIUM** | Localized defect without risk of data or configuration corruption. | Fix in current PR or defer to single follow-up. |
+| **HARDENING** | Extremely specific interleaving when core production invariants are already protected. | Document in PR review notes; do not block PR merge. |
+| **THEORETICAL** | Race requiring multiple precisely timed, unlikely failures. | Document in `DEV_HANDOVER.md` as residual risk; do NOT create an issue. |
 
-#### 5. Failure & Recovery
-The system leverages cascading failure recovery:
-- **Local Dev Breakage (Compilation/Test Fails)**: Addressed locally by the developer subagent. Creating a handover document while tests fail is a hard constraint violation. The developer loops internally until `stdout` shows success.
-- **Smoke Verification Breakage**: If `pm_bot` detects compilation or basic check failures during smoke verification, it logs `DEV_REWORK` in `WORKLOG.md` and respawns the developer subagent with the error trace to resolve the issue.
-- **Pipeline Failure**: If tests pass locally but fail in GitHub Actions, `git_bot` parses the failed job logs via `gh run view`, dumps the trace into `CICD_ERRORS.md`, and passes state back to `pm_bot` for another `DEV_REWORK` cycle.
+**Stop Rule**: Once all production-critical invariants ("Must Prove" list) pass tests, new theoretical findings do NOT block merge.
+
+#### 3. Concurrency Test Boundaries
+For complex concurrent or stateful mechanisms, `TASK.md` must lock in the test boundaries upfront.
+Example "Must Prove" list:
+- No duplicate resource allocation under concurrent requests.
+- No lost or overwritten records/peers.
+- Rollback removes exactly the intended target.
+- Database state and remote configuration never silently diverge.
+- Crash recovery does not permanently corrupt state.
+
+Once these properties are proven by automated tests, theoretical interleavings are classified under the risk rubric rather than triggering automatic blocking issues.
+
+#### 4. Architectural Escape Hatch
+If a complex synchronization mechanism or locking protocol requires more than 2 rework iterations (`DEV_REWORK`) or produces recursive edge-case fixes:
+1. `pm_bot` halts the micro-patching cycle.
+2. An architectural review is triggered to evaluate replacing the primitive with a simpler pattern:
+   - Standard `flock` / atomic filesystem operation.
+   - Existing locking primitive or single-owner queue.
+   - Database transactional lock.
+3. Current PR fixes confirmed production bugs and merges. Simplification is scheduled as a clean, independent architectural task.
+
+#### 5. State Management & Logging (`WORKLOG.md`)
+`WORKLOG.md` acts as the immutable global state machine:
+- `[TS] | pm_bot | PROJECT_START | <desc>`
+- `[TS] | dev_bot | IMPLEMENTATION_START | <desc>`
+- `[TS] | dev_bot | IMPLEMENTATION_COMPLETE | <desc>`
+- `[TS] | git_bot | PR_CREATED | <url>`
+- `[TS] | git_bot | PR_MERGED | <url>`
+- `[TS] | pm_bot | PROJECT_COMPLETED | <desc>`
+
+**Loop Prevention**: If `pm_bot` detects `DEV_REWORK` more than twice for the same task, it halts and triggers human escalation or an architectural review.
+
+#### 6. Handover Documents
+- `tasks/<issue-folder>/TASK.md`: Architecture specs, scope constraints, and explicit "Must Prove" invariants.
+- `tasks/<issue-folder>/DEV_HANDOVER.md`:
+  - Files Changed (diff manifest).
+  - Test Results (raw stdout of coverage).
+  - Linter & Security Scan outputs.
+  - Invariants Verified (evidence mapping).
+  - Residual Risks (classified as HARDENING or THEORETICAL).
+
+#### 7. Artifact Location & Privacy Invariants
+All task-related files must live in `tasks/<issue-folder>/`. Only `WORKLOG.md` and `CICD_ERRORS.md` are permitted at repository root.
+- **Zero Server IP Exposure**: Never commit or expose real server IPs. Use logical identifiers (`Server 8`, `Server 9`). Anonymize client IPs.
+- **Zero Local Path Exposure**: Never commit or expose absolute local paths. Use repository-relative paths only.
+- **Never Push Docs/Tasks**: `docs/` and `tasks/` are strictly local working folders and must never be pushed to remote branches.
+
+#### 8. Failure & Recovery
+- **Local Dev Breakage**: Handled internally by developer bot before handover.
+- **Smoke Verification Breakage**: If smoke test fails, `pm_bot` logs `DEV_REWORK` and sends the trace back to developer.
+- **Pipeline Failure**: `git_bot` dumps failed job logs into `CICD_ERRORS.md` for a rework cycle.

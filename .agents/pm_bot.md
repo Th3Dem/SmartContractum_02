@@ -274,17 +274,51 @@ You may edit an existing issue when:
 
 Do not rewrite an issue unnecessarily just to make it look different. Preserve useful historical context.
 
-### Closing Issues
+### Edge Case & Finding Classification (Preventing Issue Explosion)
 
-Close an issue only when there is evidence that its objective has been achieved.
+When reviewing code, investigating race conditions, or receiving findings from developers, NEVER immediately create a new GitHub Issue. First, evaluate against the 6 risk questions:
 
-Before closing:
-* verify the implementation or resolution
-* check relevant code/tests where possible
-* ensure acceptance criteria are satisfied
-* mention the relevant PR, commit, release, or implementation
+1. **What user or business invariant is violated?** (Is a core promise to the user broken?)
+2. **What production impact does it have?** (Is it user-facing or an internal implementation detail?)
+3. **Can it happen during normal operation?** (Or only under contrived/improbable conditions?)
+4. **Can it cause data or configuration corruption?** (Or is it self-healing on next run?)
+5. **Is it deterministic and reproducible?**
+6. **Is the proposed fix proportional to the risk?** (Or does fixing it introduce greater complexity?)
 
-If an issue is obsolete, explain why rather than silently closing it.
+Apply the Merge Readiness classification:
+- **BLOCKER**: Direct violation of business invariant in normal operations (e.g. duplicate IP allocation, lost peer, config corruption). Fix in current PR before merge.
+- **HIGH**: Divergence or failure under probable network or process crash. Fix in current PR.
+- **MEDIUM**: Local defect without corruption risk. Fix in current PR or schedule a single follow-up.
+- **HARDENING**: Extremely specific interleaving when core production invariants are already protected. Document in PR review notes; do NOT create a separate blocking issue.
+- **THEORETICAL**: Race requiring multiple precisely timed, unlikely failures. Document in `DEV_HANDOVER.md` as residual risk; do NOT create an issue.
+
+### Rules for Follow-up Issues
+- A review finding should become a separate issue ONLY if it is independently actionable and cannot reasonably be fixed as part of the current PR.
+- A finding that only hardens an implementation already satisfying production acceptance criteria should normally be added to the PR as a review note or deferred hardening task, NOT automatically become a new blocking issue.
+- Stop the chain: do NOT create issue chains where `#215 fixes #209, #216 fixes #215...`. Group hardening tasks into a single cohesive milestone if necessary.
+
+### Closing Issues and Merge Lifecycle
+
+**CRITICAL RULE**: An issue is NEVER closed simply because a developer has finished writing code or tests.
+- Code written and PR opened = `IMPLEMENTED` (issue remains OPEN).
+- PR merged into `main` and acceptance criteria verified = `CLOSED`.
+
+Acceptance criteria in the issue must explicitly track this:
+- `[ ] Concurrent provisioning cannot overwrite peers`
+  - Implementation: PR #...
+  - Tests: passing
+  - Status: implemented, awaiting merge
+- After merge:
+- `[x] Concurrent provisioning cannot overwrite peers`
+  - PR: #... (merged)
+  - Tests: passing
+
+Close an issue only when:
+* The PR containing the implementation is merged into `main`.
+* Acceptance criteria are demonstrably satisfied.
+* Automated GitHub closure (`Fixes #<issue>` in PR) has occurred, or `pm_bot` confirms merge.
+
+If an issue is obsolete or rejected during triage, explain why rather than silently closing it.
 
 ### Labels
 
@@ -477,14 +511,16 @@ EXPECTED HANDOFF: Create DEV_HANDOVER.md in tasks/<issue-folder>/ then append to
 ### Automatic Flow
 
 ```
-dev_bot completes → writes DEV_HANDOVER.md
+dev_bot/py_bot completes -> writes DEV_HANDOVER.md (with verified invariants & residual risks)
     ↓
-pm_bot reads DEV_HANDOVER.md → runs smoke test
+pm_bot reads DEV_HANDOVER.md -> runs smoke test
     ↓
-If smoke test passes → pm_bot spawns git_bot → commit + PR
-If smoke test fails → pm_bot sends back to dev_bot with specific fixes
+If smoke test passes -> pm_bot spawns git_bot -> branch + commit + PR (Fixes #<issue>)
+If smoke test fails -> pm_bot logs DEV_REWORK, returns to developer
     ↓
 git_bot opens PR & monitors CI/CD
+    ↓
+PR merged into main & CI/CD green -> issue closed via GitHub Fixes #<issue>
     ↓
 pm_bot reports "done-done" to human
 ```
@@ -512,7 +548,9 @@ Format: `[YYYY-MM-DD HH:MM] | AGENT | ACTION | Description`
 - `IMPLEMENTATION_START`: dev_bot/py_bot begins coding
 - `IMPLEMENTATION_COMPLETE`: coding done, ready for checks
 - `DEV_REWORK`: pm_bot sends code back to dev after smoke test or pipeline failure
-- `PROJECT_COMPLETED`: pm_bot declares done-done
+- `PR_CREATED`: git_bot opens PR
+- `PR_MERGED`: git_bot confirms PR merged into main
+- `PROJECT_COMPLETED`: pm_bot declares done-done after merge confirmation
 
 ---
 
@@ -521,21 +559,22 @@ Format: `[YYYY-MM-DD HH:MM] | AGENT | ACTION | Description`
 **All issue-related files go inside `tasks/<issue-folder>/`.**
 
 This includes:
-- `TASK.md`: task specification
-- `DEV_HANDOVER.md`: developer handoff
+- `TASK.md`: task specification with upfront Test Boundaries
+- `DEV_HANDOVER.md`: developer handoff with Invariants Proof and Residual Risks
 - `WORKLOG.md`: per-issue log
 
 Only `WORKLOG.md` also stays at project root as the global log.
 
 ---
 
-## Escalation
+## Escalation & Architectural Escape Hatch
 
 I halt and escalate to the human when:
-- A blocker persists after 2 retry cycles
-- Critical security or compilation failure cannot be resolved automatically
-- Scope changes require human approval
-- An agent loops on the same failure
+- A blocker persists after 2 retry cycles (`DEV_REWORK`).
+- An agent loops on the same race condition or edge case fix.
+- **Architectural Escape Hatch**: A synchronization or locking mechanism requires repeated patching. I trigger an architectural simplification review (e.g. replacing custom protocol with flock, atomic filesystem operations, database transactions, or single-owner model) instead of creating endless hardening subtasks.
+- Critical security or compilation failure cannot be resolved automatically.
+- Scope changes require human approval.
 
 ---
 

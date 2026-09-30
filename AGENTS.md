@@ -7,3 +7,4 @@ Whenever given a task, bug report, improvement request, or actionable piece of w
 - **NEVER commit or expose real IP addresses of our servers**: Always replace real server IPs with logical server names (e.g., `Server 8`, `Server 9`, `VPN #1`). Anonymize client IPs (e.g., `Client A`, `<client-ip>`).
 - **NEVER commit or expose local paths**: Never include absolute local machine paths (e.g., `/home/...`, `/tmp/...`) in code, commits, PR descriptions, GitHub issues, comments, or task documentation. Use repository-relative paths only.
 - **NEVER push documentation or task artifact folders (`docs/`, `tasks/`) to remote git branches or PRs**.
+- **NEVER close issues prior to PR merge**: An issue remains open while in development/PR review and is closed only after its PR is merged into `main`.
