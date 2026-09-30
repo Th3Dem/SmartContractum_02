@@ -1995,7 +1995,9 @@ body,
   .btn-toggle-thread,
   .btn-action-text,
   .btn-continue-thread,
-  .btn-drilldown-back {
+  .btn-drilldown-back,
+  .btn-conflict-load-server,
+  .btn-conflict-keep-local {
     min-height: 40px;
     touch-action: manipulation;
   }
@@ -2004,3 +2006,48 @@ body,
     padding: 8px 10px;
   }
 }
+
+/* Conflict resolution box for concurrent edits */
+.edit-conflict-box {
+  border: 1px solid var(--accent-orange, #f59e0b);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.edit-conflict-box .conflict-message {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.conflict-server-preview {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  margin: 8px 0;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.btn-conflict-load-server,
+.btn-conflict-keep-local {
+  min-height: 36px;
+  touch-action: manipulation;
+  font-size: 0.85rem;
+}
+

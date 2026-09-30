@@ -487,3 +487,7 @@
 [2026-09-30 23:10] | dev_bot | IMPLEMENTATION_COMPLETE | Финальная доработка геометрии дерева Reddit, относительного времени, иконок действий и подсветки всей длины (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 23:25] | pm_bot | VERIFICATION_PASSED | Пройден Compilation Gate (616 тестов, 0 нарушений миграционной диагностики) и визуальная приемка геометрии дерева Reddit в Headless Chrome (Task: issue-27-sc025-threaded-comments)
 [2026-10-01 00:38] | git_bot | GIT_COMMITTED | Фиксация коммита 4682564 в ветку feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
+[2026-10-01 01:12] | pm_bot | TASK_INIT | Инициализация задачи issue-29-comments-idempotency-and-conflicts (P1) (Task: issue-29-comments-idempotency-and-conflicts)
+[2026-10-01 01:12] | pm_bot | DEV_ASSIGN | Назначение py_bot и dev_bot для реализации серверной и клиентской идемпотентности, обязательной revision и разрешения конфликта 409 без reload (Task: issue-29-comments-idempotency-and-conflicts)
+[2026-10-01 01:18] | py_bot | IMPLEMENTATION_COMPLETE | Реализация серверной валидации revision, идемпотентности ответов и защиты от дублей (Task: issue-29-comments-idempotency-and-conflicts)
+[2026-10-01 01:27] | dev_bot | IMPLEMENTATION_COMPLETE | Клиентская идемпотентность, стабильные ключи операций и разрешение конфликта 409 без reload (Task: issue-29-comments-idempotency-and-conflicts)

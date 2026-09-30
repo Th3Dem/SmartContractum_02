@@ -153,7 +153,7 @@ class TestIssue25JsCodeContracts(unittest.TestCase):
         self.assertIn("btn-cancel-answer-edit", self.article_js)
         self.assertIn("PUT", self.article_js)
         self.assertIn("CONCURRENCY_CONFLICT", self.article_js)
-        self.assertIn("Ответ был изменен в другой сессии. Пожалуйста, обновите страницу", self.article_js)
+        self.assertIn("edit-conflict-box", self.article_js)
         self.assertIn("Ответ обновлен", self.article_js)
 
     def test_no_duplicate_answer_form_contract(self):

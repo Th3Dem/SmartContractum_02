@@ -604,6 +604,95 @@
   window._commentDrilldownState = window._commentDrilldownState || { stack: [] };
   window._commentDrafts = window._commentDrafts || {};
 
+  function generateClientOpId() {
+    return 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+  }
+
+  function getOrCreateClientOpId(formEl) {
+    if (!formEl) return generateClientOpId();
+    if (!formEl.dataset.clientOpId) {
+      formEl.dataset.clientOpId = generateClientOpId();
+    }
+    return formEl.dataset.clientOpId;
+  }
+
+  function resetClientOpId(formEl) {
+    if (!formEl) return;
+    delete formEl.dataset.clientOpId;
+    delete formEl.dataset.lastSubmittedText;
+  }
+
+  function handleFormTextInput(formEl, currentText) {
+    if (!formEl) return;
+    if (!formEl.dataset.clientOpId) {
+      formEl.dataset.clientOpId = generateClientOpId();
+    } else if (formEl.dataset.lastSubmittedText !== undefined && formEl.dataset.lastSubmittedText !== null) {
+      if ((currentText || '').trim() !== formEl.dataset.lastSubmittedText) {
+        formEl.dataset.clientOpId = generateClientOpId();
+        delete formEl.dataset.lastSubmittedText;
+      }
+    }
+  }
+
+  function showConcurrencyConflictBox(editWrap, comment, resultData, editTextarea, editCharCount, draftKey) {
+    if (!editWrap) return;
+    const currentRevision = (resultData && resultData.currentRevision !== undefined)
+      ? resultData.currentRevision
+      : ((comment.revision !== undefined ? comment.revision : 1) + 1);
+    const currentContent = (resultData && resultData.currentContent !== undefined)
+      ? resultData.currentContent
+      : '';
+
+    let conflictBox = editWrap.querySelector('.edit-conflict-box');
+    if (!conflictBox) {
+      conflictBox = document.createElement('div');
+      conflictBox.className = 'edit-conflict-box';
+      const footer = editWrap.querySelector('.comment-form-footer');
+      if (footer) {
+        editWrap.insertBefore(conflictBox, footer);
+      } else {
+        editWrap.appendChild(conflictBox);
+      }
+    }
+
+    conflictBox.innerHTML =
+      '<div class="conflict-message">Текст был изменен в другой сессии. Ваша версия не сохранена.</div>' +
+      '<div class="conflict-server-preview"></div>' +
+      '<div class="conflict-actions">' +
+        '<button type="button" class="btn btn-secondary btn-sm btn-conflict-load-server">Загрузить версию с сервера</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm btn-conflict-keep-local">Оставить мой текст</button>' +
+      '</div>';
+
+    const previewEl = conflictBox.querySelector('.conflict-server-preview');
+    if (previewEl) {
+      previewEl.textContent = currentContent;
+    }
+
+    const loadServerBtn = conflictBox.querySelector('.btn-conflict-load-server');
+    if (loadServerBtn) {
+      loadServerBtn.addEventListener('click', function () {
+        if (editTextarea) {
+          editTextarea.value = currentContent;
+          if (editCharCount) editCharCount.textContent = currentContent.length;
+          if (draftKey && window._commentDrafts) {
+            window._commentDrafts[draftKey] = currentContent;
+          }
+          editTextarea.focus();
+        }
+        comment.revision = currentRevision;
+        conflictBox.remove();
+      });
+    }
+
+    const keepLocalBtn = conflictBox.querySelector('.btn-conflict-keep-local');
+    if (keepLocalBtn) {
+      keepLocalBtn.addEventListener('click', function () {
+        comment.revision = currentRevision;
+        conflictBox.remove();
+      });
+    }
+  }
+
   function getMaxWindowDepth() {
     if (window.innerWidth < 680) {
       return 3;
@@ -1025,6 +1114,8 @@
       if (editBtn && editWrap && contentWrap) {
         editBtn.addEventListener('click', function (e) {
           e.preventDefault();
+          const conflictBox = editWrap.querySelector('.edit-conflict-box');
+          if (conflictBox) conflictBox.remove();
           contentWrap.style.display = 'none';
           editWrap.style.display = 'block';
           if (editTextarea) {
@@ -1039,6 +1130,8 @@
         if (cancelEditBtn) {
           cancelEditBtn.addEventListener('click', function () {
             if (window._commentDrafts) delete window._commentDrafts[editDraftKey];
+            const conflictBox = editWrap.querySelector('.edit-conflict-box');
+            if (conflictBox) conflictBox.remove();
             editWrap.style.display = 'none';
             contentWrap.style.display = 'block';
             if (editTextarea) {
@@ -1089,11 +1182,13 @@
               .then(function (result) {
                 saveEditBtn.disabled = false;
                 if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
-                  showToast('Комментарий был изменен в другой сессии. Пожалуйста, обновите страницу');
+                  showConcurrencyConflictBox(editWrap, comment, result.data, editTextarea, editCharCount, editDraftKey);
                   return;
                 }
 
                 if (result.data && result.data.success && result.data.comment) {
+                  const conflictBox = editWrap.querySelector('.edit-conflict-box');
+                  if (conflictBox) conflictBox.remove();
                   if (window._commentDrafts) delete window._commentDrafts[editDraftKey];
                   const updated = result.data.comment;
                   comment.content = updated.content;
@@ -1131,7 +1226,10 @@
       if (window._commentDrafts && window._commentDrafts[replyDraftKey] && replyTextarea) {
         replyTextarea.value = window._commentDrafts[replyDraftKey];
         if (replyCharCount) replyCharCount.textContent = replyTextarea.value.length;
-        if (replyWrap) replyWrap.style.display = 'block';
+        if (replyWrap) {
+          replyWrap.style.display = 'block';
+          getOrCreateClientOpId(replyWrap);
+        }
       }
 
       if (replyBtn && replyWrap) {
@@ -1144,14 +1242,18 @@
           }
           const isShown = replyWrap.style.display === 'block';
           replyWrap.style.display = isShown ? 'none' : 'block';
-          if (!isShown && replyTextarea) {
-            replyTextarea.focus();
+          if (!isShown) {
+            getOrCreateClientOpId(replyWrap);
+            if (replyTextarea) {
+              replyTextarea.focus();
+            }
           }
         });
 
         if (cancelReplyBtn) {
           cancelReplyBtn.addEventListener('click', function () {
             if (window._commentDrafts) delete window._commentDrafts[replyDraftKey];
+            resetClientOpId(replyWrap);
             replyWrap.style.display = 'none';
             if (replyTextarea) replyTextarea.value = '';
           });
@@ -1160,6 +1262,7 @@
         if (replyTextarea && replyCharCount) {
           replyTextarea.addEventListener('input', function () {
             replyCharCount.textContent = replyTextarea.value.length;
+            handleFormTextInput(replyWrap, replyTextarea.value);
             window._commentDrafts = window._commentDrafts || {};
             window._commentDrafts[replyDraftKey] = replyTextarea.value;
           });
@@ -1186,7 +1289,8 @@
 
             submitReplyBtn.disabled = true;
             const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
-            const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            const clientOpId = getOrCreateClientOpId(replyWrap);
+            replyWrap.dataset.lastSubmittedText = replyText;
 
             fetch('/api/articles/' + encodeURIComponent(targetArtId) + '/comments', {
               method: 'POST',
@@ -1204,11 +1308,15 @@
                   openAuthModal();
                   throw new Error('AUTH_REQUIRED');
                 }
-                return res.json();
+                return res.json().then(function (data) {
+                  return { status: res.status, data: data };
+                });
               })
-              .then(function (data) {
+              .then(function (result) {
                 submitReplyBtn.disabled = false;
-                if (data && data.success && data.comment) {
+                const data = result.data;
+                if ((result.status === 200 || result.status === 201) && data && data.success && data.comment) {
+                  resetClientOpId(replyWrap);
                   if (window._commentDrafts) delete window._commentDrafts[replyDraftKey];
                   replyTextarea.value = '';
                   if (replyCharCount) replyCharCount.textContent = '0';
@@ -1599,6 +1707,8 @@
 
     if (editBtn && editWrap && contentWrap && actionsWrap) {
       editBtn.addEventListener('click', function () {
+        const conflictBox = editWrap.querySelector('.edit-conflict-box');
+        if (conflictBox) conflictBox.remove();
         contentWrap.style.display = 'none';
         actionsWrap.style.display = 'none';
         editWrap.style.display = 'block';
@@ -1611,6 +1721,8 @@
 
       if (cancelEditBtn) {
         cancelEditBtn.addEventListener('click', function () {
+          const conflictBox = editWrap.querySelector('.edit-conflict-box');
+          if (conflictBox) conflictBox.remove();
           editWrap.style.display = 'none';
           contentWrap.style.display = 'block';
           actionsWrap.style.display = 'flex';
@@ -1659,12 +1771,13 @@
             .then(function (result) {
               saveEditBtn.disabled = false;
               if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
-                // Keep input text, do not clear
-                showToast('Ответ был изменен в другой сессии. Пожалуйста, обновите страницу');
+                showConcurrencyConflictBox(editWrap, comment, result.data, editTextarea, editCharCount, null);
                 return;
               }
 
               if (result.data && result.data.success && result.data.comment) {
+                const conflictBox = editWrap.querySelector('.edit-conflict-box');
+                if (conflictBox) conflictBox.remove();
                 const updated = result.data.comment;
                 comment.content = updated.content;
                 comment.revision = updated.revision;
@@ -1712,6 +1825,7 @@
         }
         repliesContainer.style.display = 'block';
         replyForm.style.display = 'block';
+        getOrCreateClientOpId(replyForm);
         if (replyTextarea) {
           replyTextarea.focus();
         }
@@ -1719,6 +1833,7 @@
 
       if (cancelReplyBtn) {
         cancelReplyBtn.addEventListener('click', function () {
+          resetClientOpId(replyForm);
           replyForm.style.display = 'none';
           if (replyTextarea) replyTextarea.value = '';
           if (replyCharCount) replyCharCount.textContent = '0';
@@ -1731,6 +1846,7 @@
       if (replyTextarea && replyCharCount) {
         replyTextarea.addEventListener('input', function () {
           replyCharCount.textContent = replyTextarea.value.length;
+          handleFormTextInput(replyForm, replyTextarea.value);
         });
       }
 
@@ -1754,6 +1870,8 @@
           }
 
           if (submitReplyBtn) submitReplyBtn.disabled = true;
+          const clientOpId = getOrCreateClientOpId(replyForm);
+          replyForm.dataset.lastSubmittedText = replyContent;
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
@@ -1761,7 +1879,8 @@
             body: JSON.stringify({
               content: replyContent,
               commentType: 'comment',
-              parentAnswerId: comment.id
+              parentAnswerId: comment.id,
+              clientOperationId: clientOpId
             })
           })
             .then(function (res) {
@@ -1770,11 +1889,15 @@
                 openAuthModal();
                 throw new Error('AUTH_REQUIRED');
               }
-              return res.json();
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
             })
-            .then(function (data) {
+            .then(function (result) {
               if (submitReplyBtn) submitReplyBtn.disabled = false;
-              if (data && data.success) {
+              const data = result.data;
+              if ((result.status === 200 || result.status === 201) && data && data.success) {
+                resetClientOpId(replyForm);
                 if (replyTextarea) replyTextarea.value = '';
                 if (replyCharCount) replyCharCount.textContent = '0';
                 replyForm.style.display = 'none';
@@ -2221,9 +2344,15 @@
 
     if (!isCommentsInitialized) {
       // 1. Standard comments listeners
+      if (form) {
+        getOrCreateClientOpId(form);
+      }
       if (textarea && charCountEl) {
         textarea.addEventListener('input', function () {
           charCountEl.textContent = textarea.value.length;
+          if (form) {
+            handleFormTextInput(form, textarea.value);
+          }
         });
       }
 
@@ -2250,7 +2379,8 @@
           }
 
           if (submitBtn) submitBtn.disabled = true;
-          const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+          const clientOpId = getOrCreateClientOpId(form);
+          form.dataset.lastSubmittedText = content;
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
@@ -2263,11 +2393,15 @@
                 openAuthModal();
                 throw new Error('AUTH_REQUIRED');
               }
-              return res.json();
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
             })
-            .then(function (data) {
+            .then(function (result) {
               if (submitBtn) submitBtn.disabled = false;
-              if (data && data.success) {
+              const data = result.data;
+              if ((result.status === 200 || result.status === 201) && data && data.success) {
+                resetClientOpId(form);
                 if (textarea) textarea.value = '';
                 if (charCountEl) charCountEl.textContent = '0';
                 showToast('Комментарий опубликован');
@@ -2293,15 +2427,20 @@
             showToast('Войдите, чтобы оставить уточнение');
             return;
           }
-          clarificationForm.style.display = clarificationForm.style.display === 'none' ? 'block' : 'none';
-          if (clarificationForm.style.display === 'block' && clarificationInput) {
-            clarificationInput.focus();
+          const isOpening = clarificationForm.style.display === 'none' || !clarificationForm.style.display;
+          clarificationForm.style.display = isOpening ? 'block' : 'none';
+          if (isOpening) {
+            getOrCreateClientOpId(clarificationForm);
+            if (clarificationInput) {
+              clarificationInput.focus();
+            }
           }
         });
       }
 
       if (cancelClarificationBtn && clarificationForm) {
         cancelClarificationBtn.addEventListener('click', function () {
+          resetClientOpId(clarificationForm);
           clarificationForm.style.display = 'none';
           if (clarificationInput) clarificationInput.value = '';
           if (clarificationCharCount) clarificationCharCount.textContent = '0';
@@ -2311,6 +2450,9 @@
       if (clarificationInput && clarificationCharCount) {
         clarificationInput.addEventListener('input', function () {
           clarificationCharCount.textContent = clarificationInput.value.length;
+          if (clarificationForm) {
+            handleFormTextInput(clarificationForm, clarificationInput.value);
+          }
         });
       }
 
@@ -2337,7 +2479,8 @@
           }
 
           if (submitClarificationBtn) submitClarificationBtn.disabled = true;
-          const clientOpId = 'op_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+          const clientOpId = getOrCreateClientOpId(clarificationForm);
+          clarificationForm.dataset.lastSubmittedText = content;
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
@@ -2350,11 +2493,15 @@
                 openAuthModal();
                 throw new Error('AUTH_REQUIRED');
               }
-              return res.json();
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
             })
-            .then(function (data) {
+            .then(function (result) {
               if (submitClarificationBtn) submitClarificationBtn.disabled = false;
-              if (data && data.success) {
+              const data = result.data;
+              if ((result.status === 200 || result.status === 201) && data && data.success) {
+                resetClientOpId(clarificationForm);
                 if (clarificationInput) clarificationInput.value = '';
                 if (clarificationCharCount) clarificationCharCount.textContent = '0';
                 clarificationForm.style.display = 'none';
@@ -2375,9 +2522,15 @@
       }
 
       // 3. Question answer submission listeners
+      if (answerForm) {
+        getOrCreateClientOpId(answerForm);
+      }
       if (answerTextInput && answerCharCount) {
         answerTextInput.addEventListener('input', function () {
           answerCharCount.textContent = answerTextInput.value.length;
+          if (answerForm) {
+            handleFormTextInput(answerForm, answerTextInput.value);
+          }
         });
       }
 
@@ -2404,11 +2557,17 @@
           }
 
           if (submitAnswerBtn) submitAnswerBtn.disabled = true;
+          const clientOpId = getOrCreateClientOpId(answerForm);
+          answerForm.dataset.lastSubmittedText = content;
 
           fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, commentType: 'answer' })
+            body: JSON.stringify({
+              content: content,
+              commentType: 'answer',
+              clientOperationId: clientOpId
+            })
           })
             .then(function (res) {
               if (res.status === 401) {
@@ -2433,7 +2592,8 @@
                 return;
               }
 
-              if (data && data.success) {
+              if ((result.status === 200 || result.status === 201) && data && data.success) {
+                resetClientOpId(answerForm);
                 if (answerTextInput) answerTextInput.value = '';
                 if (answerCharCount) answerCharCount.textContent = '0';
                 if (data.comment && data.comment.id) {
