@@ -491,3 +491,4 @@
 [2026-10-01 01:12] | pm_bot | DEV_ASSIGN | Назначение py_bot и dev_bot для реализации серверной и клиентской идемпотентности, обязательной revision и разрешения конфликта 409 без reload (Task: issue-29-comments-idempotency-and-conflicts)
 [2026-10-01 01:18] | py_bot | IMPLEMENTATION_COMPLETE | Реализация серверной валидации revision, идемпотентности ответов и защиты от дублей (Task: issue-29-comments-idempotency-and-conflicts)
 [2026-10-01 01:27] | dev_bot | IMPLEMENTATION_COMPLETE | Клиентская идемпотентность, стабильные ключи операций и разрешение конфликта 409 без reload (Task: issue-29-comments-idempotency-and-conflicts)
+[2026-10-01 01:32] | git_bot | PR_CREATED | Открыт PR #32 для Issue #29 (Fixes #29), ветка feat/issue-29-comments-idempotency-and-conflicts (Task: issue-29-comments-idempotency-and-conflicts)
