@@ -470,3 +470,5 @@
 [2026-09-30 19:25] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации геометрии Reddit, hover-подсветки, управления ветками, drilldown и E2E смоук-тестов (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 19:42] | dev_bot | IMPLEMENTATION_COMPLETE | Визуальная доработка геометрии комментариев Reddit, hover-подсветки, управления ветками и drilldown (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 19:47] | git_bot | GIT_COMMITTED | Фиксация коммита d166b2e в ветку feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 19:51] | pm_bot | DEV_REWORK | Передача dev_bot на доработку: учет дефолтного свернутого состояния веток перед проверкой видимости коннекторов и кнопки продолжения ветки в test_06 browser smoke (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 19:55] | dev_bot | IMPLEMENTATION_COMPLETE | Исправлен E2E браузерный смоук-тест test_06: разворачивание свернутых веток перед проверкой коннекторов и drilldown-кнопки (Task: issue-27-sc025-threaded-comments)

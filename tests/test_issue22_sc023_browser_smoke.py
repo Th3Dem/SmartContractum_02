@@ -897,32 +897,55 @@ class TestBrowserSmoke(unittest.TestCase):
             page.goto(f"{self.base_url}/article.html?id=art_smoke_01", wait_until="domcontentloaded")
             page.wait_for_selector(".comment-item", timeout=10000)
 
-            # 3. Verify Reddit geometry connectors (.comment-branch-connector)
-            connectors = page.locator(".comment-branch-connector")
-            self.assertGreaterEqual(connectors.count(), 1, "Expected .comment-branch-connector elements in DOM")
-            first_connector = connectors.first
-            self.assertTrue(first_connector.is_visible())
-
-            # 4. Verify Single collapse button (.btn-toggle-thread) with +/-
+            # 3. Verify Single collapse button (.btn-toggle-thread) with +/- on root comment
             toggle_btns = page.locator(".btn-toggle-thread")
             self.assertGreaterEqual(toggle_btns.count(), 1, "Expected .btn-toggle-thread in DOM")
             first_toggle = toggle_btns.first
             toggle_icon = first_toggle.locator(".thread-toggle-icon")
             self.assertTrue(toggle_icon.is_visible(), "Expected .thread-toggle-icon in collapse button")
-            self.assertIn(toggle_icon.text_content() or "", ["+", "-"])
+            self.assertEqual((toggle_icon.text_content() or "").strip(), "+")
+
+            # Click to expand first level and verify switch to '-'
+            first_toggle.click()
+            page.wait_for_selector(".comment-child-node", state="visible", timeout=5000)
+            self.assertEqual((toggle_icon.text_content() or "").strip(), "-")
+
+            # 4. Verify Reddit geometry connectors (.comment-branch-connector) on visible child
+            connectors = page.locator(".comment-branch-connector")
+            self.assertGreaterEqual(connectors.count(), 1, "Expected .comment-branch-connector elements in DOM")
+            first_connector = connectors.first
+            self.assertTrue(first_connector.is_visible())
 
             # 5. Verify 'К родителю' button (.btn-jump-to-parent) and its attributes
             jump_btns = page.locator(".btn-jump-to-parent")
             self.assertGreaterEqual(jump_btns.count(), 1, "Expected .btn-jump-to-parent on nested comments")
             first_jump = jump_btns.first
+            self.assertTrue(first_jump.is_visible())
             aria_label = first_jump.get_attribute("aria-label") or ""
             self.assertTrue(aria_label.startswith("К комментарию"), f"Unexpected aria-label: {aria_label}")
             parent_id_attr = first_jump.get_attribute("data-parent-id")
             self.assertTrue(bool(parent_id_attr), "Expected data-parent-id attribute on jump button")
 
-            # 6. Verify Drilldown windowing ('Продолжить ветку') and back navigation
+            # 6. Sequentially expand intermediate levels down to depth >= 5 for drilldown windowing
+            for _ in range(6):
+                continue_btn = page.locator(".btn-continue-thread").first
+                if continue_btn.count() > 0 and continue_btn.is_visible():
+                    break
+                unexpanded_toggles = page.locator(".btn-toggle-thread[aria-expanded='false']")
+                clicked = False
+                for i in range(unexpanded_toggles.count()):
+                    cand = unexpanded_toggles.nth(i)
+                    if cand.is_visible():
+                        cand.click()
+                        page.wait_for_timeout(200)
+                        clicked = True
+                        break
+                if not clicked:
+                    break
+
             continue_btns = page.locator(".btn-continue-thread")
             self.assertGreaterEqual(continue_btns.count(), 1, "Expected .btn-continue-thread at depth >= 5")
+            self.assertTrue(continue_btns.first.is_visible(), "Expected .btn-continue-thread to be visible")
             continue_text = continue_btns.first.text_content() or ""
             self.assertIn("Продолжить ветку", continue_text)
 
