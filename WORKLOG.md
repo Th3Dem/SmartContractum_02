@@ -461,3 +461,4 @@
 [2026-09-30 17:22] | py_bot | IMPLEMENTATION_COMPLETE | Реализация бэкенда, инвариантов и диагностики многоуровневых комментариев (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 17:31] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация древовидного рендеринга комментариев, inline-ответов/редактирования, диплинкинга и адаптивных стилей (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 17:32] | pm_bot | TASK_READY_FOR_PR | Все 10 инвариантов доказаны, 605/605 тестов успешно пройдены (100% PASS), сформирован DEV_HANDOVER.md (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 17:40] | git_bot | PR_CREATED | Открыт PR #28 для Issue #27 (Fixes #27), ветка feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
