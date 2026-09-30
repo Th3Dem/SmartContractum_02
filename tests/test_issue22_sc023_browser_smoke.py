@@ -702,6 +702,153 @@ class TestBrowserSmoke(unittest.TestCase):
         finally:
             page.close()
 
+    def test_05_qa_full_lifecycle_and_invariants(self) -> None:
+        """
+        Comprehensive multi-user Q&A lifecycle and invariants test (Issue #26):
+        1. User A posts question clarification (commentType = 'comment').
+        2. User B posts answer (commentType = 'answer').
+        3. User C posts reply to User B's answer (parentAnswerId = answer_b_id).
+        4. User B edits their answer.
+        5. User B attempts second answer: blocked with 409 ANSWER_ALREADY_EXISTS.
+        6. Question author marks answer B as solution (User C has no permission/button).
+        7. Verifies DOM: solution badge, updated badge, count badges, and deep link.
+        """
+        page = self.browser.new_page()
+        try:
+            def switch_user(user_id: str, name: str) -> None:
+                page.goto(f"{self.base_url}/feed.html", wait_until="domcontentloaded")
+                page.evaluate("""async ([uid, uname]) => {
+                    await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({userId: uid, name: uname, role: 'user'})
+                    });
+                }""", [user_id, name])
+
+            # 1. User A logs in and posts question clarification
+            switch_user("user_a_qa", "Анна Уточнитель")
+            page.goto(f"{self.base_url}/article.html?id=quest_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector("#questionCommentsWrapper", timeout=10000)
+
+            # Open question clarification form
+            clarification_btn = page.locator("#btnAddQuestionClarification")
+            clarification_btn.click()
+            page.wait_for_selector("#questionClarificationForm", state="visible", timeout=5000)
+
+            page.fill("#questionClarificationInput", "Какая версия Solidity используется в проекте?")
+            page.click("#btnSubmitClarification")
+
+            # Wait for clarification to appear
+            page.wait_for_selector(".question-comment-item", timeout=5000)
+            self.assertGreaterEqual(page.locator(".question-comment-item").count(), 1)
+            self.assertEqual(page.locator("#questionCommentsCountBadge").text_content(), "1")
+            self.assertEqual(page.locator("#answersCountBadge").text_content(), "0")
+
+            # 2. User B logs in and posts an answer
+            switch_user("user_b_qa", "Борис Ответчик")
+            page.goto(f"{self.base_url}/article.html?id=quest_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector("#questionAnswerForm", state="visible", timeout=10000)
+
+            page.fill("#answerTextInput", "Используйте Checks-Effects-Interactions и ReentrancyGuard.")
+            page.click("#btnSubmitAnswer")
+
+            # Wait for answer card to appear
+            page.wait_for_selector(".answer-card", timeout=5000)
+            answer_card = page.locator(".answer-card").first
+            answer_b_id = answer_card.get_attribute("data-id")
+            self.assertTrue(answer_b_id, "Answer card must have data-id attribute")
+            self.assertEqual(page.locator("#answersCountBadge").text_content(), "1")
+
+            # My answer banner is shown, answer submission form wrap is hidden
+            page.wait_for_selector("#myAnswerBanner", state="visible", timeout=5000)
+            self.assertFalse(page.locator("#myAnswerFormWrap").is_visible())
+
+            # 3. User C logs in and replies to User B's answer
+            switch_user("user_c_qa", "Владимир Репликатор")
+            page.goto(f"{self.base_url}/article.html?id=quest_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector(".answer-card", timeout=10000)
+
+            # Verify User C does NOT have solution action button
+            self.assertEqual(
+                page.locator(".btn-toggle-solution").count(),
+                0,
+                "Non-author user must not see solution button"
+            )
+
+            # Click reply on answer B
+            reply_btn = page.locator(".btn-reply-answer").first
+            reply_btn.click()
+            page.wait_for_selector(".answer-reply-form", state="visible", timeout=5000)
+
+            page.fill(".answer-reply-textarea", "Согласен, ReentrancyGuard решает проблему надежно.")
+            page.click(".btn-submit-reply")
+
+            # Wait for reply item to appear
+            page.wait_for_selector(".answer-reply-item", timeout=5000)
+            self.assertGreaterEqual(page.locator(".answer-reply-item").count(), 1)
+            self.assertIn("ReentrancyGuard", page.locator(".answer-reply-item").first.text_content() or "")
+
+            # 4. User B logs in and edits answer
+            switch_user("user_b_qa", "Борис Ответчик")
+            page.goto(f"{self.base_url}/article.html?id=quest_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector(".answer-card", timeout=10000)
+
+            # Verify answer banner is present for User B
+            self.assertTrue(page.locator("#myAnswerBanner").is_visible())
+
+            # Edit answer
+            edit_btn = page.locator(".btn-edit-answer").first
+            edit_btn.click()
+            page.wait_for_selector(".answer-edit-form-wrap", state="visible", timeout=5000)
+
+            page.fill(".answer-edit-textarea", "Используйте Checks-Effects-Interactions и transient storage TSTORE.")
+            page.click(".btn-save-answer-edit")
+
+            # Verify updated text and badge
+            page.wait_for_selector(".comment-updated-badge", timeout=5000)
+            self.assertIn("TSTORE", page.locator(".answer-text").first.text_content() or "")
+            self.assertIn("Изменено", page.locator(".comment-updated-badge").first.text_content() or "")
+
+            # 5. User B attempts duplicate answer (409 Conflict)
+            dup_result = page.evaluate("""async (artId) => {
+                const res = await fetch('/api/articles/' + encodeURIComponent(artId) + '/comments', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        content: 'Второй ответ от того же пользователя.',
+                        commentType: 'answer'
+                    })
+                });
+                const data = await res.json();
+                return {status: res.status, data: data};
+            }""", "quest_smoke_01")
+            self.assertEqual(dup_result["status"], 409)
+            self.assertEqual(dup_result["data"].get("code"), "ANSWER_ALREADY_EXISTS")
+
+            # 6. Question Author (expert_alex_01) marks answer B as solution
+            switch_user("expert_alex_01", "Алексей Экспертов")
+            page.goto(f"{self.base_url}/article.html?id=quest_smoke_01", wait_until="domcontentloaded")
+            page.wait_for_selector(".answer-card", timeout=10000)
+
+            # Author sees solution button
+            solution_btn = page.locator(".btn-toggle-solution").first
+            self.assertTrue(solution_btn.is_visible())
+            solution_btn.click()
+
+            # Wait for solution badge and styling
+            page.wait_for_selector(".solution-badge", timeout=5000)
+            self.assertIn("Решение принято автором", page.locator(".solution-badge").first.text_content() or "")
+            self.assertIn("is-solution-answer", page.locator(".answer-card").first.get_attribute("class") or "")
+            self.assertIn("Снять отметку решения", solution_btn.text_content() or "")
+
+            # 7. Deep link navigation to answer
+            page.goto(f"{self.base_url}/article.html?id=quest_smoke_01#comm_{answer_b_id}", wait_until="domcontentloaded")
+            page.wait_for_selector(f"#comm_{answer_b_id}", timeout=5000)
+            target_answer = page.locator(f"#comm_{answer_b_id}")
+            self.assertTrue(target_answer.is_visible())
+        finally:
+            page.close()
+
 
 if __name__ == "__main__":
     unittest.main()
