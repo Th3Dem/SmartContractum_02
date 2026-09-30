@@ -482,3 +482,4 @@
 [2026-09-30 21:42] | git_bot | GIT_COMMITTED | Фиксация коммита непрерывной геометрии Reddit и удаления «К родителю» в feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 21:58] | dev_bot | BUGFIX_COMPLETE | Устранено дублирующее объявление totalDescendants в renderCommentNode, вызывавшее SyntaxError при парсинге article.js (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 22:00] | git_bot | GIT_COMMITTED | Фиксация коммита исправления SyntaxError в feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 22:04] | py_bot | BUGFIX_COMPLETE | Устранена гонка ожидания инициализации схемы БД в test_server_subprocess_without_seed (Task: issue-27-sc025-threaded-comments)
