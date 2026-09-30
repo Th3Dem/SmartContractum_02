@@ -611,21 +611,6 @@
       }
 
       let solutionActionBtn = '';
-      const isQuestion = Boolean(currentArticle && (
-        currentArticle.materialType === 'question' ||
-        currentArticle.material_type === 'question' ||
-        (currentArticle.publication_settings && (
-          currentArticle.publication_settings.materialType === 'question' ||
-          (typeof currentArticle.publication_settings === 'string' && currentArticle.publication_settings.indexOf('"materialType":"question"') !== -1)
-        ))
-      ));
-      const isAuthor = Boolean(currentUser && currentArticle && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
-      if (isQuestion && isAuthor) {
-        solutionActionBtn =
-          '<button type="button" class="btn btn-sm btn-toggle-solution" data-comment-id="' + escapeHtml(comment.id) + '">' +
-            (isSol ? 'Снять отметку решения' : 'Отметить как решение') +
-          '</button>';
-      }
 
       const isAnswer = comment.commentType === 'answer' || comment.comment_type === 'answer';
       const commentTypeBadge = isAnswer ? '<span class="comment-type-badge answer-badge">Ответ</span>' : '';
@@ -699,14 +684,7 @@
           '</div>' +
         '</div>';
 
-      // Solution toggle handler
-      const toggleSolBtn = el.querySelector('.btn-toggle-solution');
-      if (toggleSolBtn) {
-        toggleSolBtn.addEventListener('click', function (e) {
-          e.preventDefault();
-          toggleSolution(comment.id, !isSol);
-        });
-      }
+
 
       // Jump to parent handler
       const jumpBtn = el.querySelector('.btn-jump-to-parent');

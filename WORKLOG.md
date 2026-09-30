@@ -464,3 +464,5 @@
 [2026-09-30 17:40] | git_bot | PR_CREATED | Открыт PR #28 для Issue #27 (Fixes #27), ветка feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 17:57] | dev_bot | BUGFIX_COMPLETE | Добавлен селектор .answer-reply-item для ответов на ответы в дереве комментариев для совместимости с E2E в CI (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 17:58] | git_bot | GIT_COMMITTED | Добавление класса .answer-reply-item для древовидных ответов для совместимости с E2E CI (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 18:05] | dev_bot | BUGFIX_COMPLETE | Удалена кнопка решения с узлов комментариев (решением могут быть только ответы) и устранен race condition в subprocess тесте seed (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 18:06] | git_bot | GIT_COMMITTED | Ограничение отметки решения только ответами и устранение race condition в тесте seed (Task: issue-27-sc025-threaded-comments)
