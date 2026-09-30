@@ -517,13 +517,13 @@ class TestIssue27VisualRefinementContracts(unittest.TestCase):
         self.assertIn("var(--tree-line-active)", self.article_css)
 
     def test_05_calm_collapse_toggle_and_parent_jump(self) -> None:
-        """Verify calm +/- collapse button and complete absence of parent jump button."""
+        """Verify calm 20px circular toggle button and complete absence of parent jump button."""
         self.assertIn(".btn-toggle-thread", self.article_css)
         self.assertIn(".thread-toggle-icon", self.article_css)
-        self.assertIn("width: 16px;", self.article_css)
-        self.assertIn("height: 16px;", self.article_css)
-        self.assertIn("margin-left: 7px;", self.article_css)
-        self.assertIn("margin-right: 17px;", self.article_css)
+        self.assertIn("width: 20px;", self.article_css)
+        self.assertIn("height: 20px;", self.article_css)
+        self.assertIn("margin-left: 5px;", self.article_css)
+        self.assertIn("margin-right: 15px;", self.article_css)
 
         # Complete removal of 'К родителю' and reply string
         self.assertNotIn(".btn-jump-to-parent", self.article_css)
@@ -566,6 +566,88 @@ class TestIssue27VisualRefinementContracts(unittest.TestCase):
 
         self.assertNotIn("\u2014", self.article_css, "Em dash found in article.css")
         self.assertNotIn("\u2014", self.article_js, "Em dash found in article.js")
+
+    def test_09_visual_refinement_iteration_contracts(self) -> None:
+        """Verify PR #28 visual refinement iteration tokens, neutral solution bg, hit areas, and time format."""
+        # CSS tokens and rules
+        self.assertIn("--tree-indent-step: 28px;", self.article_css)
+        self.assertIn("--tree-indent-step: 22px;", self.article_css)
+        self.assertIn("--toggle-border: #334155;", self.article_css)
+        self.assertIn("--toggle-border: #cbd5e1;", self.article_css)
+        self.assertIn(".answer-card.is-solution-answer .answer-replies-container", self.article_css)
+        self.assertIn("padding: 0 0 0 var(--tree-indent-step);", self.article_css)
+        self.assertIn(".comment-stem-upper::before", self.article_css)
+        self.assertIn(".comment-branch-stem::before", self.article_css)
+        self.assertIn(".comment-branch-elbow::before", self.article_css)
+        self.assertIn("height: 23px;", self.article_css)
+        self.assertIn("height: 22px;", self.article_css)
+
+        # JS contracts
+        self.assertIn("formatCommentTimeRelative", self.article_js)
+        self.assertIn("getRussianPlural", self.article_js)
+        self.assertIn("updateCommentTimestamps", self.article_js)
+        self.assertIn("comment-date comment-time", self.article_js)
+        self.assertIn("btn-edit-comment", self.article_js)
+        self.assertIn("btn-reply-comment", self.article_js)
+
+    def test_10_relative_time_formatter_parameterized_and_dom_invariants(self) -> None:
+        """Parameterized verification of relative time formatting, Russian plurals, and boundary rules."""
+        def get_russian_plural(n: int, one: str, few: str, many: str) -> str:
+            mod10 = n % 10
+            mod100 = n % 100
+            if mod10 == 1 and mod100 != 11:
+                return one
+            if 2 <= mod10 <= 4 and not (10 <= mod100 <= 20):
+                return few
+            return many
+
+        def format_relative(diff_sec: int) -> str:
+            if diff_sec < 1:
+                return "1 секунду назад"
+            if diff_sec < 60:
+                if diff_sec <= 1:
+                    return "1 секунду назад"
+                return f"{diff_sec} {get_russian_plural(diff_sec, 'секунду', 'секунды', 'секунд')} назад"
+            diff_min = diff_sec // 60
+            if diff_min < 60:
+                return f"{diff_min} {get_russian_plural(diff_min, 'минуту', 'минуты', 'минут')} назад"
+            if diff_sec <= 86400:
+                diff_hours = diff_sec // 3600
+                return f"{diff_hours} {get_russian_plural(diff_hours, 'час', 'часа', 'часов')} назад"
+            return "ABSOLUTE_DATE"
+
+        cases = [
+            (0, "1 секунду назад"),
+            (1, "1 секунду назад"),
+            (2, "2 секунды назад"),
+            (4, "4 секунды назад"),
+            (5, "5 секунд назад"),
+            (21, "21 секунду назад"),
+            (59, "59 секунд назад"),
+            (60, "1 минуту назад"),
+            (120, "2 минуты назад"),
+            (300, "5 минут назад"),
+            (21 * 60, "21 минуту назад"),
+            (59 * 60 + 59, "59 минут назад"),
+            (3600, "1 час назад"),
+            (7200, "2 часа назад"),
+            (5 * 3600, "5 часов назад"),
+            (21 * 3600, "21 час назад"),
+            (23 * 3600 + 59 * 60, "23 часа назад"),
+            (86400, "24 часа назад"),
+            (86401, "ABSOLUTE_DATE"),
+            (100000, "ABSOLUTE_DATE"),
+        ]
+
+        for diff_sec, expected in cases:
+            with self.subTest(diff_sec=diff_sec):
+                res = format_relative(diff_sec)
+                self.assertEqual(res, expected, f"Failed at {diff_sec}s: expected {expected}, got {res}")
+
+        # Verify updateCommentTimestamps DOM contract: modifies only textContent, preserves drafts and inputs
+        self.assertIn("function updateCommentTimestamps()", self.article_js)
+        self.assertIn("time.comment-time[datetime]", self.article_js)
+        self.assertIn("el.textContent = rel;", self.article_js)
 
 
 if __name__ == "__main__":

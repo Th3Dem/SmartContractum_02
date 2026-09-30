@@ -523,6 +523,74 @@
     }
   }
 
+  function getRussianPlural(n, one, few, many) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) {
+      return one;
+    }
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+      return few;
+    }
+    return many;
+  }
+
+  function formatCommentTimeRelative(isoStr, nowMs) {
+    if (!isoStr) return 'Недавно';
+    try {
+      const d = new Date(isoStr);
+      const timeMs = d.getTime();
+      if (isNaN(timeMs)) return 'Недавно';
+
+      const now = (typeof nowMs === 'number' && !isNaN(nowMs)) ? nowMs : Date.now();
+      const diffMs = now - timeMs;
+
+      if (diffMs < 1000) {
+        return '1 секунду назад';
+      }
+
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 60) {
+        if (diffSec <= 1) return '1 секунду назад';
+        return diffSec + ' ' + getRussianPlural(diffSec, 'секунду', 'секунды', 'секунд') + ' назад';
+      }
+
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) {
+        return diffMin + ' ' + getRussianPlural(diffMin, 'минуту', 'минуты', 'минут') + ' назад';
+      }
+
+      if (diffSec <= 86400) {
+        const diffHours = Math.floor(diffSec / 3600);
+        return diffHours + ' ' + getRussianPlural(diffHours, 'час', 'часа', 'часов') + ' назад';
+      }
+
+      return formatCommentDate(isoStr);
+    } catch (e) {
+      return 'Недавно';
+    }
+  }
+
+  function updateCommentTimestamps() {
+    const timeElements = document.querySelectorAll('time.comment-time[datetime]');
+    if (!timeElements || timeElements.length === 0) return;
+    const now = Date.now();
+    timeElements.forEach(function (el) {
+      const iso = el.getAttribute('datetime');
+      if (iso) {
+        const rel = formatCommentTimeRelative(iso, now);
+        if (el.textContent !== rel) {
+          el.textContent = rel;
+        }
+      }
+    });
+  }
+
+  if (window._commentTimestampTimer) {
+    clearInterval(window._commentTimestampTimer);
+  }
+  window._commentTimestampTimer = setInterval(updateCommentTimestamps, 30000);
+
   function getAuthorInitials(name) {
     if (!name) return 'SC';
     const parts = name.trim().split(/\s+/);
@@ -632,7 +700,9 @@
     const authorName = comment.authorName || 'Пользователь';
     const authorId = comment.userId || comment.user_id || '';
     const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+    const rawDate = comment.createdAt || comment.created_at;
+    const absDateText = formatCommentDate(rawDate);
+    const relTimeText = formatCommentTimeRelative(rawDate);
 
     function scrollToParentComment(targetId) {
       if (!targetId) return;
@@ -660,10 +730,20 @@
           const tBtn = document.querySelector('[aria-controls="thread_' + pId + '"]');
           if (tBtn) {
             tBtn.setAttribute('aria-expanded', 'true');
+            tBtn.setAttribute('aria-label', 'Скрыть комментарии');
+            tBtn.setAttribute('title', 'Скрыть комментарии');
+            const minusSvg = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="0" y1="4.5" x2="9" y2="4.5"></line></svg>';
             const iconEl = tBtn.querySelector('.thread-toggle-icon');
-            if (iconEl) iconEl.textContent = '-';
+            if (iconEl) iconEl.innerHTML = minusSvg + '<span class="sr-only">-</span>';
             const txtEl = tBtn.querySelector('.toggle-thread-text');
-            if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+            if (txtEl) {
+              txtEl.className = 'toggle-thread-text sr-only';
+              txtEl.textContent = 'Скрыть комментарии';
+            }
+            const pRow = tBtn.closest('.comment-toggle-row');
+            if (pRow) pRow.classList.add('is-expanded');
+            const pThrough = pRow ? pRow.querySelector('.comment-stem-through') : null;
+            if (pThrough) pThrough.style.display = 'block';
           }
           curr = window._allCommentsMap[pId];
         } else {
@@ -686,6 +766,9 @@
     function setTreePathHighlight(active) {
       if (elbow) {
         elbow.classList.toggle('is-tree-path-active', active);
+      }
+      if (stem) {
+        stem.classList.toggle('is-tree-path-active', active);
       }
       if (connector) {
         connector.classList.toggle('is-connection-active', active);
@@ -716,6 +799,9 @@
 
         const pStemThrough = parentToggleRow.querySelector('.comment-stem-through');
         if (pStemThrough) pStemThrough.classList.toggle('is-tree-path-active', active);
+
+        const pToggleBtn = parentToggleRow.querySelector('.btn-toggle-thread');
+        if (pToggleBtn) pToggleBtn.classList.toggle('is-tree-path-active', active);
 
         const pToggleIcon = parentToggleRow.querySelector('.thread-toggle-icon');
         if (pToggleIcon) pToggleIcon.classList.toggle('is-tree-path-active', active);
@@ -753,6 +839,11 @@
           scrollToParentComment(comment.parentCommentId);
         }
       });
+    }
+
+    if (stem) {
+      stem.addEventListener('mouseenter', function () { setTreePathHighlight(true); });
+      stem.addEventListener('mouseleave', function () { setTreePathHighlight(false); });
     }
 
     if (comment.isDeleted) {
@@ -804,7 +895,14 @@
 
       let editBtnHtml = '';
       if (isMyComment) {
-        editBtnHtml = '<button type="button" class="btn-action-text btn-edit-comment">Редактировать</button>';
+        editBtnHtml =
+          '<button type="button" class="btn-action-text btn-edit-comment">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
+            '<span>Редактировать</span>' +
+          '</button>';
       }
 
       const mainContainer = document.createElement('div');
@@ -818,10 +916,41 @@
       avatarEl.textContent = initials;
       gutter.appendChild(avatarEl);
 
+      let stemUpper = null;
       if (totalDescendants > 0) {
-        const stemUpper = document.createElement('div');
+        stemUpper = document.createElement('div');
         stemUpper.className = 'comment-stem-upper';
         stemUpper.setAttribute('aria-hidden', 'true');
+        stemUpper.addEventListener('mouseenter', function () {
+          stemUpper.classList.add('is-tree-path-active');
+          if (avatarEl) avatarEl.classList.add('avatar-peer-highlight');
+          const pToggleRow = el.querySelector(':scope > .comment-toggle-row');
+          if (pToggleRow) {
+            const tBtn = pToggleRow.querySelector('.btn-toggle-thread');
+            if (tBtn) tBtn.classList.add('is-tree-path-active');
+            const tIcon = pToggleRow.querySelector('.thread-toggle-icon');
+            if (tIcon) tIcon.classList.add('is-tree-path-active');
+            const tStemUpper = pToggleRow.querySelector('.comment-toggle-stem-upper');
+            if (tStemUpper) tStemUpper.classList.add('is-tree-path-active');
+            const tStemThrough = pToggleRow.querySelector('.comment-stem-through');
+            if (tStemThrough) tStemThrough.classList.add('is-tree-path-active');
+          }
+        });
+        stemUpper.addEventListener('mouseleave', function () {
+          stemUpper.classList.remove('is-tree-path-active');
+          if (avatarEl) avatarEl.classList.remove('avatar-peer-highlight');
+          const pToggleRow = el.querySelector(':scope > .comment-toggle-row');
+          if (pToggleRow) {
+            const tBtn = pToggleRow.querySelector('.btn-toggle-thread');
+            if (tBtn) tBtn.classList.remove('is-tree-path-active');
+            const tIcon = pToggleRow.querySelector('.thread-toggle-icon');
+            if (tIcon) tIcon.classList.remove('is-tree-path-active');
+            const tStemUpper = pToggleRow.querySelector('.comment-toggle-stem-upper');
+            if (tStemUpper) tStemUpper.classList.remove('is-tree-path-active');
+            const tStemThrough = pToggleRow.querySelector('.comment-stem-through');
+            if (tStemThrough) tStemThrough.classList.remove('is-tree-path-active');
+          }
+        });
         gutter.appendChild(stemUpper);
       }
       mainContainer.appendChild(gutter);
@@ -833,7 +962,7 @@
           '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
             '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
             commentTypeBadge +
-            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+            '<time class="comment-date comment-time" datetime="' + escapeHtml(rawDate || '') + '" title="' + escapeHtml(absDateText) + '">' + escapeHtml(relTimeText) + '</time>' +
             updatedBadgeHtml +
             srOnlyReplyHtml +
           '</div>' +
@@ -855,7 +984,12 @@
         '</div>' +
         '<div class="comment-actions">' +
           editBtnHtml +
-          '<button type="button" class="btn-action-text btn-reply-comment">Ответить</button>' +
+          '<button type="button" class="btn-action-text btn-reply-comment">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
+            '</svg>' +
+            '<span>Ответить</span>' +
+          '</button>' +
         '</div>' +
         '<div class="comment-reply-form-wrap" style="display: none;">' +
           '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
@@ -1133,7 +1267,7 @@
         const isExpanded = window._expandedCommentIds.has(comment.id);
 
         const toggleRow = document.createElement('div');
-        toggleRow.className = 'comment-toggle-row';
+        toggleRow.className = 'comment-toggle-row' + (isExpanded ? ' is-expanded' : '');
 
         const toggleStemUpper = document.createElement('div');
         toggleStemUpper.className = 'comment-toggle-stem-upper';
@@ -1151,10 +1285,55 @@
         toggleBtn.className = 'btn-toggle-thread';
         toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
         toggleBtn.setAttribute('aria-controls', 'thread_' + comment.id);
-        toggleBtn.innerHTML =
-          '<span class="thread-toggle-icon" aria-hidden="true">' + (isExpanded ? '-' : '+') + '</span>' +
-          '<span class="toggle-thread-text">' + (isExpanded ? 'Скрыть комментарии' : ('Показать комментарии (' + totalDescendants + ')')) + '</span>';
+
+        const minusSvg = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="0" y1="4.5" x2="9" y2="4.5"></line></svg>';
+        const plusSvg = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="0" y1="4.5" x2="9" y2="4.5"></line><line x1="4.5" y1="0" x2="4.5" y2="9"></line></svg>';
+
+        function updateToggleContent(expanded) {
+          if (expanded) {
+            toggleBtn.innerHTML =
+              '<span class="thread-toggle-icon" aria-hidden="true">' +
+                minusSvg +
+                '<span class="sr-only">-</span>' +
+              '</span>' +
+              '<span class="toggle-thread-text sr-only">Скрыть комментарии</span>';
+            toggleBtn.setAttribute('aria-label', 'Скрыть комментарии');
+            toggleBtn.setAttribute('title', 'Скрыть комментарии');
+            toggleRow.classList.add('is-expanded');
+          } else {
+            toggleBtn.innerHTML =
+              '<span class="thread-toggle-icon" aria-hidden="true">' +
+                plusSvg +
+                '<span class="sr-only">+</span>' +
+              '</span>' +
+              '<span class="toggle-thread-text">Показать комментарии (' + totalDescendants + ')</span>';
+            toggleBtn.setAttribute('aria-label', 'Показать комментарии (' + totalDescendants + ')');
+            toggleBtn.setAttribute('title', 'Показать комментарии (' + totalDescendants + ')');
+            toggleRow.classList.remove('is-expanded');
+          }
+        }
+
+        updateToggleContent(isExpanded);
         toggleRow.appendChild(toggleBtn);
+
+        function setLocalToggleHighlight(active) {
+          toggleBtn.classList.toggle('is-tree-path-active', active);
+          const tIcon = toggleBtn.querySelector('.thread-toggle-icon');
+          if (tIcon) tIcon.classList.toggle('is-tree-path-active', active);
+          toggleStemUpper.classList.toggle('is-tree-path-active', active);
+          stemThrough.classList.toggle('is-tree-path-active', active);
+          const upper = el.querySelector('.comment-main .comment-stem-upper');
+          if (upper) upper.classList.toggle('is-tree-path-active', active);
+          const av = el.querySelector('.comment-main .comment-author-avatar');
+          if (av) av.classList.toggle('avatar-peer-highlight', active);
+        }
+
+        toggleBtn.addEventListener('mouseenter', function () { setLocalToggleHighlight(true); });
+        toggleBtn.addEventListener('mouseleave', function () { setLocalToggleHighlight(false); });
+        toggleStemUpper.addEventListener('mouseenter', function () { setLocalToggleHighlight(true); });
+        toggleStemUpper.addEventListener('mouseleave', function () { setLocalToggleHighlight(false); });
+        stemThrough.addEventListener('mouseenter', function () { setLocalToggleHighlight(true); });
+        stemThrough.addEventListener('mouseleave', function () { setLocalToggleHighlight(false); });
 
         const childrenContainer = document.createElement('div');
         childrenContainer.className = 'comment-thread-children';
@@ -1176,19 +1355,13 @@
             }
             window._expandedCommentIds.delete(comment.id);
             toggleBtn.setAttribute('aria-expanded', 'false');
-            const iconEl = toggleBtn.querySelector('.thread-toggle-icon');
-            if (iconEl) iconEl.textContent = '+';
-            const txtEl = toggleBtn.querySelector('.toggle-thread-text');
-            if (txtEl) txtEl.textContent = 'Показать комментарии (' + totalDescendants + ')';
+            updateToggleContent(false);
             childrenContainer.style.display = 'none';
             stemThrough.style.display = 'none';
           } else {
             window._expandedCommentIds.add(comment.id);
             toggleBtn.setAttribute('aria-expanded', 'true');
-            const iconEl = toggleBtn.querySelector('.thread-toggle-icon');
-            if (iconEl) iconEl.textContent = '-';
-            const txtEl = toggleBtn.querySelector('.toggle-thread-text');
-            if (txtEl) txtEl.textContent = 'Скрыть комментарии';
+            updateToggleContent(true);
             childrenContainer.style.display = 'flex';
             stemThrough.style.display = 'block';
           }
@@ -1247,7 +1420,9 @@
     const authorName = comment.authorName || 'Пользователь';
     const authorId = comment.userId || comment.user_id || '';
     const initials = getAuthorInitials(authorName);
-    const dateText = formatCommentDate(comment.createdAt || comment.created_at);
+    const rawDate = comment.createdAt || comment.created_at;
+    const absDateText = formatCommentDate(rawDate);
+    const relTimeText = formatCommentTimeRelative(rawDate);
 
     const hasUpdated = Boolean(comment.updatedAt || comment.updated_at);
     const updatedBadgeHtml = hasUpdated
@@ -1299,7 +1474,7 @@
           '<div class="comment-author-avatar">' + escapeHtml(initials) + '</div>' +
           '<div class="answer-author-meta">' +
             '<button type="button" class="btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '">' + escapeHtml(authorName) + '</button>' +
-            '<span class="comment-date">' + escapeHtml(dateText) + '</span>' +
+            '<time class="comment-date comment-time" datetime="' + escapeHtml(rawDate || '') + '" title="' + escapeHtml(absDateText) + '">' + escapeHtml(relTimeText) + '</time>' +
             '<span class="answer-updated-wrap">' + updatedBadgeHtml + '</span>' +
           '</div>' +
         '</div>' +
@@ -1660,8 +1835,11 @@
     const hash = window.location.hash;
     if (!hash) return;
     if (hash.startsWith('#comm_') || hash.startsWith('#comment-')) {
-      const rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
-      const item = window._allCommentsMap ? window._allCommentsMap[rawTargetId] : null;
+      let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+      let item = window._allCommentsMap ? (window._allCommentsMap[rawTargetId] || window._allCommentsMap['comm_' + rawTargetId]) : null;
+      if (item) {
+        rawTargetId = item.id;
+      }
       if (item) {
         // Build ancestor chain from root down to this item
         let path = [];
@@ -1855,8 +2033,8 @@
         // Pre-expand ancestors if navigating via deep link
         const hash = window.location.hash;
         if (hash && (hash.startsWith('#comm_') || hash.startsWith('#comment-'))) {
-          const rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
-          let curr = window._allCommentsMap[rawTargetId];
+          let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
+          let curr = window._allCommentsMap ? (window._allCommentsMap[rawTargetId] || window._allCommentsMap['comm_' + rawTargetId]) : null;
           let visited = new Set();
           while (curr) {
             const pId = curr.parentCommentId || curr.parent_comment_id;

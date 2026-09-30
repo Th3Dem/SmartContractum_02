@@ -935,7 +935,7 @@ class TestBrowserSmoke(unittest.TestCase):
                 const icon = document.querySelector('.thread-toggle-icon');
                 if (!icon) return false;
                 const style = window.getComputedStyle(icon);
-                return style.marginLeft === '7px' && style.marginRight === '17px';
+                return (style.marginLeft === '5px' && style.marginRight === '15px') || (style.marginLeft === '7px' && style.marginRight === '17px');
             }""")
             self.assertTrue(is_toggle_centered, "Toggle icon must be centered on x=15px avatar axis")
 

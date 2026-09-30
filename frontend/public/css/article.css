@@ -1302,6 +1302,14 @@ body,
   border-left: 2px solid var(--border-color);
 }
 
+.answer-card.is-solution-answer .answer-replies-container {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+}
+
 .answer-replies-list {
   display: flex;
   flex-direction: column;
@@ -1457,10 +1465,12 @@ body,
    ========================================================================== */
 
 :root {
+  --tree-indent-step: 28px;
   --tree-line-color: #cbd5e1;
   --tree-line-active: #475569;
   --tree-line-hover: #475569;
   --tree-highlight-bg: rgba(71, 85, 105, 0.08);
+  --toggle-border: #334155;
 }
 
 [data-theme="dark"] {
@@ -1468,6 +1478,7 @@ body,
   --tree-line-active: #94a3b8;
   --tree-line-hover: #94a3b8;
   --tree-highlight-bg: rgba(148, 163, 184, 0.12);
+  --toggle-border: #cbd5e1;
 }
 
 /* Screen reader only utility */
@@ -1487,7 +1498,7 @@ body,
 .comment-main {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
+  align-items: stretch;
   position: relative;
   transition: background-color var(--transition-fast);
 }
@@ -1528,9 +1539,22 @@ body,
   bottom: 0;
   width: 1px;
   background-color: var(--tree-line-color);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   z-index: 1;
   transition: background-color var(--transition-fast);
+}
+
+.comment-stem-upper::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  width: 12px;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
 }
 
 .comment-body-col {
@@ -1538,6 +1562,8 @@ body,
   min-width: 0;
   display: flex;
   flex-direction: column;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .comment-body-col .comment-item-header {
@@ -1554,20 +1580,40 @@ body,
   display: flex;
   align-items: center;
   min-height: 24px;
-  margin: 0;
+  margin: 4px 0 0 0;
   padding: 0;
+}
+
+.comment-toggle-row.is-expanded {
+  min-height: 20px;
+  margin-top: -26px;
+  margin-bottom: 6px;
+  z-index: 2;
 }
 
 .comment-toggle-stem-upper {
   position: absolute;
   left: 15px;
   top: 0;
-  height: 4px;
+  height: 2px;
   width: 1px;
   background-color: var(--tree-line-color);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   z-index: 1;
   transition: background-color var(--transition-fast);
+}
+
+.comment-toggle-stem-upper::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  width: 12px;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
 }
 
 .comment-stem-through {
@@ -1577,12 +1623,25 @@ body,
   bottom: 0;
   width: 1px;
   background-color: var(--tree-line-color);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   z-index: 1;
   transition: background-color var(--transition-fast);
 }
 
-/* Calm collapse/expand button */
+.comment-stem-through::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  width: 12px;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
+}
+
+/* Circular Toggle Button */
 .btn-toggle-thread {
   display: inline-flex;
   align-items: center;
@@ -1590,19 +1649,11 @@ body,
   border: none;
   padding: 0;
   margin: 0;
-  font-size: 0.82rem;
-  font-weight: 500;
   font-family: inherit;
-  color: var(--text-muted);
   cursor: pointer;
-  border-radius: var(--radius-sm);
   position: relative;
   z-index: 2;
   transition: color var(--transition-fast);
-}
-
-.btn-toggle-thread:hover {
-  color: var(--text-primary);
 }
 
 .btn-toggle-thread:focus-visible {
@@ -1611,24 +1662,34 @@ body,
 }
 
 .thread-toggle-icon {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  margin-left: 7px;
-  margin-right: 17px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin-left: 5px;
+  margin-right: 15px;
   border-radius: 50%;
-  border: 1px solid var(--tree-line-color);
+  border: 1.5px solid var(--toggle-border, var(--text-secondary));
   background: var(--bg-surface);
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  transition: all var(--transition-fast);
-  user-select: none;
   box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+  user-select: none;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.answer-card .thread-toggle-icon,
+.answer-card.is-solution-answer .answer-replies-container .thread-toggle-icon {
+  background: var(--bg-card);
+}
+
+.thread-toggle-icon svg {
+  width: 9px;
+  height: 9px;
+  stroke-width: 1.8px;
 }
 
 .btn-toggle-thread:hover .thread-toggle-icon,
@@ -1637,34 +1698,45 @@ body,
   color: var(--tree-line-active);
 }
 
+.toggle-thread-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.btn-toggle-thread:hover .toggle-thread-text {
+  color: var(--text-primary);
+}
+
 /* Continuous Tree Geometry: Children Container */
 .comment-thread-children {
   display: flex;
   flex-direction: column;
   gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--tree-indent-step);
   border-left: none;
   position: relative;
-}
-
-.comment-child-node > .comment-thread-children {
-  margin-left: 28px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .comment-child-node {
   position: relative;
-  padding-left: 28px;
   margin: 0;
+  padding: 8px 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-/* Entry Elbow (radius 8px to x = 28px, y = 15px) */
+/* Entry Elbow (radius 8px to child avatar) */
 .comment-branch-elbow {
   position: absolute;
-  left: 15px;
+  left: calc(15px - var(--tree-indent-step));
   top: 0;
-  width: 13px;
-  height: 15px;
+  width: calc(var(--tree-indent-step) - 15px);
+  height: 23px;
   border-left: 1px solid var(--tree-line-color);
   border-bottom: 1px solid var(--tree-line-color);
   border-bottom-left-radius: 8px;
@@ -1678,24 +1750,38 @@ body,
   content: '';
   position: absolute;
   top: -4px;
-  left: -6px;
-  width: 24px;
-  height: 24px;
+  left: -5px;
+  width: calc(100% + 10px);
+  height: calc(100% + 8px);
   cursor: pointer;
   z-index: 3;
+  pointer-events: auto;
 }
 
-/* Continuation Stem for siblings (top: 15px to bottom: 0) */
+/* Continuation Stem for siblings */
 .comment-branch-stem {
   position: absolute;
-  left: 15px;
-  top: 15px;
+  left: calc(15px - var(--tree-indent-step));
+  top: 23px;
   bottom: 0;
   width: 1px;
   background-color: var(--tree-line-color);
-  pointer-events: none;
   z-index: 1;
+  pointer-events: auto;
+  cursor: pointer;
   transition: background-color var(--transition-fast);
+}
+
+.comment-branch-stem::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  width: 12px;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
 }
 
 /* Full Path Highlighting */
@@ -1711,6 +1797,7 @@ body,
   border-bottom-color: var(--tree-line-active) !important;
 }
 
+.btn-toggle-thread.is-tree-path-active .thread-toggle-icon,
 .thread-toggle-icon.is-tree-path-active {
   border-color: var(--tree-line-active) !important;
   color: var(--tree-line-active) !important;
@@ -1730,9 +1817,12 @@ body,
 }
 
 .btn-action-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: transparent;
   border: none;
-  padding: 2px 6px;
+  padding: 3px 6px;
   margin: 0;
   font-family: inherit;
   font-size: 0.82rem;
@@ -1741,6 +1831,13 @@ body,
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.btn-action-text svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  stroke-width: 1.8px;
 }
 
 .btn-action-text:hover {
@@ -1848,6 +1945,10 @@ body,
 }
 
 @media (max-width: 680px) {
+  :root {
+    --tree-indent-step: 22px;
+  }
+
   .comment-gutter,
   .comment-avatar-col {
     width: 28px;
@@ -1876,27 +1977,19 @@ body,
   }
 
   .thread-toggle-icon {
-    margin-left: 6px;
+    margin-left: 4px;
     margin-right: 14px;
   }
 
-  .comment-child-node {
-    padding-left: 24px;
-  }
-
-  .comment-child-node > .comment-thread-children {
-    margin-left: 24px;
-  }
-
   .comment-branch-elbow {
-    left: 14px;
-    width: 10px;
-    height: 14px;
+    left: calc(14px - var(--tree-indent-step));
+    width: calc(var(--tree-indent-step) - 14px);
+    height: 22px;
   }
 
   .comment-branch-stem {
-    left: 14px;
-    top: 14px;
+    left: calc(14px - var(--tree-indent-step));
+    top: 22px;
   }
 
   .btn-toggle-thread,
