@@ -479,3 +479,4 @@
 [2026-09-30 21:25] | pm_bot | TASK_INIT | Инициализация итерации доработки PR #28: полная геометрия дерева Reddit (аватар-кнопка-ребенок), удаление «К родителю», подсветка полного пути (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 21:25] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации непрерывной геометрии дерева Reddit, подсветки полного пути, удаления кнопки «К родителю» и обновления тестов (Task: issue-27-sc025-threaded-comments)
 [2026-09-30 21:38] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация непрерывной геометрии Reddit дерева, подсветки полного пути и полное удаление кнопки перехода к родителю (Task: issue-27-sc025-threaded-comments)
+[2026-09-30 21:42] | git_bot | GIT_COMMITTED | Фиксация коммита непрерывной геометрии Reddit и удаления «К родителю» в feat/issue-27-sc025-threaded-comments (Task: issue-27-sc025-threaded-comments)
