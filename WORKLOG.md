@@ -530,3 +530,4 @@
 [2026-10-01 18:27] | git_bot | GIT_COMMITTED | Фиксация визуальной полировки рейтинга по sub-issues #50, #51, #52 в ветку feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 18:35] | pm_bot | TASK_INIT | Старт задачи issue-49-delete-comment: кнопка «Удалить» для собственного комментария (Task: issue-49-delete-comment)
 [2026-10-01 18:41] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация кнопки «Удалить», доступного подтверждения, серверной авторизации, сохранения потомков и синхронизации кармы (Task: issue-49-delete-comment)
+[2026-10-01 18:44] | git_bot | PR_CREATED | Открыт PR #53 для Issue #49 (Fixes #49), ветка feat/issue-49-delete-comment (Task: issue-49-delete-comment)
