@@ -517,3 +517,4 @@
 [2026-10-01 17:41] | git_bot | GIT_COMMITTED | Фиксация согласования legacy draft_id комментариев по sub-issue #43 в ветку feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
 [2026-10-01 17:44] | git_bot | GIT_COMMITTED | Слияние feat/issue-34-independent-votes-db-api в feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 18:23] | dev_bot | IMPLEMENTATION_COMPLETE | Визуальная полировка капсулы голосования: симметрия и центрирование стрелок (#50), стабильная ширина счета tabular-nums (#51), мягкий оттенок активной стрелки без резких теней (#52) (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 18:27] | git_bot | GIT_COMMITTED | Фиксация визуальной полировки рейтинга по sub-issues #50, #51, #52 в ветку feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
