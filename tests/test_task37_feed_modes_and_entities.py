@@ -242,19 +242,19 @@ class TestFeedModes(TestTask37Base):
     def test_top_feed_periods(self):
         """
         «Топ» (tab=top): supports period=day, period=week, period=month, period=all.
-        Sorted by likesCount DESC, commentsCount DESC.
+        Sorted by score DESC, commentsCount DESC, createdAt DESC.
         """
         for period in ["day", "week", "month", "all"]:
             status, data, _ = self._get_json(f"/api/articles?tab=top&period={period}")
             self.assertEqual(status, 200)
             self.assertTrue(data.get("success"))
             articles = data.get("articles", [])
-            # Verify sorting: each subsequent item has <= likes or (equal likes and <= comments)
+            # Verify sorting: each subsequent item has <= score or (equal score and <= comments)
             for i in range(len(articles) - 1):
                 cur = articles[i]
                 nxt = articles[i + 1]
-                cur_key = (cur.get("likesCount", 0), cur.get("commentsCount", 0))
-                nxt_key = (nxt.get("likesCount", 0), nxt.get("commentsCount", 0))
+                cur_key = (cur.get("score", 0), cur.get("commentsCount", 0), cur.get("createdAt", ""))
+                nxt_key = (nxt.get("score", 0), nxt.get("commentsCount", 0), nxt.get("createdAt", ""))
                 self.assertGreaterEqual(cur_key, nxt_key, f"Top sort order violated for period={period}")
 
     def test_new_feed_strict_chronological_order(self):

@@ -506,3 +506,6 @@
 [2026-10-01 10:35] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации капсулы голосования, независимых лайков, обновления счетчиков и проверок (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 10:52] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация капсулы рейтинга со стрелками, синхронизации без перезагрузки и независимых лайков (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 10:53] | git_bot | PR_CREATED | Открыт PR #38 для Issue #35 (Fixes #35), ветка feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 11:36] | py_bot | REFINEMENT_COMPLETE | Доработка бэкенда Issue #34: requireAuth в 401 ответах, BEGIN IMMEDIATE в транзакциях, canVote с учетом статуса статьи и строгая сортировка топ по score (Task: issue-34-independent-votes-db-api)
+[2026-10-01 11:37] | git_bot | GIT_COMMITTED | Фиксация коммита доработок бэкенда в feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
+
