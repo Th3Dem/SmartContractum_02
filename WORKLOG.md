@@ -498,3 +498,4 @@
 [2026-10-01 01:58] | pm_bot | VERIFICATION_PASSED | Пройден Compilation Gate (645 тестов, 0 нарушений миграционной диагностики) и визуальная приемка Issue #30 и Issue #31 в Headless Chrome (Task: issue-30-comments-navigation-and-highlighting)
 [2026-10-01 01:59] | git_bot | GIT_COMMITTED | Фиксация коммита реализации Issue #30 и #31 в feat/issue-29-comments-idempotency-and-conflicts (Task: issue-30-comments-navigation-and-highlighting)
 [2026-10-01 07:26] | dev_bot | BUGFIX_COMPLETE | Исправление проверок бейджа изменен и лимита глубины десктопа в browser smoke tests (Task: issue-30-comments-navigation-and-highlighting)
+[2026-10-01 07:27] | git_bot | GIT_COMMITTED | Фиксация фикса тестов браузерного смоука в feat/issue-29-comments-idempotency-and-conflicts и feat/issue-30-31-comments-navigation-and-polish (Task: issue-30-comments-navigation-and-highlighting)
