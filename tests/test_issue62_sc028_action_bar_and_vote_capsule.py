@@ -452,6 +452,7 @@ class TestIssue62ActionBarAndVoteCapsule(unittest.TestCase):
             (self.editor_css, "editor.css"),
             (self.card_js, "card.js"),
             (self.votes_js, "votes.js"),
+            (self.article_js, "article.js"),
             (self.editor_html, "editor.html"),
         ]:
             matches = emoji_pattern.findall(content)
@@ -467,8 +468,204 @@ class TestIssue62ActionBarAndVoteCapsule(unittest.TestCase):
             (self.editor_css, "editor.css"),
             (self.card_js, "card.js"),
             (self.votes_js, "votes.js"),
+            (self.article_js, "article.js"),
         ]:
             self.assertNotIn(em_dash, content, f"Found em dash in {name}")
+
+    # --------------------------------------------------------------------------
+    # 10. Compact Modifier for Comments and Answers (Issue #62 SC-028)
+    # --------------------------------------------------------------------------
+    def test_19_compact_modifier_exists_and_reduced_height(self):
+        """Compact modifier exists and has 25px height (25-35% reduction from 36px base)."""
+        compact_match = re.search(
+            r'\.vote-capsule--compact,\s*\.comment-vote-row\s+\.vote-capsule\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(compact_match, "Compact modifier rule must exist in theme.css")
+        compact_css = compact_match.group(1)
+
+        # Height must be in 24-26px range
+        h_match = re.search(r'height:\s*(\d+)px;', compact_css)
+        self.assertIsNotNone(h_match, "Compact height must be declared in px")
+        compact_h = int(h_match.group(1))
+        self.assertGreaterEqual(compact_h, 24, "Compact height must be at least 24px")
+        self.assertLessEqual(compact_h, 26, "Compact height must be at most 26px")
+
+        # Height reduction percentage from 36px must be 25-35%
+        reduction_pct = ((36.0 - compact_h) / 36.0) * 100.0
+        self.assertGreaterEqual(reduction_pct, 25.0, "Height reduction must be at least 25%")
+        self.assertLessEqual(reduction_pct, 35.0, "Height reduction must be at most 35%")
+
+        # Min-height and border radius
+        self.assertIn(f"min-height: {compact_h}px;", compact_css)
+        self.assertIn("border-radius: var(--radius-xs, 4px);", compact_css)
+        self.assertIn("padding: 0 2px;", compact_css)
+        self.assertIn("gap: 2px;", compact_css)
+
+        # Compact button size
+        btn_match = re.search(
+            r'\.vote-capsule--compact\s+\.vote-btn,\s*\.comment-vote-row\s+\.vote-capsule\s+\.vote-btn\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(btn_match, "Compact button rule must exist")
+        btn_css = btn_match.group(1)
+        self.assertIn("width: 22px;", btn_css)
+        self.assertIn("height: 22px;", btn_css)
+        self.assertIn("border-radius: var(--radius-xs, 4px);", btn_css)
+
+        # Compact arrow SVG size
+        svg_match = re.search(
+            r'\.vote-capsule--compact\s+\.vote-btn\s+svg,\s*\.comment-vote-row\s+\.vote-capsule\s+\.vote-btn\s+svg\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(svg_match, "Compact SVG rule must exist")
+        svg_css = svg_match.group(1)
+        self.assertIn("width: 12px;", svg_css)
+        self.assertIn("height: 12px;", svg_css)
+
+        # Compact score styling
+        score_match = re.search(
+            r'\.vote-capsule--compact\s+\.vote-score,\s*\.comment-vote-row\s+\.vote-capsule\s+\.vote-score\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(score_match, "Compact score rule must exist")
+        score_css = score_match.group(1)
+        self.assertIn("min-width: 20px;", score_css)
+        self.assertIn("font-size: 0.78rem;", score_css)
+
+        # Tightened margins in .comment-vote-row
+        cvr_match = re.search(r'\.comment-vote-row\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(cvr_match)
+        cvr_css = cvr_match.group(1)
+        self.assertIn("margin: 4px 0 3px 0;", cvr_css, "Vertical margin in comments must be tightened to 4px 0 3px 0")
+
+    def test_20_publication_and_article_vote_capsules_retain_full_36px(self):
+        """Publication cards and article page reaction capsules retain full 36px height."""
+        # Feed card vote capsule retains 36px height and 108px width
+        card_capsule = re.search(r'\.card-footer-left\s+\.vote-capsule\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(card_capsule)
+        card_css = card_capsule.group(1)
+        self.assertIn("height: 36px;", card_css)
+        self.assertIn("min-height: 36px;", card_css)
+        self.assertIn("width: 108px;", card_css)
+        self.assertIn("aspect-ratio: 3 / 1;", card_css)
+
+        # Article top reactions capsule retains 36px height
+        art_top_capsule = re.search(r'\.article-actions-group\s+\.vote-capsule\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(art_top_capsule)
+        art_top_css = art_top_capsule.group(1)
+        self.assertIn("height: 36px;", art_top_css)
+        self.assertIn("min-height: 36px;", art_top_css)
+        self.assertIn("width: 108px;", art_top_css)
+
+        # Article bottom reactions capsule retains 36px height
+        art_bot_capsule = re.search(r'\.article-bottom-actions\s+\.vote-capsule\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(art_bot_capsule)
+        art_bot_css = art_bot_capsule.group(1)
+        self.assertIn("height: 36px;", art_bot_css)
+        self.assertIn("min-height: 36px;", art_bot_css)
+        self.assertIn("width: 108px;", art_bot_css)
+
+        # card.js does not apply compact modifier
+        self.assertNotIn("isCompact: true", self.card_js, "card.js must not apply compact modifier")
+        self.assertNotIn("compact: true", self.card_js, "card.js must not apply compact modifier")
+
+    def test_21_comments_and_answers_use_compact_modifier(self):
+        """All comment and answer levels use compact modifier in votes.js and article.js."""
+        # votes.js supports options.isCompact and automatically applies it to comment and answer
+        self.assertIn("options.isCompact !== undefined", self.votes_js)
+        self.assertIn("targetType === 'comment' || targetType === 'answer'", self.votes_js)
+        self.assertIn("(isCompact ? ' vote-capsule--compact' : '')", self.votes_js)
+        self.assertIn("const svgSize = isCompact ? '12' : '14';", self.votes_js)
+
+        # article.js passes isCompact: true for comments
+        self.assertIn(
+            "targetType: 'comment',\n            targetId: comment.id,\n            score: commScore,\n            myVote: commMyVote,\n            canVote: commCanVote,\n            isAuthor: isMyComment,\n            isDeleted: Boolean(comment.isDeleted),\n            isCompact: true",
+            self.article_js,
+            "article.js must pass isCompact: true when rendering comment vote capsule"
+        )
+
+        # article.js passes isCompact: true for answers
+        self.assertIn(
+            "targetType: 'comment',\n          targetId: comment.id,\n          score: ansScore,\n          myVote: ansMyVote,\n          canVote: ansCanVote,\n          isAuthor: isMyAnswer,\n          isDeleted: Boolean(comment.isDeleted),\n          isCompact: true",
+            self.article_js,
+            "article.js must pass isCompact: true when rendering answer vote capsule"
+        )
+
+    def test_22_compact_active_3_sided_border_and_glow_scale(self):
+        """Compact active 3-sided border and soft radial glow scale to compact geometry."""
+        # Overlay sizing matches compact height (top/bottom -1px) and button zone (24px)
+        compact_overlay = re.search(
+            r'\.vote-capsule--compact::after,\s*\.comment-vote-row\s+\.vote-capsule::after\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(compact_overlay, "Compact overlay base rule must exist")
+        ov_css = compact_overlay.group(1)
+        self.assertIn("width: 24px;", ov_css)
+        self.assertIn("top: -1px;", ov_css)
+        self.assertIn("bottom: -1px;", ov_css)
+
+        # Compact upvote 3-sided border
+        up_compact = re.search(
+            r'\.vote-capsule--compact\.has-voted-up::after,\s*\.comment-vote-row\s+\.vote-capsule\.has-voted-up::after\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(up_compact, "Compact upvote overlay rule must exist")
+        up_ov_css = up_compact.group(1)
+        self.assertIn("border-top: 1px solid var(--vote-up-color, #10b981);", up_ov_css)
+        self.assertIn("border-left: 1px solid var(--vote-up-color, #10b981);", up_ov_css)
+        self.assertIn("border-bottom: 1px solid var(--vote-up-color, #10b981);", up_ov_css)
+        self.assertIn("border-right: none;", up_ov_css)
+        self.assertIn("border-top-left-radius: var(--radius-xs, 4px);", up_ov_css)
+        self.assertIn("border-bottom-left-radius: var(--radius-xs, 4px);", up_ov_css)
+
+        # Compact downvote 3-sided border
+        down_compact = re.search(
+            r'\.vote-capsule--compact\.has-voted-down::after,\s*\.comment-vote-row\s+\.vote-capsule\.has-voted-down::after\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(down_compact, "Compact downvote overlay rule must exist")
+        down_ov_css = down_compact.group(1)
+        self.assertIn("border-top: 1px solid var(--vote-down-color, #ef4444);", down_ov_css)
+        self.assertIn("border-right: 1px solid var(--vote-down-color, #ef4444);", down_ov_css)
+        self.assertIn("border-bottom: 1px solid var(--vote-down-color, #ef4444);", down_ov_css)
+        self.assertIn("border-left: none;", down_ov_css)
+        self.assertIn("border-top-right-radius: var(--radius-xs, 4px);", down_ov_css)
+        self.assertIn("border-bottom-right-radius: var(--radius-xs, 4px);", down_ov_css)
+
+        # Scaled radial glow for compact arrows
+        glow_up_compact = re.search(
+            r'\.vote-capsule--compact\.has-voted-up::before,\s*\.comment-vote-row\s+\.vote-capsule\.has-voted-up::before\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(glow_up_compact)
+        self.assertIn("radial-gradient(circle 16px at 12px 50%", glow_up_compact.group(1))
+
+        glow_down_compact = re.search(
+            r'\.vote-capsule--compact\.has-voted-down::before,\s*\.comment-vote-row\s+\.vote-capsule\.has-voted-down::before\s*\{([^}]+)\}',
+            self.theme_css
+        )
+        self.assertIsNotNone(glow_down_compact)
+        self.assertIn("radial-gradient(circle 16px at calc(100% - 12px) 50%", glow_down_compact.group(1))
+
+    def test_23_mobile_touch_retains_compact_comment_votes(self):
+        """In mobile/touch queries, comment vote capsules remain compact and are not bloated to 46px."""
+        mob_block_start = self.theme_css.find("@media (pointer: coarse), (max-width: 768px)")
+        self.assertNotEqual(mob_block_start, -1, "Mobile media query must exist")
+        mob_css = self.theme_css[mob_block_start:]
+
+        # Compact rule in mobile must maintain 25px height
+        mob_compact = re.search(
+            r'\.vote-capsule--compact,\s*\.comment-vote-row\s+\.vote-capsule[^{]*\{([^}]+)\}',
+            mob_css
+        )
+        self.assertIsNotNone(mob_compact, "Mobile compact rule must exist")
+        compact_mob_css = mob_compact.group(1)
+        self.assertIn("height: 25px;", compact_mob_css, "Mobile compact capsule must retain 25px height")
+        self.assertIn("min-height: 25px;", compact_mob_css, "Mobile compact capsule must retain min-height: 25px")
+
+        # Comment vote capsule must NOT be in the 46px rule
+        self.assertNotIn(".comment-vote-row .vote-capsule,\n  .answer-actions .vote-capsule {\n    min-height: 46px;", mob_css)
 
 
 if __name__ == "__main__":

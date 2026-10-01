@@ -114,6 +114,16 @@ class Canvas:
         self.draw_line(cx, cy + 6, cx - 5, cy + 1, color, stroke_w)
         self.draw_line(cx, cy + 6, cx + 5, cy + 1, color, stroke_w)
 
+    def draw_arrow_up_mini(self, cx: int, cy: int, color, stroke_w: int = 1):
+        self.draw_line(cx, cy + 4, cx, cy - 4, color, stroke_w)
+        self.draw_line(cx, cy - 4, cx - 3, cy, color, stroke_w)
+        self.draw_line(cx, cy - 4, cx + 3, cy, color, stroke_w)
+
+    def draw_arrow_down_mini(self, cx: int, cy: int, color, stroke_w: int = 1):
+        self.draw_line(cx, cy - 4, cx, cy + 4, color, stroke_w)
+        self.draw_line(cx, cy + 4, cx - 3, cy, color, stroke_w)
+        self.draw_line(cx, cy + 4, cx + 3, cy, color, stroke_w)
+
     def draw_arrow_right(self, cx: int, cy: int, color, stroke_w: int = 2):
         self.draw_line(cx - 5, cy, cx + 5, cy, color, stroke_w)
         self.draw_line(cx + 5, cy, cx + 1, cy - 4, color, stroke_w)
@@ -386,6 +396,108 @@ def render_action_bar_block(
         canvas.draw_arrow_right(rm_x + rm_w - 18 + arrow_shift, y + 18, rm_color, stroke_w=2)
 
 
+def render_compact_vote_capsule(
+    canvas: Canvas,
+    x: int,
+    y: int,
+    theme: str = "dark",
+    vote_state: str = "default",
+    score_val: int = 0
+):
+    if theme == "dark":
+        bg_surface = (30, 41, 59)
+        border_color = (51, 65, 85)
+        text_muted = (148, 163, 184)
+        success = (16, 185, 129)
+        error = (239, 68, 68)
+    else:
+        bg_surface = (255, 255, 255)
+        border_color = (226, 232, 240)
+        text_muted = (100, 116, 139)
+        success = (16, 185, 129)
+        error = (239, 68, 68)
+
+    elem_h = 25
+    capsule_w = 74
+    radius = 4
+    zone_w = 24
+
+    # Background and neutral border
+    canvas.draw_round_rect(x, y, capsule_w, elem_h, radius, bg_surface, border_color, 1)
+
+    # Soft radial glow
+    if vote_state == "up":
+        canvas.draw_radial_glow(x + 12, y + 12, 16, success, max_alpha=0.30 if theme == "dark" else 0.22)
+    elif vote_state == "down":
+        canvas.draw_radial_glow(x + capsule_w - 12, y + 12, 16, error, max_alpha=0.30 if theme == "dark" else 0.22)
+
+    # 3-Sided outer border overlay
+    if vote_state == "up":
+        for py in range(y + radius, y + elem_h - radius):
+            canvas.set_pixel(x, py, success, 1.0)
+        for px in range(x + radius, x + zone_w):
+            canvas.set_pixel(px, y, success, 1.0)
+            canvas.set_pixel(px, y + elem_h - 1, success, 1.0)
+        for cy in range(y, y + radius):
+            for cx in range(x, x + radius):
+                dx = (x + radius) - cx
+                dy = (y + radius) - cy
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, success, 1.0)
+        for cy in range(y + elem_h - radius, y + elem_h):
+            for cx in range(x, x + radius):
+                dx = (x + radius) - cx
+                dy = cy - (y + elem_h - radius - 1)
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, success, 1.0)
+    elif vote_state == "down":
+        right_x = x + capsule_w - 1
+        for py in range(y + radius, y + elem_h - radius):
+            canvas.set_pixel(right_x, py, error, 1.0)
+        for px in range(x + capsule_w - zone_w, right_x - radius + 1):
+            canvas.set_pixel(px, y, error, 1.0)
+            canvas.set_pixel(px, y + elem_h - 1, error, 1.0)
+        for cy in range(y, y + radius):
+            for cx in range(right_x - radius + 1, right_x + 1):
+                dx = cx - (right_x - radius)
+                dy = (y + radius) - cy
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, error, 1.0)
+        for cy in range(y + elem_h - radius, y + elem_h):
+            for cx in range(right_x - radius + 1, right_x + 1):
+                dx = cx - (right_x - radius)
+                dy = cy - (y + elem_h - radius - 1)
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, error, 1.0)
+
+    # Up arrow (zone 1, center ~12)
+    up_color = success if vote_state == "up" else text_muted
+    canvas.draw_arrow_up_mini(x + 12, y + 12, up_color, stroke_w=1)
+
+    # Score number (center ~37)
+    if score_val > 0:
+        score_color = success
+        score_text = f"+{score_val}" if score_val > 0 else "0"
+    elif score_val < 0:
+        score_color = error
+        score_text = f"{score_val}"
+    else:
+        score_color = text_muted
+        score_text = "0"
+
+    score_text_w = len(score_text) * 4 - 1
+    score_pos_x = x + (capsule_w // 2) - (score_text_w // 2)
+    canvas.draw_text_mini(score_pos_x, y + 10, score_text, score_color)
+
+    # Down arrow (zone 3, center ~capsule_w - 12)
+    down_color = error if vote_state == "down" else text_muted
+    canvas.draw_arrow_down_mini(x + capsule_w - 12, y + 12, down_color, stroke_w=1)
+
+
 def generate_all_screenshots():
     # 1. Desktop Light Theme: All Key States
     c_light = Canvas(760, 540, bg_color=(248, 250, 252))
@@ -438,6 +550,23 @@ def generate_all_screenshots():
         row_y = 30 + idx * 64
         render_action_bar_block(c_matrix, 40, row_y, theme="dark", vote_state=vs, score_val=sc, include_read_more=False)
     c_matrix.save_png(os.path.join(OUTPUT_DIR, "vote_capsule_states_matrix.png"))
+
+    # 6. Compact Comment Vote Capsule States Matrix (Issue #62 SC-028)
+    c_compact = Canvas(600, 360, bg_color=(15, 23, 42))
+    compact_states = [
+        ("Compact Neutral (Score 0, 25px height)", "default", 0),
+        ("Compact Upvoted (Green 3-sided border & glow)", "up", 1),
+        ("Compact Downvoted (Red 3-sided border & glow)", "down", -1),
+        ("Compact Independent: Score +12 with Downvote", "down", 12),
+        ("Compact Independent: Score -4 with Upvote", "up", -4),
+    ]
+    for idx, (lbl, vs, sc) in enumerate(compact_states):
+        row_y = 26 + idx * 64
+        # Left column: Dark theme
+        render_compact_vote_capsule(c_compact, 40, row_y, theme="dark", vote_state=vs, score_val=sc)
+        # Right column: Light theme
+        render_compact_vote_capsule(c_compact, 320, row_y, theme="light", vote_state=vs, score_val=sc)
+    c_compact.save_png(os.path.join(OUTPUT_DIR, "comment_vote_capsule_compact.png"))
 
     print("Successfully generated all screenshots in:", OUTPUT_DIR)
 

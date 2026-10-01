@@ -115,6 +115,7 @@
   --editor-width: 940px;
   --editor-padding-x: 48px;
   --side-zone-width: 350px;
+  --radius-xs: 4px;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -1046,13 +1047,8 @@ button.author-name:focus-visible,
 .comment-vote-row {
   display: flex;
   align-items: center;
-  margin: 7px 0 5px 0;
+  margin: 4px 0 3px 0;
   width: 100%;
-}
-
-.comment-vote-row .vote-capsule {
-  height: 36px;
-  min-height: 36px;
 }
 
 .vote-btn {
@@ -1238,6 +1234,97 @@ button.author-name:focus-visible,
   aspect-ratio: 3 / 1;
 }
 
+/* ==========================================================================
+   Compact Voting Capsule Modifier for Comments & Answers (Issue #62 SC-028)
+   ========================================================================== */
+.vote-capsule--compact,
+.comment-vote-row .vote-capsule {
+  height: 25px;
+  min-height: 25px;
+  max-height: 25px;
+  width: auto;
+  min-width: 72px;
+  max-width: 80px;
+  aspect-ratio: auto;
+  padding: 0 2px;
+  gap: 2px;
+  border-radius: var(--radius-xs, 4px);
+}
+
+.vote-capsule--compact .vote-btn,
+.comment-vote-row .vote-capsule .vote-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: var(--radius-xs, 4px);
+}
+
+.vote-capsule--compact .vote-btn svg,
+.comment-vote-row .vote-capsule .vote-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+
+.vote-capsule--compact .vote-score,
+.comment-vote-row .vote-capsule .vote-score {
+  width: auto;
+  min-width: 20px;
+  padding: 0 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Compact Soft Radial Glow Scaled to 12px Icon */
+.vote-capsule--compact.has-voted-up::before,
+.comment-vote-row .vote-capsule.has-voted-up::before {
+  background: radial-gradient(circle 16px at 12px 50%, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.10) 40%, rgba(16, 185, 129, 0.02) 70%, transparent 100%);
+}
+
+.vote-capsule--compact.has-voted-down::before,
+.comment-vote-row .vote-capsule.has-voted-down::before {
+  background: radial-gradient(circle 16px at calc(100% - 12px) 50%, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0.10) 40%, rgba(239, 68, 68, 0.02) 70%, transparent 100%);
+}
+
+/* Compact 3-Sided Outer Border Overlay (Matches 25px Height, 24px Width, 4px Radius) */
+.vote-capsule--compact::after,
+.comment-vote-row .vote-capsule::after {
+  top: -1px;
+  bottom: -1px;
+  width: 24px;
+}
+
+.vote-capsule--compact.has-voted-up::after,
+.comment-vote-row .vote-capsule.has-voted-up::after {
+  left: -1px;
+  right: auto;
+  border-top: 1px solid var(--vote-up-color, #10b981);
+  border-left: 1px solid var(--vote-up-color, #10b981);
+  border-bottom: 1px solid var(--vote-up-color, #10b981);
+  border-right: none;
+  border-top-left-radius: var(--radius-xs, 4px);
+  border-bottom-left-radius: var(--radius-xs, 4px);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.vote-capsule--compact.has-voted-down::after,
+.comment-vote-row .vote-capsule.has-voted-down::after {
+  right: -1px;
+  left: auto;
+  border-top: 1px solid var(--vote-down-color, #ef4444);
+  border-right: 1px solid var(--vote-down-color, #ef4444);
+  border-bottom: 1px solid var(--vote-down-color, #ef4444);
+  border-left: none;
+  border-top-right-radius: var(--radius-xs, 4px);
+  border-bottom-right-radius: var(--radius-xs, 4px);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vote-capsule,
   .vote-capsule::before,
@@ -1275,9 +1362,7 @@ button.author-name:focus-visible,
     height: 14px;
   }
 
-  .card-footer-left .vote-capsule,
-  .comment-vote-row .vote-capsule,
-  .answer-actions .vote-capsule {
+  .card-footer-left .vote-capsule {
     min-height: 46px;
     height: auto;
   }
@@ -1291,6 +1376,59 @@ button.author-name:focus-visible,
     justify-content: center;
     min-height: 46px;
     height: auto;
+  }
+
+  /* Compact vote capsule in mobile/touch stays compact (Issue #62 SC-028) */
+  .vote-capsule--compact,
+  .comment-vote-row .vote-capsule,
+  .answer-vote-row .vote-capsule,
+  .answer-actions .vote-capsule {
+    min-height: 25px;
+    height: 25px;
+    max-height: 25px;
+    padding: 0 2px;
+    gap: 2px;
+    width: auto;
+    min-width: 72px;
+    max-width: 80px;
+  }
+
+  .vote-capsule--compact::after,
+  .comment-vote-row .vote-capsule::after,
+  .answer-vote-row .vote-capsule::after,
+  .answer-actions .vote-capsule::after {
+    width: 24px;
+    top: -1px;
+    bottom: -1px;
+  }
+
+  .vote-capsule--compact .vote-btn,
+  .comment-vote-row .vote-capsule .vote-btn,
+  .answer-vote-row .vote-capsule .vote-btn,
+  .answer-actions .vote-capsule .vote-btn {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0;
+  }
+
+  .vote-capsule--compact .vote-btn svg,
+  .comment-vote-row .vote-capsule .vote-btn svg,
+  .answer-vote-row .vote-capsule .vote-btn svg,
+  .answer-actions .vote-capsule .vote-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .vote-capsule--compact .vote-score,
+  .comment-vote-row .vote-capsule .vote-score,
+  .answer-vote-row .vote-capsule .vote-score,
+  .answer-actions .vote-capsule .vote-score {
+    width: auto;
+    min-width: 20px;
+    padding: 0 2px;
+    font-size: 0.78rem;
   }
 }
 
