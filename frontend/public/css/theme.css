@@ -760,6 +760,7 @@ body {
   border-radius: 50%;
   color: var(--text-secondary, #94a3b8);
   cursor: pointer;
+  text-decoration: none;
   transition: all 0.2s ease;
 }
 

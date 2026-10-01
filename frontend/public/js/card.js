@@ -9,10 +9,10 @@
  * - Единый порядок блоков (Хабр-подобный компактный лейаут):
  *   1. Автор (аватар, имя, компания)
  *   2. Заголовок
- *   3. Бейджи (вопрос, все темы 1-5, формат: "Формат: <Название>", клуб)
+ *   3. Бейджи (вопрос, все темы 1-5, клуб)
  *   4. Полноширинная обложка (100% внутренней ширины, пропорции 780:350 / 78:35)
  *   5. Краткое описание (clamped до 2 строк)
- *   6. Сервисная строка (дата публикации, время чтения, сложность)
+ *   6. Сервисная строка (дата публикации, время чтения, формат публикации)
  *   7. Футер (лайк, рейтинг капсула, комментарии / ответы, закладка, читать далее)
  * - Чистоту обложки: на обложку НЕ накладываются никакие элементы сайта.
  * - Состояния: 0px при отсутствии обложки или ошибке, шиммер при загрузке, 100% ширина при показе.
@@ -87,54 +87,48 @@
       badgesHtml += '<span class="meta-badge topic-badge"' + (isPreview ? ' id="preview-card-badge-topic"' : '') + '>' + escapeHtml(item.topicTitle) + '</span>';
     }
 
-    // 2. Format Badge (only for standard publications, NOT questions)
-    if (!isQuestion) {
-      let formatTitle = '';
-      if (window.PublicationConfig && item.format && item.format !== 'not_specified' && item.format !== 'none') {
-        const f = window.PublicationConfig.getFormatById(item.format);
-        if (f && f.title && f.title.toLowerCase() !== 'не указан') {
-          formatTitle = f.title;
-        }
-      } else if (item.formatTitle) {
-        formatTitle = item.formatTitle;
-      }
-      if (formatTitle) {
-        const prefix = /^формат:\s*/i.test(formatTitle) ? '' : 'Формат: ';
-        const displayFormat = prefix + formatTitle;
-        badgesHtml += '<span class="meta-badge format-badge card-format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(displayFormat) + '</span>';
-      }
-    }
-
     if (item.clubTitle) {
       badgesHtml += '<span class="meta-badge club-badge"' + (isPreview ? ' id="preview-card-badge-club"' : '') + '>' + escapeHtml(item.clubTitle) + '</span>';
     }
 
-    // Note: Complexity badge has been moved down to the bottom service row.
-    // Note: "Демонстрационный материал" badge has been completely removed per requirements.
+    // Note: Format badge is rendered in the bottom service row.
+    // Note: Complexity and audience badges are completely removed per Issue #61.
 
     return badgesHtml;
   }
 
-  function getComplexityBadgeHtml(item, options) {
+  function getFormatBadgeHtml(item, options) {
     options = options || {};
     const isPreview = Boolean(options.isPreview);
-    let complexityTitle = '';
-    let complexityClass = '';
-    if (window.PublicationConfig && item.complexity && item.complexity !== 'none') {
-      const c = window.PublicationConfig.getComplexityById(item.complexity);
-      if (c && c.title && c.title.toLowerCase() !== 'не указан') {
-        complexityTitle = c.title;
-        complexityClass = 'complexity-' + item.complexity;
+    const isQuestion = Boolean(
+      item.materialType === 'question' ||
+      item.type === 'question' ||
+      item.material_type === 'question'
+    );
+    if (isQuestion) {
+      return '';
+    }
+
+    let formatTitle = '';
+    if (window.PublicationConfig && typeof window.PublicationConfig.getFormatById === 'function' && item.format && item.format !== 'not_specified' && item.format !== 'none') {
+      const f = window.PublicationConfig.getFormatById(item.format);
+      if (f && f.title && f.title.toLowerCase() !== 'не указан') {
+        formatTitle = f.title;
       }
-    } else if (item.complexityTitle) {
-      complexityTitle = item.complexityTitle;
-      complexityClass = item.complexity ? 'complexity-' + item.complexity : '';
+    } else if (item.formatTitle) {
+      formatTitle = item.formatTitle;
     }
-    if (complexityTitle) {
-      return '<span class="meta-badge complexity-badge ' + complexityClass + '"' + (isPreview ? ' id="preview-card-badge-complexity"' : '') + '>' + escapeHtml(complexityTitle) + '</span>';
+    if (formatTitle) {
+      // Strip any legacy 'Формат: ' prefix
+      const cleanFormat = formatTitle.replace(/^формат:\s*/i, '').trim();
+      return '<span class="meta-badge format-badge card-format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(cleanFormat) + '</span>';
     } else if (isPreview) {
-      return '<span class="meta-badge complexity-badge" id="preview-card-badge-complexity" style="display: none;"></span>';
+      return '<span class="meta-badge format-badge card-format-badge" id="preview-card-badge-format" style="display: none;"></span>';
     }
+    return '';
+  }
+
+  function getComplexityBadgeHtml() {
     return '';
   }
 
@@ -240,7 +234,7 @@
 
     // 7. Bottom in 2 compact rows:
     const readingTimeText = item.readingTime || (isPreview ? '~1 мин чтения' : '5 мин чтения');
-    const complexityBadgeHtml = getComplexityBadgeHtml(item, options);
+    const formatBadgeHtml = getFormatBadgeHtml(item, options);
 
     let subInfoHtml = '';
     if (isQuestion) {
@@ -257,7 +251,7 @@
             '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
             '<span' + (isPreview ? ' class="pub-feed-card-time" id="preview-card-time"' : '') + '>' + escapeHtml(readingTimeText) + '</span>' +
           '</div>' +
-          (complexityBadgeHtml ? ('<span class="meta-dot"></span>' + complexityBadgeHtml) : '') +
+          (formatBadgeHtml ? ('<span class="meta-dot"></span>' + formatBadgeHtml) : '') +
         '</div>';
     }
 
@@ -530,6 +524,7 @@
     escapeHtml: escapeHtml,
     cleanString: cleanString,
     getBadgesHtml: getBadgesHtml,
+    getFormatBadgeHtml: getFormatBadgeHtml,
     getComplexityBadgeHtml: getComplexityBadgeHtml,
     renderVoteCapsuleHtml: renderVoteCapsuleHtml,
     renderCardInnerHtml: renderCardInnerHtml,

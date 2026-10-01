@@ -198,8 +198,8 @@
     requestGeneration: 0,
     noSubscriptions: false,
     feedSettings: {
-      materialTypes: ['article', 'post', 'news', 'question'],
-      complexityLevels: ['all']
+      materialTypes: ['publication', 'question'],
+      complexityLevels: []
     },
     filters: {
       types: [],
@@ -743,10 +743,11 @@
 
   function syncSettingsUIFromDraft() {
     // 1. Material Types Tumblers
-    const types = draftSettingsState.materialTypes || ['article', 'post', 'news', 'question'];
+    const types = draftSettingsState.materialTypes || ['publication', 'question'];
     const typeInputs = document.querySelectorAll('input[name="feedMaterialType"]');
     typeInputs.forEach(function (inp) {
-      inp.checked = (types.indexOf(inp.value) !== -1);
+      const isPub = (inp.value === 'publication');
+      inp.checked = (types.indexOf(inp.value) !== -1 || (isPub && (types.indexOf('article') !== -1 || types.indexOf('post') !== -1 || types.indexOf('news') !== -1)));
     });
 
     // 2. Complexity Tumblers
@@ -1126,9 +1127,9 @@
   function updateFeedTitleUI() {
     const titleEl = document.querySelector('.feed-compact-title');
     const titles = {
-      all: 'Все публикации — SmartContractum',
+      all: 'Публикации — SmartContractum',
       questions: 'Вопросы — SmartContractum',
-      focus: 'Все публикации — SmartContractum',
+      focus: 'Публикации — SmartContractum',
       top: 'Топ публикаций — SmartContractum',
       new: 'Новые публикации — SmartContractum',
       subscriptions: 'Мои подписки — SmartContractum',

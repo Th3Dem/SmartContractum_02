@@ -93,13 +93,17 @@ class TestIssue54SC026FeedCardHabrLayout(unittest.TestCase):
         self.assertIn('topics: (this.topics && this.topics.length > 0) ? this.topics : []', self.pub_js)
 
     def test_03_format_separation_invariant3(self):
-        """Invariant 3: Format is rendered in a dedicated semantic group with 'Формат: <Название>'."""
+        """Invariant 3: Format is rendered in bottom service row without 'Формат: ' prefix (Issue #55, #61)."""
         self.assertIn('card-format-badge', self.card_js)
-        self.assertIn("'Формат: '", self.card_js)
         self.assertIn('.meta-badge.format-badge', self.feed_css)
+        # Format badge does NOT prefix with 'Формат: '
+        self.assertNotIn("'Формат: ' +", self.card_js)
+        # Format badge is placed in bottom service row
+        self.assertIn('formatBadgeHtml', self.card_js)
         # Format badge is not rendered for questions
-        card_badges_snippet = self.card_js[self.card_js.find('function getBadgesHtml'):self.card_js.find('function getComplexityBadgeHtml')]
-        self.assertIn('if (!isQuestion)', card_badges_snippet)
+        format_fn_snippet = self.card_js[self.card_js.find('function getFormatBadgeHtml'):self.card_js.find('function renderCardInnerHtml')]
+        self.assertIn('isQuestion', format_fn_snippet)
+        self.assertIn("return '';", format_fn_snippet)
 
     def test_04_hashtags_and_author_role_removal_invariant4(self):
         """Invariant 4: Hashtags and author role are completely removed from card.js and editor preview."""

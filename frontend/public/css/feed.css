@@ -2527,19 +2527,18 @@ button.author-name:focus-visible,
   border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
-.meta-badge.format-badge {
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
+.meta-badge.format-badge,
+.card-format-badge {
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--accent-color, #38bdf8);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 1px 7px;
 }
 
-.meta-badge.complexity-badge {
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-}
-
-/* Neutral thematic colors for complexity: no alarming red! */
+/* Calm neutral metadata badges for backward compatibility */
 .meta-badge.complexity-hard {
   background: rgba(148, 163, 184, 0.12);
   color: var(--text-secondary);

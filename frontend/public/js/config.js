@@ -131,31 +131,20 @@
       id: 'analytics',
       title: 'Аналитика',
       description: 'Глубокое исследование рынка, статистических данных или стека технологий'
+    },
+    {
+      id: 'news',
+      title: 'Новость',
+      description: 'Оперативное сообщение о событии, релизе или изменении в индустрии'
+    },
+    {
+      id: 'note',
+      title: 'Заметка',
+      description: 'Краткая мысль, наблюдение или быстрый практический совет'
     }
   ];
 
-  const COMPLEXITIES = [
-    {
-      id: 'none',
-      title: 'Не указан',
-      description: 'Материал подходит для широкого круга читателей без требований к опыту'
-    },
-    {
-      id: 'easy',
-      title: 'Простой',
-      description: 'Базовые понятия и концепции, подходит начинающим специалистам'
-    },
-    {
-      id: 'medium',
-      title: 'Средний',
-      description: 'Требуется понимание базовых технологий и практический опыт'
-    },
-    {
-      id: 'hard',
-      title: 'Сложный',
-      description: 'Глубокий технический анализ для опытных экспертов и разработчиков'
-    }
-  ];
+  const COMPLEXITIES = [];
 
   const COVER = {
     REQUIRED: false,
@@ -173,19 +162,19 @@
   };
 
   const MATERIAL_TYPES = [
-    { id: 'article', title: 'Статьи', singular: 'Статья' },
-    { id: 'post', title: 'Посты', singular: 'Пост' },
-    { id: 'news', title: 'Новости', singular: 'Новость' },
+    { id: 'publication', title: 'Публикации', singular: 'Публикация' },
     { id: 'question', title: 'Вопросы', singular: 'Вопрос' }
   ];
-  MATERIAL_TYPES.article = 'Статьи';
-  MATERIAL_TYPES.post = 'Посты';
-  MATERIAL_TYPES.news = 'Новости';
+  MATERIAL_TYPES.publication = 'Публикации';
   MATERIAL_TYPES.question = 'Вопросы';
+  // Backward-compatible read mappings
+  MATERIAL_TYPES.article = 'Публикации';
+  MATERIAL_TYPES.post = 'Публикации';
+  MATERIAL_TYPES.news = 'Публикации';
 
   const DEFAULT_FEED_SETTINGS = {
-    materialTypes: ['article', 'post', 'news', 'question'],
-    complexityLevels: ['all']
+    materialTypes: ['publication', 'question'],
+    complexityLevels: []
   };
 
   const LIMITS = {
@@ -212,6 +201,9 @@
     COVER,
 
     getMaterialTypeById(id) {
+      if (id === 'article' || id === 'post' || id === 'news') {
+        id = 'publication';
+      }
       return MATERIAL_TYPES.find(m => m.id === id) || null;
     },
 

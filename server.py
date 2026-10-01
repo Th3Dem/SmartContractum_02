@@ -44,7 +44,8 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 # Allowed configuration values
 VALID_COMPLEXITIES = {"none", "easy", "medium", "hard"}
 VALID_STATUSES = {"draft", "pending_moderation", "approved", "rejected"}
-VALID_MATERIAL_TYPES = ("article", "post", "news", "question")
+VALID_MATERIAL_TYPES = ("publication", "question")
+LEGACY_MATERIAL_TYPES = {"article": "publication", "post": "publication", "news": "publication"}
 
 # Request body size limits (Issue #8 / SC-005)
 MAX_JSON_BODY_BYTES = 5 * 1024 * 1024    # 5 МБ для стандартных JSON-запросов
@@ -1650,20 +1651,26 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
             if not isinstance(fmt, str) or not is_valid_id(fmt):
                 field_errors["format"] = "Недопустимый формат публикации."
 
-        # 4f. complexity
+        # 4f. complexity (deprecated per Issue #61: optional, not enforced)
         compl = pub_settings.get("complexity")
         if compl is not None and compl != "":
             if not isinstance(compl, str) or compl not in VALID_COMPLEXITIES:
-                field_errors["complexity"] = "Недопустимый уровень сложности публикации."
+                pass
 
-        # 4g. materialType / type
+        # 4g. materialType / type (Issue #61: publication or question)
         raw_mat = pub_settings.get("materialType") or pub_settings.get("type")
         if raw_mat is not None and raw_mat != "":
-            if not isinstance(raw_mat, str) or raw_mat.strip().lower() not in VALID_MATERIAL_TYPES:
+            if not isinstance(raw_mat, str):
                 field_errors["materialType"] = f"Недопустимый тип материала публикации. Допустимые типы: {', '.join(VALID_MATERIAL_TYPES)}"
             else:
-                pub_settings["materialType"] = raw_mat.strip().lower()
-                pub_settings["type"] = raw_mat.strip().lower()
+                norm_mat = raw_mat.strip().lower()
+                if norm_mat in LEGACY_MATERIAL_TYPES:
+                    norm_mat = LEGACY_MATERIAL_TYPES[norm_mat]
+                if norm_mat not in VALID_MATERIAL_TYPES:
+                    field_errors["materialType"] = f"Недопустимый тип материала публикации. Допустимые типы: {', '.join(VALID_MATERIAL_TYPES)}"
+                else:
+                    pub_settings["materialType"] = norm_mat
+                    pub_settings["type"] = norm_mat
 
         # 4h. coverImage
         cover_image = pub_settings.get("coverImage")
@@ -2012,6 +2019,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_user_profile(user_id)
         elif path == "/api/user/profile":
             self.handle_get_current_user_profile(parsed)
+        elif path in ("/mobile", "/emulator", "/mobile/", "/emulator/"):
+            self.send_response(302)
+            self.send_header("Location", "/mobile.html")
+            self.end_headers()
+            return
         elif path.startswith("/api/"):
             self.send_json_response(404, {
                 "success": False,
@@ -2020,6 +2032,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             # Delegate to SimpleHTTPRequestHandler for static files
             super().do_GET()
+
+    def do_HEAD(self):
+        """Handle HEAD requests."""
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path in ("/mobile", "/emulator", "/mobile/", "/emulator/"):
+            self.send_response(302)
+            self.send_header("Location", "/mobile.html")
+            self.end_headers()
+            return
+        super().do_HEAD()
 
     def do_POST(self):
         """Handle POST requests for REST API."""
@@ -3262,9 +3285,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         valid_types = []
         for t in material_types:
-            if isinstance(t, str) and t.strip().lower() in VALID_MATERIAL_TYPES:
+            if isinstance(t, str):
                 norm_t = t.strip().lower()
-                if norm_t not in valid_types:
+                if norm_t in LEGACY_MATERIAL_TYPES:
+                    norm_t = LEGACY_MATERIAL_TYPES[norm_t]
+                if norm_t in VALID_MATERIAL_TYPES and norm_t not in valid_types:
                     valid_types.append(norm_t)
 
         if not valid_types:
@@ -5102,7 +5127,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 is_author = bool(row["author_id"] == user["id"])
                 can_vote = bool(row["status"] == "approved" and not is_author)
 
-        mat_type = settings.get("materialType") or settings.get("type") or "article"
+        raw_mat = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
+        if raw_mat in ("article", "post", "news"):
+            mat_type = "publication"
+        else:
+            mat_type = raw_mat
 
         article_data = {
             "id": row["id"],
@@ -5528,8 +5557,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if art_id not in allowed_ids and draft_id not in allowed_ids:
                     continue
 
-            # Material type filtering
-            art_type = (settings.get("materialType") or settings.get("type") or "article").strip().lower()
+            # Material type filtering (Issue #61: publication or question)
+            raw_art_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
+            if raw_art_type in ("article", "post", "news"):
+                art_type = "publication"
+            else:
+                art_type = raw_art_type
+
             if tab == "questions":
                 if art_type != "question":
                     continue
@@ -5539,8 +5573,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     continue
                 if question_status == "solved" and not is_sol:
                     continue
-            elif allowed_types is not None and art_type not in allowed_types:
-                continue
+            elif allowed_types is not None:
+                norm_allowed = []
+                for at in allowed_types:
+                    at_norm = at.strip().lower()
+                    if at_norm in ("article", "post", "news"):
+                        at_norm = "publication"
+                    norm_allowed.append(at_norm)
+                if art_type not in norm_allowed:
+                    continue
 
             # Complexity filtering
             compl = (settings.get("complexity") or "").strip().lower()

@@ -1010,7 +1010,10 @@
     }
 
     setMaterialType(type) {
-      this.materialType = type || 'article';
+      if (type === 'article' || type === 'post' || type === 'news') {
+        type = 'publication';
+      }
+      this.materialType = type || 'publication';
       this.renderMaterialTypes();
 
       // Question scenarios: prompts & security warning
@@ -1428,9 +1431,8 @@
           topics: (this.topics && this.topics.length > 0) ? this.topics : [],
           topic: (this.topics && this.topics.length > 0) ? this.topics[0] : null,
           format: (this.format && this.format !== 'not_specified' && this.format !== 'none') ? this.format : null,
-          complexity: (this.complexity && this.complexity !== 'none') ? this.complexity : null,
-          materialType: this.materialType || 'article',
-          type: this.materialType || 'article',
+          materialType: (this.materialType === 'question') ? 'question' : 'publication',
+          type: (this.materialType === 'question') ? 'question' : 'publication',
           coverImage: this.coverDataUrl || null,
           description: rawDesc || 'Краткое описание публикации появится здесь...',
           readingTime: `~${minutes} мин чтения`,
@@ -1606,9 +1608,8 @@
         topics: [...this.topics],
         keywords: [...this.keywords],
         format: (this.format === 'not_specified' || !this.format) ? null : this.format,
-        complexity: this.complexity || 'none',
-        materialType: this.materialType || 'article',
-        type: this.materialType || 'article',
+        materialType: (this.materialType === 'question') ? 'question' : 'publication',
+        type: (this.materialType === 'question') ? 'question' : 'publication',
         description: this.description,
         isDescriptionCustom: this.isDescriptionCustom,
         coverDataUrl: this.coverDataUrl,
@@ -1633,8 +1634,11 @@
       this.topics = Array.isArray(settings.topics) ? [...settings.topics] : [];
       this.keywords = Array.isArray(settings.keywords) ? [...settings.keywords] : [];
       this.format = settings.format || 'not_specified';
-      this.complexity = settings.complexity || 'none';
-      this.materialType = settings.materialType || settings.type || 'article';
+      let loadedType = settings.materialType || settings.type || 'publication';
+      if (loadedType === 'article' || loadedType === 'post' || loadedType === 'news') {
+        loadedType = 'publication';
+      }
+      this.materialType = loadedType;
       this.description = typeof settings.description === 'string' ? settings.description : '';
       this.isDescriptionCustom = Boolean(settings.isDescriptionCustom || (settings.description && settings.description.length > 0));
       this.coverDataUrl = settings.coverDataUrl || null;
@@ -1677,13 +1681,12 @@
       this.topics = [];
       this.keywords = [];
       this.format = 'not_specified';
-      this.complexity = 'none';
 
-      let defaultMaterialType = 'article';
+      let defaultMaterialType = 'publication';
       try {
         if (typeof window !== 'undefined' && window.location && window.location.search) {
           const urlParams = new URLSearchParams(window.location.search);
-          if (urlParams.get('type') === 'question') {
+          if (urlParams.get('type') === 'question' || urlParams.get('mode') === 'question') {
             defaultMaterialType = 'question';
           }
         }
