@@ -511,3 +511,5 @@
 
 [2026-10-01 11:52] | dev_bot | REFINEMENT_COMPLETE | Доработка UI голосования Issue #35: двухстрочное расположение рейтинга и действий, выравнивание, гостевой режим, устранение дублирования card.js и синхронизация кэшей (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 11:53] | git_bot | GIT_COMMITTED | Фиксация коммита доработок UI голосования в feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 16:53] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация защиты от гонок и рассинхронизации сессий при голосовании (#41, #42), исполнимые поведенческие сценарии и тесты (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 17:03] | dev_bot | IMPLEMENTATION_COMPLETE | Устранение двойной подсветки капсулы (#46), разделение знака счета от голоса пользователя (#47), увеличение зон клика десктоп 32px и тач 44px (#48) (Task: issue-35-voting-arrows-and-live-counters)

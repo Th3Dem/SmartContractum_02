@@ -1119,9 +1119,13 @@ def seed_article_likes(conn: sqlite3.Connection):
         if target_likes == 0:
             continue
         created_dt = datetime.datetime.fromisoformat(art["created_at"].replace("Z", "+00:00"))
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
         for i in range(min(target_likes, len(users))):
             uid = users[i]
-            like_dt = created_dt + datetime.timedelta(hours=i * 2 + 1)
+            if art_id in ("art-07", "art-01"):
+                like_dt = max(created_dt + datetime.timedelta(hours=i * 2 + 1), now_dt - datetime.timedelta(hours=(i + 1) * 3))
+            else:
+                like_dt = created_dt + datetime.timedelta(hours=i * 2 + 1)
             likes_rows.append((art_id, uid, like_dt.strftime("%Y-%m-%dT%H:%M:%SZ")))
 
     conn.executemany("""

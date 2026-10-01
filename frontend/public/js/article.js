@@ -388,6 +388,11 @@
   window.addEventListener('smartcontractum:voted', function (e) {
     const detail = e.detail;
     if (!detail) return;
+    if (detail.sessionToken && window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function') {
+      if (detail.sessionToken !== window.SmartContractumVotes.getSessionToken()) {
+        return;
+      }
+    }
     updateVoteDataStore(detail.targetType, detail.targetId, detail.score, detail.myVote, detail.canVote);
   });
 
@@ -419,7 +424,13 @@
   }
 
   function refreshArticleAndCommentsOnAuthChange() {
-    const sessionToken = ++currentAuthSessionToken;
+    if (window.SmartContractumVotes && typeof window.SmartContractumVotes.bumpSessionToken === 'function') {
+      window.SmartContractumVotes.bumpSessionToken();
+    }
+    const sessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+      ? window.SmartContractumVotes.getSessionToken()
+      : ++currentAuthSessionToken;
+    currentAuthSessionToken = sessionToken;
     if (!currentArticle) return;
     const artId = currentArticle.id;
 
@@ -2580,10 +2591,24 @@
     }
   }
 
+  let _currentCommentsRequestSeq = 0;
+
   function loadComments(articleId) {
+    const reqSeq = ++_currentCommentsRequestSeq;
+    const sessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+      ? window.SmartContractumVotes.getSessionToken()
+      : currentAuthSessionToken;
+
     fetch('/api/articles/' + encodeURIComponent(articleId) + '/comments')
       .then(function (res) { return res.json(); })
       .then(function (data) {
+        const curSessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+          ? window.SmartContractumVotes.getSessionToken()
+          : currentAuthSessionToken;
+        if (sessionToken !== curSessionToken || reqSeq !== _currentCommentsRequestSeq) {
+          return;
+        }
+
         if (!data || !data.success) {
           console.error('Failed to load comments:', data && data.error);
           return;
@@ -2593,6 +2618,12 @@
         handleDeepLink();
       })
       .catch(function (err) {
+        const curSessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+          ? window.SmartContractumVotes.getSessionToken()
+          : currentAuthSessionToken;
+        if (sessionToken !== curSessionToken || reqSeq !== _currentCommentsRequestSeq) {
+          return;
+        }
         console.error('Failed to load comments:', err);
       });
   }
