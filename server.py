@@ -1558,10 +1558,39 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
     if not isinstance(payload, dict):
         return False, "Тело запроса должно быть JSON-объектом", {"payload": "Invalid JSON object"}
 
+    pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
+    if pub_settings is None and (payload.get("materialType") == "question" or payload.get("type") == "question"):
+        pub_settings = {}
+        payload["publicationSettings"] = pub_settings
+
+    # Resolve materialType early to apply material-specific rules (e.g. questions)
+    raw_mat = None
+    if isinstance(pub_settings, dict):
+        raw_mat = pub_settings.get("materialType") or pub_settings.get("type")
+    if not raw_mat:
+        raw_mat = payload.get("materialType") or payload.get("type")
+
+    is_question = False
+    if raw_mat is not None and isinstance(raw_mat, str):
+        norm_mat = raw_mat.strip().lower()
+        if norm_mat in LEGACY_MATERIAL_TYPES:
+            norm_mat = LEGACY_MATERIAL_TYPES[norm_mat]
+        if norm_mat in VALID_MATERIAL_TYPES:
+            raw_mat = norm_mat
+            is_question = (norm_mat == "question")
+            if isinstance(pub_settings, dict):
+                pub_settings["materialType"] = norm_mat
+                pub_settings["type"] = norm_mat
+            payload["materialType"] = norm_mat
+
     # 1. draftId
     draft_id = payload.get("draftId") or payload.get("draft_id")
     if not draft_id or not isinstance(draft_id, str) or not draft_id.strip():
-        field_errors["draftId"] = "Идентификатор черновика (draftId) обязателен."
+        if is_question:
+            draft_id = f"draft_q_{int(time.time()*1000)}"
+            payload["draftId"] = draft_id
+        else:
+            field_errors["draftId"] = "Идентификатор черновика (draftId) обязателен."
 
     # 2. title
     title = payload.get("title")
@@ -1585,21 +1614,28 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
                 payload["content"] = sanitized_html
 
     # 4. publicationSettings
-    pub_settings = payload.get("publicationSettings") or payload.get("publication_settings")
     if pub_settings is None or not isinstance(pub_settings, dict):
         field_errors["publicationSettings"] = "Настройки публикации обязательны и должны быть объектом."
     else:
         # 4a. targetAudience
         target_audience = pub_settings.get("targetAudience") or pub_settings.get("target_audience")
         if not target_audience or not isinstance(target_audience, str) or not target_audience.strip():
-            field_errors["targetAudience"] = "Целевая аудитория обязательна и должна быть выбрана."
+            if is_question:
+                target_audience = "developers"
+                pub_settings["targetAudience"] = "developers"
+            else:
+                field_errors["targetAudience"] = "Целевая аудитория обязательна и должна быть выбрана."
         elif not is_valid_id(target_audience):
             field_errors["targetAudience"] = "Указан недопустимый идентификатор целевой аудитории."
 
         # 4b. topics
         topics = pub_settings.get("topics")
-        if topics is None or not isinstance(topics, list):
-            field_errors["topics"] = "Темы публикации должны быть массивом идентификаторов."
+        if topics is None or not isinstance(topics, list) or len(topics) == 0:
+            if is_question:
+                pub_settings["topics"] = ["smart-contracts-development"]
+                topics = pub_settings["topics"]
+            else:
+                field_errors["topics"] = "Темы публикации должны быть массивом идентификаторов."
         elif len(topics) < 1 or len(topics) > 5:
             field_errors["topics"] = "Необходимо выбрать от 1 до 5 тем публикации."
         elif not all(isinstance(t, str) and is_valid_id(t) for t in topics):
@@ -1610,9 +1646,14 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
         # 4c. keywords
         keywords = pub_settings.get("keywords")
         if keywords is None or not isinstance(keywords, list):
-            field_errors["keywords"] = "Ключевые слова должны быть массивом строк."
+            if is_question:
+                pub_settings["keywords"] = []
+                keywords = []
+            else:
+                field_errors["keywords"] = "Ключевые слова должны быть массивом строк."
         elif len(keywords) < 1:
-            field_errors["keywords"] = "Необходимо указать хотя бы одно ключевое слово."
+            if not is_question:
+                field_errors["keywords"] = "Необходимо указать хотя бы одно ключевое слово."
         elif len(keywords) > 10:
             field_errors["keywords"] = "Нельзя указать более 10 ключевых слов."
         else:
@@ -1640,10 +1681,17 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
 
         # 4d. description
         desc = pub_settings.get("description")
-        if desc is None or not isinstance(desc, str):
-            field_errors["description"] = "Краткое описание обязательно."
-        elif len(desc.strip()) < 50 or len(desc.strip()) > 500:
-            field_errors["description"] = "Краткое описание должно содержать от 50 до 500 символов."
+        if is_question:
+            if not desc or not isinstance(desc, str) or not desc.strip():
+                clean_title = (title or "Вопрос сообществу").strip()
+                pub_settings["description"] = clean_title[:500]
+            elif len(desc.strip()) > 500:
+                field_errors["description"] = "Краткое описание должно содержать от 50 до 500 символов."
+        else:
+            if desc is None or not isinstance(desc, str):
+                field_errors["description"] = "Краткое описание обязательно."
+            elif len(desc.strip()) < 50 or len(desc.strip()) > 500:
+                field_errors["description"] = "Краткое описание должно содержать от 50 до 500 символов."
 
         # 4e. format
         fmt = pub_settings.get("format")
@@ -1658,12 +1706,12 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
                 pass
 
         # 4g. materialType / type (Issue #61: publication or question)
-        raw_mat = pub_settings.get("materialType") or pub_settings.get("type")
-        if raw_mat is not None and raw_mat != "":
-            if not isinstance(raw_mat, str):
+        mat_check = pub_settings.get("materialType") or pub_settings.get("type") or payload.get("materialType")
+        if mat_check is not None and mat_check != "":
+            if not isinstance(mat_check, str):
                 field_errors["materialType"] = f"Недопустимый тип материала публикации. Допустимые типы: {', '.join(VALID_MATERIAL_TYPES)}"
             else:
-                norm_mat = raw_mat.strip().lower()
+                norm_mat = mat_check.strip().lower()
                 if norm_mat in LEGACY_MATERIAL_TYPES:
                     norm_mat = LEGACY_MATERIAL_TYPES[norm_mat]
                 if norm_mat not in VALID_MATERIAL_TYPES:
@@ -1671,6 +1719,7 @@ def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict
                 else:
                     pub_settings["materialType"] = norm_mat
                     pub_settings["type"] = norm_mat
+                    payload["materialType"] = norm_mat
 
         # 4h. coverImage
         cover_image = pub_settings.get("coverImage")
@@ -2105,7 +2154,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_subscriptions_toggle()
         elif path == "/api/moderation/submit":
             self.handle_moderation_submit()
-        elif path == "/api/media/upload":
+        elif path == "/api/media/upload" or path == "/api/upload/image":
             self.handle_media_upload()
         elif path.startswith("/api/"):
             raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
@@ -4860,6 +4909,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             "success": True,
                             "status": dup_row["status"],
                             "submissionId": dup_row["id"],
+                            "id": dup_row["id"],
+                            "url": f"/article.html?id={dup_row['id']}",
                             "snapshotHash": dup_row["snapshot_hash"],
                             "createdAt": dup_row["created_at"],
                             "isDuplicate": True
@@ -4877,6 +4928,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": True,
                 "status": "pending_moderation",
                 "submissionId": submission_id,
+                "id": submission_id,
+                "url": f"/article.html?id={submission_id}",
                 "snapshotHash": snapshot_hash,
                 "createdAt": now_iso
             })
@@ -5861,6 +5914,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "meta": res.meta
             })
             return
+
+        if "multipart/form-data" in content_type:
+            boundary_match = re.search(r'boundary=([^\s;]+)', content_type)
+            if boundary_match:
+                boundary = boundary_match.group(1).strip('"\'').encode('ascii')
+                parts = raw_body.split(b'--' + boundary)
+                file_bytes = None
+                for part in parts:
+                    if b'filename=' in part:
+                        header_end = part.find(b'\r\n\r\n')
+                        if header_end != -1:
+                            file_bytes = part[header_end + 4:].rstrip(b'\r\n-')
+                            break
+                        header_end = part.find(b'\n\n')
+                        if header_end != -1:
+                            file_bytes = part[header_end + 2:].rstrip(b'\r\n-')
+                            break
+                if file_bytes:
+                    raw_body = file_bytes
 
         # Direct binary image upload
         ok, err, meta = image_decoder.decode_and_validate_image(raw_body)

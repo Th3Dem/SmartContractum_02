@@ -5,9 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Создание статьи - Antigravity Editor</title>
 
-  <!-- Early Theme Initialization -->
+  <!-- Early Theme Initialization & Question Editor Redirection -->
   <script>
     (function() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('type') === 'question' || (window.location.search && window.location.search.indexOf('type=question') !== -1)) {
+          window.location.replace('question-editor.html' + (window.location.hash || ''));
+          return;
+        }
+      } catch(e) {}
       try {
         var theme = localStorage.getItem('ag_theme') || localStorage.getItem('sc_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', theme);
