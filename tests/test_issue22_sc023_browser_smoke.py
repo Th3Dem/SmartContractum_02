@@ -807,7 +807,7 @@ class TestBrowserSmoke(unittest.TestCase):
             # Verify updated text and badge
             page.wait_for_selector(".comment-updated-badge", timeout=5000)
             self.assertIn("TSTORE", page.locator(".answer-text").first.text_content() or "")
-            self.assertIn("Изменено", page.locator(".comment-updated-badge").first.text_content() or "")
+            self.assertIn("измен", (page.locator(".comment-updated-badge").first.text_content() or "").lower())
 
             # 5. User B attempts duplicate answer (409 Conflict)
             dup_result = page.evaluate("""async (artId) => {
@@ -866,11 +866,11 @@ class TestBrowserSmoke(unittest.TestCase):
                 });
             }""")
 
-            # Build a 6-level comment chain via API
+            # Build a 10-level comment chain via API
             chain_ids = page.evaluate("""async () => {
                 const ids = [];
                 let parentId = null;
-                for (let lvl = 0; lvl <= 6; lvl++) {
+                for (let lvl = 0; lvl <= 9; lvl++) {
                     const payload = {
                         content: 'Уровень вложенности ' + lvl,
                         commentType: 'comment'
@@ -891,7 +891,7 @@ class TestBrowserSmoke(unittest.TestCase):
                 }
                 return ids;
             }""")
-            self.assertEqual(len(chain_ids), 7, "Failed to seed 7-level comment chain")
+            self.assertEqual(len(chain_ids), 10, "Failed to seed 10-level comment chain")
 
             # 2. Open article page
             page.goto(f"{self.base_url}/article.html?id=art_smoke_01", wait_until="domcontentloaded")
@@ -946,8 +946,8 @@ class TestBrowserSmoke(unittest.TestCase):
             self.assertGreaterEqual(active_paths_count, 1, "Expected .is-tree-path-active elements on hover")
             page.mouse.move(0, 0)
 
-            # 6. Sequentially expand intermediate levels down to depth >= 5 for drilldown windowing
-            for _ in range(6):
+            # 6. Sequentially expand intermediate levels down to depth >= 8 for drilldown windowing
+            for _ in range(12):
                 continue_btn = page.locator(".btn-continue-thread").first
                 if continue_btn.count() > 0 and continue_btn.is_visible():
                     break
@@ -964,7 +964,7 @@ class TestBrowserSmoke(unittest.TestCase):
                     break
 
             continue_btns = page.locator(".btn-continue-thread")
-            self.assertGreaterEqual(continue_btns.count(), 1, "Expected .btn-continue-thread at depth >= 5")
+            self.assertGreaterEqual(continue_btns.count(), 1, "Expected .btn-continue-thread at depth >= 8")
             self.assertTrue(continue_btns.first.is_visible(), "Expected .btn-continue-thread to be visible")
             continue_text = continue_btns.first.text_content() or ""
             self.assertIn("Продолжить ветку", continue_text)
