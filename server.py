@@ -536,6 +536,32 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_likes_article_user ON article_likes(article_id, user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_likes_article_id ON article_likes(article_id);")
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS article_votes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                value INTEGER NOT NULL CHECK(value IN (-1, 1)),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(article_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_votes_target ON article_votes(article_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_votes_user ON article_votes(user_id);")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS comment_votes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                comment_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                value INTEGER NOT NULL CHECK(value IN (-1, 1)),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(comment_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_votes_target ON comment_votes(comment_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_votes_user ON comment_votes(user_id);")
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS article_comments (
                 id TEXT PRIMARY KEY,
                 article_id TEXT NOT NULL,
@@ -692,6 +718,9 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         seed_database(conn)
 
     return conn
+
+
+init_moderation_db = init_db
 
 
 RU_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
@@ -2012,6 +2041,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             parts = path.strip("/").split("/")
             comm_id = parts[2] if len(parts) >= 4 else ""
             self.handle_comment_solution_toggle("", comm_id)
+        elif path.startswith("/api/articles/") and "/comments/" in path and path.endswith("/vote"):
+            parts = path.strip("/").split("/")
+            comm_id = parts[4] if len(parts) >= 6 else ""
+            self.handle_comment_vote(comm_id)
+        elif path.startswith("/api/comments/") and path.endswith("/vote"):
+            comm_id = path[len("/api/comments/"): -len("/vote")].strip("/")
+            self.handle_comment_vote(comm_id)
+        elif path.startswith("/api/articles/") and path.endswith("/vote"):
+            art_id = path[len("/api/articles/"): -len("/vote")].strip("/")
+            self.handle_article_vote(art_id)
         elif path.startswith("/api/articles/") and path.endswith("/comments"):
             art_id = path[len("/api/articles/"): -len("/comments")].strip("/")
             self.handle_post_article_comment(art_id)
@@ -3418,6 +3457,239 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "articleId": real_art_id
         })
 
+    def handle_article_vote(self, raw_id: str):
+        """
+        POST /api/articles/<id>/vote
+        Registers or cancels vote (-1, 0, 1) for the specified article.
+        Requires authenticated session (401 AUTH_REQUIRED).
+        Prevents self-voting by the author (403 SELF_VOTE_FORBIDDEN).
+        Resolves canonical article ID from id or draft_id.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "code": "AUTH_REQUIRED"
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if payload is None:
+            return
+
+        if not isinstance(payload, dict) or "value" not in payload:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Значение голоса должно быть -1, 0 или 1",
+                "code": "INVALID_VOTE_VALUE"
+            })
+            return
+
+        val = payload.get("value")
+        if type(val) is not int or isinstance(val, bool) or val not in (-1, 0, 1):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Значение голоса должно быть -1, 0 или 1",
+                "code": "INVALID_VOTE_VALUE"
+            })
+            return
+
+        if not raw_id:
+            self.send_json_response(404, {
+                "success": False,
+                "error": "Публикация не найдена",
+                "code": "NOT_FOUND"
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT id, draft_id, author_id, status FROM moderation_submissions WHERE (id = ? OR draft_id = ?) LIMIT 1",
+                    (raw_id, raw_id)
+                )
+                art_row = cur.fetchone()
+                if not art_row or art_row["status"] != "approved":
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Публикация не найдена",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                canonical_id = art_row["id"]
+                if art_row["author_id"] == user["id"]:
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Нельзя голосовать за собственную публикацию",
+                        "code": "SELF_VOTE_FORBIDDEN"
+                    })
+                    return
+
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                if val in (-1, 1):
+                    cur.execute("""
+                        INSERT INTO article_votes (article_id, user_id, value, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(article_id, user_id) DO UPDATE SET
+                            value = excluded.value,
+                            updated_at = excluded.updated_at
+                    """, (canonical_id, user["id"], val, now_iso, now_iso))
+                elif val == 0:
+                    cur.execute(
+                        "DELETE FROM article_votes WHERE article_id = ? AND user_id = ?",
+                        (canonical_id, user["id"])
+                    )
+
+                cur.execute("SELECT COALESCE(SUM(value), 0) AS score FROM article_votes WHERE article_id = ?", (canonical_id,))
+                score_row = cur.fetchone()
+                score = score_row["score"] if score_row else 0
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "targetType": "article",
+            "targetId": canonical_id,
+            "score": score,
+            "myVote": val,
+            "canVote": True
+        })
+
+    def handle_comment_vote(self, comment_id: str):
+        """
+        POST /api/comments/<id>/vote
+        Registers or cancels vote (-1, 0, 1) for the specified comment.
+        Requires authenticated session (401 AUTH_REQUIRED).
+        Prevents self-voting by the author (403 SELF_VOTE_FORBIDDEN).
+        Validates comment existence, published status, and parent publication approval.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "code": "AUTH_REQUIRED"
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if payload is None:
+            return
+
+        if not isinstance(payload, dict) or "value" not in payload:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Значение голоса должно быть -1, 0 или 1",
+                "code": "INVALID_VOTE_VALUE"
+            })
+            return
+
+        val = payload.get("value")
+        if type(val) is not int or isinstance(val, bool) or val not in (-1, 0, 1):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Значение голоса должно быть -1, 0 или 1",
+                "code": "INVALID_VOTE_VALUE"
+            })
+            return
+
+        if not comment_id:
+            comment_id = payload.get("commentId") or payload.get("comment_id") or ""
+
+        if not comment_id:
+            self.send_json_response(404, {
+                "success": False,
+                "error": "Комментарий не найден",
+                "code": "NOT_FOUND"
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id, article_id, user_id, status FROM article_comments WHERE id = ?", (comment_id,))
+                comment = cur.fetchone()
+                if not comment:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Комментарий не найден",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                if comment["status"] == "deleted":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Нельзя голосовать за удаленный комментарий",
+                        "code": "COMMENT_DELETED"
+                    })
+                    return
+
+                if comment["status"] != "published":
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Комментарий не найден",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                parent_art_id = comment["article_id"]
+                cur.execute(
+                    "SELECT id, status FROM moderation_submissions WHERE (id = ? OR draft_id = ?) LIMIT 1",
+                    (parent_art_id, parent_art_id)
+                )
+                art_row = cur.fetchone()
+                if not art_row or art_row["status"] != "approved":
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Публикация не найдена",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                if comment["user_id"] == user["id"]:
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Нельзя голосовать за собственный комментарий",
+                        "code": "SELF_VOTE_FORBIDDEN"
+                    })
+                    return
+
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                if val in (-1, 1):
+                    cur.execute("""
+                        INSERT INTO comment_votes (comment_id, user_id, value, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(comment_id, user_id) DO UPDATE SET
+                            value = excluded.value,
+                            updated_at = excluded.updated_at
+                    """, (comment_id, user["id"], val, now_iso, now_iso))
+                elif val == 0:
+                    cur.execute(
+                        "DELETE FROM comment_votes WHERE comment_id = ? AND user_id = ?",
+                        (comment_id, user["id"])
+                    )
+
+                cur.execute("SELECT COALESCE(SUM(value), 0) AS score FROM comment_votes WHERE comment_id = ?", (comment_id,))
+                score_row = cur.fetchone()
+                score = score_row["score"] if score_row else 0
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "targetType": "comment",
+            "targetId": comment_id,
+            "score": score,
+            "myVote": val,
+            "canVote": True
+        })
+
     def handle_get_article_comments(self, article_id: str):
         """
         GET /api/articles/<id>/comments
@@ -3453,8 +3725,30 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             """, (real_id,))
             rows = cur.fetchall()
 
-        curr_user = self.get_current_user()
-        curr_user_id = curr_user["id"] if curr_user else None
+            curr_user = self.get_current_user()
+            curr_user_id = curr_user["id"] if curr_user else None
+
+            all_comm_ids = [r["id"] for r in rows]
+            comment_scores = {}
+            user_comment_votes = {}
+            if all_comm_ids:
+                for i in range(0, len(all_comm_ids), 500):
+                    chunk = all_comm_ids[i:i+500]
+                    placeholders = ",".join("?" for _ in chunk)
+                    cur.execute(
+                        f"SELECT comment_id, COALESCE(SUM(value), 0) AS score FROM comment_votes WHERE comment_id IN ({placeholders}) GROUP BY comment_id",
+                        tuple(chunk)
+                    )
+                    for cr in cur.fetchall():
+                        comment_scores[cr["comment_id"]] = cr["score"]
+
+                    if curr_user_id:
+                        cur.execute(
+                            f"SELECT comment_id, value FROM comment_votes WHERE user_id = ? AND comment_id IN ({placeholders})",
+                            (curr_user_id, *chunk)
+                        )
+                        for cr in cur.fetchall():
+                            user_comment_votes[cr["comment_id"]] = cr["value"]
 
         row_map = {r["id"]: r for r in rows}
         published_rows = [r for r in rows if r["status"] == "published"]
@@ -3495,6 +3789,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             p_ans_id = r["parent_answer_id"] if "parent_answer_id" in r.keys() else None
             p_comm_id = r["parent_comment_id"] if "parent_comment_id" in r.keys() else None
             client_op_id = r["client_operation_id"] if "client_operation_id" in r.keys() else None
+            comm_score = comment_scores.get(r["id"], 0)
+            comm_my_vote = user_comment_votes.get(r["id"], 0)
+            comm_can_vote = bool(curr_user and not is_del and r["user_id"] != curr_user_id)
 
             if not is_del and is_sol and ctype == "answer":
                 has_solution = True
@@ -3516,7 +3813,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "isDeleted": True,
                     "updatedAt": upd_at,
                     "revision": rev,
-                    "createdAt": r["created_at"]
+                    "createdAt": r["created_at"],
+                    "score": comm_score,
+                    "myVote": comm_my_vote,
+                    "canVote": False
                 }
             else:
                 dto = {
@@ -3534,7 +3834,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "isDeleted": False,
                     "updatedAt": upd_at,
                     "revision": rev,
-                    "createdAt": r["created_at"]
+                    "createdAt": r["created_at"],
+                    "score": comm_score,
+                    "myVote": comm_my_vote,
+                    "canVote": comm_can_vote
                 }
 
             if ctype == "answer":
@@ -4721,6 +5024,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         discussion_count = 0
         has_solution = False
         has_liked = False
+        score = 0
+        my_vote = 0
+        can_vote = False
         with conn:
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (row["id"],))
@@ -4732,9 +5038,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             discussion_count = comments_count + answers_count
             cur.execute("SELECT 1 FROM article_comments WHERE article_id = ? AND status = 'published' AND is_solution = 1 LIMIT 1", (row["id"],))
             has_solution = cur.fetchone() is not None
+            cur.execute("SELECT COALESCE(SUM(value), 0) AS score FROM article_votes WHERE article_id = ?", (row["id"],))
+            score_row = cur.fetchone()
+            score = score_row["score"] if score_row else 0
             if user:
                 cur.execute("SELECT 1 FROM article_likes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
                 has_liked = cur.fetchone() is not None
+                cur.execute("SELECT value FROM article_votes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
+                vote_row = cur.fetchone()
+                if vote_row:
+                    my_vote = vote_row["value"]
+                can_vote = bool(row["author_id"] != user["id"])
 
         mat_type = settings.get("materialType") or settings.get("type") or "article"
 
@@ -4763,6 +5077,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "readingMinutes": reading_minutes,
             "likesCount": likes_count,
             "hasLiked": has_liked,
+            "score": score,
+            "myVote": my_vote,
+            "canVote": can_vote,
             "commentsCount": comments_count,
             "answersCount": answers_count,
             "discussionCount": discussion_count,
@@ -4778,7 +5095,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "article": article_data,
             "commentsCount": comments_count,
             "answersCount": answers_count,
-            "discussionCount": discussion_count
+            "discussionCount": discussion_count,
+            "score": score,
+            "myVote": my_vote,
+            "canVote": can_vote
         })
 
     handle_get_article_by_id = handle_get_article
@@ -4997,6 +5317,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
                 likes_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
+                cur.execute("SELECT article_id, COALESCE(SUM(value), 0) AS score FROM article_votes GROUP BY article_id")
+                article_scores = {r["article_id"]: r["score"] for r in cur.fetchall()}
+
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_comments WHERE status = 'published' AND comment_type = 'comment' GROUP BY article_id")
                 comments_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
@@ -5024,6 +5347,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 current_user = self.get_current_user()
                 user_likes = set()
+                user_votes = {}
                 exc_authors = set()
                 exc_topics = set()
                 exc_tags = set()
@@ -5032,6 +5356,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if current_user:
                     cur.execute("SELECT article_id FROM article_likes WHERE user_id = ?", (current_user["id"],))
                     user_likes = {r["article_id"] for r in cur.fetchall()}
+                    cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (current_user["id"],))
+                    user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
                     cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (current_user["id"],))
                     for r in cur.fetchall():
                         ttype = r["target_type"]
@@ -5279,6 +5605,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "subscriptionReason": subscription_reason,
                 "likesCount": likes_counts.get(art_id, 0),
                 "hasLiked": art_id in user_likes,
+                "score": article_scores.get(art_id, 0),
+                "myVote": user_votes.get(art_id, 0),
+                "canVote": bool(current_user and row["author_id"] != current_user["id"]),
                 "commentsCount": comments_counts.get(art_id, 0),
                 "answersCount": answers_counts.get(art_id, 0),
                 "discussionCount": comments_counts.get(art_id, 0) + answers_counts.get(art_id, 0),
@@ -5296,8 +5625,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # Apply sorting logic
         if has_explicit_sort:
-            if sort_by in ("popular", "rating"):
-                filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("createdAt", "")), reverse=True)
+            if sort_by == "rating":
+                filtered_articles.sort(key=lambda a: (a.get("score", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
+            elif sort_by == "popular":
+                filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
             elif sort_by == "discussed":
                 filtered_articles.sort(key=lambda a: (a.get("discussionCount", a.get("commentsCount", 0)), a.get("createdAt", "")), reverse=True)
             elif sort_by in ("oldest", "asc"):
@@ -5309,8 +5640,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Default "В фокусе": gravity popularity with fallback to createdAt
                 filtered_articles.sort(key=lambda a: (a.get("focusScore", 0.0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
             elif tab == "top":
-                # "Топ": sort by likesCount DESC, commentsCount DESC, createdAt DESC
-                filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
+                has_votes = any(a.get("score", 0) != 0 for a in filtered_articles)
+                if has_votes:
+                    # "Топ": sort by (score, commentsCount, createdAt, id) DESC
+                    filtered_articles.sort(key=lambda a: (a.get("score", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
+                else:
+                    # Fallback when no votes exist in database/feed: sort by likesCount DESC, commentsCount DESC
+                    filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
             elif tab == "new":
                 # "Новое": strict chronological DESC
                 filtered_articles.sort(key=lambda a: (a.get("createdAt", ""), a.get("id", "")), reverse=True)
