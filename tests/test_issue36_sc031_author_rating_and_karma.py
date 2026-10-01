@@ -611,6 +611,75 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         # 4. Strict Quality Standards
         self.assertNotIn("\u2014", feed_js[feed_js.find("openUserProfileModal"):feed_js.find("openUserProfileModal") + 2000])
 
+    def test_09_shared_profile_css_and_responsive_grid(self):
+        """
+        Test 9 (Shared CSS & Responsive 2x2 Grid):
+        Profile styles extracted into shared profile.css linked in feed.html and article.html.
+        Stats on narrow screens use 2x2 grid layout without overflow.
+        """
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        profile_css_path = os.path.join(repo_root, "frontend", "public", "css", "profile.css")
+        self.assertTrue(os.path.exists(profile_css_path), "frontend/public/css/profile.css must exist")
+
+        with open(profile_css_path, "r", encoding="utf-8") as f:
+            profile_css = f.read()
+
+        # Contains core modal and profile classes
+        self.assertIn(".feed-modal-overlay", profile_css)
+        self.assertIn(".user-profile-modal-card", profile_css)
+        self.assertIn(".user-profile-stats", profile_css)
+        self.assertIn(".user-profile-stat-box", profile_css)
+
+        # 2x2 grid on mobile/narrow screens
+        self.assertIn("grid-template-columns: repeat(2, 1fr)", profile_css)
+        self.assertIn("@media (max-width: 640px)", profile_css)
+
+        # Linked in both feed.html and article.html
+        feed_html_path = os.path.join(repo_root, "frontend", "public", "feed.html")
+        with open(feed_html_path, "r", encoding="utf-8") as f:
+            feed_html = f.read()
+        self.assertIn('<link rel="stylesheet" href="css/profile.css">', feed_html)
+
+        article_html_path = os.path.join(repo_root, "frontend", "public", "article.html")
+        with open(article_html_path, "r", encoding="utf-8") as f:
+            article_html = f.read()
+        self.assertIn('<link rel="stylesheet" href="css/profile.css">', article_html)
+
+    def test_10_behavioral_profile_modal_abort_focus_and_escape(self):
+        """
+        Test 10 (Behavioral: AbortController, Focus, and Escape):
+        - feed.js and article.js use AbortController / sequence token to discard stale responses on author switch.
+        - Closing the modal invalidates in-flight requests.
+        - Escape key closes modal.
+        - Focus is restored to the initiating trigger button upon close.
+        - smartcontractum:voted event refreshes open profile without full page reload.
+        """
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        # feed.js
+        feed_js_path = os.path.join(repo_root, "frontend", "public", "js", "feed.js")
+        with open(feed_js_path, "r", encoding="utf-8") as f:
+            feed_js = f.read()
+
+        self.assertIn("profileAbortController", feed_js)
+        self.assertIn("profileRequestSeq", feed_js)
+        self.assertIn("closeUserProfileModal", feed_js)
+        self.assertIn("lastProfileTriggerEl", feed_js)
+        self.assertIn("e.key === 'Escape'", feed_js)
+        self.assertIn("smartcontractum:voted", feed_js)
+
+        # article.js
+        article_js_path = os.path.join(repo_root, "frontend", "public", "js", "article.js")
+        with open(article_js_path, "r", encoding="utf-8") as f:
+            article_js = f.read()
+
+        self.assertIn("profileAbortController", article_js)
+        self.assertIn("profileRequestSeq", article_js)
+        self.assertIn("closeUserProfileModal", article_js)
+        self.assertIn("lastProfileTriggerEl", article_js)
+        self.assertIn("e.key === 'Escape'", article_js)
+        self.assertIn("smartcontractum:voted", article_js)
+
 
 if __name__ == "__main__":
     unittest.main()

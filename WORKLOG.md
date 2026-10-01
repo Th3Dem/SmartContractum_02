@@ -510,4 +510,8 @@
 [2026-10-01 10:57] | pm_bot | DEV_ASSIGN | Назначение py_bot для реализации серверной агрегации рейтинга автора и тестирования инвариантов (Task: issue-36-author-rating-and-karma)
 [2026-10-01 11:04] | py_bot | IMPLEMENTATION_COMPLETE | Реализация агрегации рейтинга автора в server.py и тестовый сьют инвариантов (Task: issue-36-author-rating-and-karma)
 [2026-10-01 11:09] | git_bot | PR_CREATED | Открыт PR #39 для Issue #36 (Fixes #36), ветка feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
-
+[2026-10-01 11:36] | py_bot | REFINEMENT_COMPLETE | Доработка бэкенда Issue #34: requireAuth в 401 ответах, BEGIN IMMEDIATE в транзакциях, canVote с учетом статуса статьи и строгая сортировка топ по score (Task: issue-34-independent-votes-db-api)
+[2026-10-01 11:37] | git_bot | GIT_COMMITTED | Фиксация коммита доработок бэкенда в feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
+[2026-10-01 11:52] | dev_bot | REFINEMENT_COMPLETE | Доработка UI голосования Issue #35: двухстрочное расположение рейтинга и действий, выравнивание, гостевой режим, устранение дублирования card.js и синхронизация кэшей (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 11:53] | git_bot | GIT_COMMITTED | Фиксация коммита доработок UI голосования в feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 12:25] | dev_bot | REFINEMENT_COMPLETE | Доработка профиля автора Issue #36: общий компонент profile.css, сетка 2x2, AbortController, возврат фокуса и Escape (Task: issue-36-author-rating-and-karma)

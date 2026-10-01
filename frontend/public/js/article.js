@@ -334,11 +334,69 @@
     if (modal) modal.style.display = 'none';
   }
 
+  let currentAuthSessionToken = 0;
+
+  function updateVoteDataStore(targetType, targetId, score, myVote, canVote) {
+    if (!targetId) return;
+
+    if (targetType === 'article' && currentArticle && (currentArticle.id === targetId || currentArticle.draftId === targetId)) {
+      currentArticle.score = score;
+      currentArticle.myVote = myVote;
+      if (canVote !== undefined) {
+        currentArticle.canVote = canVote;
+      }
+    }
+
+    function updateCommentObj(item) {
+      if (!item) return;
+      if (item.id === targetId) {
+        item.score = score;
+        item.myVote = myVote;
+        if (canVote !== undefined) {
+          item.canVote = canVote;
+        }
+      }
+    }
+
+    if (window._allCommentsMap && window._allCommentsMap[targetId]) {
+      updateCommentObj(window._allCommentsMap[targetId]);
+    }
+
+    if (window._commentsResponseData) {
+      const resp = window._commentsResponseData;
+      if (Array.isArray(resp.comments)) {
+        resp.comments.forEach(updateCommentObj);
+      }
+      if (Array.isArray(resp.answers)) {
+        resp.answers.forEach(function (ans) {
+          updateCommentObj(ans);
+          if (Array.isArray(ans.comments)) {
+            ans.comments.forEach(updateCommentObj);
+          }
+        });
+      }
+      if (Array.isArray(resp.questionComments)) {
+        resp.questionComments.forEach(updateCommentObj);
+      }
+    }
+
+    if (Array.isArray(window._rawCommentsData)) {
+      window._rawCommentsData.forEach(updateCommentObj);
+    }
+  }
+
+  window.addEventListener('smartcontractum:voted', function (e) {
+    const detail = e.detail;
+    if (!detail) return;
+    updateVoteDataStore(detail.targetType, detail.targetId, detail.score, detail.myVote, detail.canVote);
+  });
+
   function syncArticleVoteCapsules(article) {
     if (!article) return;
     const authorId = article.authorId || article.author_id;
-    const isAuthor = Boolean(currentUser && (currentUser.id === authorId));
-    const canVote = article.canVote !== false && !isAuthor;
+    const isAuthor = article.isAuthor !== undefined ? Boolean(article.isAuthor) : Boolean(currentUser && (currentUser.id === authorId));
+    const isGuest = !currentUser || Boolean(currentUser.isGuest);
+    const canVote = article.canVote !== undefined ? Boolean(article.canVote) : (!isAuthor && !isGuest);
     const score = article.score !== undefined ? article.score : 0;
     const myVote = article.myVote !== undefined ? article.myVote : 0;
 
@@ -360,6 +418,43 @@
     if (bottomEl) bottomEl.innerHTML = capsuleHtml;
   }
 
+  function refreshArticleAndCommentsOnAuthChange() {
+    const sessionToken = ++currentAuthSessionToken;
+    if (!currentArticle) return;
+    const artId = currentArticle.id;
+
+    // Immediately clear personalized vote state in currentArticle so old vote does not flash
+    if (!currentUser) {
+      currentArticle.myVote = 0;
+      currentArticle.canVote = false;
+      currentArticle.isAuthor = false;
+      syncArticleVoteCapsules(currentArticle);
+    } else {
+      currentArticle.myVote = 0;
+      currentArticle.isAuthor = Boolean(currentUser.id === (currentArticle.authorId || currentArticle.author_id));
+      syncArticleVoteCapsules(currentArticle);
+    }
+
+    // Re-fetch personalized article state
+    fetch('/api/articles/' + encodeURIComponent(artId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (sessionToken !== currentAuthSessionToken) return; // Stale session response discarded
+        if (data && data.success && data.article) {
+          const fresh = data.article;
+          currentArticle.score = fresh.score !== undefined ? fresh.score : currentArticle.score;
+          currentArticle.myVote = fresh.myVote !== undefined ? fresh.myVote : 0;
+          currentArticle.canVote = fresh.canVote !== undefined ? fresh.canVote : false;
+          currentArticle.isAuthor = fresh.isAuthor !== undefined ? fresh.isAuthor : Boolean(currentUser && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
+          syncArticleVoteCapsules(currentArticle);
+        }
+      })
+      .catch(function () {});
+
+    // Re-fetch comments with personalized votes
+    loadComments(artId);
+  }
+
   function initAuthControls() {
     const loginBtn = document.getElementById('headerLoginBtn');
     if (loginBtn) {
@@ -375,10 +470,7 @@
                 currentMyAnswerId = null;
                 updateAuthUI();
                 showToast('Вы вышли из системы');
-                if (currentArticle) {
-                  syncArticleVoteCapsules(currentArticle);
-                  loadComments(currentArticle.id);
-                }
+                refreshArticleAndCommentsOnAuthChange();
               });
           }
         } else {
@@ -421,10 +513,7 @@
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
-              if (currentArticle) {
-                syncArticleVoteCapsules(currentArticle);
-                loadComments(currentArticle.id);
-              }
+              refreshArticleAndCommentsOnAuthChange();
             }
           });
       });
@@ -448,10 +537,7 @@
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
-              if (currentArticle) {
-                syncArticleVoteCapsules(currentArticle);
-                loadComments(currentArticle.id);
-              }
+              refreshArticleAndCommentsOnAuthChange();
             }
           });
       });
@@ -466,6 +552,15 @@
     if (questionLoginBtn) {
       questionLoginBtn.addEventListener('click', openAuthModal);
     }
+
+    window.addEventListener('smartcontractum:auth-changed', function (e) {
+      if (e.detail && e.detail.user !== undefined) {
+        currentUser = e.detail.user;
+        window.currentUser = e.detail.user;
+      }
+      updateAuthUI();
+      refreshArticleAndCommentsOnAuthChange();
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -1168,8 +1263,10 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="comment-actions">' +
+        '<div class="comment-vote-row">' +
           commVoteCapsuleHtml +
+        '</div>' +
+        '<div class="comment-actions">' +
           editBtnHtml +
           '<button type="button" class="btn-action-text btn-reply-comment">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -1749,8 +1846,10 @@
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="answer-actions">' +
+      '<div class="comment-vote-row answer-vote-row">' +
         ansVoteCapsuleHtml +
+      '</div>' +
+      '<div class="answer-actions">' +
         editBtnHtml +
         '<button type="button" class="btn btn-secondary btn-sm btn-reply-answer">Комментировать ответ</button>' +
       '</div>' +
@@ -3519,17 +3618,55 @@
     const userModalBody = document.getElementById('userProfileModalBody');
     const btnCloseUserModal = document.getElementById('btnCloseUserProfileModal');
     let currentOpenUserId = null;
+    let profileRequestSeq = 0;
+    let profileAbortController = null;
+    let lastProfileTriggerEl = null;
 
-    function openUserProfileModal(userId) {
+    function closeUserProfileModal() {
+      if (!userModal) return;
+      if (profileAbortController) {
+        try { profileAbortController.abort(); } catch (e) {}
+        profileAbortController = null;
+      }
+      currentOpenUserId = null;
+      profileRequestSeq++;
+      userModal.style.display = 'none';
+      if (lastProfileTriggerEl && typeof lastProfileTriggerEl.focus === 'function') {
+        try { lastProfileTriggerEl.focus(); } catch (e) {}
+      }
+      lastProfileTriggerEl = null;
+    }
+
+    function openUserProfileModal(userId, triggerEl, isSilentRefresh) {
       if (!userModal || !userModalBody) return;
-      currentOpenUserId = userId;
-      userModalBody.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted);">Загрузка профиля...</div>';
-      userModal.style.display = 'flex';
+      if (triggerEl) {
+        lastProfileTriggerEl = triggerEl;
+      } else if (!isSilentRefresh) {
+        lastProfileTriggerEl = document.activeElement;
+      }
 
-      fetch('/api/users/' + encodeURIComponent(userId))
+      currentOpenUserId = userId;
+      const seq = ++profileRequestSeq;
+
+      if (profileAbortController) {
+        try { profileAbortController.abort(); } catch (e) {}
+      }
+      profileAbortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+      if (!isSilentRefresh) {
+        userModalBody.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted);">Загрузка профиля...</div>';
+        userModal.style.display = 'flex';
+        if (btnCloseUserModal) {
+          try { btnCloseUserModal.focus(); } catch (e) {}
+        }
+      }
+
+      const fetchOpts = profileAbortController ? { signal: profileAbortController.signal } : {};
+
+      fetch('/api/users/' + encodeURIComponent(userId), fetchOpts)
         .then(function (res) { return res.ok ? res.json() : null; })
         .then(function (data) {
-          if (currentOpenUserId !== userId) return;
+          if (seq !== profileRequestSeq || currentOpenUserId !== userId) return;
           const u = (data && (data.user || data.profile)) || data;
           if (!data || !data.success || !u || (!u.name && !u.id)) {
             userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Профиль пользователя не найден</div>';
@@ -3570,25 +3707,26 @@
             '</div>' +
             articlesHtml;
         })
-        .catch(function () {
-          if (currentOpenUserId === userId) {
-            userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Ошибка загрузки профиля</div>';
-          }
+        .catch(function (err) {
+          if (err && err.name === 'AbortError') return;
+          if (seq !== profileRequestSeq || currentOpenUserId !== userId) return;
+          userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Ошибка загрузки профиля</div>';
         });
     }
 
     if (btnCloseUserModal && userModal) {
-      btnCloseUserModal.addEventListener('click', function () {
-        userModal.style.display = 'none';
-        currentOpenUserId = null;
-      });
+      btnCloseUserModal.addEventListener('click', closeUserProfileModal);
       userModal.addEventListener('click', function (e) {
-        if (e.target === userModal) {
-          userModal.style.display = 'none';
-          currentOpenUserId = null;
-        }
+        if (e.target === userModal) closeUserProfileModal();
       });
     }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && userModal && userModal.style.display !== 'none') {
+        e.preventDefault();
+        closeUserProfileModal();
+      }
+    });
 
     document.addEventListener('click', function (e) {
       const authorBtn = e.target.closest('.btn-author-profile');
@@ -3597,6 +3735,7 @@
         e.stopPropagation();
         const authorId = authorBtn.getAttribute('data-author-id') || authorBtn.getAttribute('data-user-id');
         if (authorId) {
+          lastProfileTriggerEl = authorBtn;
           openUserProfileModal(authorId);
         }
       }
@@ -3604,7 +3743,7 @@
 
     window.addEventListener('smartcontractum:voted', function () {
       if (currentOpenUserId && userModal && userModal.style.display !== 'none') {
-        openUserProfileModal(currentOpenUserId);
+        openUserProfileModal(currentOpenUserId, null, true);
       }
     });
   }
