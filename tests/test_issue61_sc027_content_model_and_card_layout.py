@@ -53,6 +53,8 @@ class TestIssue61SC027ContentModelAndCardLayout(unittest.TestCase):
             cls.config_js = f.read()
         with open(os.path.join(FRONTEND_DIR, "css", "feed.css"), "r", encoding="utf-8") as f:
             cls.feed_css = f.read()
+        with open(os.path.join(FRONTEND_DIR, "css", "editor.css"), "r", encoding="utf-8") as f:
+            cls.editor_css = f.read()
         with open(os.path.join(FRONTEND_DIR, "editor.html"), "r", encoding="utf-8") as f:
             cls.editor_html = f.read()
         with open(os.path.join(FRONTEND_DIR, "feed.html"), "r", encoding="utf-8") as f:
@@ -285,6 +287,7 @@ class TestIssue61SC027ContentModelAndCardLayout(unittest.TestCase):
             os.path.join(FRONTEND_DIR, "js", "feed.js"),
             os.path.join(FRONTEND_DIR, "js", "publication.js"),
             os.path.join(FRONTEND_DIR, "css", "feed.css"),
+            os.path.join(FRONTEND_DIR, "css", "editor.css"),
             os.path.join(FRONTEND_DIR, "editor.html"),
             os.path.join(FRONTEND_DIR, "feed.html"),
         ]
@@ -297,6 +300,69 @@ class TestIssue61SC027ContentModelAndCardLayout(unittest.TestCase):
             # Ensure no local server IPs
             self.assertNotIn("192.168.", content)
             self.assertNotIn("10.0.", content)
+
+    # Format dropdown tests
+    def test_17_format_dropdown_trigger_and_menu_in_editor_html(self):
+        """Verify format dropdown trigger button and dropdown menu container in editor.html."""
+        # Section 4 contains wrap and trigger button
+        self.assertIn('id="pub-format-dropdown-wrap"', self.editor_html)
+        self.assertIn('id="pub-format-trigger"', self.editor_html)
+        self.assertIn('class="pub-format-dropdown-trigger"', self.editor_html)
+        self.assertIn('aria-haspopup="listbox"', self.editor_html)
+        self.assertIn('aria-expanded="false"', self.editor_html)
+
+        # Trigger text defaults to "Не указан"
+        self.assertIn('id="pub-format-trigger-text"', self.editor_html)
+        self.assertIn('>Не указан<', self.editor_html)
+
+        # SVG chevron icon is present
+        self.assertIn('class="pub-format-chevron"', self.editor_html)
+        self.assertIn('<polyline points="6 9 12 15 18 9"></polyline>', self.editor_html)
+
+        # Menu container has role="listbox"
+        self.assertIn('id="pub-format-options"', self.editor_html)
+        self.assertIn('class="pub-format-dropdown-menu"', self.editor_html)
+        self.assertIn('role="listbox"', self.editor_html)
+
+    def test_18_dropdown_supports_all_formats_including_news_and_note(self):
+        """Verify dropdown supports all formats from config including news, note, and not_specified."""
+        # Formats in config.js
+        self.assertIn("id: 'news'", self.config_js)
+        self.assertIn("id: 'note'", self.config_js)
+
+        # publication.js handles not_specified and all formats from PublicationConfig.FORMATS
+        self.assertIn("data-format-id=\"not_specified\"", self.pub_js)
+        self.assertIn("role=\"option\"", self.pub_js)
+        self.assertIn("aria-selected=", self.pub_js)
+        self.assertIn("window.PublicationConfig.FORMATS", self.pub_js)
+
+    def test_19_format_selection_reflects_in_state_and_preview(self):
+        """Verify selecting format updates state, trigger text, and feed card preview."""
+        # setFormat updates this.format, re-renders formats, updates trigger text, and updates preview
+        self.assertIn("setFormat(fmtId)", self.pub_js)
+        self.assertIn("this.format = fmtId;", self.pub_js)
+        self.assertIn("this.updateFormatTriggerText();", self.pub_js)
+        self.assertIn("this.updateCardPreview();", self.pub_js)
+
+        # Dropdown open/close/toggle logic
+        self.assertIn("openFormatDropdown()", self.pub_js)
+        self.assertIn("closeFormatDropdown(", self.pub_js)
+        self.assertIn("toggleFormatDropdown()", self.pub_js)
+
+        # Escape key handling closes dropdown first
+        self.assertIn("this.isFormatDropdownOpen", self.pub_js)
+        self.assertIn("this.closeFormatDropdown(true);", self.pub_js)
+
+    def test_20_format_dropdown_styles_in_editor_css(self):
+        """Verify editor.css provides styling for dropdown trigger, menu, and options with theme variables."""
+        self.assertIn(".pub-format-dropdown-wrap", self.editor_css)
+        self.assertIn(".pub-format-dropdown-trigger", self.editor_css)
+        self.assertIn(".pub-format-dropdown-menu", self.editor_css)
+        self.assertIn(".pub-format-option", self.editor_css)
+        self.assertIn(".pub-format-chevron", self.editor_css)
+        self.assertIn("var(--bg-surface)", self.editor_css)
+        self.assertIn("var(--accent-color)", self.editor_css)
+        self.assertIn("var(--border-color)", self.editor_css)
 
 
 if __name__ == "__main__":

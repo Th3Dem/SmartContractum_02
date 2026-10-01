@@ -118,7 +118,11 @@
       this.keywordsErrorEl = document.getElementById('pub-keywords-error');
 
       // Section 4: Format
+      this.formatDropdownWrap = document.getElementById('pub-format-dropdown-wrap');
+      this.formatTriggerBtn = document.getElementById('pub-format-trigger');
+      this.formatTriggerText = document.getElementById('pub-format-trigger-text');
       this.formatOptionsEl = document.getElementById('pub-format-options');
+      this.isFormatDropdownOpen = false;
 
       // Section 5: Complexity
       this.complexityOptionsEl = document.getElementById('pub-complexity-options');
@@ -235,6 +239,63 @@
         this.keywordsInput.addEventListener('paste', (e) => this.handleKeywordsPaste(e));
         this.keywordsInput.addEventListener('blur', () => this.commitUncommittedKeyword());
       }
+
+      // Section 4: Format dropdown trigger and outside click
+      if (this.formatTriggerBtn) {
+        this.formatTriggerBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleFormatDropdown();
+        });
+      }
+
+      if (this.formatDropdownWrap) {
+        this.formatDropdownWrap.addEventListener('keydown', (e) => {
+          if (!this.isFormatDropdownOpen) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+              if (document.activeElement === this.formatTriggerBtn) {
+                e.preventDefault();
+                this.openFormatDropdown();
+              }
+            }
+            return;
+          }
+
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.closeFormatDropdown(true);
+            return;
+          }
+
+          const options = Array.from(this.formatOptionsEl ? this.formatOptionsEl.querySelectorAll('.pub-format-option') : []);
+          if (options.length === 0) return;
+          const currentIndex = options.indexOf(document.activeElement);
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const nextIndex = (currentIndex + 1) % options.length;
+            if (options[nextIndex]) options[nextIndex].focus();
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prevIndex = (currentIndex - 1 + options.length) % options.length;
+            if (options[prevIndex]) options[prevIndex].focus();
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            if (document.activeElement && document.activeElement.classList.contains('pub-format-option')) {
+              e.preventDefault();
+              const fid = document.activeElement.getAttribute('data-format-id');
+              this.setFormat(fid);
+              this.closeFormatDropdown(true);
+            }
+          }
+        });
+      }
+
+      // Close format dropdown on outside click
+      document.addEventListener('click', (e) => {
+        if (this.isFormatDropdownOpen && this.formatDropdownWrap && !this.formatDropdownWrap.contains(e.target)) {
+          this.closeFormatDropdown();
+        }
+      });
 
       // Section 5: Complexity change
       if (this.complexityOptionsEl) {
@@ -536,6 +597,7 @@
         this.extractDescriptionFromEditor();
       }
 
+      this.closeFormatDropdown();
       this.render();
       this.updateCardPreview();
 
@@ -548,6 +610,8 @@
 
     closeModal(save = true) {
       if (!this.modalOverlay) return;
+
+      this.closeFormatDropdown();
 
       if (save) {
         this.commitUncommittedKeyword();
@@ -574,6 +638,12 @@
       if (!this.isOpen) return;
 
       if (e.key === 'Escape') {
+        if (this.isFormatDropdownOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.closeFormatDropdown(true);
+          return;
+        }
         e.preventDefault();
         this.closeModal(true);
         return;
@@ -929,41 +999,123 @@
     }
 
     /* ==========================================================================
-       Section 4: Format (11 formats + 'not_specified')
+       Section 4: Format Dropdown (formats + 'not_specified')
        ========================================================================== */
+    openFormatDropdown() {
+      if (!this.formatOptionsEl || !this.formatTriggerBtn) return;
+      this.isFormatDropdownOpen = true;
+      this.formatOptionsEl.style.display = 'flex';
+      this.formatOptionsEl.classList.add('is-open');
+      this.formatTriggerBtn.setAttribute('aria-expanded', 'true');
+      this.formatTriggerBtn.classList.add('is-open');
+
+      const selectedOpt = this.formatOptionsEl.querySelector('.pub-format-option.is-selected') ||
+                          this.formatOptionsEl.querySelector('.pub-format-option');
+      if (selectedOpt) {
+        selectedOpt.focus();
+      }
+    }
+
+    closeFormatDropdown(returnFocus = false) {
+      if (!this.formatOptionsEl || !this.formatTriggerBtn) return;
+      this.isFormatDropdownOpen = false;
+      this.formatOptionsEl.style.display = 'none';
+      this.formatOptionsEl.classList.remove('is-open');
+      this.formatTriggerBtn.setAttribute('aria-expanded', 'false');
+      this.formatTriggerBtn.classList.remove('is-open');
+      if (returnFocus && this.formatTriggerBtn) {
+        this.formatTriggerBtn.focus();
+      }
+    }
+
+    toggleFormatDropdown() {
+      if (this.isFormatDropdownOpen) {
+        this.closeFormatDropdown();
+      } else {
+        this.openFormatDropdown();
+      }
+    }
+
+    updateFormatTriggerText() {
+      if (!this.formatTriggerText) return;
+      const currentFmtId = this.format;
+      let currentTitle = 'Не указан';
+      if (currentFmtId && currentFmtId !== 'not_specified' && currentFmtId !== 'none') {
+        const formats = (window.PublicationConfig && Array.isArray(window.PublicationConfig.FORMATS))
+          ? window.PublicationConfig.FORMATS
+          : (this.config.FORMATS || []);
+        const found = formats.find(f => f.id === currentFmtId);
+        if (found) {
+          currentTitle = found.title;
+        } else {
+          currentTitle = currentFmtId;
+        }
+      }
+      this.formatTriggerText.textContent = currentTitle;
+    }
+
     renderFormats() {
       if (!this.formatOptionsEl) return;
 
+      const formats = (window.PublicationConfig && Array.isArray(window.PublicationConfig.FORMATS))
+        ? window.PublicationConfig.FORMATS
+        : (this.config.FORMATS || []);
+
+      const isNotSpecified = !this.format || this.format === 'not_specified' || this.format === 'none';
+
       let html = `
-        <div class="pub-format-card ${this.format === 'not_specified' ? 'is-selected' : ''}" data-format-id="not_specified">
-          <div class="pub-format-title">Не указан</div>
-          <div class="pub-format-desc">Формат статьи не выбран</div>
+        <div class="pub-format-option pub-format-card ${isNotSpecified ? 'is-selected' : ''}" role="option" aria-selected="${isNotSpecified ? 'true' : 'false'}" data-format-id="not_specified" tabindex="0">
+          <div class="pub-format-option-info">
+            <div class="pub-format-title">Не указан</div>
+            <div class="pub-format-desc">Формат статьи не выбран</div>
+          </div>
+          ${isNotSpecified ? `
+            <span class="pub-format-check-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </span>
+          ` : ''}
         </div>
       `;
 
-      this.config.FORMATS.forEach(fmt => {
+      formats.forEach(fmt => {
         const isSelected = this.format === fmt.id;
         html += `
-          <div class="pub-format-card ${isSelected ? 'is-selected' : ''}" data-format-id="${fmt.id}">
-            <div class="pub-format-title">${fmt.title}</div>
-            <div class="pub-format-desc">${fmt.description}</div>
+          <div class="pub-format-option pub-format-card ${isSelected ? 'is-selected' : ''}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" data-format-id="${this.escapeHtml(fmt.id)}" tabindex="0">
+            <div class="pub-format-option-info">
+              <div class="pub-format-title">${this.escapeHtml(fmt.title)}</div>
+              <div class="pub-format-desc">${this.escapeHtml(fmt.description || '')}</div>
+            </div>
+            ${isSelected ? `
+              <span class="pub-format-check-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
+            ` : ''}
           </div>
         `;
       });
 
       this.formatOptionsEl.innerHTML = html;
 
-      this.formatOptionsEl.querySelectorAll('.pub-format-card').forEach(el => {
-        el.addEventListener('click', () => {
+      this.formatOptionsEl.querySelectorAll('.pub-format-option').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
           const fid = el.getAttribute('data-format-id');
           this.setFormat(fid);
+          this.closeFormatDropdown(true);
         });
       });
+
+      this.updateFormatTriggerText();
     }
 
     setFormat(fmtId) {
       this.format = fmtId;
       this.renderFormats();
+      this.updateFormatTriggerText();
       this.updateCardPreview();
     }
 
@@ -1710,6 +1862,7 @@
       if (this.companySelect) this.companySelect.value = '';
       if (this.clubSelect) this.clubSelect.value = '';
 
+      this.closeFormatDropdown();
       this.render();
       this.setMaterialType(defaultMaterialType);
       this.updateCardPreview();

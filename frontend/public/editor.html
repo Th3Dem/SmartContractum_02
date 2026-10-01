@@ -1244,11 +1244,19 @@
             <div class="pub-section-header">
               <span class="pub-section-num">4</span>
               <div>
-                <h3 class="pub-section-title">Формат публикации</h3>
+                <h3 class="pub-section-title" id="pub-section-format-title">Формат публикации</h3>
                 <p class="pub-section-hint">Определяет подачу материала (необязательное поле). По умолчанию «Не указан».</p>
               </div>
             </div>
-            <div id="pub-format-options" class="pub-format-grid"></div>
+            <div class="pub-format-dropdown-wrap" id="pub-format-dropdown-wrap">
+              <button type="button" class="pub-format-dropdown-trigger" id="pub-format-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="pub-section-format-title pub-format-trigger-text">
+                <span class="pub-format-trigger-text" id="pub-format-trigger-text">Не указан</span>
+                <svg class="pub-format-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div id="pub-format-options" class="pub-format-dropdown-menu" role="listbox" aria-labelledby="pub-section-format-title" style="display: none;"></div>
+            </div>
           </section>
 
           <!-- 5. Отображение в ленте -->
