@@ -5964,15 +5964,56 @@
     const userModal = document.getElementById('userProfileModal');
     const btnCloseUserModal = document.getElementById('btnCloseUserProfileModal');
     const userModalBody = document.getElementById('userProfileModalBody');
+    let currentOpenUserId = null;
+    let profileRequestSeq = 0;
+    let profileAbortController = null;
+    let lastProfileTriggerEl = null;
 
-    function openUserProfileModal(userId) {
+    function closeUserProfileModal() {
+      if (!userModal) return;
+      if (profileAbortController) {
+        try { profileAbortController.abort(); } catch (e) {}
+        profileAbortController = null;
+      }
+      currentOpenUserId = null;
+      profileRequestSeq++;
+      userModal.style.display = 'none';
+      if (lastProfileTriggerEl && typeof lastProfileTriggerEl.focus === 'function') {
+        try { lastProfileTriggerEl.focus(); } catch (e) {}
+      }
+      lastProfileTriggerEl = null;
+    }
+
+    function openUserProfileModal(userId, triggerEl, isSilentRefresh) {
       if (!userModal || !userModalBody) return;
-      userModalBody.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted);">Загрузка профиля...</div>';
-      userModal.style.display = 'flex';
+      if (triggerEl) {
+        lastProfileTriggerEl = triggerEl;
+      } else if (!isSilentRefresh) {
+        lastProfileTriggerEl = document.activeElement;
+      }
 
-      fetch('/api/users/' + encodeURIComponent(userId))
+      currentOpenUserId = userId;
+      const seq = ++profileRequestSeq;
+
+      if (profileAbortController) {
+        try { profileAbortController.abort(); } catch (e) {}
+      }
+      profileAbortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+      if (!isSilentRefresh) {
+        userModalBody.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted);">Загрузка профиля...</div>';
+        userModal.style.display = 'flex';
+        if (btnCloseUserModal) {
+          try { btnCloseUserModal.focus(); } catch (e) {}
+        }
+      }
+
+      const fetchOpts = profileAbortController ? { signal: profileAbortController.signal } : {};
+
+      fetch('/api/users/' + encodeURIComponent(userId), fetchOpts)
         .then(function (res) { return res.ok ? res.json() : null; })
         .then(function (data) {
+          if (seq !== profileRequestSeq || currentOpenUserId !== userId) return;
           const u = (data && (data.user || data.profile)) || data;
           if (!data || !data.success || !u || (!u.name && !u.id)) {
             userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Профиль пользователя не найден</div>';
@@ -6006,25 +6047,33 @@
             '</div>' +
             (u.bio ? '<div class="user-profile-bio">' + escapeHtml(u.bio) + '</div>' : '') +
             '<div class="user-profile-stats">' +
+              '<div class="user-profile-stat-box" title="Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются"><span class="user-profile-stat-num user-profile-rating-num">' + (stats.rating !== undefined ? stats.rating : (u.rating !== undefined ? u.rating : 0)) + '</span><span class="user-profile-stat-label">Рейтинг</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.articlesCount || stats.publicationsCount || 0) + '</span><span class="user-profile-stat-label">Публикаций</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.answersCount || 0) + '</span><span class="user-profile-stat-label">Ответов</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.solutionsCount || 0) + '</span><span class="user-profile-stat-label">Решений</span></div>' +
             '</div>' +
             articlesHtml;
         })
-        .catch(function () {
+        .catch(function (err) {
+          if (err && err.name === 'AbortError') return;
+          if (seq !== profileRequestSeq || currentOpenUserId !== userId) return;
           userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Ошибка загрузки профиля</div>';
         });
     }
 
     if (btnCloseUserModal && userModal) {
-      btnCloseUserModal.addEventListener('click', function () {
-        userModal.style.display = 'none';
-      });
+      btnCloseUserModal.addEventListener('click', closeUserProfileModal);
       userModal.addEventListener('click', function (e) {
-        if (e.target === userModal) userModal.style.display = 'none';
+        if (e.target === userModal) closeUserProfileModal();
       });
     }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && userModal && userModal.style.display !== 'none') {
+        e.preventDefault();
+        closeUserProfileModal();
+      }
+    });
 
     document.addEventListener('click', function (e) {
       const authorBtn = e.target.closest('.btn-author-profile');
@@ -6033,10 +6082,17 @@
         e.stopPropagation();
         const authorId = authorBtn.getAttribute('data-author-id') || authorBtn.getAttribute('data-user-id');
         if (authorId) {
+          lastProfileTriggerEl = authorBtn;
           openUserProfileModal(authorId);
         }
       }
     }, true);
+
+    window.addEventListener('smartcontractum:voted', function () {
+      if (currentOpenUserId && userModal && userModal.style.display !== 'none') {
+        openUserProfileModal(currentOpenUserId, null, true);
+      }
+    });
   }
 
   // --------------------------------------------------------------------------
