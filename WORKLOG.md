@@ -516,3 +516,6 @@
 [2026-10-01 11:53] | git_bot | GIT_COMMITTED | Фиксация коммита доработок UI голосования в feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 12:25] | dev_bot | REFINEMENT_COMPLETE | Доработка профиля автора Issue #36: общий компонент profile.css, сетка 2x2, AbortController, возврат фокуса и Escape (Task: issue-36-author-rating-and-karma)
 [2026-10-01 12:26] | git_bot | GIT_COMMITTED | Фиксация коммита доработок профиля автора в feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
+[2026-10-01 16:53] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация защиты от гонок и рассинхронизации сессий при голосовании (#41, #42), исполнимые поведенческие сценарии и тесты (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 17:03] | dev_bot | IMPLEMENTATION_COMPLETE | Устранение двойной подсветки капсулы (#46), разделение знака счета от голоса пользователя (#47), увеличение зон клика десктоп 32px и тач 44px (#48) (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 17:08] | git_bot | GIT_COMMITTED | Фиксация доработок по sub-issues #41, #42, #46, #47, #48 в ветку feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)

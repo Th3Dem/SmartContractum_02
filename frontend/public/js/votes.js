@@ -8,6 +8,11 @@
 
   window._activePendingVotes = window._activePendingVotes || new Set();
 
+  let _globalSessionGeneration = 1;
+  let _lastObservedUserId = null;
+  let _voteRequestSeq = 0;
+  const _activeVoteRequests = new Map();
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -24,6 +29,35 @@
       return window.getCurrentUser();
     }
     return null;
+  }
+
+  function getCurrentUserId() {
+    const user = getCurrentUser();
+    if (!user || user.isGuest) return null;
+    return user.id || null;
+  }
+
+  _lastObservedUserId = getCurrentUserId();
+
+  function getSessionToken() {
+    const curUserId = getCurrentUserId();
+    if (curUserId !== _lastObservedUserId) {
+      _lastObservedUserId = curUserId;
+      _globalSessionGeneration++;
+    }
+    return _globalSessionGeneration;
+  }
+
+  function bumpSessionToken() {
+    _globalSessionGeneration++;
+    _lastObservedUserId = getCurrentUserId();
+    return _globalSessionGeneration;
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('smartcontractum:auth-changed', function () {
+      bumpSessionToken();
+    });
   }
 
   function invokeAuthModal() {
@@ -408,6 +442,10 @@
       btns.forEach(function (b) { b.disabled = true; });
     });
 
+    const reqSeq = ++_voteRequestSeq;
+    _activeVoteRequests.set(targetKey, reqSeq);
+    const requestSessionToken = getSessionToken();
+
     const endpoint = targetType === 'comment'
       ? ('/api/comments/' + encodeURIComponent(targetId) + '/vote')
       : ('/api/articles/' + encodeURIComponent(targetId) + '/vote');
@@ -427,7 +465,34 @@
         });
       })
       .then(function (resObj) {
-        window._activePendingVotes.delete(targetKey);
+        const isLatestRequest = _activeVoteRequests.get(targetKey) === reqSeq;
+        if (isLatestRequest) {
+          _activeVoteRequests.delete(targetKey);
+          if (window._activePendingVotes) {
+            window._activePendingVotes.delete(targetKey);
+          }
+        }
+
+        if (requestSessionToken !== getSessionToken()) {
+          if (isLatestRequest) {
+            document.querySelectorAll(selector).forEach(function (c) {
+              updateCapsuleElement(c, {
+                score: parseInt(c.getAttribute('data-score'), 10) || 0,
+                myVote: parseInt(c.getAttribute('data-my-vote'), 10) || 0,
+                canVote: c.getAttribute('data-can-vote') === 'true'
+              });
+            });
+          }
+          return;
+        }
+
+        if (!isLatestRequest) {
+          return;
+        }
+
+        const currentMatching = Array.from(document.querySelectorAll(selector));
+        const allToUpdate = Array.from(new Set([...matchingCapsules, ...currentMatching]));
+
         const status = resObj.status;
         const data = resObj.data;
 
@@ -450,7 +515,7 @@
             canVote: data.canVote !== false,
             isAuthor: false
           };
-          matchingCapsules.forEach(function (c) {
+          allToUpdate.forEach(function (c) {
             updateCapsuleElement(c, updatedState);
           });
 
@@ -462,17 +527,18 @@
                 targetId: targetId,
                 score: data.score,
                 myVote: data.myVote,
-                canVote: data.canVote
+                canVote: data.canVote,
+                sessionToken: requestSessionToken
               }
             }));
           } catch (e) {}
         } else if (status === 401) {
-          matchingCapsules.forEach(function (c) {
+          allToUpdate.forEach(function (c) {
             updateCapsuleElement(c, previousState);
           });
           invokeAuthModal();
         } else if (status === 403) {
-          matchingCapsules.forEach(function (c) {
+          allToUpdate.forEach(function (c) {
             c.setAttribute('data-is-author', 'true');
             c.setAttribute('data-can-vote', 'false');
             updateCapsuleElement(c, {
@@ -485,7 +551,7 @@
           const errText = (data && data.error) || 'Нельзя голосовать за собственный материал';
           showToast(errText, 'error');
         } else {
-          matchingCapsules.forEach(function (c) {
+          allToUpdate.forEach(function (c) {
             updateCapsuleElement(c, previousState);
           });
           const errText = (data && data.error) || 'Ошибка при сохранении голоса';
@@ -493,8 +559,34 @@
         }
       })
       .catch(function () {
-        window._activePendingVotes.delete(targetKey);
-        matchingCapsules.forEach(function (c) {
+        const isLatestRequest = _activeVoteRequests.get(targetKey) === reqSeq;
+        if (isLatestRequest) {
+          _activeVoteRequests.delete(targetKey);
+          if (window._activePendingVotes) {
+            window._activePendingVotes.delete(targetKey);
+          }
+        }
+
+        if (requestSessionToken !== getSessionToken()) {
+          if (isLatestRequest) {
+            document.querySelectorAll(selector).forEach(function (c) {
+              updateCapsuleElement(c, {
+                score: parseInt(c.getAttribute('data-score'), 10) || 0,
+                myVote: parseInt(c.getAttribute('data-my-vote'), 10) || 0,
+                canVote: c.getAttribute('data-can-vote') === 'true'
+              });
+            });
+          }
+          return;
+        }
+
+        if (!isLatestRequest) {
+          return;
+        }
+
+        const currentMatching = Array.from(document.querySelectorAll(selector));
+        const allToUpdate = Array.from(new Set([...matchingCapsules, ...currentMatching]));
+        allToUpdate.forEach(function (c) {
           updateCapsuleElement(c, previousState);
         });
         showToast('Ошибка сети при отправке голоса', 'error');
@@ -520,7 +612,9 @@
     syncVoteCapsules: syncVoteCapsules,
     handleVoteClick: handleVoteClick,
     initVoting: initVoting,
-    showToast: showToast
+    showToast: showToast,
+    getSessionToken: getSessionToken,
+    bumpSessionToken: bumpSessionToken
   };
 
 })(window);

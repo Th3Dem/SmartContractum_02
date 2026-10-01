@@ -949,7 +949,8 @@ button.author-name:focus-visible,
   align-items: center;
   gap: 2px;
   padding: 0 4px;
-  height: 28px;
+  height: 34px;
+  min-height: 34px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -969,17 +970,18 @@ button.author-name:focus-visible,
 }
 
 .comment-vote-row .vote-capsule {
-  height: 28px;
+  height: 34px;
+  min-height: 34px;
 }
 
 .vote-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  min-height: 24px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   padding: 0;
   margin: 0;
   border: none;
@@ -1044,12 +1046,10 @@ button.author-name:focus-visible,
   stroke-width: 3.2;
 }
 
-.vote-capsule.has-voted-up {
-  border-color: rgba(16, 185, 129, 0.45);
-}
-
+.vote-capsule.has-voted-up,
 .vote-capsule.has-voted-down {
-  border-color: rgba(239, 68, 68, 0.45);
+  border-color: var(--border-color);
+  background: var(--bg-surface);
 }
 
 /* Score display */
@@ -1109,43 +1109,46 @@ button.author-name:focus-visible,
 
 .article-actions-group .vote-capsule {
   height: 36px;
+  min-height: 36px;
   padding: 2px 6px;
 }
 
 .article-bottom-actions .vote-capsule {
   height: 38px;
+  min-height: 38px;
   padding: 2px 8px;
 }
 
 .card-footer-left .vote-capsule {
-  height: 28px;
+  height: 34px;
+  min-height: 34px;
 }
 
 /* Mobile & Touch Responsive */
-@media (max-width: 768px) {
+@media (pointer: coarse), (max-width: 768px) {
   .vote-capsule {
     padding: 0 5px;
     gap: 3px;
-    min-height: 32px;
+    min-height: 46px;
     height: auto;
   }
 
   .vote-btn {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .vote-btn svg {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
   }
 
   .card-footer-left .vote-capsule,
   .comment-vote-row .vote-capsule,
   .answer-actions .vote-capsule {
-    min-height: 32px;
+    min-height: 46px;
     height: auto;
   }
 
@@ -1156,7 +1159,8 @@ button.author-name:focus-visible,
   .article-bottom-actions .vote-capsule {
     width: 100%;
     justify-content: center;
-    height: 42px;
+    min-height: 46px;
+    height: auto;
   }
 }
 
