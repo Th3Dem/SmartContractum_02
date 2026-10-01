@@ -505,3 +505,4 @@
 [2026-10-01 11:36] | py_bot | REFINEMENT_COMPLETE | Доработка бэкенда Issue #34: requireAuth в 401 ответах, BEGIN IMMEDIATE в транзакциях, canVote с учетом статуса статьи и строгая сортировка топ по score (Task: issue-34-independent-votes-db-api)
 [2026-10-01 11:37] | git_bot | GIT_COMMITTED | Фиксация коммита доработок бэкенда в feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
 [2026-10-01 17:38] | py_bot | IMPLEMENTATION_COMPLETE | Разрешение Sub-issue #43: связывание комментариев legacy draft_id с канонической публикацией, учет в рейтинге автора и тест 09 (Task: issue-34-independent-votes-db-api)
+[2026-10-01 17:41] | git_bot | GIT_COMMITTED | Фиксация согласования legacy draft_id комментариев по sub-issue #43 в ветку feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
