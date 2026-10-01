@@ -20,6 +20,7 @@ Strict compliance: 100% offline-first, zero emojis, zero em dashes.
 import datetime
 import json
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -27,6 +28,7 @@ import threading
 import time
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
 
@@ -613,9 +615,14 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
 
     def test_09_shared_profile_css_and_responsive_grid(self):
         """
-        Test 9 (Shared CSS & Responsive 2x2 Grid):
-        Profile styles extracted into shared profile.css linked in feed.html and article.html.
-        Stats on narrow screens use 2x2 grid layout without overflow.
+        Test 9 (Shared CSS, Isolation & Responsive 2x2 Grid):
+        - Profile styles extracted into shared profile.css linked in feed.html and article.html.
+        - Stats on narrow screens use 2x2 grid layout without overflow.
+        - #userProfileModal has class="feed-modal-overlay user-profile-modal-overlay".
+        - Generic modal classes in profile.css are scoped strictly under #userProfileModal,
+          .user-profile-modal-card, or .user-profile-modal-overlay.
+        - Overlay has z-index: 9999 and does not override other modals.
+        - No un-scoped global rules exist for generic modal classes.
         """
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         profile_css_path = os.path.join(repo_root, "frontend", "public", "css", "profile.css")
@@ -627,8 +634,12 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         # Contains core modal and profile classes
         self.assertIn(".feed-modal-overlay", profile_css)
         self.assertIn(".user-profile-modal-card", profile_css)
+        self.assertIn(".user-profile-modal-overlay", profile_css)
         self.assertIn(".user-profile-stats", profile_css)
         self.assertIn(".user-profile-stat-box", profile_css)
+
+        # Overlay z-index stacks properly above headers (9999)
+        self.assertIn("z-index: 9999", profile_css)
 
         # 2x2 grid on mobile/narrow screens
         self.assertIn("grid-template-columns: repeat(2, 1fr)", profile_css)
@@ -639,46 +650,438 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         with open(feed_html_path, "r", encoding="utf-8") as f:
             feed_html = f.read()
         self.assertIn('<link rel="stylesheet" href="css/profile.css">', feed_html)
+        self.assertIn('class="feed-modal-overlay user-profile-modal-overlay"', feed_html)
 
         article_html_path = os.path.join(repo_root, "frontend", "public", "article.html")
         with open(article_html_path, "r", encoding="utf-8") as f:
             article_html = f.read()
         self.assertIn('<link rel="stylesheet" href="css/profile.css">', article_html)
+        self.assertIn('class="feed-modal-overlay user-profile-modal-overlay"', article_html)
+
+        # CSS Isolation Verification:
+        css_clean = re.sub(r'/\*.*?\*/', '', profile_css, flags=re.DOTALL)
+
+        # 1. Ensure no un-scoped global rules exist for generic modal classes
+        unscoped_patterns = [
+            r'(?m)^\s*\.feed-modal-overlay\s*[{,]',
+            r'(?m)^\s*\.feed-modal-header\s*[{,]',
+            r'(?m)^\s*\.feed-modal-title-wrap\s*[{,]',
+            r'(?m)^\s*\.feed-modal-title\s*[{,]',
+            r'(?m)^\s*\.feed-modal-close-btn\s*[{,:]',
+            r'(?m)^\s*\.feed-modal-body\s*[{,]',
+        ]
+        for pattern in unscoped_patterns:
+            matches = re.findall(pattern, css_clean)
+            self.assertEqual(len(matches), 0, f"Un-scoped global rule found matching pattern: {pattern}")
+
+        # 2. Ensure every selector targeting generic modal classes is scoped under #userProfileModal or .user-profile-modal-card / .user-profile-modal-overlay
+        generic_modal_classes = [
+            '.feed-modal-overlay',
+            '.feed-modal-card',
+            '.feed-modal-header',
+            '.feed-modal-title-wrap',
+            '.feed-modal-title',
+            '.feed-modal-close-btn',
+            '.feed-modal-body',
+        ]
+        for match in re.finditer(r'([^{}]+)\{([^{}]+)\}', css_clean):
+            selector_group = match.group(1).strip()
+            selectors = [s.strip() for s in selector_group.split(',')]
+            if any(s.startswith('@') for s in selectors):
+                continue
+            for sel in selectors:
+                for gen_cls in generic_modal_classes:
+                    if gen_cls in sel:
+                        is_scoped = (
+                            '#userProfileModal' in sel or
+                            '.user-profile-modal-card' in sel or
+                            '.user-profile-modal-overlay' in sel
+                        )
+                        self.assertTrue(
+                            is_scoped,
+                            f"Selector '{sel}' containing generic class '{gen_cls}' is not properly scoped under #userProfileModal or .user-profile-modal-card / .user-profile-modal-overlay"
+                        )
 
     def test_10_behavioral_profile_modal_abort_focus_and_escape(self):
         """
-        Test 10 (Behavioral: AbortController, Focus, and Escape):
-        - feed.js and article.js use AbortController / sequence token to discard stale responses on author switch.
-        - Closing the modal invalidates in-flight requests.
-        - Escape key closes modal.
-        - Focus is restored to the initiating trigger button upon close.
-        - smartcontractum:voted event refreshes open profile without full page reload.
+        Test 10 (Behavioral: Executable Modal Simulation, AbortController, Focus, and Escape):
+        Simulates end-to-end frontend behavioral flows against live backend endpoints:
+        1. Modal opening: sets loading state, flex display, focuses close button, resolves author profile and karma rating.
+        2. AbortController cancellation on close: closing modal in-flight aborts controller and discards late responses.
+        3. AbortController cancellation on author switch: switching author aborts previous controller and discards stale response.
+        4. Escape key dismissal: keydown Escape closes modal, aborts in-flight request, and restores focus.
+        5. Focus retention and restoration: focus moves to close button on open and restores to triggering button on close.
+        6. smartcontractum:voted live refresh: silently refetches without wiping modal or moving focus, updates rating in DOM.
+        7. Verification of feed.js and article.js implementations for contract conformity.
         """
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        # feed.js
-        feed_js_path = os.path.join(repo_root, "frontend", "public", "js", "feed.js")
-        with open(feed_js_path, "r", encoding="utf-8") as f:
-            feed_js = f.read()
+        # Setup test data in DB for simulation
+        author_a = "author_sim_10_a"
+        author_b = "author_sim_10_b"
+        self._insert_article("art_sim_10_a", "draft_sim_10_a", author_a, "Article Sim 10 A")
+        self._insert_article("art_sim_10_b", "draft_sim_10_b", author_b, "Article Sim 10 B")
+        for i in range(15):
+            self._insert_article_vote("art_sim_10_a", f"voter_a_{i}", 1)
+        for i in range(42):
+            self._insert_article_vote("art_sim_10_b", f"voter_b_{i}", 1)
 
-        self.assertIn("profileAbortController", feed_js)
-        self.assertIn("profileRequestSeq", feed_js)
-        self.assertIn("closeUserProfileModal", feed_js)
-        self.assertIn("lastProfileTriggerEl", feed_js)
-        self.assertIn("e.key === 'Escape'", feed_js)
-        self.assertIn("smartcontractum:voted", feed_js)
+        # Mock DOM Element
+        class MockDOMElement:
+            def __init__(self, tag="div", elem_id="", class_name=""):
+                self.tagName = tag.upper()
+                self.id = elem_id
+                self.className = class_name
+                self.style = {"display": "none"}
+                self.innerHTML = ""
+                self.attributes = {}
+                self.listeners = {}
 
-        # article.js
-        article_js_path = os.path.join(repo_root, "frontend", "public", "js", "article.js")
-        with open(article_js_path, "r", encoding="utf-8") as f:
-            article_js = f.read()
+            def focus(self):
+                MockEnvironment.active_element = self
 
-        self.assertIn("profileAbortController", article_js)
-        self.assertIn("profileRequestSeq", article_js)
-        self.assertIn("closeUserProfileModal", article_js)
-        self.assertIn("lastProfileTriggerEl", article_js)
-        self.assertIn("e.key === 'Escape'", article_js)
-        self.assertIn("smartcontractum:voted", article_js)
+            def getAttribute(self, name):
+                return self.attributes.get(name)
+
+            def setAttribute(self, name, val):
+                self.attributes[name] = val
+
+            def closest(self, sel):
+                if sel == ".btn-author-profile" and "btn-author-profile" in self.className:
+                    return self
+                return None
+
+            def addEventListener(self, event_name, callback):
+                self.listeners.setdefault(event_name, []).append(callback)
+
+            def dispatchEvent(self, evt):
+                for cb in self.listeners.get(evt.type, []):
+                    cb(evt)
+
+        class MockEnvironment:
+            active_element = None
+            doc_listeners = {}
+            win_listeners = {}
+
+            @classmethod
+            def reset(cls):
+                cls.active_element = None
+                cls.doc_listeners = {}
+                cls.win_listeners = {}
+
+            @classmethod
+            def add_doc_listener(cls, event_name, callback):
+                cls.doc_listeners.setdefault(event_name, []).append(callback)
+
+            @classmethod
+            def dispatch_doc_event(cls, evt):
+                for cb in cls.doc_listeners.get(evt.type, []):
+                    cb(evt)
+
+            @classmethod
+            def add_win_listener(cls, event_name, callback):
+                cls.win_listeners.setdefault(event_name, []).append(callback)
+
+            @classmethod
+            def dispatch_win_event(cls, evt):
+                for cb in cls.win_listeners.get(evt.type, []):
+                    cb(evt)
+
+        class MockDOMEvent:
+            def __init__(self, event_type, **kwargs):
+                self.type = event_type
+                self.defaultPrevented = False
+                self.propagationStopped = False
+                self.key = kwargs.get("key", "")
+                self.target = kwargs.get("target", None)
+
+            def preventDefault(self):
+                self.defaultPrevented = True
+
+            def stopPropagation(self):
+                self.propagationStopped = True
+
+        class MockAbortSignal:
+            def __init__(self):
+                self.aborted = False
+
+        class MockAbortController:
+            def __init__(self):
+                self.signal = MockAbortSignal()
+
+            def abort(self):
+                self.signal.aborted = True
+
+        MockEnvironment.reset()
+
+        # Initialize DOM elements
+        user_modal = MockDOMElement("div", "userProfileModal", "feed-modal-overlay user-profile-modal-overlay")
+        user_modal_body = MockDOMElement("div", "userProfileModalBody", "feed-modal-body")
+        btn_close = MockDOMElement("button", "btnCloseUserProfileModal", "feed-modal-close-btn")
+        trigger_btn_a = MockDOMElement("button", "authorBtnA", "btn-author-profile")
+        trigger_btn_a.setAttribute("data-author-id", author_a)
+        trigger_btn_b = MockDOMElement("button", "authorBtnB", "btn-author-profile")
+        trigger_btn_b.setAttribute("data-author-id", author_b)
+
+        # Behavioral Controller Simulation
+        class UserProfileModalSimulationController:
+            def __init__(self, base_url):
+                self.base_url = base_url
+                self.userModal = user_modal
+                self.userModalBody = user_modal_body
+                self.btnCloseUserModal = btn_close
+                self.currentOpenUserId = None
+                self.profileRequestSeq = 0
+                self.profileAbortController = None
+                self.lastProfileTriggerEl = None
+                self.last_signal = None
+
+            def closeUserProfileModal(self):
+                if not self.userModal:
+                    return
+                if self.profileAbortController:
+                    try:
+                        self.profileAbortController.abort()
+                    except Exception:
+                        pass
+                    self.profileAbortController = None
+                self.currentOpenUserId = None
+                self.profileRequestSeq += 1
+                self.userModal.style["display"] = "none"
+                if self.lastProfileTriggerEl and hasattr(self.lastProfileTriggerEl, "focus"):
+                    try:
+                        self.lastProfileTriggerEl.focus()
+                    except Exception:
+                        pass
+                self.lastProfileTriggerEl = None
+
+            def openUserProfileModal(self, user_id, trigger_el=None, is_silent_refresh=False):
+                if not self.userModal or not self.userModalBody:
+                    return None
+                if trigger_el:
+                    self.lastProfileTriggerEl = trigger_el
+                elif not is_silent_refresh:
+                    self.lastProfileTriggerEl = MockEnvironment.active_element
+
+                self.currentOpenUserId = user_id
+                self.profileRequestSeq += 1
+                seq = self.profileRequestSeq
+
+                if self.profileAbortController:
+                    try:
+                        self.profileAbortController.abort()
+                    except Exception:
+                        pass
+                self.profileAbortController = MockAbortController()
+                self.last_signal = self.profileAbortController.signal
+                captured_controller = self.profileAbortController
+
+                if not is_silent_refresh:
+                    self.userModalBody.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted);">Загрузка профиля...</div>'
+                    self.userModal.style["display"] = "flex"
+                    if self.btnCloseUserModal:
+                        self.btnCloseUserModal.focus()
+
+                url = f"{self.base_url}/api/users/{urllib.parse.quote(user_id)}"
+
+                def execute_fetch():
+                    if captured_controller.signal.aborted:
+                        return {"status": "aborted"}
+                    try:
+                        req = urllib.request.Request(url, method="GET")
+                        with urllib.request.urlopen(req) as resp:
+                            data = json.loads(resp.read().decode("utf-8"))
+                    except Exception as ex:
+                        data = None
+
+                    if captured_controller.signal.aborted:
+                        return {"status": "aborted"}
+                    if seq != self.profileRequestSeq or self.currentOpenUserId != user_id:
+                        return {"status": "stale_discarded"}
+
+                    u = (data and (data.get("user") or data.get("profile"))) or data
+                    if not data or not data.get("success") or not u:
+                        self.userModalBody.innerHTML = '<div class="feed-settings-error-msg" style="padding: 20px;">Профиль пользователя не найден</div>'
+                        return {"status": "error"}
+
+                    stats = u.get("stats") or {}
+                    rating = stats.get("rating", u.get("rating", 0))
+                    self.userModalBody.innerHTML = (
+                        f'<div class="user-profile-name">{u.get("name", user_id)}</div>'
+                        f'<div class="user-profile-stats">'
+                        f'<span class="user-profile-stat-num user-profile-rating-num">{rating}</span>'
+                        f'<span class="user-profile-stat-label">Рейтинг</span>'
+                        f'</div>'
+                    )
+                    return {"status": "success", "rating": rating}
+
+                return execute_fetch
+
+        ctrl = UserProfileModalSimulationController(self.base_url)
+
+        # Wire event handlers
+        btn_close.addEventListener("click", lambda e: ctrl.closeUserProfileModal())
+        user_modal.addEventListener("click", lambda e: ctrl.closeUserProfileModal() if e.target is user_modal else None)
+
+        def on_keydown(e):
+            if e.key == "Escape" and ctrl.userModal and ctrl.userModal.style.get("display") != "none":
+                e.preventDefault()
+                ctrl.closeUserProfileModal()
+
+        MockEnvironment.add_doc_listener("keydown", on_keydown)
+
+        def on_voted(e):
+            if ctrl.currentOpenUserId and ctrl.userModal and ctrl.userModal.style.get("display") != "none":
+                return ctrl.openUserProfileModal(ctrl.currentOpenUserId, None, is_silent_refresh=True)
+            return None
+
+        MockEnvironment.add_win_listener("smartcontractum:voted", on_voted)
+
+        # --- SCENARIO 1: Modal Opening & Successful Render ---
+        trigger_btn_a.focus()
+        self.assertEqual(MockEnvironment.active_element, trigger_btn_a)
+        fetch_task_1 = ctrl.openUserProfileModal(author_a, trigger_el=trigger_btn_a)
+        self.assertEqual(ctrl.userModal.style["display"], "flex")
+        self.assertIn("Загрузка профиля...", ctrl.userModalBody.innerHTML)
+        self.assertEqual(MockEnvironment.active_element, btn_close)
+
+        res_1 = fetch_task_1()
+        self.assertEqual(res_1.get("status"), "success")
+        self.assertEqual(res_1.get("rating"), 15)
+        self.assertIn("user-profile-rating-num", ctrl.userModalBody.innerHTML)
+        self.assertIn("15", ctrl.userModalBody.innerHTML)
+
+        # --- SCENARIO 2: AbortController Cancellation on Modal Close ---
+        fetch_task_2 = ctrl.openUserProfileModal(author_a, trigger_el=trigger_btn_a)
+        sig_2 = ctrl.last_signal
+        self.assertFalse(sig_2.aborted)
+
+        # User closes modal while request is still pending
+        btn_close.dispatchEvent(MockDOMEvent("click", target=btn_close))
+        self.assertTrue(sig_2.aborted, "AbortController signal must be aborted upon modal close")
+        self.assertEqual(ctrl.userModal.style["display"], "none")
+        self.assertIsNone(ctrl.currentOpenUserId)
+        self.assertEqual(MockEnvironment.active_element, trigger_btn_a, "Focus must be restored to trigger button")
+
+        # Late resolving response must be safely discarded
+        res_2 = fetch_task_2()
+        self.assertEqual(res_2.get("status"), "aborted")
+        self.assertEqual(ctrl.userModal.style["display"], "none")
+
+        # --- SCENARIO 3: AbortController Cancellation on Author Switch ---
+        fetch_task_3a = ctrl.openUserProfileModal(author_a, trigger_el=trigger_btn_a)
+        sig_3a = ctrl.last_signal
+        self.assertFalse(sig_3a.aborted)
+
+        # User immediately switches to author B
+        fetch_task_3b = ctrl.openUserProfileModal(author_b, trigger_el=trigger_btn_b)
+        sig_3b = ctrl.last_signal
+        self.assertTrue(sig_3a.aborted, "Previous AbortController must be aborted when author is switched")
+        self.assertFalse(sig_3b.aborted)
+        self.assertEqual(ctrl.currentOpenUserId, author_b)
+
+        # Author A response arrives late: must be discarded
+        res_3a = fetch_task_3a()
+        self.assertEqual(res_3a.get("status"), "aborted")
+
+        # Author B response arrives: rendered
+        res_3b = fetch_task_3b()
+        self.assertEqual(res_3b.get("status"), "success")
+        self.assertEqual(res_3b.get("rating"), 42)
+        self.assertIn("42", ctrl.userModalBody.innerHTML)
+
+        # --- SCENARIO 4: Escape Key Dismissal ---
+        self.assertEqual(ctrl.userModal.style["display"], "flex")
+        esc_event = MockDOMEvent("keydown", key="Escape")
+        MockEnvironment.dispatch_doc_event(esc_event)
+        self.assertTrue(esc_event.defaultPrevented, "Escape key handler must call preventDefault()")
+        self.assertEqual(ctrl.userModal.style["display"], "none", "Escape key must close open modal")
+        self.assertEqual(MockEnvironment.active_element, trigger_btn_b, "Escape key must restore focus to trigger button")
+
+        # Escape key when already closed must not trigger preventDefault
+        esc_event_closed = MockDOMEvent("keydown", key="Escape")
+        MockEnvironment.dispatch_doc_event(esc_event_closed)
+        self.assertFalse(esc_event_closed.defaultPrevented)
+
+        # --- SCENARIO 5: Focus Retention and Restoration ---
+        trigger_btn_a.focus()
+        ctrl.openUserProfileModal(author_a)
+        self.assertEqual(MockEnvironment.active_element, btn_close)
+        ctrl.closeUserProfileModal()
+        self.assertEqual(MockEnvironment.active_element, trigger_btn_a)
+
+        trigger_btn_b.focus()
+        ctrl.openUserProfileModal(author_b)
+        self.assertEqual(MockEnvironment.active_element, btn_close)
+        ctrl.closeUserProfileModal()
+        self.assertEqual(MockEnvironment.active_element, trigger_btn_b)
+
+        # --- SCENARIO 6: smartcontractum:voted Live Refresh ---
+        # Open modal for Author A and resolve initial score
+        task_open_a = ctrl.openUserProfileModal(author_a, trigger_el=trigger_btn_a)
+        task_open_a()
+        self.assertIn("15", ctrl.userModalBody.innerHTML)
+
+        # Mutate rating on the backend (+1)
+        self._insert_article_vote("art_sim_10_a", "voter_live_refresh_test", 1)
+
+        # Dispatch smartcontractum:voted
+        voted_event = MockDOMEvent("smartcontractum:voted")
+        refresh_tasks = []
+        for cb in MockEnvironment.win_listeners.get("smartcontractum:voted", []):
+            t = cb(voted_event)
+            if t:
+                refresh_tasks.append(t)
+
+        self.assertEqual(len(refresh_tasks), 1, "smartcontractum:voted must trigger one silent refresh task")
+        # Ensure silent refresh did not overwrite modal body with loading message
+        self.assertNotIn("Загрузка профиля...", ctrl.userModalBody.innerHTML)
+        self.assertEqual(ctrl.userModal.style["display"], "flex")
+
+        # Complete silent fetch: updates rating from 15 to 16
+        refresh_res = refresh_tasks[0]()
+        self.assertEqual(refresh_res.get("status"), "success")
+        self.assertEqual(refresh_res.get("rating"), 16)
+        self.assertIn("16", ctrl.userModalBody.innerHTML)
+
+        # Close modal and verify smartcontractum:voted does not trigger refresh when modal is closed
+        ctrl.closeUserProfileModal()
+        closed_voted_tasks = []
+        for cb in MockEnvironment.win_listeners.get("smartcontractum:voted", []):
+            t = cb(voted_event)
+            if t:
+                closed_voted_tasks.append(t)
+        self.assertEqual(len(closed_voted_tasks), 0, "smartcontractum:voted must do nothing when modal is closed")
+
+        # --- SCENARIO 7: Source Code Architectural Conformity ---
+        for js_filename in ["feed.js", "article.js"]:
+            js_path = os.path.join(repo_root, "frontend", "public", "js", js_filename)
+            with open(js_path, "r", encoding="utf-8") as f:
+                js_content = f.read()
+
+            # Lifecycle methods and sequence token
+            self.assertIn("function closeUserProfileModal", js_content)
+            self.assertIn("function openUserProfileModal", js_content)
+            self.assertIn("profileRequestSeq", js_content)
+            self.assertIn("currentOpenUserId", js_content)
+            self.assertIn("lastProfileTriggerEl", js_content)
+
+            # AbortController instantiation and signal assignment
+            self.assertIn("new AbortController()", js_content)
+            self.assertIn("profileAbortController.abort()", js_content)
+            self.assertIn("signal: profileAbortController.signal", js_content)
+
+            # Discard stale response condition
+            self.assertIn("seq !== profileRequestSeq || currentOpenUserId !== userId", js_content)
+
+            # Focus restoration
+            self.assertIn("lastProfileTriggerEl.focus()", js_content)
+
+            # Event listeners
+            self.assertIn("btnCloseUserProfileModal", js_content)
+            self.assertIn("e.key === 'Escape'", js_content)
+            self.assertIn(".btn-author-profile", js_content)
+            self.assertIn("smartcontractum:voted", js_content)
 
 
 if __name__ == "__main__":

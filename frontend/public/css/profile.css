@@ -3,12 +3,15 @@
    Reusable across feed.html, article.html, and other views
    ========================================================================== */
 
-.feed-modal-overlay {
+#userProfileModal.feed-modal-overlay,
+#userProfileModal.user-profile-modal-overlay,
+.user-profile-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(4px);
-  z-index: 1100;
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -16,7 +19,9 @@
   box-sizing: border-box;
 }
 
-.feed-modal-card.user-profile-modal-card {
+#userProfileModal .feed-modal-card,
+#userProfileModal .user-profile-modal-card,
+.user-profile-modal-card {
   background: var(--bg-card, var(--bg-surface));
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg, 12px);
@@ -41,7 +46,8 @@
   }
 }
 
-.feed-modal-header {
+#userProfileModal .feed-modal-header,
+.user-profile-modal-card .feed-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -49,20 +55,23 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-.feed-modal-title-wrap {
+#userProfileModal .feed-modal-title-wrap,
+.user-profile-modal-card .feed-modal-title-wrap {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.feed-modal-title {
+#userProfileModal .feed-modal-title,
+.user-profile-modal-card .feed-modal-title {
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
 
-.feed-modal-close-btn {
+#userProfileModal .feed-modal-close-btn,
+.user-profile-modal-card .feed-modal-close-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -77,17 +86,20 @@
   transition: color var(--transition-fast, 150ms ease), background var(--transition-fast, 150ms ease);
 }
 
-.feed-modal-close-btn:hover {
+#userProfileModal .feed-modal-close-btn:hover,
+.user-profile-modal-card .feed-modal-close-btn:hover {
   background: var(--bg-hover, rgba(255, 255, 255, 0.08));
   color: var(--text-primary);
 }
 
-.feed-modal-close-btn:focus-visible {
+#userProfileModal .feed-modal-close-btn:focus-visible,
+.user-profile-modal-card .feed-modal-close-btn:focus-visible {
   outline: 2px solid var(--accent-color, #38bdf8);
   outline-offset: 1px;
 }
 
-.feed-modal-body {
+#userProfileModal .feed-modal-body,
+.user-profile-modal-card .feed-modal-body {
   padding: 20px 22px;
 }
 

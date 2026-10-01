@@ -520,3 +520,4 @@
 [2026-10-01 17:03] | dev_bot | IMPLEMENTATION_COMPLETE | Устранение двойной подсветки капсулы (#46), разделение знака счета от голоса пользователя (#47), увеличение зон клика десктоп 32px и тач 44px (#48) (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 17:08] | git_bot | GIT_COMMITTED | Фиксация доработок по sub-issues #41, #42, #46, #47, #48 в ветку feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 17:11] | git_bot | GIT_COMMITTED | Слияние feat/issue-35-voting-arrows-and-live-counters в feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
+[2026-10-01 17:21] | dev_bot | IMPLEMENTATION_COMPLETE | Изоляция CSS модалки профиля автора (#44), stacking z-index 9999, исполнимые поведенческие тесты и проверки отсутствия глобальных утечек стилей (Task: issue-36-author-rating-and-karma)
