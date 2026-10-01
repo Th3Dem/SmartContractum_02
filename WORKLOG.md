@@ -506,3 +506,6 @@
 [2026-10-01 10:35] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации капсулы голосования, независимых лайков, обновления счетчиков и проверок (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 10:52] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация капсулы рейтинга со стрелками, синхронизации без перезагрузки и независимых лайков (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 10:53] | git_bot | PR_CREATED | Открыт PR #38 для Issue #35 (Fixes #35), ветка feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 10:57] | pm_bot | TASK_INIT | Старт задачи issue-36-author-rating-and-karma: общий рейтинг автора в профиле и пересчет кармы (Task: issue-36-author-rating-and-karma)
+[2026-10-01 10:57] | pm_bot | DEV_ASSIGN | Назначение py_bot для реализации серверной агрегации рейтинга автора и тестирования инвариантов (Task: issue-36-author-rating-and-karma)
+[2026-10-01 11:04] | py_bot | IMPLEMENTATION_COMPLETE | Реализация агрегации рейтинга автора в server.py и тестовый сьют инвариантов (Task: issue-36-author-rating-and-karma)

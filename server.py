@@ -6111,6 +6111,33 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 """, (user_id,))
                 c_stats = cur.fetchone()
 
+                cur.execute("""
+                    SELECT COALESCE(SUM(v.value), 0) AS pub_score
+                    FROM article_votes v
+                    WHERE v.article_id IN (
+                        SELECT id FROM moderation_submissions WHERE author_id = ? AND status = 'approved'
+                        UNION
+                        SELECT draft_id FROM moderation_submissions WHERE author_id = ? AND status = 'approved' AND draft_id IS NOT NULL
+                    )
+                """, (user_id, user_id))
+                pub_score = cur.fetchone()["pub_score"] or 0
+
+                cur.execute("""
+                    SELECT COALESCE(SUM(v.value), 0) AS comm_score
+                    FROM comment_votes v
+                    WHERE v.comment_id IN (
+                        SELECT ac.id
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND ms.status = 'approved'
+                    )
+                """, (user_id,))
+                comm_score = cur.fetchone()["comm_score"] or 0
+
+                total_rating = int(pub_score) + int(comm_score)
+
                 curr_user = self.get_current_user()
                 is_sub = False
                 if curr_user:
@@ -6149,7 +6176,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "bio": bio,
                 "avatar": avatar,
                 "isSubscribed": is_sub,
+                "rating": total_rating,
+                "karma": total_rating,
                 "stats": {
+                    "rating": total_rating,
+                    "karma": total_rating,
                     "publicationsCount": len(pub_rows),
                     "answersCount": (c_stats["total_answers"] or 0) if c_stats else 0,
                     "solutionsCount": (c_stats["total_solutions"] or 0) if c_stats else 0

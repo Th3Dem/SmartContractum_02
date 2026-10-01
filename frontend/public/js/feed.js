@@ -5990,6 +5990,7 @@
             '</div>' +
             (u.bio ? '<div class="user-profile-bio">' + escapeHtml(u.bio) + '</div>' : '') +
             '<div class="user-profile-stats">' +
+              '<div class="user-profile-stat-box" title="Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются"><span class="user-profile-stat-num user-profile-rating-num">' + (stats.rating !== undefined ? stats.rating : (u.rating !== undefined ? u.rating : 0)) + '</span><span class="user-profile-stat-label">Рейтинг</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.articlesCount || stats.publicationsCount || 0) + '</span><span class="user-profile-stat-label">Публикаций</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.answersCount || 0) + '</span><span class="user-profile-stat-label">Ответов</span></div>' +
               '<div class="user-profile-stat-box"><span class="user-profile-stat-num">' + (stats.solutionsCount || 0) + '</span><span class="user-profile-stat-label">Решений</span></div>' +
