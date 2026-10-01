@@ -522,3 +522,6 @@
 [2026-10-01 17:11] | git_bot | GIT_COMMITTED | Слияние feat/issue-35-voting-arrows-and-live-counters в feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
 [2026-10-01 17:21] | dev_bot | IMPLEMENTATION_COMPLETE | Изоляция CSS модалки профиля автора (#44), stacking z-index 9999, исполнимые поведенческие тесты и проверки отсутствия глобальных утечек стилей (Task: issue-36-author-rating-and-karma)
 [2026-10-01 17:24] | git_bot | GIT_COMMITTED | Фиксация изоляции CSS профиля по sub-issue #44 в ветку feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
+[2026-10-01 17:38] | py_bot | IMPLEMENTATION_COMPLETE | Разрешение Sub-issue #43: связывание комментариев legacy draft_id с канонической публикацией, учет в рейтинге автора и тест 09 (Task: issue-34-independent-votes-db-api)
+[2026-10-01 17:41] | git_bot | GIT_COMMITTED | Фиксация согласования legacy draft_id комментариев по sub-issue #43 в ветку feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
+[2026-10-01 17:44] | git_bot | GIT_COMMITTED | Слияние feat/issue-34-independent-votes-db-api в feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)

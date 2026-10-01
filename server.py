@@ -602,6 +602,22 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_client_operation ON article_comments(user_id, client_operation_id) WHERE client_operation_id IS NOT NULL;")
 
         conn.execute("""
+            UPDATE article_comments
+            SET article_id = (
+                SELECT ms.id FROM moderation_submissions ms
+                WHERE ms.draft_id = article_comments.article_id AND ms.status = 'approved'
+                LIMIT 1
+            )
+            WHERE article_id IN (
+                SELECT draft_id FROM moderation_submissions WHERE draft_id IS NOT NULL AND status = 'approved'
+            )
+            AND EXISTS (
+                SELECT 1 FROM moderation_submissions ms
+                WHERE ms.draft_id = article_comments.article_id AND ms.status = 'approved'
+            );
+        """)
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS user_notifications (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -3715,20 +3731,29 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn = self.get_db()
         with conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, status FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
+            cur.execute("SELECT id, draft_id, status FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
             art_row = cur.fetchone()
             real_id = art_row["id"] if art_row else article_id
+            draft_id = art_row["draft_id"] if art_row else None
             parent_is_approved = bool(art_row and art_row["status"] == "approved")
 
-            cur.execute("""
+            target_article_ids = [real_id]
+            if draft_id and draft_id != real_id:
+                target_article_ids.append(draft_id)
+            placeholders = ",".join("?" for _ in target_article_ids)
+
+            cur.execute(f"""
                 SELECT id, article_id, user_id, author_name, author_avatar, content,
                        status, comment_type, is_solution, parent_answer_id, parent_comment_id,
                        client_operation_id, updated_at, revision, created_at
                 FROM article_comments
-                WHERE article_id = ? AND status IN ('published', 'deleted')
+                WHERE article_id IN ({placeholders}) AND status IN ('published', 'deleted')
                 ORDER BY is_solution DESC, created_at ASC
-            """, (real_id,))
+            """, tuple(target_article_ids))
             rows = cur.fetchall()
+
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id IN ({placeholders}) AND status = 'published' AND comment_type = 'comment'", tuple(target_article_ids))
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id IN ({placeholders}) AND status = 'published' AND comment_type = 'answer'", tuple(target_article_ids))
 
             curr_user = self.get_current_user()
             curr_user_id = curr_user["id"] if curr_user else None
@@ -5040,12 +5065,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (row["id"],))
             likes_count = cur.fetchone()["cnt"]
-            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'comment'", (row["id"],))
+            target_ids = [row["id"]]
+            draft_id = row["draft_id"] if ("draft_id" in row.keys() and row["draft_id"]) else None
+            if draft_id and draft_id != row["id"]:
+                target_ids.append(draft_id)
+            placeholders = ",".join("?" for _ in target_ids)
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id IN ({placeholders}) AND status = 'published' AND comment_type = 'comment'", tuple(target_ids))
             comments_count = cur.fetchone()["cnt"]
-            cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = ? AND status = 'published' AND comment_type = 'answer'", (row["id"],))
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id IN ({placeholders}) AND status = 'published' AND comment_type = 'answer'", tuple(target_ids))
             answers_count = cur.fetchone()["cnt"]
             discussion_count = comments_count + answers_count
-            cur.execute("SELECT 1 FROM article_comments WHERE article_id = ? AND status = 'published' AND is_solution = 1 LIMIT 1", (row["id"],))
+            cur.execute(f"SELECT 1 FROM article_comments WHERE article_id IN ({placeholders}) AND status = 'published' AND is_solution = 1 LIMIT 1", tuple(target_ids))
             has_solution = cur.fetchone() is not None
             cur.execute("SELECT COALESCE(SUM(value), 0) AS score FROM article_votes WHERE article_id = ?", (row["id"],))
             score_row = cur.fetchone()
