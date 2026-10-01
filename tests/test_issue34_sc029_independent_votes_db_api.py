@@ -266,14 +266,16 @@ class TestIssue34IndependentVotesDbApi(unittest.TestCase):
         cookie_author = self._login(author_id, "Author Sec")
         cookie_other = self._login("user_sec_other", "Other Sec")
 
-        # 1. Guest receives 401 AUTH_REQUIRED
+        # 1. Guest receives 401 AUTH_REQUIRED with requireAuth
         status, data = self._post_json(f"/api/articles/{art_id}/vote", {"value": 1}, cookie=None)
         self.assertEqual(status, 401)
         self.assertEqual(data.get("code"), "AUTH_REQUIRED")
+        self.assertTrue(data.get("requireAuth"))
 
         status, data = self._post_json(f"/api/comments/{comm_id}/vote", {"value": 1}, cookie=None)
         self.assertEqual(status, 401)
         self.assertEqual(data.get("code"), "AUTH_REQUIRED")
+        self.assertTrue(data.get("requireAuth"))
 
         # 2. Self-voting on article receives 403 SELF_VOTE_FORBIDDEN
         status, data = self._post_json(f"/api/articles/{art_id}/vote", {"value": 1}, cookie_author)
@@ -315,6 +317,12 @@ class TestIssue34IndependentVotesDbApi(unittest.TestCase):
         status, data = self._post_json(f"/api/comments/{orphan_comm_id}/vote", {"value": 1}, cookie_other)
         self.assertEqual(status, 404)
         self.assertEqual(data.get("code"), "NOT_FOUND")
+
+        # 8b. Comments DTO under unapproved parent article must have canVote == False
+        status, comm_dto = self._get_json(f"/api/articles/{unapproved_id}/comments", cookie_other)
+        self.assertEqual(status, 200)
+        for c in comm_dto.get("comments", []):
+            self.assertFalse(c.get("canVote"), "Comments under unapproved article must have canVote=False")
 
         # 9. Invalid payload validations: bool, float, string, out of bounds
         invalid_values = [2, -2, 10, "1", "-1", "up", 1.0, -1.0, True, False, None]
@@ -520,6 +528,25 @@ class TestIssue34IndependentVotesDbApi(unittest.TestCase):
         self.assertEqual(status, 200)
         items = res["articles"]
         self.assertEqual([x["id"] for x in items], [a1, a3, a2])
+
+        # 4. tab=top when all articles have score=0: strictly sorts by commentsCount/createdAt, NOT likesCount
+        z1 = "art_zero_likes_high"
+        z2 = "art_zero_comm_high"
+        self._insert_article(z1, "draft_z1", "author_bob", "Zero Score High Likes", created_at="2026-10-01T10:10:00Z")
+        self._insert_article(z2, "draft_z2", "author_bob", "Zero Score High Comm", created_at="2026-10-01T10:15:00Z")
+        conn = sqlite3.connect(self.db_path)
+        with conn:
+            for i in range(50):
+                conn.execute("INSERT OR REPLACE INTO article_likes (article_id, user_id, created_at) VALUES (?, ?, '2026-10-01T10:10:00Z')", (z1, f"liker_z1_{i}"))
+            conn.execute("INSERT OR REPLACE INTO article_likes (article_id, user_id, created_at) VALUES (?, ?, '2026-10-01T10:15:00Z')", (z2, "liker_z2_0"))
+            for i in range(5):
+                conn.execute("INSERT OR REPLACE INTO article_comments (id, article_id, user_id, author_name, content, status, comment_type, created_at) VALUES (?, ?, ?, 'Commer', 'comm', 'published', 'comment', '2026-10-01T10:20:00Z')", (f"comm_z2_{i}", z2, f"u_z2_{i}"))
+        conn.close()
+
+        status, res_z = self._get_json(f"/api/articles?ids={z1},{z2}&tab=top&period=all")
+        self.assertEqual(status, 200)
+        items_z = res_z["articles"]
+        self.assertEqual([x["id"] for x in items_z], [z2, z1], "tab=top must prioritize commentsCount over likes when scores are 0")
 
     def test_08_canonical_id_alias(self):
         """Invariant 8: Voting via draft_id resolves to canonical article_id."""

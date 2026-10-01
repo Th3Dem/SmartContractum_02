@@ -3470,7 +3470,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(401, {
                 "success": False,
                 "error": "Требуется авторизация",
-                "code": "AUTH_REQUIRED"
+                "code": "AUTH_REQUIRED",
+                "requireAuth": True
             })
             return
 
@@ -3506,6 +3507,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn = self.get_db()
         try:
             with conn:
+                conn.execute("BEGIN IMMEDIATE")
                 cur = conn.cursor()
                 cur.execute(
                     "SELECT id, draft_id, author_id, status FROM moderation_submissions WHERE (id = ? OR draft_id = ?) LIMIT 1",
@@ -3572,7 +3574,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(401, {
                 "success": False,
                 "error": "Требуется авторизация",
-                "code": "AUTH_REQUIRED"
+                "code": "AUTH_REQUIRED",
+                "requireAuth": True
             })
             return
 
@@ -3611,6 +3614,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn = self.get_db()
         try:
             with conn:
+                conn.execute("BEGIN IMMEDIATE")
                 cur = conn.cursor()
                 cur.execute("SELECT id, article_id, user_id, status FROM article_comments WHERE id = ?", (comment_id,))
                 comment = cur.fetchone()
@@ -3711,9 +3715,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn = self.get_db()
         with conn:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
+            cur.execute("SELECT id, status FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
             art_row = cur.fetchone()
             real_id = art_row["id"] if art_row else article_id
+            parent_is_approved = bool(art_row and art_row["status"] == "approved")
 
             cur.execute("""
                 SELECT id, article_id, user_id, author_name, author_avatar, content,
@@ -3791,7 +3796,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             client_op_id = r["client_operation_id"] if "client_operation_id" in r.keys() else None
             comm_score = comment_scores.get(r["id"], 0)
             comm_my_vote = user_comment_votes.get(r["id"], 0)
-            comm_can_vote = bool(curr_user and not is_del and r["user_id"] != curr_user_id)
+            comm_is_author = bool(curr_user and r["user_id"] == curr_user_id)
+            comm_can_vote = bool(curr_user and parent_is_approved and not is_del and r["status"] == "published" and not comm_is_author)
 
             if not is_del and is_sol and ctype == "answer":
                 has_solution = True
@@ -3816,7 +3822,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "createdAt": r["created_at"],
                     "score": comm_score,
                     "myVote": comm_my_vote,
-                    "canVote": False
+                    "canVote": False,
+                    "isAuthor": False
                 }
             else:
                 dto = {
@@ -3837,7 +3844,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "createdAt": r["created_at"],
                     "score": comm_score,
                     "myVote": comm_my_vote,
-                    "canVote": comm_can_vote
+                    "canVote": comm_can_vote,
+                    "isAuthor": comm_is_author
                 }
 
             if ctype == "answer":
@@ -5027,6 +5035,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         score = 0
         my_vote = 0
         can_vote = False
+        is_author = False
         with conn:
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (row["id"],))
@@ -5048,7 +5057,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 vote_row = cur.fetchone()
                 if vote_row:
                     my_vote = vote_row["value"]
-                can_vote = bool(row["author_id"] != user["id"])
+                is_author = bool(row["author_id"] == user["id"])
+                can_vote = bool(row["status"] == "approved" and not is_author)
 
         mat_type = settings.get("materialType") or settings.get("type") or "article"
 
@@ -5080,6 +5090,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "score": score,
             "myVote": my_vote,
             "canVote": can_vote,
+            "isAuthor": is_author,
             "commentsCount": comments_count,
             "answersCount": answers_count,
             "discussionCount": discussion_count,
@@ -5098,7 +5109,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "discussionCount": discussion_count,
             "score": score,
             "myVote": my_vote,
-            "canVote": can_vote
+            "canVote": can_vote,
+            "isAuthor": is_author
         })
 
     handle_get_article_by_id = handle_get_article
@@ -5607,7 +5619,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "hasLiked": art_id in user_likes,
                 "score": article_scores.get(art_id, 0),
                 "myVote": user_votes.get(art_id, 0),
-                "canVote": bool(current_user and row["author_id"] != current_user["id"]),
+                "canVote": bool(current_user and row["status"] == "approved" and row["author_id"] != current_user["id"]),
+                "isAuthor": bool(current_user and row["author_id"] == current_user["id"]),
                 "commentsCount": comments_counts.get(art_id, 0),
                 "answersCount": answers_counts.get(art_id, 0),
                 "discussionCount": comments_counts.get(art_id, 0) + answers_counts.get(art_id, 0),
@@ -5640,13 +5653,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Default "В фокусе": gravity popularity with fallback to createdAt
                 filtered_articles.sort(key=lambda a: (a.get("focusScore", 0.0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
             elif tab == "top":
-                has_votes = any(a.get("score", 0) != 0 for a in filtered_articles)
-                if has_votes:
-                    # "Топ": sort by (score, commentsCount, createdAt, id) DESC
-                    filtered_articles.sort(key=lambda a: (a.get("score", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
-                else:
-                    # Fallback when no votes exist in database/feed: sort by likesCount DESC, commentsCount DESC
-                    filtered_articles.sort(key=lambda a: (a.get("likesCount", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
+                # "Топ": sort by (score, commentsCount, createdAt, id) DESC strictly
+                filtered_articles.sort(key=lambda a: (a.get("score", 0), a.get("commentsCount", 0), a.get("createdAt", ""), a.get("id", "")), reverse=True)
             elif tab == "new":
                 # "Новое": strict chronological DESC
                 filtered_articles.sort(key=lambda a: (a.get("createdAt", ""), a.get("id", "")), reverse=True)

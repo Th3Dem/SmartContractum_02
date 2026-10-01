@@ -502,3 +502,4 @@
 [2026-10-01 10:15] | pm_bot | TASK_INIT | Старт задачи issue-34-independent-votes-db-api: независимые голоса +-1, БД и API голосования (Task: issue-34-independent-votes-db-api)
 [2026-10-01 10:30] | py_bot | IMPLEMENTATION_COMPLETE | Реализация независимого голосования +-1, схемы БД, API эндпоинтов и сортировок (Task: issue-34-independent-votes-db-api)
 [2026-10-01 10:33] | git_bot | PR_CREATED | Открыт PR для Issue #34 (Fixes #34), ветка feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
+[2026-10-01 11:36] | py_bot | REFINEMENT_COMPLETE | Доработка бэкенда Issue #34: requireAuth в 401 ответах, BEGIN IMMEDIATE в транзакциях, canVote с учетом статуса статьи и строгая сортировка топ по score (Task: issue-34-independent-votes-db-api)
