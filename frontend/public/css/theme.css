@@ -947,7 +947,7 @@ button.author-name:focus-visible,
 .vote-capsule {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   padding: 0 4px;
   height: 34px;
   min-height: 34px;
@@ -994,6 +994,12 @@ button.author-name:focus-visible,
   transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
 }
 
+.vote-btn-up,
+.vote-btn-down {
+  margin: 0;
+  padding: 0;
+}
+
 .vote-btn svg {
   display: block;
   width: 14px;
@@ -1028,22 +1034,20 @@ button.author-name:focus-visible,
 /* Active Voted States */
 .vote-btn-up.is-voted {
   color: var(--success-color, #10b981);
-  background: rgba(16, 185, 129, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.14);
 }
 
 .vote-btn-up.is-voted svg {
-  stroke-width: 3.2;
+  stroke-width: 2.5;
 }
 
 .vote-btn-down.is-voted {
   color: var(--danger-color, #ef4444);
-  background: rgba(239, 68, 68, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.14);
 }
 
 .vote-btn-down.is-voted svg {
-  stroke-width: 3.2;
+  stroke-width: 2.5;
 }
 
 .vote-capsule.has-voted-up,
@@ -1055,8 +1059,8 @@ button.author-name:focus-visible,
 /* Score display */
 .vote-score {
   display: inline-block;
-  min-width: 18px;
-  padding: 0 4px;
+  min-width: 26px;
+  padding: 0 2px;
   font-size: 0.85rem;
   font-weight: 700;
   line-height: 1;

@@ -526,3 +526,8 @@
 [2026-10-01 17:41] | git_bot | GIT_COMMITTED | Фиксация согласования legacy draft_id комментариев по sub-issue #43 в ветку feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
 [2026-10-01 17:44] | git_bot | GIT_COMMITTED | Слияние feat/issue-34-independent-votes-db-api в feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
 [2026-10-01 17:47] | git_bot | GIT_COMMITTED | Слияние обновленной ветки feat/issue-35-voting-arrows-and-live-counters в feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
+[2026-10-01 18:23] | dev_bot | IMPLEMENTATION_COMPLETE | Визуальная полировка капсулы голосования: симметрия и центрирование стрелок (#50), стабильная ширина счета tabular-nums (#51), мягкий оттенок активной стрелки без резких теней (#52) (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 18:27] | git_bot | GIT_COMMITTED | Фиксация визуальной полировки рейтинга по sub-issues #50, #51, #52 в ветку feat/issue-35-voting-arrows-and-live-counters (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 18:35] | pm_bot | TASK_INIT | Старт задачи issue-49-delete-comment: кнопка «Удалить» для собственного комментария (Task: issue-49-delete-comment)
+[2026-10-01 18:41] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация кнопки «Удалить», доступного подтверждения, серверной авторизации, сохранения потомков и синхронизации кармы (Task: issue-49-delete-comment)
+[2026-10-01 18:44] | git_bot | PR_CREATED | Открыт PR #53 для Issue #49 (Fixes #49), ветка feat/issue-49-delete-comment (Task: issue-49-delete-comment)
