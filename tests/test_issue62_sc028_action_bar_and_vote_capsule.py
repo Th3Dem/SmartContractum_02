@@ -215,22 +215,97 @@ class TestIssue62ActionBarAndVoteCapsule(unittest.TestCase):
         self.assertIn("color: #ef4444;", active_css, "Liked text/icon must be red")
         self.assertIn("background: transparent;", active_css, "No heavy solid fill")
 
-    def test_10_comments_active_click_blue_response(self):
-        """Comments button provides blue border response on active/focus-visible."""
+    def test_10_comments_hover_and_active_unified_light_blue(self):
+        """Comments hover and active states share same light-blue color (#38bdf8)."""
+        # Comments hover state
+        comm_hover = re.search(r'\.btn-card-comments:hover\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(comm_hover, "Comments hover rule must exist")
+        hover_css = comm_hover.group(1)
+        self.assertIn("color: #38bdf8;", hover_css, "Comments hover color must be light-blue #38bdf8")
+        self.assertIn("border-color: #38bdf8;", hover_css, "Comments hover border must be light-blue #38bdf8")
+
+        # Comments active / focus-visible state
         comm_active = re.search(r'\.btn-card-comments:active,\s*\.btn-card-comments:focus-visible\s*\{([^}]+)\}', self.feed_css)
         self.assertIsNotNone(comm_active, "Comments active/focus rule must exist")
         active_css = comm_active.group(1)
-        self.assertIn("border-color: var(--accent-color, #3b82f6);", active_css)
-        self.assertIn("color: var(--accent-color, #3b82f6);", active_css)
+        self.assertIn("color: #38bdf8;", active_css, "Comments active color must match light-blue #38bdf8")
+        self.assertIn("border-color: #38bdf8;", active_css, "Comments active border must match light-blue #38bdf8")
 
-    def test_11_bookmark_active_amber_state(self):
-        """Bookmark button turns amber/yellow on border and icon when bookmarked."""
+        # Strict check: no dark/saturated blue #3b82f6
+        self.assertNotIn("#3b82f6", active_css, "Comments active must not use dark blue #3b82f6")
+        self.assertNotIn("#3b82f6", hover_css, "Comments hover must not use dark blue #3b82f6")
+
+    def test_11_bookmark_hover_and_saved_yellow_state(self):
+        """Bookmark hover matches yellow saved state (#f59e0b) and never uses blue."""
+        # Bookmark hover state in feed.css
+        bm_hover = re.search(r'\.btn-card-bookmark:hover\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(bm_hover, "Bookmark hover rule must exist")
+        hover_css = bm_hover.group(1)
+        self.assertIn("color: #f59e0b;", hover_css, "Bookmark hover color must be yellow #f59e0b")
+        self.assertIn("border-color: #f59e0b;", hover_css, "Bookmark hover border must be yellow #f59e0b")
+        self.assertNotIn("var(--accent-color)", hover_css, "Bookmark hover must strictly not use blue accent color")
+        self.assertNotIn("#38bdf8", hover_css, "Bookmark hover must strictly not use blue")
+        self.assertNotIn("#3b82f6", hover_css, "Bookmark hover must strictly not use blue")
+
+        # Bookmark saved state in feed.css
         bm_active = re.search(r'\.btn-card-bookmark\.is-bookmarked\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(bm_active)
+        self.assertIsNotNone(bm_active, "Bookmark is-bookmarked rule must exist")
         active_css = bm_active.group(1)
-        self.assertIn("border-color: #f59e0b;", active_css, "Bookmarked border must be amber")
-        self.assertIn("color: #f59e0b;", active_css, "Bookmarked icon must be amber")
+        self.assertIn("border-color: #f59e0b;", active_css, "Bookmarked border must be yellow #f59e0b")
+        self.assertIn("color: #f59e0b;", active_css, "Bookmarked icon must be yellow #f59e0b")
         self.assertIn("background: transparent;", active_css, "No heavy solid fill")
+
+        # Bookmark hover in article.css
+        art_bm_hover = re.search(r'\.btn-action-bookmark:hover\s*\{([^}]+)\}', self.article_css)
+        self.assertIsNotNone(art_bm_hover, "Article bookmark hover rule must exist")
+        art_hover_css = art_bm_hover.group(1)
+        self.assertIn("color: #f59e0b;", art_hover_css)
+        self.assertIn("border-color: #f59e0b;", art_hover_css)
+
+    def test_11b_read_more_default_visible_border_and_background(self):
+        """Read More button has visible border and light-blue background by default, with arrow shift on hover."""
+        # Default state in feed.css
+        rm_match = re.search(r'\.card-read-more,\s*\.btn-read-more\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(rm_match, "card-read-more rule must exist in feed.css")
+        rm_css = rm_match.group(1)
+        self.assertIn("border: 1px solid rgba(56, 189, 248, 0.4);", rm_css, "Read More must have visible border by default")
+        self.assertIn("background: rgba(56, 189, 248, 0.08);", rm_css, "Read More must have light-blue background by default")
+        self.assertIn("color: #38bdf8;", rm_css, "Read More default text color must be light-blue")
+        self.assertIn("height: 36px;", rm_css, "Read More must match action bar 36px height")
+        self.assertIn("border-radius: var(--radius-sm, 6px);", rm_css, "Read More must use rounded radius-sm")
+
+        # Light theme override in feed.css
+        lt_match = re.search(r'\[data-theme="light"\] \.card-read-more,\s*\[data-theme="light"\] \.btn-read-more\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(lt_match, "Light theme rule for Read More must exist")
+        lt_css = lt_match.group(1)
+        self.assertIn("color: #0284c7;", lt_css)
+        self.assertIn("background: rgba(2, 132, 199, 0.08);", lt_css)
+
+        # Hover state in feed.css
+        rm_hover = re.search(r'\.card-read-more:hover,\s*\.btn-read-more:hover\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(rm_hover)
+        hover_css = rm_hover.group(1)
+        self.assertIn("background: rgba(56, 189, 248, 0.16);", hover_css)
+        self.assertIn("border-color: rgba(56, 189, 248, 0.7);", hover_css)
+
+        # Arrow shift on hover in feed.css
+        arrow_hover = re.search(r'\.card-read-more:hover svg,\s*\.btn-read-more:hover svg\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(arrow_hover, "Arrow hover shift rule must exist")
+        self.assertIn("transform: translateX(2px);", arrow_hover.group(1))
+
+        # Focus / active state in feed.css
+        focus_rule = re.search(r'\.card-read-more:focus-visible,\s*\.btn-read-more:focus-visible,\s*\.card-read-more:active,\s*\.btn-read-more:active\s*\{([^}]+)\}', self.feed_css)
+        self.assertIsNotNone(focus_rule, "Focus / active rule must exist")
+        self.assertIn("outline: 2px solid var(--accent-color);", focus_rule.group(1))
+        self.assertIn("outline-offset: 2px;", focus_rule.group(1))
+
+        # Editor preview in editor.css
+        ed_match = re.search(r'\.pub-feed-card \.card-read-more,\s*\.pub-feed-card \.btn-read-more\s*\{([^}]+)\}', self.editor_css)
+        self.assertIsNotNone(ed_match, "Editor preview read more rule must exist")
+        ed_css = ed_match.group(1)
+        self.assertIn("border: 1px solid rgba(56, 189, 248, 0.4);", ed_css)
+        self.assertIn("background: rgba(56, 189, 248, 0.08);", ed_css)
+        self.assertIn("height: 36px;", ed_css)
 
     # --------------------------------------------------------------------------
     # 4. Rating Capsule: Upvote Active State & 3-Sided Border

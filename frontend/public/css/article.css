@@ -85,11 +85,16 @@ body,
 }
 
 .btn-action-like:hover,
-.btn-action-bookmark:hover,
 .btn-action-share:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--accent-color);
+}
+
+.btn-action-bookmark:hover {
+  background: var(--bg-hover);
+  color: #f59e0b;
+  border-color: #f59e0b;
 }
 
 .btn-action-like.is-liked {

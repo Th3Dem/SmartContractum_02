@@ -46,7 +46,7 @@ class Canvas:
             for cx in range(max(0, x), min(self.width, x + w)):
                 self.set_pixel(cx, cy, color, alpha)
 
-    def draw_round_rect(self, x: int, y: int, w: int, h: int, r: int, fill_color, border_color=None, border_width: int = 1):
+    def draw_round_rect(self, x: int, y: int, w: int, h: int, r: int, fill_color, border_color=None, border_width: int = 1, fill_alpha: float = 1.0, border_alpha: float = 1.0):
         for cy in range(y, y + h):
             for cx in range(x, x + w):
                 dx = 0
@@ -70,9 +70,9 @@ class Canvas:
                             dist >= r - border_width):
                             is_border = True
                     if is_border:
-                        self.set_pixel(cx, cy, border_color)
+                        self.set_pixel(cx, cy, border_color, border_alpha)
                     elif fill_color:
-                        self.set_pixel(cx, cy, fill_color)
+                        self.set_pixel(cx, cy, fill_color, fill_alpha)
 
     def draw_radial_glow(self, cx: int, cy: int, radius: int, color, max_alpha: float = 0.25):
         for y in range(cy - radius, cy + radius + 1):
@@ -113,6 +113,11 @@ class Canvas:
         self.draw_line(cx, cy - 6, cx, cy + 6, color, stroke_w)
         self.draw_line(cx, cy + 6, cx - 5, cy + 1, color, stroke_w)
         self.draw_line(cx, cy + 6, cx + 5, cy + 1, color, stroke_w)
+
+    def draw_arrow_right(self, cx: int, cy: int, color, stroke_w: int = 2):
+        self.draw_line(cx - 5, cy, cx + 5, cy, color, stroke_w)
+        self.draw_line(cx + 5, cy, cx + 1, cy - 4, color, stroke_w)
+        self.draw_line(cx + 5, cy, cx + 1, cy + 4, color, stroke_w)
 
     def draw_heart(self, cx: int, cy: int, color, filled: bool = False):
         # Heart silhouette
@@ -167,6 +172,13 @@ class Canvas:
             '+': ["   ", " # ", "###", " # ", "   "],
             '-': ["   ", "   ", "###", "   ", "   "],
             'k': ["#  ", "# #", "## ", "# #", "# #"],
+            'R': ["## ", "# #", "## ", "# #", "# #"],
+            'E': ["###", "#  ", "## ", "#  ", "###"],
+            'A': [" # ", "# #", "###", "# #", "# #"],
+            'D': ["## ", "# #", "# #", "# #", "## "],
+            'M': ["# #", "###", "# #", "# #", "# #"],
+            'O': ["###", "# #", "# #", "# #", "###"],
+            ' ': ["   ", "   ", "   ", "   ", "   "],
         }
         rows = glyphs.get(char, ["###", " # ", " # ", " # ", "###"])
         for r_idx, row in enumerate(rows):
@@ -212,9 +224,11 @@ def render_action_bar_block(
     like_count: str = "12",
     vote_state: str = "default",  # default, up, down
     score_val: int = 0,
-    comm_state: str = "default",  # default, active
+    comm_state: str = "default",  # default, hover, active
     comm_count: str = "4",
-    bm_state: str = "default"  # default, bookmarked
+    bm_state: str = "default",  # default, hover, bookmarked
+    include_read_more: bool = True,
+    rm_state: str = "default"  # default, hover
 ):
     # Palette definition
     if theme == "dark":
@@ -222,19 +236,25 @@ def render_action_bar_block(
         border_color = (51, 65, 85)
         text_primary = (248, 250, 252)
         text_muted = (148, 163, 184)
-        accent = (59, 130, 246)
+        accent = (56, 189, 248)  # Unified light-blue #38bdf8
         success = (16, 185, 129)
         error = (239, 68, 68)
         warning = (245, 158, 11)
+        rm_color = (56, 189, 248)
+        rm_bg_alpha = 0.16 if rm_state == "hover" else 0.08
+        rm_border_alpha = 0.70 if rm_state == "hover" else 0.40
     else:
         bg_surface = (255, 255, 255)
         border_color = (226, 232, 240)
         text_primary = (15, 23, 42)
         text_muted = (100, 116, 139)
-        accent = (59, 130, 246)
+        accent = (56, 189, 248)  # Unified light-blue #38bdf8
         success = (16, 185, 129)
         error = (239, 68, 68)
         warning = (245, 158, 11)
+        rm_color = (2, 132, 199)
+        rm_bg_alpha = 0.16 if rm_state == "hover" else 0.08
+        rm_border_alpha = 0.60 if rm_state == "hover" else 0.35
 
     elem_h = 36
     radius = 6
@@ -330,8 +350,8 @@ def render_action_bar_block(
     # 3. Comments button (compact square / min-width 36)
     comm_x = capsule_x + capsule_w + 8
     comm_w = 42 if len(comm_count) > 1 else 36
-    comm_border = accent if comm_state == "active" else border_color
-    comm_fg = accent if comm_state == "active" else text_muted
+    comm_border = accent if comm_state in ("hover", "active") else border_color
+    comm_fg = accent if comm_state in ("hover", "active") else text_muted
     canvas.draw_round_rect(comm_x, y, comm_w, elem_h, radius, bg_surface, comm_border, 1)
     canvas.draw_comments_bubble(comm_x + 13, y + 18, comm_fg)
     canvas.draw_text_mini(comm_x + 23, y + 16, comm_count, comm_fg)
@@ -339,48 +359,70 @@ def render_action_bar_block(
     # 4. Bookmark button (1:1 square, 36x36)
     bm_x = comm_x + comm_w + 8
     bm_w = 36
-    bm_border = warning if bm_state == "bookmarked" else border_color
-    bm_fg = warning if bm_state == "bookmarked" else text_muted
+    bm_border = warning if bm_state in ("hover", "bookmarked") else border_color
+    bm_fg = warning if bm_state in ("hover", "bookmarked") else text_muted
     canvas.draw_round_rect(bm_x, y, bm_w, elem_h, radius, bg_surface, bm_border, 1)
     canvas.draw_bookmark(bm_x + 18, y + 18, bm_fg, filled=(bm_state == "bookmarked"))
+
+    # 5. Read More button (compact action button with border and light-blue background)
+    if include_read_more:
+        if canvas.width > 500:
+            rm_w = 92
+            rm_x = canvas.width - x - rm_w
+        else:
+            rm_w = 84
+            rm_x = canvas.width - x - rm_w
+
+        canvas.draw_round_rect(
+            rm_x, y, rm_w, elem_h, radius,
+            fill_color=rm_color,
+            border_color=rm_color,
+            border_width=1,
+            fill_alpha=rm_bg_alpha,
+            border_alpha=rm_border_alpha
+        )
+        canvas.draw_text_mini(rm_x + 12, y + 16, "READ", rm_color)
+        arrow_shift = 2 if rm_state == "hover" else 0
+        canvas.draw_arrow_right(rm_x + rm_w - 18 + arrow_shift, y + 18, rm_color, stroke_w=2)
 
 
 def generate_all_screenshots():
     # 1. Desktop Light Theme: All Key States
-    c_light = Canvas(760, 480, bg_color=(248, 250, 252))
+    c_light = Canvas(760, 540, bg_color=(248, 250, 252))
     states = [
-        ("Default state (Score 0)", "default", "0", "default", 0, "default", "0", "default"),
-        ("Liked state (Red border & icon)", "liked", "15", "default", 15, "default", "3", "default"),
-        ("Upvoted state (3-sided green border & glow)", "default", "8", "up", 8, "default", "2", "default"),
-        ("Downvoted state (3-sided red border & glow)", "default", "4", "down", -1, "default", "0", "default"),
-        ("Positive score + Downvote (Score green, right border red)", "default", "24", "down", 15, "default", "7", "default"),
-        ("Bookmarked state (Amber border & icon)", "default", "19", "default", 12, "default", "5", "bookmarked"),
-        ("Comments active click response", "default", "10", "default", 3, "active", "12", "default"),
+        ("Default state (Score 0, neutral borders, read-more default)", "default", "0", "default", 0, "default", "0", "default", "default"),
+        ("Liked state (Red border & heart)", "liked", "15", "default", 15, "default", "3", "default", "default"),
+        ("Upvoted state (3-sided green border & glow)", "default", "8", "up", 8, "default", "2", "default", "default"),
+        ("Downvoted state (3-sided red border & glow)", "default", "4", "down", -1, "default", "0", "default", "default"),
+        ("Bookmark hover (Amber border & icon)", "default", "19", "default", 12, "default", "5", "hover", "default"),
+        ("Bookmarked state (Amber border & filled icon)", "default", "19", "default", 12, "default", "5", "bookmarked", "default"),
+        ("Comments hover / active response (#38bdf8)", "default", "10", "default", 3, "active", "12", "default", "default"),
+        ("Read More hover (saturated cyan, arrow shifted +2px)", "default", "24", "default", 15, "default", "7", "default", "hover"),
     ]
-    for idx, (label, ls, lc, vs, sc, cs, cc, bs) in enumerate(states):
+    for idx, (label, ls, lc, vs, sc, cs, cc, bs, rms) in enumerate(states):
         row_y = 30 + idx * 62
-        render_action_bar_block(c_light, 60, row_y, theme="light", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs)
+        render_action_bar_block(c_light, 60, row_y, theme="light", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs, include_read_more=True, rm_state=rms)
     c_light.save_png(os.path.join(OUTPUT_DIR, "action_bar_desktop_light.png"))
 
     # 2. Desktop Dark Theme: All Key States
-    c_dark = Canvas(760, 480, bg_color=(15, 23, 42))
-    for idx, (label, ls, lc, vs, sc, cs, cc, bs) in enumerate(states):
+    c_dark = Canvas(760, 540, bg_color=(15, 23, 42))
+    for idx, (label, ls, lc, vs, sc, cs, cc, bs, rms) in enumerate(states):
         row_y = 30 + idx * 62
-        render_action_bar_block(c_dark, 60, row_y, theme="dark", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs)
+        render_action_bar_block(c_dark, 60, row_y, theme="dark", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs, include_read_more=True, rm_state=rms)
     c_dark.save_png(os.path.join(OUTPUT_DIR, "action_bar_desktop_dark.png"))
 
     # 3. Mobile Light Theme View
-    c_mob_light = Canvas(380, 520, bg_color=(248, 250, 252))
-    for idx, (label, ls, lc, vs, sc, cs, cc, bs) in enumerate(states[:7]):
+    c_mob_light = Canvas(380, 580, bg_color=(248, 250, 252))
+    for idx, (label, ls, lc, vs, sc, cs, cc, bs, rms) in enumerate(states):
         row_y = 25 + idx * 68
-        render_action_bar_block(c_mob_light, 20, row_y, theme="light", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs)
+        render_action_bar_block(c_mob_light, 20, row_y, theme="light", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs, include_read_more=True, rm_state=rms)
     c_mob_light.save_png(os.path.join(OUTPUT_DIR, "action_bar_mobile_light.png"))
 
     # 4. Mobile Dark Theme View
-    c_mob_dark = Canvas(380, 520, bg_color=(15, 23, 42))
-    for idx, (label, ls, lc, vs, sc, cs, cc, bs) in enumerate(states[:7]):
+    c_mob_dark = Canvas(380, 580, bg_color=(15, 23, 42))
+    for idx, (label, ls, lc, vs, sc, cs, cc, bs, rms) in enumerate(states):
         row_y = 25 + idx * 68
-        render_action_bar_block(c_mob_dark, 20, row_y, theme="dark", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs)
+        render_action_bar_block(c_mob_dark, 20, row_y, theme="dark", like_state=ls, like_count=lc, vote_state=vs, score_val=sc, comm_state=cs, comm_count=cc, bm_state=bs, include_read_more=True, rm_state=rms)
     c_mob_dark.save_png(os.path.join(OUTPUT_DIR, "action_bar_mobile_dark.png"))
 
     # 5. Dedicated Vote Capsule States Matrix
@@ -394,7 +436,7 @@ def generate_all_screenshots():
     ]
     for idx, (lbl, vs, sc) in enumerate(capsule_states):
         row_y = 30 + idx * 64
-        render_action_bar_block(c_matrix, 40, row_y, theme="dark", vote_state=vs, score_val=sc)
+        render_action_bar_block(c_matrix, 40, row_y, theme="dark", vote_state=vs, score_val=sc, include_read_more=False)
     c_matrix.save_png(os.path.join(OUTPUT_DIR, "vote_capsule_states_matrix.png"))
 
     print("Successfully generated all screenshots in:", OUTPUT_DIR)
