@@ -502,3 +502,6 @@
 [2026-10-01 10:15] | pm_bot | TASK_INIT | Старт задачи issue-34-independent-votes-db-api: независимые голоса +-1, БД и API голосования (Task: issue-34-independent-votes-db-api)
 [2026-10-01 10:30] | py_bot | IMPLEMENTATION_COMPLETE | Реализация независимого голосования +-1, схемы БД, API эндпоинтов и сортировок (Task: issue-34-independent-votes-db-api)
 [2026-10-01 10:33] | git_bot | PR_CREATED | Открыт PR для Issue #34 (Fixes #34), ветка feat/issue-34-independent-votes-db-api (Task: issue-34-independent-votes-db-api)
+[2026-10-01 10:35] | pm_bot | TASK_INIT | Старт задачи issue-35-voting-arrows-and-live-counters: стрелки голосования в интерфейсе и обновление счетчиков без перезагрузки (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 10:35] | pm_bot | DEV_ASSIGN | Назначение dev_bot для реализации капсулы голосования, независимых лайков, обновления счетчиков и проверок (Task: issue-35-voting-arrows-and-live-counters)
+[2026-10-01 10:52] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация капсулы рейтинга со стрелками, синхронизации без перезагрузки и независимых лайков (Task: issue-35-voting-arrows-and-live-counters)

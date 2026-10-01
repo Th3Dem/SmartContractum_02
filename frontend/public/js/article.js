@@ -260,15 +260,20 @@
       .then(function (data) {
         if (data && data.authenticated && data.user) {
           currentUser = data.user;
+          window.currentUser = data.user;
         } else {
           currentUser = null;
+          window.currentUser = null;
         }
         updateAuthUI();
+        if (currentArticle) syncArticleVoteCapsules(currentArticle);
         if (callback) callback();
       })
       .catch(function () {
         currentUser = null;
+        window.currentUser = null;
         updateAuthUI();
+        if (currentArticle) syncArticleVoteCapsules(currentArticle);
         if (callback) callback();
       });
   }
@@ -322,10 +327,37 @@
     const modal = document.getElementById('authModal');
     if (modal) modal.style.display = 'flex';
   }
+  window.openAuthModal = openAuthModal;
 
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
     if (modal) modal.style.display = 'none';
+  }
+
+  function syncArticleVoteCapsules(article) {
+    if (!article) return;
+    const authorId = article.authorId || article.author_id;
+    const isAuthor = Boolean(currentUser && (currentUser.id === authorId));
+    const canVote = article.canVote !== false && !isAuthor;
+    const score = article.score !== undefined ? article.score : 0;
+    const myVote = article.myVote !== undefined ? article.myVote : 0;
+
+    const capsuleHtml = (window.SmartContractumVotes && typeof window.SmartContractumVotes.renderVoteCapsuleHtml === 'function')
+      ? window.SmartContractumVotes.renderVoteCapsuleHtml({
+          targetType: 'article',
+          targetId: article.id,
+          score: score,
+          myVote: myVote,
+          canVote: canVote,
+          isAuthor: isAuthor
+        })
+      : '';
+
+    const topEl = document.getElementById('voteArticleTop');
+    if (topEl) topEl.innerHTML = capsuleHtml;
+
+    const bottomEl = document.getElementById('voteArticleBottom');
+    if (bottomEl) bottomEl.innerHTML = capsuleHtml;
   }
 
   function initAuthControls() {
@@ -339,10 +371,12 @@
               .then(function (res) { return res.json(); })
               .then(function () {
                 currentUser = null;
+                window.currentUser = null;
                 currentMyAnswerId = null;
                 updateAuthUI();
                 showToast('Вы вышли из системы');
                 if (currentArticle) {
+                  syncArticleVoteCapsules(currentArticle);
                   loadComments(currentArticle.id);
                 }
               });
@@ -383,10 +417,12 @@
           .then(function (data) {
             if (data && data.success && data.user) {
               currentUser = data.user;
+              window.currentUser = data.user;
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
               if (currentArticle) {
+                syncArticleVoteCapsules(currentArticle);
                 loadComments(currentArticle.id);
               }
             }
@@ -408,10 +444,12 @@
           .then(function (data) {
             if (data && data.success && data.user) {
               currentUser = data.user;
+              window.currentUser = data.user;
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
               if (currentArticle) {
+                syncArticleVoteCapsules(currentArticle);
                 loadComments(currentArticle.id);
               }
             }
@@ -1026,6 +1064,20 @@
         currentUser.id === comment.userId ||
         currentUser.id === comment.user_id
       ));
+      const commScore = comment.score !== undefined ? comment.score : 0;
+      const commMyVote = comment.myVote !== undefined ? comment.myVote : 0;
+      const commCanVote = comment.canVote !== false && !isMyComment;
+      const commVoteCapsuleHtml = (window.SmartContractumVotes && typeof window.SmartContractumVotes.renderVoteCapsuleHtml === 'function')
+        ? window.SmartContractumVotes.renderVoteCapsuleHtml({
+            targetType: 'comment',
+            targetId: comment.id,
+            score: commScore,
+            myVote: commMyVote,
+            canVote: commCanVote,
+            isAuthor: isMyComment,
+            isDeleted: Boolean(comment.isDeleted)
+          })
+        : '';
 
       let editBtnHtml = '';
       if (isMyComment) {
@@ -1117,6 +1169,7 @@
           '</div>' +
         '</div>' +
         '<div class="comment-actions">' +
+          commVoteCapsuleHtml +
           editBtnHtml +
           '<button type="button" class="btn-action-text btn-reply-comment">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -1642,6 +1695,20 @@
       currentUser.id === comment.userId ||
       currentUser.id === comment.user_id
     ));
+    const ansScore = comment.score !== undefined ? comment.score : 0;
+    const ansMyVote = comment.myVote !== undefined ? comment.myVote : 0;
+    const ansCanVote = comment.canVote !== false && !isMyAnswer;
+    const ansVoteCapsuleHtml = (window.SmartContractumVotes && typeof window.SmartContractumVotes.renderVoteCapsuleHtml === 'function')
+      ? window.SmartContractumVotes.renderVoteCapsuleHtml({
+          targetType: 'comment',
+          targetId: comment.id,
+          score: ansScore,
+          myVote: ansMyVote,
+          canVote: ansCanVote,
+          isAuthor: isMyAnswer,
+          isDeleted: Boolean(comment.isDeleted)
+        })
+      : '';
 
     let editBtnHtml = '';
     if (isMyAnswer) {
@@ -1683,6 +1750,7 @@
         '</div>' +
       '</div>' +
       '<div class="answer-actions">' +
+        ansVoteCapsuleHtml +
         editBtnHtml +
         '<button type="button" class="btn btn-secondary btn-sm btn-reply-answer">Комментировать ответ</button>' +
       '</div>' +
@@ -3209,6 +3277,9 @@
 
     // Sync Like State
     syncLikeButtons(article.likesCount, Boolean(article.hasLiked || article.isLiked));
+
+    // Sync Article Vote Capsules (Top and Bottom)
+    syncArticleVoteCapsules(article);
 
     // Customize Comments / Answers section for Questions
     const isQuestion = Boolean(

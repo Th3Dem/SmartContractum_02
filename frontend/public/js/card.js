@@ -1,5 +1,5 @@
 /**
- * card.js — Единый общий компонент карточки публикации SmartContractum
+ * card.js - Единый общий компонент карточки публикации SmartContractum
  *
  * Используется совместно в:
  * 1. Ленте публикаций (feed.html, feed.js)
@@ -113,6 +113,104 @@
       return '<span class="meta-badge complexity-badge" id="preview-card-badge-complexity" style="display: none;"></span>';
     }
     return '';
+  }
+
+  function renderVoteCapsuleHtml(params) {
+    if (window.SmartContractumVotes && typeof window.SmartContractumVotes.renderVoteCapsuleHtml === 'function') {
+      return window.SmartContractumVotes.renderVoteCapsuleHtml(params);
+    }
+    params = params || {};
+    const targetType = params.targetType || 'article';
+    const targetId = params.targetId ? String(params.targetId) : '';
+    const score = Number.isInteger(params.score) ? params.score : (parseInt(params.score, 10) || 0);
+    const myVote = Number.isInteger(params.myVote) ? params.myVote : (parseInt(params.myVote, 10) || 0);
+    const isAuthor = Boolean(params.isAuthor);
+    const canVote = params.canVote !== undefined ? Boolean(params.canVote) : (!isAuthor);
+    const isDeleted = Boolean(params.isDeleted);
+    const isPreview = Boolean(params.isPreview);
+
+    const authorTitle = targetType === 'comment'
+      ? 'Нельзя голосовать за собственный комментарий'
+      : 'Нельзя голосовать за собственный материал';
+
+    let upTitle = 'Повысить рейтинг';
+    let upLabel = 'Повысить рейтинг';
+    let upDisabled = false;
+    let downTitle = 'Понизить рейтинг';
+    let downLabel = 'Понизить рейтинг';
+    let downDisabled = false;
+
+    if (isAuthor || canVote === false) {
+      upTitle = authorTitle;
+      upLabel = authorTitle;
+      upDisabled = true;
+      downTitle = authorTitle;
+      downLabel = authorTitle;
+      downDisabled = true;
+    } else if (isDeleted) {
+      upTitle = 'Комментарий удален';
+      upLabel = 'Комментарий удален';
+      upDisabled = true;
+      downTitle = 'Комментарий удален';
+      downLabel = 'Комментарий удален';
+      downDisabled = true;
+    } else if (isPreview) {
+      upTitle = 'Предпросмотр';
+      upDisabled = true;
+      downTitle = 'Предпросмотр';
+      downDisabled = true;
+    } else {
+      if (myVote === 1) upTitle = 'Снять голос';
+      if (myVote === -1) downTitle = 'Снять голос';
+    }
+
+    const upClass = 'vote-btn vote-btn-up' + (myVote === 1 ? ' is-voted' : '');
+    const downClass = 'vote-btn vote-btn-down' + (myVote === -1 ? ' is-voted' : '');
+
+    const upBtnHtml =
+      '<button type="button" class="' + upClass + '" data-dir="1" ' +
+      'aria-label="' + escapeHtml(upLabel) + '" title="' + escapeHtml(upTitle) + '" ' +
+      'aria-pressed="' + (myVote === 1 ? 'true' : 'false') + '"' +
+      (upDisabled ? ' disabled aria-disabled="true"' : '') + '>' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<polyline points="18 15 12 9 6 15"></polyline>' +
+        '</svg>' +
+      '</button>';
+
+    const downBtnHtml =
+      '<button type="button" class="' + downClass + '" data-dir="-1" ' +
+      'aria-label="' + escapeHtml(downLabel) + '" title="' + escapeHtml(downTitle) + '" ' +
+      'aria-pressed="' + (myVote === -1 ? 'true' : 'false') + '"' +
+      (downDisabled ? ' disabled aria-disabled="true"' : '') + '>' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<polyline points="6 9 12 15 18 9"></polyline>' +
+        '</svg>' +
+      '</button>';
+
+    let scoreClass = 'vote-score';
+    if (score > 0) scoreClass += ' is-positive';
+    else if (score < 0) scoreClass += ' is-negative';
+    else scoreClass += ' is-zero';
+
+    const scoreHtml = '<span class="' + scoreClass + '" data-score="' + score + '">' + score + '</span>';
+
+    const capsuleClass = 'vote-capsule' +
+      (myVote === 1 ? ' has-voted-up' : (myVote === -1 ? ' has-voted-down' : '')) +
+      (isPreview ? ' is-preview' : '');
+
+    return (
+      '<div class="' + capsuleClass + '" ' +
+        'data-vote-target-type="' + escapeHtml(targetType) + '" ' +
+        'data-vote-target-id="' + escapeHtml(targetId) + '" ' +
+        'data-score="' + score + '" ' +
+        'data-my-vote="' + myVote + '" ' +
+        'data-can-vote="' + (canVote ? 'true' : 'false') + '"' +
+        (isAuthor ? ' data-is-author="true"' : '') + '>' +
+        upBtnHtml +
+        scoreHtml +
+        downBtnHtml +
+      '</div>'
+    );
   }
 
   function renderCardInnerHtml(item, options, isBookmarked) {
@@ -334,6 +432,20 @@
         '</button>';
     }
 
+    const score = item.score !== undefined ? item.score : 0;
+    const myVote = item.myVote !== undefined ? item.myVote : 0;
+    const canVote = item.canVote !== undefined ? Boolean(item.canVote) : true;
+    const isAuthor = Boolean(options.currentUserId && (options.currentUserId === (item.authorId || item.author_id)));
+    const voteCapsuleHtml = renderVoteCapsuleHtml({
+      targetType: 'article',
+      targetId: item.id || '',
+      score: score,
+      myVote: myVote,
+      canVote: canVote && !isAuthor,
+      isAuthor: isAuthor,
+      isPreview: isPreview
+    });
+
     let footerLeftHtml = '';
     let readMoreText = 'Читать далее';
     let actionTargetUrl = articleUrl;
@@ -353,13 +465,13 @@
           '</svg>' +
           '<span>' + (item.hasSolution ? 'Решение принято • ' : '') + aText + '</span>' +
         '</a>';
-      footerLeftHtml = answersBtnHtml + bookmarkHtml;
+      footerLeftHtml = likeBtnHtml + voteCapsuleHtml + answersBtnHtml + bookmarkHtml;
       readMoreText = (aCount === 0 ? 'Ответить' : 'Смотреть вопрос');
       if (aCount === 0) {
         actionTargetUrl = questionAnswerUrl;
       }
     } else {
-      footerLeftHtml = likeBtnHtml + commentsBtnHtml + bookmarkHtml;
+      footerLeftHtml = likeBtnHtml + voteCapsuleHtml + commentsBtnHtml + bookmarkHtml;
       readMoreText = 'Читать далее';
       actionTargetUrl = articleUrl;
     }
@@ -543,6 +655,7 @@
     cleanString: cleanString,
     getBadgesHtml: getBadgesHtml,
     getComplexityBadgeHtml: getComplexityBadgeHtml,
+    renderVoteCapsuleHtml: renderVoteCapsuleHtml,
     renderCardInnerHtml: renderCardInnerHtml,
     createCardElement: createCardElement,
     createAvatarEl: createAvatarEl

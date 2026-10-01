@@ -447,6 +447,7 @@
 
   function setAuthState(user) {
     currentUser = user;
+    window.currentUser = user;
     const personalElements = document.querySelectorAll('.personal-tab');
     personalElements.forEach(function (el) {
       el.style.display = user ? 'inline-flex' : 'none';
@@ -478,6 +479,7 @@
     const modal = document.getElementById('authModal');
     if (modal) modal.style.display = 'flex';
   }
+  window.openAuthModal = openAuthModal;
 
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
@@ -3724,13 +3726,34 @@
     let items = filterArticleList(FALLBACK_ARTICLES);
 
     // Apply sorting in offline fallback
-    if (state.sort === 'oldest') {
+    if (state.sort === 'rating') {
+      items.sort(function (a, b) {
+        const sa = a.score !== undefined ? a.score : 0;
+        const sb = b.score !== undefined ? b.score : 0;
+        if (sb !== sa) return sb - sa;
+        const da = parseArticleDate(a) || 0;
+        const db = parseArticleDate(b) || 0;
+        return db - da;
+      });
+    } else if (state.tab === 'top') {
+      items.sort(function (a, b) {
+        const sa = a.score !== undefined ? a.score : 0;
+        const sb = b.score !== undefined ? b.score : 0;
+        if (sb !== sa) return sb - sa;
+        const ca = a.commentsCount || 0;
+        const cb = b.commentsCount || 0;
+        if (cb !== ca) return cb - ca;
+        const da = parseArticleDate(a) || 0;
+        const db = parseArticleDate(b) || 0;
+        return db - da;
+      });
+    } else if (state.sort === 'oldest') {
       items.sort(function (a, b) {
         const da = parseArticleDate(a) || 0;
         const db = parseArticleDate(b) || 0;
         return da - db;
       });
-    } else if (state.sort === 'popular') {
+    } else if (state.sort === 'popular' || state.tab === 'focus') {
       items.sort(function (a, b) {
         const la = (a.likesCount !== undefined ? a.likesCount : a.views || 0);
         const lb = (b.likesCount !== undefined ? b.likesCount : b.views || 0);
@@ -4090,6 +4113,7 @@
     if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
       return window.SmartContractumCard.createCardElement(item, {
         isBookmarked: isBookmarked,
+        currentUserId: currentUser ? currentUser.id : '',
         onLikeToggle: toggleArticleLike,
         onBookmarkToggle: function (id, btn) {
           const active = toggleBookmark(id);
@@ -6042,6 +6066,19 @@
         fetchFeed(true);
       }
     });
+  });
+
+  window.addEventListener('smartcontractum:voted', function (e) {
+    if (!e || !e.detail) return;
+    const detail = e.detail;
+    if (detail.targetType === 'article') {
+      const art = (state.articles || []).find(function (a) { return a.id === detail.targetId; });
+      if (art) {
+        art.score = detail.score;
+        art.myVote = detail.myVote;
+        art.canVote = detail.canVote;
+      }
+    }
   });
 
   if (typeof window !== 'undefined') {
