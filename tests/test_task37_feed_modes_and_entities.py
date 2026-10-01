@@ -224,6 +224,15 @@ class TestFeedModes(TestTask37Base):
         """
         «В фокусе» (tab=focus): 72h gravity formula (likes_72h*2 + comments_72h*3)/((age_hours+2)**1.5).
         """
+        # Ensure at least one recent interaction within 72 hours for gravity scoring
+        conn = sqlite3.connect(self.db_path)
+        try:
+            now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            conn.execute("INSERT OR REPLACE INTO article_likes (article_id, user_id, created_at) VALUES ('art-07', 'user_test_recent', ?)", (now_iso,))
+            conn.commit()
+        finally:
+            conn.close()
+
         status, data, _ = self._get_json("/api/articles?tab=focus")
         self.assertEqual(status, 200)
         self.assertTrue(data.get("success"))
