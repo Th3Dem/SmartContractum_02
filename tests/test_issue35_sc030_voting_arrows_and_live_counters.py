@@ -16,6 +16,9 @@ Must Prove Invariants:
 8. CSS styling, dark/light theme tokens, and mobile touch targets without 28px/32px container conflict.
 9. Code quality standards: 100% offline-first, zero emojis, zero em dashes.
 10. Behavioral checks: guest arrow click, user switch, drilldown return state retention, error rollback, 2-tier layout.
+11. Sub-issue #50: Symmetry, gap: 4px, padding: 0 4px, centered SVG arrows, and invariant geometry across states.
+12. Sub-issue #51: Score width stability, min-width >= 24px, tabular-nums, padding 0 2px.
+13. Sub-issue #52: Soft active arrow styling, no harsh inset box-shadow border, soft background tint <= 0.16, crisp stroke-width 2.4-2.6.
 """
 
 import os
@@ -1202,6 +1205,157 @@ class TestIssue35VotingArrowsAndLiveCounters(unittest.TestCase):
         # 3. Compact SVG icons: width: 14px; height: 14px;
         self.assertIn('width: 14px;', self.theme_css)
         self.assertIn('height: 14px;', self.theme_css)
+
+    # --------------------------------------------------------------------------
+    # Invariant 20: Symmetry and centering of voting capsule and buttons (#50)
+    # --------------------------------------------------------------------------
+    def test_20_vote_capsule_symmetry_and_centering(self):
+        """Sub-issue #50: Symmetric padding in .vote-capsule, identical button dimensions, and centered SVG icons."""
+        # 1. Capsule container symmetry: padding 0 4px and gap 4px
+        self.assertIn('.vote-capsule {', self.theme_css)
+        capsule_block_match = re.search(r'\.vote-capsule\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(capsule_block_match, ".vote-capsule rule must exist in theme.css")
+        capsule_css = capsule_block_match.group(1)
+
+        self.assertIn('padding: 0 4px;', capsule_css, "Capsule must have symmetric padding: 0 4px;")
+        self.assertIn('gap: 4px;', capsule_css, "Capsule must have symmetric gap: 4px;")
+        self.assertIn('vertical-align: middle;', capsule_css)
+        self.assertIn('align-items: center;', capsule_css)
+        self.assertIn('box-sizing: border-box;', capsule_css)
+
+        # 2. Button geometry and centering
+        btn_block_match = re.search(r'\.vote-btn\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(btn_block_match, ".vote-btn rule must exist in theme.css")
+        btn_css = btn_block_match.group(1)
+
+        self.assertIn('display: inline-flex;', btn_css)
+        self.assertIn('align-items: center;', btn_css)
+        self.assertIn('justify-content: center;', btn_css)
+        self.assertIn('margin: 0;', btn_css)
+        self.assertIn('padding: 0;', btn_css)
+        self.assertIn('width: 32px;', btn_css)
+        self.assertIn('height: 32px;', btn_css)
+
+        # Explicit reset on up and down variants
+        self.assertIn('.vote-btn-up,\n.vote-btn-down', self.theme_css)
+
+        # SVG centered vector icon
+        svg_block_match = re.search(r'\.vote-btn svg\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(svg_block_match, ".vote-btn svg rule must exist in theme.css")
+        svg_css = svg_block_match.group(1)
+        self.assertIn('display: block;', svg_css)
+        self.assertIn('width: 14px;', svg_css)
+        self.assertIn('height: 14px;', svg_css)
+
+        # 3. Geometry stability: active, hover, focus, pending, disabled states do not shift dimensions
+        for state_selector in [
+            r'\.vote-btn-up\.is-voted\s*\{([^}]+)\}',
+            r'\.vote-btn-down\.is-voted\s*\{([^}]+)\}',
+            r'\.vote-btn:hover:not\(:disabled\)\s*\{([^}]+)\}',
+            r'\.vote-btn-up:hover:not\(:disabled\)\s*\{([^}]+)\}',
+            r'\.vote-btn-down:hover:not\(:disabled\)\s*\{([^}]+)\}',
+            r'\.vote-btn:focus-visible\s*\{([^}]+)\}',
+            r'\.vote-btn:disabled[^{]*\{([^}]+)\}',
+            r'\.vote-capsule\.is-pending\s*\{([^}]+)\}'
+        ]:
+            m = re.search(state_selector, self.theme_css)
+            self.assertIsNotNone(m, f"State selector {state_selector} must exist")
+            rule_body = m.group(1)
+            # Ensure no layout shifting properties (margin, padding, border changes)
+            self.assertNotIn('margin:', rule_body, f"State {state_selector} must not alter margin")
+            self.assertNotIn('padding:', rule_body, f"State {state_selector} must not alter padding")
+            self.assertNotIn('border:', rule_body, f"State {state_selector} must not alter border")
+
+    # --------------------------------------------------------------------------
+    # Invariant 21: Score width stability and tabular numbers (#51)
+    # --------------------------------------------------------------------------
+    def test_21_vote_score_width_stability_and_tabular_nums(self):
+        """Sub-issue #51: .vote-score has min-width >= 24px and tabular-nums for layout stability."""
+        score_block_match = re.search(r'\.vote-score\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(score_block_match, ".vote-score rule must exist in theme.css")
+        score_css = score_block_match.group(1)
+
+        self.assertIn('display: inline-block;', score_css)
+        self.assertIn('text-align: center;', score_css)
+        self.assertIn('font-variant-numeric: tabular-nums;', score_css)
+        self.assertIn('padding: 0 2px;', score_css)
+
+        # Min-width must be at least 24px (e.g. 26px or 28px)
+        min_w_match = re.search(r'min-width:\s*(\d+)px;', score_css)
+        self.assertIsNotNone(min_w_match, ".vote-score must specify min-width in px")
+        min_width_val = int(min_w_match.group(1))
+        self.assertGreaterEqual(min_width_val, 24, "Score min-width must be at least 24px")
+
+        # Behavioral verification: single-digit scores (-1, 0, 1) and flips take stable width
+        doc = MockElement("body")
+        controller = MockVotingController(doc)
+
+        test_scores = [-1, 0, 1]
+        for s in test_scores:
+            cap = controller.create_capsule_element("article", f"art_stability_{s}", score=s, my_vote=s)
+            score_el = cap.query_selector(".vote-score")
+            self.assertIsNotNone(score_el)
+            self.assertEqual(score_el.text_content, str(s))
+            # Number of rendered characters in score string (-1: 2, 0: 1, 1: 1)
+            char_count = len(str(s))
+            self.assertLessEqual(char_count, 2, "Single-digit scores must be at most 2 characters")
+            # Estimated width per tabular character ~8px + 4px padding <= min_width_val
+            estimated_content_width = (char_count * 8) + 4
+            self.assertLessEqual(
+                estimated_content_width, min_width_val,
+                f"Score {s} estimated content width ({estimated_content_width}px) must comfortably fit within min-width ({min_width_val}px)"
+            )
+
+    # --------------------------------------------------------------------------
+    # Invariant 22: Soft active arrow styling without harsh box-shadow (#52)
+    # --------------------------------------------------------------------------
+    def test_22_soft_active_arrow_styling_without_harsh_border(self):
+        """Sub-issue #52: .is-voted active arrow has soft tint without harsh inset box-shadow border."""
+        # Extract rules for up and down active voted buttons
+        up_voted_match = re.search(r'\.vote-btn-up\.is-voted\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(up_voted_match, ".vote-btn-up.is-voted rule must exist")
+        up_voted_css = up_voted_match.group(1)
+
+        down_voted_match = re.search(r'\.vote-btn-down\.is-voted\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(down_voted_match, ".vote-btn-down.is-voted rule must exist")
+        down_voted_css = down_voted_match.group(1)
+
+        # 1. Harsh box-shadow border must be completely removed
+        self.assertNotIn('box-shadow', up_voted_css, "Up active arrow must not have box-shadow")
+        self.assertNotIn('box-shadow', down_voted_css, "Down active arrow must not have box-shadow")
+        self.assertNotIn('inset', up_voted_css, "Up active arrow must not have inset border")
+        self.assertNotIn('inset', down_voted_css, "Down active arrow must not have inset border")
+
+        # 2. Soft background tint (alpha <= 0.16)
+        alpha_up = re.search(r'rgba\(\s*16\s*,\s*185\s*,\s*129\s*,\s*([0-9.]+)\s*\)', up_voted_css)
+        self.assertIsNotNone(alpha_up, "Up active button must have soft emerald tint")
+        self.assertLessEqual(float(alpha_up.group(1)), 0.16, "Up active background alpha must be soft (<= 0.16)")
+
+        alpha_down = re.search(r'rgba\(\s*239\s*,\s*68\s*,\s*68\s*,\s*([0-9.]+)\s*\)', down_voted_css)
+        self.assertIsNotNone(alpha_down, "Down active button must have soft danger tint")
+        self.assertLessEqual(float(alpha_down.group(1)), 0.16, "Down active background alpha must be soft (<= 0.16)")
+
+        # 3. Crisp vector stroke-width between 2.4 and 2.6
+        up_svg_match = re.search(r'\.vote-btn-up\.is-voted svg\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(up_svg_match, ".vote-btn-up.is-voted svg rule must exist")
+        stroke_up_m = re.search(r'stroke-width:\s*([0-9.]+);', up_svg_match.group(1))
+        self.assertIsNotNone(stroke_up_m)
+        stroke_up_val = float(stroke_up_m.group(1))
+        self.assertTrue(2.4 <= stroke_up_val <= 2.6, f"Up stroke-width {stroke_up_val} must be between 2.4 and 2.6")
+
+        down_svg_match = re.search(r'\.vote-btn-down\.is-voted svg\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(down_svg_match, ".vote-btn-down.is-voted svg rule must exist")
+        stroke_down_m = re.search(r'stroke-width:\s*([0-9.]+);', down_svg_match.group(1))
+        self.assertIsNotNone(stroke_down_m)
+        stroke_down_val = float(stroke_down_m.group(1))
+        self.assertTrue(2.4 <= stroke_down_val <= 2.6, f"Down stroke-width {stroke_down_val} must be between 2.4 and 2.6")
+
+        # 4. Keyboard accessible high-contrast focus outline retained
+        focus_match = re.search(r'\.vote-btn:focus-visible\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(focus_match, ".vote-btn:focus-visible rule must exist")
+        focus_css = focus_match.group(1)
+        self.assertIn('outline:', focus_css)
+        self.assertIn('var(--accent-color)', focus_css)
 
 
 if __name__ == '__main__':
