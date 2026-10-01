@@ -6,6 +6,8 @@
 (function (window) {
   'use strict';
 
+  window._activePendingVotes = window._activePendingVotes || new Set();
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -94,10 +96,16 @@
     const targetId = options.targetId ? String(options.targetId) : '';
     const score = Number.isInteger(options.score) ? options.score : (parseInt(options.score, 10) || 0);
     const myVote = Number.isInteger(options.myVote) ? options.myVote : (parseInt(options.myVote, 10) || 0);
-    const isAuthor = Boolean(options.isAuthor);
-    const canVote = options.canVote !== undefined ? Boolean(options.canVote) : (!isAuthor);
+
+    const user = getCurrentUser();
+    const isGuest = !user || Boolean(user.isGuest);
+    const isAuthor = Boolean(options.isAuthor || (user && options.authorId && user.id === options.authorId));
     const isDeleted = Boolean(options.isDeleted);
     const isPreview = Boolean(options.isPreview);
+    const canVote = options.canVote !== undefined ? Boolean(options.canVote) : (!isAuthor && !isGuest && !isDeleted && !isPreview);
+
+    const targetKey = targetType + ':' + targetId;
+    const isPending = Boolean(targetId && window._activePendingVotes && window._activePendingVotes.has(targetKey));
 
     const authorTitle = targetType === 'comment'
       ? 'Нельзя голосовать за собственный комментарий'
@@ -110,12 +118,10 @@
     let downLabel = 'Понизить рейтинг';
     let downDisabled = false;
 
-    if (isAuthor || canVote === false) {
-      upTitle = authorTitle;
-      upLabel = authorTitle;
+    if (isPreview) {
+      upTitle = 'Предпросмотр';
       upDisabled = true;
-      downTitle = authorTitle;
-      downLabel = authorTitle;
+      downTitle = 'Предпросмотр';
       downDisabled = true;
     } else if (isDeleted) {
       upTitle = 'Комментарий удален';
@@ -124,11 +130,20 @@
       downTitle = 'Комментарий удален';
       downLabel = 'Комментарий удален';
       downDisabled = true;
-    } else if (isPreview) {
-      upTitle = 'Предпросмотр';
+    } else if (isAuthor) {
+      upTitle = authorTitle;
+      upLabel = authorTitle;
       upDisabled = true;
-      downTitle = 'Предпросмотр';
+      downTitle = authorTitle;
+      downLabel = authorTitle;
       downDisabled = true;
+    } else if (isGuest) {
+      upTitle = 'Войдите, чтобы повысить рейтинг';
+      upLabel = 'Войдите, чтобы повысить рейтинг';
+      upDisabled = false; // Guest can click to trigger login modal
+      downTitle = 'Войдите, чтобы понизить рейтинг';
+      downLabel = 'Войдите, чтобы понизить рейтинг';
+      downDisabled = false; // Guest can click to trigger login modal
     } else {
       if (myVote === 1) {
         upTitle = 'Снять голос';
@@ -138,17 +153,32 @@
       }
     }
 
+    if (isPending) {
+      upDisabled = true;
+      downDisabled = true;
+    }
+
     const upClass = 'vote-btn vote-btn-up' + (myVote === 1 ? ' is-voted' : '');
     const downClass = 'vote-btn vote-btn-down' + (myVote === -1 ? ' is-voted' : '');
+
+    const upArrowSvg =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<line x1="12" y1="19" x2="12" y2="5"></line>' +
+        '<polyline points="5 12 12 5 19 12"></polyline>' +
+      '</svg>';
+
+    const downArrowSvg =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<line x1="12" y1="5" x2="12" y2="19"></line>' +
+        '<polyline points="19 12 12 19 5 12"></polyline>' +
+      '</svg>';
 
     const upBtnHtml =
       '<button type="button" class="' + upClass + '" data-dir="1" ' +
       'aria-label="' + escapeHtml(upLabel) + '" title="' + escapeHtml(upTitle) + '" ' +
       'aria-pressed="' + (myVote === 1 ? 'true' : 'false') + '"' +
       (upDisabled ? ' disabled aria-disabled="true"' : '') + '>' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-          '<polyline points="18 15 12 9 6 15"></polyline>' +
-        '</svg>' +
+        upArrowSvg +
       '</button>';
 
     const downBtnHtml =
@@ -156,9 +186,7 @@
       'aria-label="' + escapeHtml(downLabel) + '" title="' + escapeHtml(downTitle) + '" ' +
       'aria-pressed="' + (myVote === -1 ? 'true' : 'false') + '"' +
       (downDisabled ? ' disabled aria-disabled="true"' : '') + '>' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-          '<polyline points="6 9 12 15 18 9"></polyline>' +
-        '</svg>' +
+        downArrowSvg +
       '</button>';
 
     let scoreClass = 'vote-score';
@@ -170,7 +198,9 @@
 
     const capsuleClass = 'vote-capsule' +
       (myVote === 1 ? ' has-voted-up' : (myVote === -1 ? ' has-voted-down' : '')) +
-      (isPreview ? ' is-preview' : '');
+      (isPreview ? ' is-preview' : '') +
+      (isPending ? ' is-pending' : '') +
+      (isGuest ? ' is-guest' : '');
 
     return (
       '<div class="' + capsuleClass + '" ' +
@@ -179,7 +209,9 @@
         'data-score="' + score + '" ' +
         'data-my-vote="' + myVote + '" ' +
         'data-can-vote="' + (canVote ? 'true' : 'false') + '"' +
-        (isAuthor ? ' data-is-author="true"' : '') + '>' +
+        (isAuthor ? ' data-is-author="true"' : '') +
+        (isDeleted ? ' data-is-deleted="true"' : '') +
+        (isGuest ? ' data-is-guest="true"' : '') + '>' +
         upBtnHtml +
         scoreHtml +
         downBtnHtml +
@@ -189,53 +221,108 @@
 
   function updateCapsuleElement(c, state) {
     if (!c) return;
-    c.classList.remove('is-pending');
-    c.setAttribute('data-score', String(state.score));
-    c.setAttribute('data-my-vote', String(state.myVote));
-    c.setAttribute('data-can-vote', state.canVote ? 'true' : 'false');
+    const targetType = c.getAttribute('data-vote-target-type') || 'article';
+    const targetId = c.getAttribute('data-vote-target-id') || '';
+    const targetKey = targetType + ':' + targetId;
+    const isPending = Boolean(targetId && window._activePendingVotes && window._activePendingVotes.has(targetKey));
 
-    c.classList.toggle('has-voted-up', state.myVote === 1);
-    c.classList.toggle('has-voted-down', state.myVote === -1);
+    if (isPending) {
+      c.classList.add('is-pending');
+    } else {
+      c.classList.remove('is-pending');
+    }
+
+    const score = Number.isInteger(state.score) ? state.score : (parseInt(state.score, 10) || 0);
+    const myVote = Number.isInteger(state.myVote) ? state.myVote : (parseInt(state.myVote, 10) || 0);
+
+    c.setAttribute('data-score', String(score));
+    c.setAttribute('data-my-vote', String(myVote));
+    if (state.canVote !== undefined) {
+      c.setAttribute('data-can-vote', state.canVote ? 'true' : 'false');
+    }
+
+    c.classList.toggle('has-voted-up', myVote === 1);
+    c.classList.toggle('has-voted-down', myVote === -1);
 
     const scoreEl = c.querySelector('.vote-score');
     if (scoreEl) {
-      scoreEl.textContent = String(state.score);
-      scoreEl.setAttribute('data-score', String(state.score));
-      scoreEl.classList.toggle('is-positive', state.score > 0);
-      scoreEl.classList.toggle('is-negative', state.score < 0);
-      scoreEl.classList.toggle('is-zero', state.score === 0);
+      scoreEl.textContent = String(score);
+      scoreEl.setAttribute('data-score', String(score));
+      scoreEl.classList.toggle('is-positive', score > 0);
+      scoreEl.classList.toggle('is-negative', score < 0);
+      scoreEl.classList.toggle('is-zero', score === 0);
     }
 
-    const isAuthor = c.getAttribute('data-is-author') === 'true' || state.canVote === false;
-    const targetType = c.getAttribute('data-vote-target-type') || 'article';
+    const user = getCurrentUser();
+    const isGuest = !user || Boolean(user.isGuest);
+    const isAuthor = c.getAttribute('data-is-author') === 'true' || state.isAuthor === true;
+    const isDeleted = c.getAttribute('data-is-deleted') === 'true' || state.isDeleted === true;
+    const isPreview = c.classList.contains('is-preview') || state.isPreview === true;
+
     const authorTitle = targetType === 'comment'
       ? 'Нельзя голосовать за собственный комментарий'
       : 'Нельзя голосовать за собственный материал';
 
     const upBtn = c.querySelector('.vote-btn-up');
+    const downBtn = c.querySelector('.vote-btn-down');
+
+    let upDisabled = false;
+    let downDisabled = false;
+    let upTitle = 'Повысить рейтинг';
+    let downTitle = 'Понизить рейтинг';
+
+    if (isPreview) {
+      upTitle = 'Предпросмотр';
+      downTitle = 'Предпросмотр';
+      upDisabled = true;
+      downDisabled = true;
+    } else if (isDeleted) {
+      upTitle = 'Комментарий удален';
+      downTitle = 'Комментарий удален';
+      upDisabled = true;
+      downDisabled = true;
+    } else if (isAuthor) {
+      upTitle = authorTitle;
+      downTitle = authorTitle;
+      upDisabled = true;
+      downDisabled = true;
+    } else if (isGuest) {
+      upTitle = 'Войдите, чтобы повысить рейтинг';
+      downTitle = 'Войдите, чтобы понизить рейтинг';
+      upDisabled = false; // guest can click to open auth modal
+      downDisabled = false;
+    } else {
+      if (myVote === 1) upTitle = 'Снять голос';
+      if (myVote === -1) downTitle = 'Снять голос';
+    }
+
+    if (isPending) {
+      upDisabled = true;
+      downDisabled = true;
+    }
+
     if (upBtn) {
-      const isUp = state.myVote === 1;
+      const isUp = myVote === 1;
       upBtn.classList.toggle('is-voted', isUp);
       upBtn.setAttribute('aria-pressed', isUp ? 'true' : 'false');
-      upBtn.title = isAuthor ? authorTitle : (isUp ? 'Снять голос' : 'Повысить рейтинг');
-      upBtn.setAttribute('aria-label', isAuthor ? authorTitle : (isUp ? 'Снять голос' : 'Повысить рейтинг'));
-      upBtn.disabled = isAuthor;
-      if (isAuthor) {
+      upBtn.title = upTitle;
+      upBtn.setAttribute('aria-label', upTitle);
+      upBtn.disabled = upDisabled;
+      if (upDisabled) {
         upBtn.setAttribute('aria-disabled', 'true');
       } else {
         upBtn.removeAttribute('aria-disabled');
       }
     }
 
-    const downBtn = c.querySelector('.vote-btn-down');
     if (downBtn) {
-      const isDown = state.myVote === -1;
+      const isDown = myVote === -1;
       downBtn.classList.toggle('is-voted', isDown);
       downBtn.setAttribute('aria-pressed', isDown ? 'true' : 'false');
-      downBtn.title = isAuthor ? authorTitle : (isDown ? 'Снять голос' : 'Понизить рейтинг');
-      downBtn.setAttribute('aria-label', isAuthor ? authorTitle : (isDown ? 'Снять голос' : 'Понизить рейтинг'));
-      downBtn.disabled = isAuthor;
-      if (isAuthor) {
+      downBtn.title = downTitle;
+      downBtn.setAttribute('aria-label', downTitle);
+      downBtn.disabled = downDisabled;
+      if (downDisabled) {
         downBtn.setAttribute('aria-disabled', 'true');
       } else {
         downBtn.removeAttribute('aria-disabled');
@@ -269,14 +356,16 @@
       return;
     }
 
+    // 1. Guest click: invoke auth modal!
     const user = getCurrentUser();
-    if (!user) {
+    if (!user || user.isGuest) {
       invokeAuthModal();
       return;
     }
 
-    const isAuthor = capsule.getAttribute('data-is-author') === 'true' || capsule.getAttribute('data-can-vote') === 'false';
-    if (isAuthor || btn.disabled || btn.getAttribute('aria-disabled') === 'true') {
+    // 2. Author check
+    const isAuthor = capsule.getAttribute('data-is-author') === 'true';
+    if (isAuthor || (btn.disabled && !capsule.classList.contains('is-pending') && !capsule.classList.contains('is-guest'))) {
       const targetType = capsule.getAttribute('data-vote-target-type') || 'article';
       const authorMsg = targetType === 'comment'
         ? 'Нельзя голосовать за собственный комментарий'
@@ -285,13 +374,15 @@
       return;
     }
 
-    if (capsule.classList.contains('is-pending')) {
-      return;
-    }
-
+    // 3. Pending check
     const targetType = capsule.getAttribute('data-vote-target-type') || 'article';
     const targetId = capsule.getAttribute('data-vote-target-id');
     if (!targetId) return;
+
+    const targetKey = targetType + ':' + targetId;
+    if (window._activePendingVotes && window._activePendingVotes.has(targetKey)) {
+      return;
+    }
 
     const dir = parseInt(btn.getAttribute('data-dir'), 10) || 0;
     const isVoted = btn.classList.contains('is-voted') || btn.getAttribute('aria-pressed') === 'true';
@@ -303,10 +394,14 @@
     const previousState = {
       score: parseInt(capsule.getAttribute('data-score'), 10) || 0,
       myVote: parseInt(capsule.getAttribute('data-my-vote'), 10) || 0,
-      canVote: true
+      canVote: true,
+      isAuthor: false
     };
 
-    // Lock all matching capsules on page
+    // Mark as pending globally and lock all matching capsules on page
+    window._activePendingVotes = window._activePendingVotes || new Set();
+    window._activePendingVotes.add(targetKey);
+
     matchingCapsules.forEach(function (c) {
       c.classList.add('is-pending');
       const btns = c.querySelectorAll('.vote-btn');
@@ -327,23 +422,39 @@
       .then(function (res) {
         return res.json().then(function (data) {
           return { status: res.status, data: data };
+        }).catch(function () {
+          return { status: res.status, data: null };
         });
       })
       .then(function (resObj) {
+        window._activePendingVotes.delete(targetKey);
         const status = resObj.status;
         const data = resObj.data;
 
-        if (status === 200 && data && data.success) {
+        // Validate response format:
+        // score is integer, myVote in {-1, 0, 1}, targetId matches request
+        const isValid =
+          status === 200 &&
+          data &&
+          data.success === true &&
+          data.targetId === targetId &&
+          typeof data.score === 'number' &&
+          Number.isInteger(data.score) &&
+          typeof data.myVote === 'number' &&
+          [-1, 0, 1].indexOf(data.myVote) !== -1;
+
+        if (isValid) {
           const updatedState = {
             score: data.score,
             myVote: data.myVote,
-            canVote: data.canVote !== false
+            canVote: data.canVote !== false,
+            isAuthor: false
           };
           matchingCapsules.forEach(function (c) {
             updateCapsuleElement(c, updatedState);
           });
 
-          // Dispatch window event for external caches
+          // Dispatch window event for sync across all models/views
           try {
             window.dispatchEvent(new CustomEvent('smartcontractum:voted', {
               detail: {
@@ -367,7 +478,8 @@
             updateCapsuleElement(c, {
               score: previousState.score,
               myVote: 0,
-              canVote: false
+              canVote: false,
+              isAuthor: true
             });
           });
           const errText = (data && data.error) || 'Нельзя голосовать за собственный материал';
@@ -381,6 +493,7 @@
         }
       })
       .catch(function () {
+        window._activePendingVotes.delete(targetKey);
         matchingCapsules.forEach(function (c) {
           updateCapsuleElement(c, previousState);
         });

@@ -3725,12 +3725,43 @@
 
     let items = filterArticleList(FALLBACK_ARTICLES);
 
-    // Apply sorting in offline fallback
-    if (state.sort === 'rating') {
+    // Apply sorting in offline fallback: explicit state.sort has strict priority over tab
+    const hasExplicitSort = Boolean(state.sort && state.sort !== 'default' && state.sort !== 'none');
+    if (hasExplicitSort && state.sort === 'rating') {
       items.sort(function (a, b) {
         const sa = a.score !== undefined ? a.score : 0;
         const sb = b.score !== undefined ? b.score : 0;
         if (sb !== sa) return sb - sa;
+        const da = parseArticleDate(a) || 0;
+        const db = parseArticleDate(b) || 0;
+        return db - da;
+      });
+    } else if (hasExplicitSort && state.sort === 'popular') {
+      items.sort(function (a, b) {
+        const la = (a.likesCount !== undefined ? a.likesCount : a.views || 0);
+        const lb = (b.likesCount !== undefined ? b.likesCount : b.views || 0);
+        if (lb !== la) return lb - la;
+        const da = parseArticleDate(a) || 0;
+        const db = parseArticleDate(b) || 0;
+        return db - da;
+      });
+    } else if (hasExplicitSort && state.sort === 'oldest') {
+      items.sort(function (a, b) {
+        const da = parseArticleDate(a) || 0;
+        const db = parseArticleDate(b) || 0;
+        return da - db;
+      });
+    } else if (hasExplicitSort && (state.sort === 'discussed' || state.sort === 'comments')) {
+      items.sort(function (a, b) {
+        const ca = a.commentsCount || 0;
+        const cb = b.commentsCount || 0;
+        if (cb !== ca) return cb - ca;
+        const da = parseArticleDate(a) || 0;
+        const db = parseArticleDate(b) || 0;
+        return db - da;
+      });
+    } else if (hasExplicitSort && state.sort === 'newest') {
+      items.sort(function (a, b) {
         const da = parseArticleDate(a) || 0;
         const db = parseArticleDate(b) || 0;
         return db - da;
@@ -3747,26 +3778,11 @@
         const db = parseArticleDate(b) || 0;
         return db - da;
       });
-    } else if (state.sort === 'oldest') {
-      items.sort(function (a, b) {
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return da - db;
-      });
-    } else if (state.sort === 'popular' || state.tab === 'focus') {
+    } else if (state.tab === 'focus') {
       items.sort(function (a, b) {
         const la = (a.likesCount !== undefined ? a.likesCount : a.views || 0);
         const lb = (b.likesCount !== undefined ? b.likesCount : b.views || 0);
         if (lb !== la) return lb - la;
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else if (state.sort === 'discussed' || state.sort === 'comments') {
-      items.sort(function (a, b) {
-        const ca = a.commentsCount || 0;
-        const cb = b.commentsCount || 0;
-        if (cb !== ca) return cb - ca;
         const da = parseArticleDate(a) || 0;
         const db = parseArticleDate(b) || 0;
         return db - da;
