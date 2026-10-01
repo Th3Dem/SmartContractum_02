@@ -531,3 +531,4 @@
 [2026-10-01 18:35] | pm_bot | TASK_INIT | Старт задачи issue-49-delete-comment: кнопка «Удалить» для собственного комментария (Task: issue-49-delete-comment)
 [2026-10-01 18:41] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация кнопки «Удалить», доступного подтверждения, серверной авторизации, сохранения потомков и синхронизации кармы (Task: issue-49-delete-comment)
 [2026-10-01 18:44] | git_bot | PR_CREATED | Открыт PR #53 для Issue #49 (Fixes #49), ветка feat/issue-49-delete-comment (Task: issue-49-delete-comment)
+[2026-10-01 20:38] | dev_bot | IMPLEMENTATION_COMPLETE | Пересборка карточки статьи в ленте под компактный Хабр-лейаут (Task: issue-54-sc026-feed-card-redesign)

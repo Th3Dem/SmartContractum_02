@@ -163,11 +163,11 @@
     ALLOWED_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.webp', '.gif'],
     MAX_FILE_BYTES: 10 * 1024 * 1024, // 10 МБ
     TARGET_WIDTH: 780,
-    TARGET_HEIGHT: 440,
-    ASPECT_RATIO_W: 39,
-    ASPECT_RATIO_H: 22,
-    ASPECT_RATIO_VALUE: 39 / 22, // ~1.7727
-    ASPECT_RATIO_STR: '39 / 22',
+    TARGET_HEIGHT: 350,
+    ASPECT_RATIO_W: 78,
+    ASPECT_RATIO_H: 35,
+    ASPECT_RATIO_VALUE: 780 / 350, // ~2.22857
+    ASPECT_RATIO_STR: '780 / 350',
     FEED_FULL_WIDTH: true,
     FEED_MAX_WIDTH: '100%'
   };
@@ -198,7 +198,7 @@
     DESCRIPTION_MAX: 500,
     COVER_MAX_BYTES: 10 * 1024 * 1024, // 10MB
     COVER_WIDTH: 780,
-    COVER_HEIGHT: 440
+    COVER_HEIGHT: 350
   };
 
   const PublicationConfig = {

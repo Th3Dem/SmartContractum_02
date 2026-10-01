@@ -1347,6 +1347,8 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
             cls.feed_css = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
             cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'card.js'), 'r', encoding='utf-8') as f:
+            cls.card_js = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'article.js'), 'r', encoding='utf-8') as f:
             cls.article_js = f.read()
         with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
@@ -1401,16 +1403,15 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
         self.assertIn('Убрать из сохраненного', self.feed_js)
 
     def test_card_hierarchy_badges_below_title(self):
-        """Verify in feed.js that .card-meta contains author-info, and .card-meta-badges is below .card-title."""
-        card_gen_match = re.search(r'function createCardElement\(item\)\s*\{([\s\S]*?)\n  \}', self.feed_js)
-        self.assertIsNotNone(card_gen_match, "createCardElement function not found")
-        fn_code = card_gen_match.group(1)
-        self.assertIn('<div class="card-meta">', fn_code)
-        self.assertIn('<h2 class="card-title">', fn_code)
-        self.assertIn('<div class="card-meta-badges">', fn_code)
+        """Verify in feed.js delegation to SmartContractumCard and in card.js that .card-meta contains author-info, and .card-meta-badges is below .card-title."""
+        self.assertIn('window.SmartContractumCard.createCardElement', self.feed_js)
+        fn_code = self.card_js
+        self.assertIn('class="card-meta"', fn_code)
+        self.assertIn('class="card-title', fn_code)
+        self.assertIn('class="card-meta-badges', fn_code)
 
-        title_pos = fn_code.find('<h2 class="card-title">')
-        badges_pos = fn_code.find('<div class="card-meta-badges">')
+        title_pos = fn_code.find('class="card-title')
+        badges_pos = fn_code.find('class="card-meta-badges')
         self.assertTrue(0 < title_pos < badges_pos, ".card-meta-badges must be rendered under .card-title")
 
 
@@ -1524,7 +1525,7 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
 
         cover_match = re.search(r'\.card-cover-container\s*\{([^}]+)\}', self.feed_css)
         self.assertIsNotNone(cover_match)
-        self.assertIn('aspect-ratio: 780 / 440', cover_match.group(1))
+        self.assertIn('aspect-ratio: 780 / 350', cover_match.group(1))
 
     def test_no_dashed_borders_in_feed_css(self):
         """Verify no dashed borders exist in feed.css (empty state and sidebar toggle use solid borders)."""
@@ -1712,6 +1713,8 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             cls.feed_css = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
             cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'card.js'), 'r', encoding='utf-8') as f:
+            cls.card_js = f.read()
         with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
             cls.server_py = f.read()
 
@@ -1757,16 +1760,16 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
         # 1. CSS rules for card-cover-container
         self.assertIn('.card-cover-container', self.feed_css)
         self.assertIn('max-width: 780px;', self.feed_css)
-        self.assertIn('aspect-ratio: 780 / 440;', self.feed_css)
+        self.assertIn('aspect-ratio: 780 / 350;', self.feed_css)
         self.assertIn('.card-cover-container.is-loading', self.feed_css)
         self.assertIn('.card-cover-container.is-loaded', self.feed_css)
         self.assertIn('.card-cover-container.is-error', self.feed_css)
         self.assertIn('display: none !important;', self.feed_css)
 
-        # 2. feed.js cover handling: onerror removes container, onload marks loaded
-        self.assertIn('card-cover-container', self.feed_js)
-        self.assertIn(r"closest(\'.card-cover-container\')", self.feed_js)
-        self.assertIn('remove()', self.feed_js)
+        # 2. cover handling in card.js: onerror removes container, onload marks loaded
+        self.assertIn('card-cover-container', self.card_js)
+        self.assertIn(r"closest(\'.card-cover-container\')", self.card_js)
+        self.assertIn('remove()', self.card_js)
 
         # 3. Seed articles in server.py and FALLBACK_ARTICLES in feed.js use base64 data URIs
         for art in server.APPROVED_SEED_ARTICLES:
@@ -1812,9 +1815,7 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             self.assertNotIn('(демо)', art["title"])
             self.assertNotIn('(демо)', art["publication_settings"]["authorRole"])
 
-        # 2. feed.js creates .badge-demo for demo articles
-        self.assertIn('badge-demo', self.feed_js)
-        self.assertIn('Демонстрационный материал', self.feed_js)
+        # 2. badge-demo style exists in feed.css
         self.assertIn('.badge-demo', self.feed_css)
 
         # 3. feed.html widget-create-card has concise text
@@ -1904,10 +1905,10 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         # 1. PublicationConfig.COVER parameters in config.js
         self.assertIn('const COVER = {', self.config_js)
         self.assertIn('TARGET_WIDTH: 780', self.config_js)
-        self.assertIn('TARGET_HEIGHT: 440', self.config_js)
-        self.assertIn('ASPECT_RATIO_W: 39', self.config_js)
-        self.assertIn('ASPECT_RATIO_H: 22', self.config_js)
-        self.assertIn("ASPECT_RATIO_STR: '39 / 22'", self.config_js)
+        self.assertIn('TARGET_HEIGHT: 350', self.config_js)
+        self.assertIn('ASPECT_RATIO_W: 78', self.config_js)
+        self.assertIn('ASPECT_RATIO_H: 35', self.config_js)
+        self.assertIn("ASPECT_RATIO_STR: '780 / 350'", self.config_js)
         self.assertIn('MAX_FILE_BYTES: 10 * 1024 * 1024', self.config_js)
         self.assertTrue('FEED_FULL_WIDTH: true' in self.config_js or 'FEED_MAX_WIDTH_PX: 560' in self.config_js)
         self.assertIn("'image/jpeg'", self.config_js)
@@ -1918,27 +1919,27 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         self.assertIn('window.PublicationConfig = PublicationConfig;', self.config_js)
 
         # 2. Design tokens in theme.css
-        self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
+        self.assertIn('--card-cover-aspect-ratio: 780 / 350;', self.theme_css)
         self.assertTrue('--card-cover-max-width: 100%;' in self.theme_css or '--card-cover-max-width: 560px;' in self.theme_css)
 
     def test_editor_feed_section_texts_and_preview_markup(self):
         """
         Verify exact hint and description texts in editor.html and
-        the 7-step sequence of elements in #pub-card-preview:
-        author -> title -> badges -> cover -> description -> tags -> footer.
+        the sequence of elements in #pub-card-preview:
+        author -> title -> badges -> cover -> description -> footer.
         """
         # 1. Exact hint and description texts in editor.html
         self.assertIn(
-            'Обложка необязательна. Рекомендуемое разрешение — от 780 × 440 px. Область обложки — 39:22. JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр',
+            'Обложка необязательна. Рекомендуемое разрешение: от 780 × 350 px. Область обложки: 78:35 (780:350). JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр',
             self.editor_html
         )
         self.assertIn(
             'В ленте обложка отображается в уменьшенном размере с сохранением выбранного кадра. Для GIF используется первый кадр без анимации.',
             self.editor_html
         )
-        self.assertIn('Кадрирование обложки (39:22)', self.editor_html)
+        self.assertIn('Кадрирование обложки (78:35)', self.editor_html)
 
-        # 2. 7-step card preview markup structure
+        # 2. Card preview markup structure
         preview_pos = self.editor_html.find('id="pub-card-preview"')
         self.assertNotEqual(preview_pos, -1, "Preview card #pub-card-preview must exist in editor.html")
         preview_chunk = self.editor_html[preview_pos:preview_pos + 4000]
@@ -1948,7 +1949,6 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         idx_badges = preview_chunk.find('id="preview-card-badges"')
         idx_cover = preview_chunk.find('id="preview-card-cover"')
         idx_desc = preview_chunk.find('id="preview-card-desc"')
-        idx_tags = preview_chunk.find('id="preview-card-tags"')
         idx_footer = preview_chunk.find('class="card-footer')
 
         self.assertNotEqual(idx_author, -1, "Author block must exist in preview card")
@@ -1956,15 +1956,13 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         self.assertNotEqual(idx_badges, -1, "Badges container must exist in preview card")
         self.assertNotEqual(idx_cover, -1, "Cover container must exist in preview card")
         self.assertNotEqual(idx_desc, -1, "Description lead must exist in preview card")
-        self.assertNotEqual(idx_tags, -1, "Tags container must exist in preview card")
         self.assertNotEqual(idx_footer, -1, "Footer must exist in preview card")
 
         self.assertLess(idx_author, idx_title, "Author must precede Title")
         self.assertLess(idx_title, idx_badges, "Title must precede Badges")
         self.assertLess(idx_badges, idx_cover, "Badges must precede Cover")
         self.assertLess(idx_cover, idx_desc, "Cover must precede Description")
-        self.assertLess(idx_desc, idx_tags, "Description must precede Tags")
-        self.assertLess(idx_tags, idx_footer, "Tags must precede Footer")
+        self.assertLess(idx_desc, idx_footer, "Description must precede Footer")
 
     def test_editor_css_preview_card_styles(self):
         """
@@ -1973,7 +1971,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         """
         self.assertIn('.pub-feed-card-cover', self.editor_css)
         self.assertTrue('var(--card-cover-max-width' in self.editor_css or 'width: 100%;' in self.editor_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.editor_css)
         self.assertTrue('align-self: stretch;' in self.editor_css or 'align-self: flex-start;' in self.editor_css)
 
         # 0px when cover is hidden / empty
@@ -1984,18 +1982,18 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
 
     def test_feed_css_card_cover_and_compactness(self):
         """
-        Verify .card-cover-container in feed.css (full-width 100%, aspect-ratio 39 / 22),
-        .card-lead line clamping to 3 lines, and compact .feed-toolbar-row.
+        Verify .card-cover-container in feed.css (full-width 100%, aspect-ratio 780 / 350),
+        .card-lead line clamping to 2 lines, and compact .feed-toolbar-row.
         """
         # 1. .card-cover-container styling
         self.assertIn('.card-cover-container', self.feed_css)
         self.assertTrue('var(--card-cover-max-width' in self.feed_css or 'width: 100%;' in self.feed_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.feed_css)
         self.assertTrue('align-self: stretch;' in self.feed_css or 'align-self: flex-start;' in self.feed_css)
 
-        # 2. .card-lead 3 lines limit
+        # 2. .card-lead 2 lines limit
         self.assertIn('.card-lead', self.feed_css)
-        self.assertIn('-webkit-line-clamp: 3;', self.feed_css)
+        self.assertIn('-webkit-line-clamp: 2;', self.feed_css)
         self.assertIn('display: -webkit-box;', self.feed_css)
         self.assertIn('-webkit-box-orient: vertical;', self.feed_css)
 
@@ -2267,19 +2265,19 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         self.assertNotIn('FEED_MAX_WIDTH_PX: 560', self.config_js)
 
         # 2. theme.css tokens
-        self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
+        self.assertIn('--card-cover-aspect-ratio: 780 / 350;', self.theme_css)
         self.assertIn('--card-cover-max-width: 100%;', self.theme_css)
 
         # 3. feed.css
         self.assertIn('.card-cover-container', self.feed_css)
         self.assertIn('max-width: var(--card-cover-max-width, 100%);', self.feed_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.feed_css)
         self.assertIn('align-self: stretch;', self.feed_css)
 
         # 4. editor.css
         self.assertIn('.pub-feed-card-cover', self.editor_css)
         self.assertIn('max-width: 100%;', self.editor_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.editor_css)
         self.assertIn('align-self: stretch;', self.editor_css)
 
         # 5. Clean 0px empty state
@@ -2297,16 +2295,18 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         self.assertIn('renderCardInnerHtml', self.card_js)
         self.assertIn('createCardElement', self.card_js)
 
-        # 3. 7-step structure in card.js
+        # 3. Compact structure in card.js without hashtags or author-role
         idx_meta = self.card_js.find("class=\"card-meta\"")
         idx_title = self.card_js.find("class=\"card-title")
         idx_badges = self.card_js.find("class=\"card-meta-badges")
         idx_cover = self.card_js.find("class=\"card-cover-container")
         idx_lead = self.card_js.find("class=\"card-lead")
-        idx_tags = self.card_js.find("class=\"card-tags")
+        idx_sub_info = self.card_js.find("class=\"card-sub-info")
         idx_footer = self.card_js.find("class=\"card-footer\"")
 
-        self.assertTrue(0 < idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_tags < idx_footer)
+        self.assertTrue(0 < idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_sub_info < idx_footer)
+        self.assertNotIn('class="card-tags', self.card_js)
+        self.assertNotIn('preview-card-role', self.card_js)
 
         # 4. Usage in feed.js and publication.js
         self.assertIn('window.SmartContractumCard.createCardElement', self.feed_js)
@@ -3651,9 +3651,9 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
         idx_badges = self.card_js.find('class="card-meta-badges')
         idx_cover = self.card_js.find('class="card-cover-container')
         idx_lead = self.card_js.find('class="card-lead')
-        idx_tags = self.card_js.find('class="card-tags')
+        idx_sub_info = self.card_js.find('class="card-sub-info')
         idx_footer = self.card_js.find('class="card-footer')
-        self.assertTrue(idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_tags < idx_footer)
+        self.assertTrue(idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_sub_info < idx_footer)
 
         # feed.css styles
         self.assertIn('.subs-author-avatar', self.feed_css)

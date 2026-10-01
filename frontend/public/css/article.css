@@ -251,7 +251,7 @@ body,
 /* Cover Image */
 .article-cover-container {
   width: 100%;
-  aspect-ratio: 780 / 440;
+  aspect-ratio: 780 / 350;
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 32px;

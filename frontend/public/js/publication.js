@@ -28,7 +28,7 @@
           DESCRIPTION_MAX: 500,
           COVER_MAX_BYTES: 10 * 1024 * 1024,
           COVER_WIDTH: 780,
-          COVER_HEIGHT: 440
+          COVER_HEIGHT: 350
         }
       };
 
@@ -41,7 +41,7 @@
       this.materialType = 'article'; // 'article' | 'post' | 'news' | 'question'
       this.description = ''; // plain text 50-500 chars
       this.isDescriptionCustom = false;
-      this.coverDataUrl = null; // cropped 780x440 data URL
+      this.coverDataUrl = null; // cropped 780x350 data URL
       this.rawCoverImageSource = null; // original Data URL string
       this.cropParams = { zoom: 1, panX: 0, panY: 0 };
       this.previousCoverState = null; // backup for cancel/replace error recovery
@@ -1084,8 +1084,8 @@
         MAX_FILE_BYTES: 10 * 1024 * 1024,
         ALLOWED_FORMATS: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
         TARGET_WIDTH: 780,
-        TARGET_HEIGHT: 440,
-        ASPECT_RATIO_VALUE: 39 / 22
+        TARGET_HEIGHT: 350,
+        ASPECT_RATIO_VALUE: 780 / 350
       };
 
       // Validate size (max 10MB)
@@ -1141,13 +1141,13 @@
             this.coverNoticeEl.textContent = 'Для GIF используется первый кадр в качестве статичной обложки.';
           }
 
-          // Check aspect ratio (39:22 with ~0.02 epsilon)
-          const targetRatio = coverConfig.ASPECT_RATIO_VALUE || (39 / 22);
+          // Check aspect ratio (780:350 with ~0.02 epsilon)
+          const targetRatio = coverConfig.ASPECT_RATIO_VALUE || (780 / 350);
           const imgRatio = img.naturalWidth / img.naturalHeight;
-          const is39x22 = Math.abs(imgRatio - targetRatio) <= 0.02;
+          const is78x35 = Math.abs(imgRatio - targetRatio) <= 0.02;
 
-          if (is39x22) {
-            // Already 39:22 -> save whole frame by default without forced cropping modal
+          if (is78x35) {
+            // Already 780:350 -> save whole frame by default without forced cropping modal
             const targetW = coverConfig.TARGET_WIDTH;
             const targetH = coverConfig.TARGET_HEIGHT;
             const offscreen = document.createElement('canvas');
@@ -1165,7 +1165,7 @@
             this.renderCoverUI();
             this.updateCardPreview();
           } else {
-            // Proportions differ -> open cropper with fixed 39:22
+            // Proportions differ -> open cropper with fixed 780:350
             this.cropParams = { zoom: 1, panX: 0, panY: 0 };
             this.cropZoom = 1;
             this.cropPanX = 0;
@@ -1212,6 +1212,15 @@
 
       if (this.cropperZoomInput) {
         this.cropperZoomInput.value = String(this.cropZoom);
+      }
+
+      if (this.cropperCanvas) {
+        const coverConfig = (window.PublicationConfig && window.PublicationConfig.COVER) || {
+          TARGET_WIDTH: 780,
+          TARGET_HEIGHT: 350
+        };
+        this.cropperCanvas.width = coverConfig.TARGET_WIDTH || 780;
+        this.cropperCanvas.height = coverConfig.TARGET_HEIGHT || 350;
       }
 
       this.drawCropperCanvas();
@@ -1269,7 +1278,7 @@
 
       const coverConfig = (window.PublicationConfig && window.PublicationConfig.COVER) || {
         TARGET_WIDTH: 780,
-        TARGET_HEIGHT: 440
+        TARGET_HEIGHT: 350
       };
       const targetW = coverConfig.TARGET_WIDTH;
       const targetH = coverConfig.TARGET_HEIGHT;
@@ -1414,9 +1423,9 @@
         const previewItem = {
           title: rawTitle || 'Заголовок публикации',
           author: authorName,
-          authorRole: authorRole,
           authorInitials: authorInitials,
           date: 'Недавно',
+          topics: (this.topics && this.topics.length > 0) ? this.topics : [],
           topic: (this.topics && this.topics.length > 0) ? this.topics[0] : null,
           format: (this.format && this.format !== 'not_specified' && this.format !== 'none') ? this.format : null,
           complexity: (this.complexity && this.complexity !== 'none') ? this.complexity : null,
@@ -1424,7 +1433,6 @@
           type: this.materialType || 'article',
           coverImage: this.coverDataUrl || null,
           description: rawDesc || 'Краткое описание публикации появится здесь...',
-          keywords: this.keywords || [],
           readingTime: `~${minutes} мин чтения`,
           likesCount: 0,
           hasLiked: false,

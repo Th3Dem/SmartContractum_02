@@ -1299,7 +1299,7 @@
             <!-- Cover Image Upload & Canvas Cropper -->
             <div class="pub-subsection">
               <h4 class="pub-subsection-title">Обложка статьи</h4>
-              <p class="pub-subsection-hint">Обложка необязательна. Рекомендуемое разрешение — от 780 × 440 px. Область обложки — 39:22. JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр</p>
+              <p class="pub-subsection-hint">Обложка необязательна. Рекомендуемое разрешение: от 780 × 350 px. Область обложки: 78:35 (780:350). JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр</p>
               <p class="pub-subsection-hint" style="margin-top: 4px; font-size: 0.8rem; color: var(--text-muted);">В ленте обложка отображается в уменьшенном размере с сохранением выбранного кадра. Для GIF используется первый кадр без анимации.</p>
               
               <div id="pub-cover-dropzone" class="pub-dropzone">
@@ -1316,14 +1316,14 @@
               <!-- Cropper Container -->
               <div id="pub-cropper-wrapper" class="pub-cropper-wrapper">
                 <div class="pub-cropper-header">
-                  <span class="pub-cropper-title">Кадрирование обложки (39:22)</span>
+                  <span class="pub-cropper-title">Кадрирование обложки (78:35)</span>
                   <div class="pub-cropper-zoom-box">
                     <span>Масштаб:</span>
                     <input type="range" id="pub-cropper-zoom" min="1" max="3" step="0.05" value="1">
                   </div>
                 </div>
                 <div class="pub-cropper-canvas-box">
-                  <canvas id="pub-cropper-canvas" width="780" height="440"></canvas>
+                  <canvas id="pub-cropper-canvas" width="780" height="350"></canvas>
                 </div>
                 <div class="pub-cropper-actions">
                   <button type="button" id="pub-cropper-cancel-btn" class="btn">Отмена</button>
@@ -1365,16 +1365,12 @@
               <p class="pub-subsection-hint">Так ваша статья будет выглядеть в ленте публикаций.</p>
               <div class="pub-card-preview-container">
                 <article class="feed-card pub-feed-card" id="pub-card-preview">
-                  <!-- 1. Автор и дата -->
+                  <!-- 1. Автор -->
                   <div class="card-meta">
                     <div class="author-info">
                       <div class="author-avatar" id="preview-card-avatar">АП</div>
                       <div class="author-details">
                         <span class="author-name" id="preview-card-author">Автор платформы</span>
-                        <div class="meta-sub-row">
-                          <span class="meta-dot" id="preview-card-dot" style="display: none;"></span>
-                          <span class="author-role" id="preview-card-role" style="display: none;"></span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -1394,10 +1390,7 @@
                   <!-- 5. Краткое описание -->
                   <p class="card-lead pub-feed-card-desc" id="preview-card-desc">Краткое описание публикации появится здесь...</p>
 
-                  <!-- 6. Ключевые слова -->
-                  <div class="card-tags pub-feed-card-tags" id="preview-card-tags" style="display: none;"></div>
-
-                  <!-- 7. Служебная строка и футер действий (2 компактные строки) -->
+                  <!-- 6. Служебная строка и футер действий (2 компактные строки) -->
                   <!-- Строка 1: Служебная информация (дата публикации, время чтения, сложность) -->
                   <div class="card-sub-info card-meta-row-bottom">
                     <span class="publish-date" id="preview-card-date">Недавно</span>

@@ -6,15 +6,15 @@
  * 2. Живом предпросмотре формы публикации (editor.html, publication.js)
  *
  * Обеспечивает:
- * - Единый 7-ступенчатый порядок блоков:
- *   1. Автор и дата
+ * - Единый порядок блоков (Хабр-подобный компактный лейаут):
+ *   1. Автор (аватар, имя, компания)
  *   2. Заголовок
- *   3. Бейджи (тема, формат, сложность, демо)
- *   4. Полноширинная обложка (100% внутренней ширины, пропорции 39:22)
- *   5. Краткое описание
- *   6. Ключевые слова (#хэштеги)
- *   7. Футер (время чтения, закладка)
- * - Чистоту обложки: на обложку НЕ накладываются никакие элементы сайта (заголовки, бейджи, водяные знаки).
+ *   3. Бейджи (вопрос, все темы 1-5, формат: "Формат: <Название>", клуб)
+ *   4. Полноширинная обложка (100% внутренней ширины, пропорции 780:350 / 78:35)
+ *   5. Краткое описание (clamped до 2 строк)
+ *   6. Сервисная строка (дата публикации, время чтения, сложность)
+ *   7. Футер (лайк, рейтинг капсула, комментарии / ответы, закладка, читать далее)
+ * - Чистоту обложки: на обложку НЕ накладываются никакие элементы сайта.
  * - Состояния: 0px при отсутствии обложки или ошибке, шиммер при загрузке, 100% ширина при показе.
  */
 
@@ -54,16 +54,37 @@
       badgesHtml += '<span class="meta-badge question-badge"' + (isPreview ? ' id="preview-card-badge-question"' : '') + '>Вопрос</span>';
     }
 
-    // 1. Topic Title & Badge
-    let topicTitle = '';
-    if (window.PublicationConfig && item.topic) {
-      const t = window.PublicationConfig.getTopicById(item.topic);
-      if (t) topicTitle = t.title;
-    } else if (item.topicTitle) {
-      topicTitle = item.topicTitle;
+    // 1. Topic Titles & Badges (all topics 1 to 5)
+    let topicIds = [];
+    if (Array.isArray(item.topics) && item.topics.length > 0) {
+      topicIds = item.topics;
+    } else if (item.topic) {
+      topicIds = [item.topic];
     }
-    if (topicTitle) {
-      badgesHtml += '<span class="meta-badge topic-badge"' + (isPreview ? ' id="preview-card-badge-topic"' : '') + '>' + escapeHtml(topicTitle) + '</span>';
+
+    if (topicIds.length > 0) {
+      topicIds.forEach(function (topicId, idx) {
+        let topicTitle = '';
+        if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
+          const t = window.PublicationConfig.getTopicById(topicId);
+          if (t) topicTitle = t.title;
+        }
+        if (!topicTitle && item.topicTitles && Array.isArray(item.topicTitles) && item.topicTitles[idx]) {
+          topicTitle = item.topicTitles[idx];
+        }
+        if (!topicTitle && idx === 0 && item.topicTitle) {
+          topicTitle = item.topicTitle;
+        }
+        if (!topicTitle && typeof topicId === 'string') {
+          topicTitle = topicId;
+        }
+        if (topicTitle) {
+          const idAttr = (isPreview && idx === 0) ? ' id="preview-card-badge-topic"' : '';
+          badgesHtml += '<span class="meta-badge topic-badge"' + idAttr + '>' + escapeHtml(topicTitle) + '</span>';
+        }
+      });
+    } else if (item.topicTitle) {
+      badgesHtml += '<span class="meta-badge topic-badge"' + (isPreview ? ' id="preview-card-badge-topic"' : '') + '>' + escapeHtml(item.topicTitle) + '</span>';
     }
 
     // 2. Format Badge (only for standard publications, NOT questions)
@@ -78,7 +99,9 @@
         formatTitle = item.formatTitle;
       }
       if (formatTitle) {
-        badgesHtml += '<span class="meta-badge format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(formatTitle) + '</span>';
+        const prefix = /^формат:\s*/i.test(formatTitle) ? '' : 'Формат: ';
+        const displayFormat = prefix + formatTitle;
+        badgesHtml += '<span class="meta-badge format-badge card-format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(displayFormat) + '</span>';
       }
     }
 
@@ -127,7 +150,6 @@
     const isPreview = Boolean(options.isPreview);
 
     const cleanTitle = cleanString(item.title) || (isPreview ? 'Заголовок публикации' : '');
-    const cleanRole = cleanString(item.authorRole);
     const authorName = item.author || 'Автор платформы';
     const authorInitials = item.authorInitials ||
       authorName.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'АП';
@@ -163,10 +185,6 @@
               ) +
               companyBadgeHtml +
             '</div>' +
-            (cleanRole
-              ? ('<div class="meta-sub-row"><span class="author-role"' + (isPreview ? ' id="preview-card-role"' : '') + '>' + escapeHtml(cleanRole) + '</span></div>')
-              : (isPreview ? '<div class="meta-sub-row"><span class="author-role" id="preview-card-role" style="display: none;"></span></div>' : '')
-            ) +
           '</div>' +
         '</div>' +
       '</div>';
@@ -219,42 +237,6 @@
         '</div>';
     }
 
-    // 6. Keywords (#hashtags)
-    const tags = Array.isArray(item.keywords) ? item.keywords : [];
-    let tagsHtml = '';
-    if (tags.length > 0) {
-      const maxVisible = 3;
-      const visible = tags.slice(0, maxVisible);
-      const hidden = tags.slice(maxVisible);
-
-      visible.forEach(function (tag) {
-        tagsHtml +=
-          '<button type="button" class="tag-chip" data-tag="' + escapeHtml(tag) + '" tabindex="' + (isPreview ? '-1' : '0') + '">' +
-            '#' + escapeHtml(tag) +
-          '</button>';
-      });
-
-      if (hidden.length > 0) {
-        if (isPreview) {
-          tagsHtml += '<span class="tag-expand-btn">+' + hidden.length + ' еще</span>';
-        } else {
-          tagsHtml +=
-            '<button type="button" class="tag-expand-btn" aria-expanded="false">+' + hidden.length + ' еще</button>' +
-            '<span class="extra-tags" style="display: none;">';
-          hidden.forEach(function (tag) {
-            tagsHtml +=
-              '<button type="button" class="tag-chip" data-tag="' + escapeHtml(tag) + '">' +
-                '#' + escapeHtml(tag) +
-              '</button>';
-          });
-          tagsHtml += '</span>';
-        }
-      }
-    }
-    const tagsContainerHtml =
-      '<div class="card-tags' + (isPreview ? ' pub-feed-card-tags' : '') + '"' + (isPreview ? ' id="preview-card-tags"' : '') + (tagsHtml ? '' : (isPreview ? ' style="display: none;"' : '')) + '>' +
-        tagsHtml +
-      '</div>';
 
     // 7. Bottom in 2 compact rows:
     const readingTimeText = item.readingTime || (isPreview ? '~1 мин чтения' : '5 мин чтения');
@@ -425,7 +407,6 @@
       coverHtml +
       leadHtml +
       snippetHtml +
-      tagsContainerHtml +
       subInfoHtml +
       footerHtml;
   }
@@ -504,20 +485,6 @@
         });
       }
 
-      const expandBtn = card.querySelector('.tag-expand-btn');
-      if (expandBtn) {
-        expandBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          const extraTags = card.querySelector('.extra-tags');
-          if (extraTags) {
-            const isExpanded = extraTags.style.display !== 'none';
-            extraTags.style.display = isExpanded ? 'none' : 'inline';
-            const hiddenCount = (item.keywords && item.keywords.length > 3) ? (item.keywords.length - 3) : 0;
-            expandBtn.textContent = isExpanded ? ('+' + hiddenCount + ' еще') : 'Свернуть';
-            expandBtn.setAttribute('aria-expanded', String(!isExpanded));
-          }
-        });
-      }
     }
 
     return card;
