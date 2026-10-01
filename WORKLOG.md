@@ -536,3 +536,4 @@
 [2026-10-01 23:35] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация упрощенной контентной модели (Публикация / Вопрос), удаление уровня сложности, новые форматы Новость/Заметка, темы сверху, формат в нижней строке, адаптация тестов и мобильный эмулятор (Fixes #61, #55, #56, #57, #58, #59) (Task: issue-54-sc026-feed-card-redesign)
 [2026-10-01 23:38] | git_bot | GIT_COMMITTED | Фиксация упрощения контентной модели (Fixes #61) и обновлений #55-#59 в ветку feat/issue-54-sc026-feed-card-redesign (Task: issue-54-sc026-feed-card-redesign)
 [2026-10-02 00:04] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация выпадающего меню выбора формата публикации в редакторе с поддержкой Новость и Заметка (Task: issue-54-sc026-feed-card-redesign)
+[2026-10-02 00:06] | git_bot | GIT_COMMITTED | Фиксация выпадающего меню выбора формата публикации в редакторе (Fixes #61, #54) в ветку feat/issue-54-sc026-feed-card-redesign (Task: issue-54-sc026-feed-card-redesign)
