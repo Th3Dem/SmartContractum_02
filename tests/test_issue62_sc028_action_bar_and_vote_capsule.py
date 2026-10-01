@@ -23,21 +23,20 @@ Acceptance Criteria verified:
    - Single horizontal rectangle with slight rounding: Up-arrow - score - Down-arrow.
    - Outer border continuous around entire capsule; no internal vertical dividing lines.
    - Arrows: slightly thicker, saturated silhouette in neutral gray by default.
-4. Upvote Active State (Left Outer Border Highlight & Glow):
+4. Upvote Active State (3-Sided Green Outer Border & Glow):
    - Up-arrow becomes green (var(--success-color, #10b981)).
-   - Green highlight on nearest outer border section ONLY (left border, curves, fading toward center via mask).
+   - Explicit 3-sided green border (top, left outer edge, bottom) matching outer capsule geometry.
+   - Right side has no border (completely open to middle score area).
    - Central score area and right half of capsule border remain neutral gray.
-   - No vertical green line to the right of up-arrow.
-5. Downvote Active State (Right Outer Border Highlight & Glow):
-   - Down-arrow becomes red (var(--error-color, #ef4444)).
-   - Red highlight on nearest outer border section ONLY (right border, curves, fading toward center via mask).
+5. Downvote Active State (3-Sided Red Outer Border & Glow):
+   - Down-arrow becomes red (var(--danger-color, #ef4444)).
+   - Explicit 3-sided red border (top, right outer edge, bottom) matching outer capsule geometry.
+   - Left side has no border (completely open to middle score area).
    - Central score area and left half of capsule border remain neutral gray.
-   - No vertical red line to the left of down-arrow.
 6. Soft Radial Glow Inside the Block:
    - Radial gradient glow centered exactly at active arrow icon, fading outward into background.
    - Purely radial character; no visible square, rectangular, or hard circular box boundaries.
    - Score area and opposite arrow have no visible color tint/fill.
-   - Glow remains inside capsule (overflow: hidden).
    - Decorative layers have pointer-events: none.
 7. Score Number and Independence:
    - Total score color depends only on score value (positive green, negative red, zero gray).
@@ -143,7 +142,7 @@ class TestIssue62ActionBarAndVoteCapsule(unittest.TestCase):
         self.assertIn("aspect-ratio: 3 / 1;", css, "Capsule must declare 3:1 aspect ratio")
         self.assertIn("border: 1px solid var(--border-color);", css, "Capsule must have 1px solid border")
         self.assertIn("border-radius: var(--radius-sm, 6px);", css, "Capsule must have matching radius-sm (6px)")
-        self.assertIn("overflow: hidden;", css, "Capsule must have overflow: hidden to contain glow")
+        self.assertIn("overflow: visible;", css, "Capsule must have overflow: visible so border overlay renders without clipping")
 
     def test_05_rating_capsule_three_equal_zones(self):
         """Inside rating capsule, 3 equal zones of 36px exist: up-button (32+4), score (28+8), down-button (32+4)."""
@@ -234,48 +233,77 @@ class TestIssue62ActionBarAndVoteCapsule(unittest.TestCase):
         self.assertIn("background: transparent;", active_css, "No heavy solid fill")
 
     # --------------------------------------------------------------------------
-    # 4. Rating Capsule: Upvote Active State & Left Outer Border Highlight
+    # 4. Rating Capsule: Upvote Active State & 3-Sided Border
     # --------------------------------------------------------------------------
-    def test_12_upvote_arrow_and_left_outer_border_highlight(self):
-        """Upvote sets green arrow and highlights only left outer border fading to center."""
+    def test_12_upvote_arrow_and_3_sided_border(self):
+        """Upvote sets green arrow and 3-sided outer border (top, left, bottom, no right line)."""
         # Up arrow color
         self.assertIn(".vote-btn-up.is-voted {", self.theme_css)
         up_btn_css = re.search(r'\.vote-btn-up\.is-voted\s*\{([^}]+)\}', self.theme_css).group(1)
         self.assertIn("color: var(--success-color, #10b981);", up_btn_css)
 
-        # Left outer border highlight via ::after with linear gradient mask
+        # 3-sided outer border overlay on left section (top, left, bottom)
         up_after = re.search(r'\.vote-capsule\.has-voted-up::after\s*\{([^}]+)\}', self.theme_css)
-        self.assertIsNotNone(up_after, "has-voted-up::after rule must exist for outer border highlight")
+        self.assertIsNotNone(up_after, "has-voted-up::after rule must exist for 3-sided border")
         after_css = up_after.group(1)
-        self.assertIn("border: 1px solid var(--success-color, #10b981);", after_css)
-        self.assertIn("mask: linear-gradient(to right,", after_css)
-        self.assertIn("-webkit-mask: linear-gradient(to right,", after_css)
+        self.assertIn("left: -1px;", after_css)
+        self.assertIn("border-top: 1px solid var(--vote-up-color, #10b981);", after_css)
+        self.assertIn("border-left: 1px solid var(--vote-up-color, #10b981);", after_css)
+        self.assertIn("border-bottom: 1px solid var(--vote-up-color, #10b981);", after_css)
+        self.assertIn("border-right: none;", after_css, "No vertical divider between arrow and score")
+        self.assertIn("border-top-left-radius: var(--radius-sm, 6px);", after_css)
+        self.assertIn("border-bottom-left-radius: var(--radius-sm, 6px);", after_css)
+        self.assertIn("border-top-right-radius: 0;", after_css)
+        self.assertIn("border-bottom-right-radius: 0;", after_css)
 
-        # No vertical green divider inside
+        # Invariant: no separate button box around arrow
         self.assertNotIn("border-right: 1px solid var(--success-color", self.theme_css)
         self.assertNotIn("border-right: 1px solid #10b981", self.theme_css)
 
     # --------------------------------------------------------------------------
-    # 5. Rating Capsule: Downvote Active State & Right Outer Border Highlight
+    # 5. Rating Capsule: Downvote Active State & 3-Sided Border
     # --------------------------------------------------------------------------
-    def test_13_downvote_arrow_and_right_outer_border_highlight(self):
-        """Downvote sets red arrow and highlights only right outer border fading to center."""
+    def test_13_downvote_arrow_and_3_sided_border(self):
+        """Downvote sets red arrow and 3-sided outer border (top, right, bottom, no left line)."""
         # Down arrow color
         self.assertIn(".vote-btn-down.is-voted {", self.theme_css)
         down_btn_css = re.search(r'\.vote-btn-down\.is-voted\s*\{([^}]+)\}', self.theme_css).group(1)
         self.assertIn("color: var(--danger-color, #ef4444);", down_btn_css)
 
-        # Right outer border highlight via ::after with linear gradient mask to left
+        # 3-sided outer border overlay on right section (top, right, bottom)
         down_after = re.search(r'\.vote-capsule\.has-voted-down::after\s*\{([^}]+)\}', self.theme_css)
-        self.assertIsNotNone(down_after, "has-voted-down::after rule must exist for outer border highlight")
+        self.assertIsNotNone(down_after, "has-voted-down::after rule must exist for 3-sided border")
         after_css = down_after.group(1)
-        self.assertIn("border: 1px solid var(--error-color, #ef4444);", after_css)
-        self.assertIn("mask: linear-gradient(to left,", after_css)
-        self.assertIn("-webkit-mask: linear-gradient(to left,", after_css)
+        self.assertIn("right: -1px;", after_css)
+        self.assertIn("border-top: 1px solid var(--vote-down-color, #ef4444);", after_css)
+        self.assertIn("border-right: 1px solid var(--vote-down-color, #ef4444);", after_css)
+        self.assertIn("border-bottom: 1px solid var(--vote-down-color, #ef4444);", after_css)
+        self.assertIn("border-left: none;", after_css, "No vertical divider between arrow and score")
+        self.assertIn("border-top-right-radius: var(--radius-sm, 6px);", after_css)
+        self.assertIn("border-bottom-right-radius: var(--radius-sm, 6px);", after_css)
+        self.assertIn("border-top-left-radius: 0;", after_css)
+        self.assertIn("border-bottom-left-radius: 0;", after_css)
 
-        # No vertical red divider inside
+        # Invariant: no separate button box around arrow
         self.assertNotIn("border-left: 1px solid var(--error-color", self.theme_css)
         self.assertNotIn("border-left: 1px solid #ef4444", self.theme_css)
+
+    def test_13b_mutual_exclusion_and_overlay_invariants(self):
+        """Both 3-sided borders must never be displayed simultaneously and overlay pointer-events is none."""
+        # Both borders never displayed simultaneously
+        mutual_rule = re.search(r'\.vote-capsule\.has-voted-up\.has-voted-down::after\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(mutual_rule, "Safeguard against simultaneous active borders must exist")
+        self.assertIn("display: none;", mutual_rule.group(1))
+
+        # Base overlay geometry and click passthrough
+        base_overlay = re.search(r'\.vote-capsule::after\s*\{([^}]+)\}', self.theme_css)
+        self.assertIsNotNone(base_overlay)
+        base_css = base_overlay.group(1)
+        self.assertIn("pointer-events: none;", base_css)
+        self.assertIn("position: absolute;", base_css)
+        self.assertIn("top: -1px;", base_css)
+        self.assertIn("bottom: -1px;", base_css)
+        self.assertIn("width: 36px;", base_css)
 
     # --------------------------------------------------------------------------
     # 6. Soft Radial Glow Inside the Block

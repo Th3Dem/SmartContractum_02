@@ -8,10 +8,10 @@ for Issue #62 (SC-028) across desktop, mobile, light theme, dark theme, and all 
 - Liked state (red border, red heart icon)
 - Comments click state (blue border response)
 - Bookmarked state (amber border, amber bookmark icon)
-- Upvoted state (green arrow, left outer border green highlight fading to center, soft radial glow)
-- Downvoted state (red arrow, right outer border red highlight fading to center, soft radial glow)
-- Positive score (+15) + Downvote (green score, red down arrow and right border)
-- Negative score (-5) + Upvote (red score, green up arrow and left border)
+- Upvoted state (green arrow, 3-sided green outer border, soft radial glow)
+- Downvoted state (red arrow, 3-sided red outer border, soft radial glow)
+- Positive score (+15) + Downvote (green score, red down arrow and 3-sided right border)
+- Negative score (-5) + Upvote (red score, green up arrow and 3-sided left border)
 """
 
 import math
@@ -258,29 +258,51 @@ def render_action_bar_block(
     elif vote_state == "down":
         canvas.draw_radial_glow(capsule_x + capsule_w - 18, y + 18, 26, error, max_alpha=0.30 if theme == "dark" else 0.22)
 
-    # Outer border highlight on nearest section with smooth fading
+    # 3-Sided outer border overlay (top, outer edge, bottom, no vertical inner line)
+    zone_w = 36
     if vote_state == "up":
-        # Green highlight on left border and curves fading toward center
-        for px in range(capsule_x, capsule_x + 48):
-            fade = max(0.0, 1.0 - (px - capsule_x) / 46.0)
-            if px < capsule_x + 18:
-                fade = 1.0
-            # top line & curve
-            canvas.set_pixel(px, y, success, fade)
-            # bottom line & curve
-            canvas.set_pixel(px, y + elem_h - 1, success, fade)
-        for py in range(y, y + elem_h):
+        # Green 3-sided border: top, left, bottom, with 6px rounded outer corners
+        for py in range(y + radius, y + elem_h - radius):
             canvas.set_pixel(capsule_x, py, success, 1.0)
+        for px in range(capsule_x + radius, capsule_x + zone_w):
+            canvas.set_pixel(px, y, success, 1.0)
+            canvas.set_pixel(px, y + elem_h - 1, success, 1.0)
+        for cy in range(y, y + radius):
+            for cx in range(capsule_x, capsule_x + radius):
+                dx = (capsule_x + radius) - cx
+                dy = (y + radius) - cy
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, success, 1.0)
+        for cy in range(y + elem_h - radius, y + elem_h):
+            for cx in range(capsule_x, capsule_x + radius):
+                dx = (capsule_x + radius) - cx
+                dy = cy - (y + elem_h - radius - 1)
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, success, 1.0)
     elif vote_state == "down":
-        # Red highlight on right border and curves fading toward center
-        for px in range(capsule_x + capsule_w - 48, capsule_x + capsule_w):
-            fade = max(0.0, (px - (capsule_x + capsule_w - 48)) / 46.0)
-            if px > capsule_x + capsule_w - 18:
-                fade = 1.0
-            canvas.set_pixel(px, y, error, fade)
-            canvas.set_pixel(px, y + elem_h - 1, error, fade)
-        for py in range(y, y + elem_h):
-            canvas.set_pixel(capsule_x + capsule_w - 1, py, error, 1.0)
+        # Red 3-sided border: top, right, bottom, with 6px rounded outer corners
+        right_x = capsule_x + capsule_w - 1
+        for py in range(y + radius, y + elem_h - radius):
+            canvas.set_pixel(right_x, py, error, 1.0)
+        for px in range(capsule_x + capsule_w - zone_w, right_x - radius + 1):
+            canvas.set_pixel(px, y, error, 1.0)
+            canvas.set_pixel(px, y + elem_h - 1, error, 1.0)
+        for cy in range(y, y + radius):
+            for cx in range(right_x - radius + 1, right_x + 1):
+                dx = cx - (right_x - radius)
+                dy = (y + radius) - cy
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, error, 1.0)
+        for cy in range(y + elem_h - radius, y + elem_h):
+            for cx in range(right_x - radius + 1, right_x + 1):
+                dx = cx - (right_x - radius)
+                dy = cy - (y + elem_h - radius - 1)
+                dist = math.sqrt(dx * dx + dy * dy)
+                if radius - 1.2 <= dist <= radius + 0.3:
+                    canvas.set_pixel(cx, cy, error, 1.0)
 
     # Up arrow (zone 1, center ~18)
     up_color = success if vote_state == "up" else text_muted
@@ -329,8 +351,8 @@ def generate_all_screenshots():
     states = [
         ("Default state (Score 0)", "default", "0", "default", 0, "default", "0", "default"),
         ("Liked state (Red border & icon)", "liked", "15", "default", 15, "default", "3", "default"),
-        ("Upvoted state (Green border highlight & glow)", "default", "8", "up", 8, "default", "2", "default"),
-        ("Downvoted state (Red border highlight & glow)", "default", "4", "down", -1, "default", "0", "default"),
+        ("Upvoted state (3-sided green border & glow)", "default", "8", "up", 8, "default", "2", "default"),
+        ("Downvoted state (3-sided red border & glow)", "default", "4", "down", -1, "default", "0", "default"),
         ("Positive score + Downvote (Score green, right border red)", "default", "24", "down", 15, "default", "7", "default"),
         ("Bookmarked state (Amber border & icon)", "default", "19", "default", 12, "default", "5", "bookmarked"),
         ("Comments active click response", "default", "10", "default", 3, "active", "12", "default"),

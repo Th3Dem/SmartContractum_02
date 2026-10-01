@@ -946,6 +946,8 @@ button.author-name:focus-visible,
    Voting Capsule Component (.vote-capsule)
    ========================================================================== */
 .vote-capsule {
+  --vote-up-color: var(--success-color, #10b981);
+  --vote-down-color: var(--danger-color, #ef4444);
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -968,8 +970,7 @@ button.author-name:focus-visible,
   line-height: 1;
   vertical-align: middle;
   box-shadow: none;
-  overflow: hidden;
-  overflow-clip-margin: border-box;
+  overflow: visible;
   isolation: isolate;
   transition: border-color var(--transition-fast), background-color var(--transition-fast), opacity var(--transition-fast);
 }
@@ -996,31 +997,50 @@ button.author-name:focus-visible,
   background: radial-gradient(circle 28px at calc(100% - 20px) 50%, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0.10) 40%, rgba(239, 68, 68, 0.02) 70%, transparent 100%);
 }
 
-/* Local Outer Border Highlight (Issue #62 SC-028) */
+/* 3-Sided Outer Border Overlay (Issue #62 SC-028) */
 .vote-capsule::after {
   content: '';
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
+  top: -1px;
+  bottom: -1px;
+  width: 36px;
+  box-sizing: border-box;
   pointer-events: none;
   opacity: 0;
-  border: 1px solid transparent;
   transition: opacity var(--transition-fast, 150ms) ease;
   z-index: 2;
 }
 
 .vote-capsule.has-voted-up::after {
   opacity: 1;
-  border: 1px solid var(--success-color, #10b981);
-  -webkit-mask: linear-gradient(to right, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
-  mask: linear-gradient(to right, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
+  left: -1px;
+  right: auto;
+  border-top: 1px solid var(--vote-up-color, #10b981);
+  border-left: 1px solid var(--vote-up-color, #10b981);
+  border-bottom: 1px solid var(--vote-up-color, #10b981);
+  border-right: none;
+  border-top-left-radius: var(--radius-sm, 6px);
+  border-bottom-left-radius: var(--radius-sm, 6px);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .vote-capsule.has-voted-down::after {
   opacity: 1;
-  border: 1px solid var(--error-color, #ef4444);
-  -webkit-mask: linear-gradient(to left, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
-  mask: linear-gradient(to left, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
+  right: -1px;
+  left: auto;
+  border-top: 1px solid var(--vote-down-color, #ef4444);
+  border-right: 1px solid var(--vote-down-color, #ef4444);
+  border-bottom: 1px solid var(--vote-down-color, #ef4444);
+  border-left: none;
+  border-top-right-radius: var(--radius-sm, 6px);
+  border-bottom-right-radius: var(--radius-sm, 6px);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.vote-capsule.has-voted-up.has-voted-down::after {
+  display: none;
 }
 
 .comment-vote-row {
@@ -1031,8 +1051,6 @@ button.author-name:focus-visible,
 }
 
 .comment-vote-row .vote-capsule {
-  height: 34px;
-  min-height: 34px;
   height: 36px;
   min-height: 36px;
 }
@@ -1239,6 +1257,10 @@ button.author-name:focus-visible,
     gap: 3px;
     min-height: 46px;
     height: auto;
+  }
+
+  .vote-capsule::after {
+    width: 49px;
   }
 
   .vote-btn {

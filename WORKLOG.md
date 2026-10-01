@@ -540,3 +540,4 @@
 [2026-10-02 00:37] | pm_bot | TASK_INIT | Старт задачи Issue #62 (SC-028): Редизайн панели действий карточки и капсулы рейтинга (Task: issue-62-sc028-action-bar-redesign)
 [2026-10-02 00:49] | dev_bot | IMPLEMENTATION_COMPLETE | Редизайн панели действий (рамки 1:1, рейтинг 3:1) и капсулы рейтинга (локальная подсветка рамки, мягкое радиальное свечение) (Task: issue-62-sc028-action-bar-redesign)
 [2026-10-02 00:52] | git_bot | PR_CREATED | Открыт PR #63 для Issue #62 (Fixes #62), ветка feat/issue-62-sc028-action-bar-redesign (Task: issue-62-sc028-action-bar-redesign)
+[2026-10-02 01:23] | dev_bot | IMPLEMENTATION_COMPLETE | Трехсторонняя рамка активного голосования (сверху, сбоку, снизу) по референсу пользователя (Task: issue-62-sc028-action-bar-redesign)
