@@ -509,3 +509,5 @@
 [2026-10-01 10:57] | pm_bot | TASK_INIT | Старт задачи issue-36-author-rating-and-karma: общий рейтинг автора в профиле и пересчет кармы (Task: issue-36-author-rating-and-karma)
 [2026-10-01 10:57] | pm_bot | DEV_ASSIGN | Назначение py_bot для реализации серверной агрегации рейтинга автора и тестирования инвариантов (Task: issue-36-author-rating-and-karma)
 [2026-10-01 11:04] | py_bot | IMPLEMENTATION_COMPLETE | Реализация агрегации рейтинга автора в server.py и тестовый сьют инвариантов (Task: issue-36-author-rating-and-karma)
+[2026-10-01 11:09] | git_bot | PR_CREATED | Открыт PR #39 для Issue #36 (Fixes #36), ветка feat/issue-36-author-rating-and-karma (Task: issue-36-author-rating-and-karma)
+
