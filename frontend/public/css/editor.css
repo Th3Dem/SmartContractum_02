@@ -3683,12 +3683,18 @@ body.modal-open {
 }
 
 .pub-feed-card .btn-card-action {
-  background: transparent;
-  border: none;
+  height: 36px;
+  min-height: 36px;
+  min-width: 36px;
+  box-sizing: border-box;
+  background: var(--bg-surface, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
-  padding: 4px 6px;
+  padding: 0 6px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   font-size: 0.8rem;
   font-family: var(--font-sans);
@@ -3722,10 +3728,18 @@ body.modal-open {
 }
 
 .pub-feed-card .btn-card-bookmark {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
-  padding: 4px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3736,11 +3750,35 @@ body.modal-open {
 .pub-feed-card .btn-read-more {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.8rem;
+  gap: 6px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--accent-color);
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: var(--radius-sm, 6px);
+  text-decoration: none;
   font-family: var(--font-sans);
+  cursor: default;
+}
+
+[data-theme="light"] .pub-feed-card .card-read-more,
+[data-theme="light"] .pub-feed-card .btn-read-more {
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.08);
+  border-color: rgba(2, 132, 199, 0.35);
+}
+
+.pub-feed-card .card-read-more svg,
+.pub-feed-card .btn-read-more svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
 }
 
 /* Feedback & Messages */

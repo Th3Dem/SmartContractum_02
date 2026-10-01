@@ -115,6 +115,7 @@
   --editor-width: 940px;
   --editor-padding-x: 48px;
   --side-zone-width: 350px;
+  --radius-xs: 4px;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -946,33 +947,108 @@ button.author-name:focus-visible,
    Voting Capsule Component (.vote-capsule)
    ========================================================================== */
 .vote-capsule {
+  --vote-up-color: var(--success-color, #10b981);
+  --vote-down-color: var(--danger-color, #ef4444);
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 4px;
   padding: 0 4px;
-  height: 34px;
   min-height: 34px;
+  height: 34px;
+  height: 36px;
+  min-height: 36px;
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+  aspect-ratio: 3 / 1;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm, 6px);
   box-sizing: border-box;
   user-select: none;
   line-height: 1;
   vertical-align: middle;
   box-shadow: none;
+  overflow: visible;
+  isolation: isolate;
   transition: border-color var(--transition-fast), background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+/* Soft Radial Glow Inside Capsule (Issue #62 SC-028) */
+.vote-capsule::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms) ease;
+  z-index: 0;
+}
+
+.vote-capsule.has-voted-up::before {
+  opacity: 1;
+  background: radial-gradient(circle 28px at 20px 50%, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.10) 40%, rgba(16, 185, 129, 0.02) 70%, transparent 100%);
+}
+
+.vote-capsule.has-voted-down::before {
+  opacity: 1;
+  background: radial-gradient(circle 28px at calc(100% - 20px) 50%, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0.10) 40%, rgba(239, 68, 68, 0.02) 70%, transparent 100%);
+}
+
+/* 3-Sided Outer Border Overlay (Issue #62 SC-028) */
+.vote-capsule::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 36px;
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms) ease;
+  z-index: 2;
+}
+
+.vote-capsule.has-voted-up::after {
+  opacity: 1;
+  left: -1px;
+  right: auto;
+  border-top: 1px solid var(--vote-up-color, #10b981);
+  border-left: 1px solid var(--vote-up-color, #10b981);
+  border-bottom: 1px solid var(--vote-up-color, #10b981);
+  border-right: none;
+  border-top-left-radius: var(--radius-sm, 6px);
+  border-bottom-left-radius: var(--radius-sm, 6px);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.vote-capsule.has-voted-down::after {
+  opacity: 1;
+  right: -1px;
+  left: auto;
+  border-top: 1px solid var(--vote-down-color, #ef4444);
+  border-right: 1px solid var(--vote-down-color, #ef4444);
+  border-bottom: 1px solid var(--vote-down-color, #ef4444);
+  border-left: none;
+  border-top-right-radius: var(--radius-sm, 6px);
+  border-bottom-right-radius: var(--radius-sm, 6px);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.vote-capsule.has-voted-up.has-voted-down::after {
+  display: none;
 }
 
 .comment-vote-row {
   display: flex;
   align-items: center;
-  margin: 7px 0 5px 0;
+  margin: 4px 0 3px 0;
   width: 100%;
-}
-
-.comment-vote-row .vote-capsule {
-  height: 34px;
-  min-height: 34px;
 }
 
 .vote-btn {
@@ -992,6 +1068,8 @@ button.author-name:focus-visible,
   cursor: pointer;
   box-sizing: border-box;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
   transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
 }
 
@@ -1006,21 +1084,29 @@ button.author-name:focus-visible,
   width: 14px;
   height: 14px;
   pointer-events: none;
+  stroke-width: 2.4;
+  transition: stroke var(--transition-fast), fill var(--transition-fast), transform var(--transition-fast);
 }
 
 .vote-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: transparent;
   color: var(--text-primary);
 }
 
 .vote-btn-up:hover:not(:disabled) {
   color: var(--success-color, #10b981);
-  background: rgba(16, 185, 129, 0.12);
+}
+
+.vote-btn-up:hover:not(:disabled) svg {
+  stroke: var(--success-color, #10b981);
 }
 
 .vote-btn-down:hover:not(:disabled) {
   color: var(--danger-color, #ef4444);
-  background: rgba(239, 68, 68, 0.12);
+}
+
+.vote-btn-down:hover:not(:disabled) svg {
+  stroke: var(--danger-color, #ef4444);
 }
 
 .vote-btn:active:not(:disabled) {
@@ -1035,20 +1121,27 @@ button.author-name:focus-visible,
 /* Active Voted States */
 .vote-btn-up.is-voted {
   color: var(--success-color, #10b981);
-  background: rgba(16, 185, 129, 0.14);
+  background: rgba(16, 185, 129, 0.04);
 }
 
 .vote-btn-up.is-voted svg {
   stroke-width: 2.5;
+  stroke: var(--success-color, #10b981);
 }
 
 .vote-btn-down.is-voted {
   color: var(--danger-color, #ef4444);
-  background: rgba(239, 68, 68, 0.14);
+  background: rgba(239, 68, 68, 0.04);
 }
 
 .vote-btn-down.is-voted svg {
   stroke-width: 2.5;
+  stroke: var(--danger-color, #ef4444);
+}
+
+.vote-capsule .vote-btn-up.is-voted,
+.vote-capsule .vote-btn-down.is-voted {
+  background: transparent;
 }
 
 .vote-capsule.has-voted-up,
@@ -1060,7 +1153,8 @@ button.author-name:focus-visible,
 /* Score display */
 .vote-score {
   display: inline-block;
-  min-width: 26px;
+  width: 28px;
+  min-width: 28px;
   padding: 0 2px;
   font-size: 0.85rem;
   font-weight: 700;
@@ -1069,6 +1163,10 @@ button.author-name:focus-visible,
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  transition: color var(--transition-fast);
 }
 
 .vote-score.is-positive {
@@ -1115,18 +1213,128 @@ button.author-name:focus-visible,
 .article-actions-group .vote-capsule {
   height: 36px;
   min-height: 36px;
-  padding: 2px 6px;
+  width: 108px;
+  min-width: 108px;
+  aspect-ratio: 3 / 1;
 }
 
 .article-bottom-actions .vote-capsule {
-  height: 38px;
-  min-height: 38px;
-  padding: 2px 8px;
+  height: 36px;
+  min-height: 36px;
+  width: 108px;
+  min-width: 108px;
+  aspect-ratio: 3 / 1;
 }
 
 .card-footer-left .vote-capsule {
-  height: 34px;
-  min-height: 34px;
+  height: 36px;
+  min-height: 36px;
+  width: 108px;
+  min-width: 108px;
+  aspect-ratio: 3 / 1;
+}
+
+/* ==========================================================================
+   Compact Voting Capsule Modifier for Comments & Answers (Issue #62 SC-028)
+   ========================================================================== */
+.vote-capsule--compact,
+.comment-vote-row .vote-capsule {
+  height: 25px;
+  min-height: 25px;
+  max-height: 25px;
+  width: auto;
+  min-width: 72px;
+  max-width: 80px;
+  aspect-ratio: auto;
+  padding: 0 2px;
+  gap: 2px;
+  border-radius: var(--radius-xs, 4px);
+}
+
+.vote-capsule--compact .vote-btn,
+.comment-vote-row .vote-capsule .vote-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: var(--radius-xs, 4px);
+}
+
+.vote-capsule--compact .vote-btn svg,
+.comment-vote-row .vote-capsule .vote-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+
+.vote-capsule--compact .vote-score,
+.comment-vote-row .vote-capsule .vote-score {
+  width: auto;
+  min-width: 20px;
+  padding: 0 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Compact Soft Radial Glow Scaled to 12px Icon */
+.vote-capsule--compact.has-voted-up::before,
+.comment-vote-row .vote-capsule.has-voted-up::before {
+  background: radial-gradient(circle 16px at 12px 50%, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.10) 40%, rgba(16, 185, 129, 0.02) 70%, transparent 100%);
+}
+
+.vote-capsule--compact.has-voted-down::before,
+.comment-vote-row .vote-capsule.has-voted-down::before {
+  background: radial-gradient(circle 16px at calc(100% - 12px) 50%, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0.10) 40%, rgba(239, 68, 68, 0.02) 70%, transparent 100%);
+}
+
+/* Compact 3-Sided Outer Border Overlay (Matches 25px Height, 24px Width, 4px Radius) */
+.vote-capsule--compact::after,
+.comment-vote-row .vote-capsule::after {
+  top: -1px;
+  bottom: -1px;
+  width: 24px;
+}
+
+.vote-capsule--compact.has-voted-up::after,
+.comment-vote-row .vote-capsule.has-voted-up::after {
+  left: -1px;
+  right: auto;
+  border-top: 1px solid var(--vote-up-color, #10b981);
+  border-left: 1px solid var(--vote-up-color, #10b981);
+  border-bottom: 1px solid var(--vote-up-color, #10b981);
+  border-right: none;
+  border-top-left-radius: var(--radius-xs, 4px);
+  border-bottom-left-radius: var(--radius-xs, 4px);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.vote-capsule--compact.has-voted-down::after,
+.comment-vote-row .vote-capsule.has-voted-down::after {
+  right: -1px;
+  left: auto;
+  border-top: 1px solid var(--vote-down-color, #ef4444);
+  border-right: 1px solid var(--vote-down-color, #ef4444);
+  border-bottom: 1px solid var(--vote-down-color, #ef4444);
+  border-left: none;
+  border-top-right-radius: var(--radius-xs, 4px);
+  border-bottom-right-radius: var(--radius-xs, 4px);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vote-capsule,
+  .vote-capsule::before,
+  .vote-capsule::after,
+  .vote-btn,
+  .vote-score,
+  .btn-card-action {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /* Mobile & Touch Responsive */
@@ -1136,6 +1344,10 @@ button.author-name:focus-visible,
     gap: 3px;
     min-height: 46px;
     height: auto;
+  }
+
+  .vote-capsule::after {
+    width: 49px;
   }
 
   .vote-btn {
@@ -1150,9 +1362,7 @@ button.author-name:focus-visible,
     height: 14px;
   }
 
-  .card-footer-left .vote-capsule,
-  .comment-vote-row .vote-capsule,
-  .answer-actions .vote-capsule {
+  .card-footer-left .vote-capsule {
     min-height: 46px;
     height: auto;
   }
@@ -1166,6 +1376,59 @@ button.author-name:focus-visible,
     justify-content: center;
     min-height: 46px;
     height: auto;
+  }
+
+  /* Compact vote capsule in mobile/touch stays compact (Issue #62 SC-028) */
+  .vote-capsule--compact,
+  .comment-vote-row .vote-capsule,
+  .answer-vote-row .vote-capsule,
+  .answer-actions .vote-capsule {
+    min-height: 25px;
+    height: 25px;
+    max-height: 25px;
+    padding: 0 2px;
+    gap: 2px;
+    width: auto;
+    min-width: 72px;
+    max-width: 80px;
+  }
+
+  .vote-capsule--compact::after,
+  .comment-vote-row .vote-capsule::after,
+  .answer-vote-row .vote-capsule::after,
+  .answer-actions .vote-capsule::after {
+    width: 24px;
+    top: -1px;
+    bottom: -1px;
+  }
+
+  .vote-capsule--compact .vote-btn,
+  .comment-vote-row .vote-capsule .vote-btn,
+  .answer-vote-row .vote-capsule .vote-btn,
+  .answer-actions .vote-capsule .vote-btn {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0;
+  }
+
+  .vote-capsule--compact .vote-btn svg,
+  .comment-vote-row .vote-capsule .vote-btn svg,
+  .answer-vote-row .vote-capsule .vote-btn svg,
+  .answer-actions .vote-capsule .vote-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .vote-capsule--compact .vote-score,
+  .comment-vote-row .vote-capsule .vote-score,
+  .answer-vote-row .vote-capsule .vote-score,
+  .answer-actions .vote-capsule .vote-score {
+    width: auto;
+    min-width: 20px;
+    padding: 0 2px;
+    font-size: 0.78rem;
   }
 }
 

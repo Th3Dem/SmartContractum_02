@@ -1181,7 +1181,8 @@
             myVote: commMyVote,
             canVote: commCanVote,
             isAuthor: isMyComment,
-            isDeleted: Boolean(comment.isDeleted)
+            isDeleted: Boolean(comment.isDeleted),
+            isCompact: true
           })
         : '';
 
@@ -1972,7 +1973,8 @@
           myVote: ansMyVote,
           canVote: ansCanVote,
           isAuthor: isMyAnswer,
-          isDeleted: Boolean(comment.isDeleted)
+          isDeleted: Boolean(comment.isDeleted),
+          isCompact: true
         })
       : '';
 

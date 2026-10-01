@@ -131,6 +131,12 @@
     const score = Number.isInteger(options.score) ? options.score : (parseInt(options.score, 10) || 0);
     const myVote = Number.isInteger(options.myVote) ? options.myVote : (parseInt(options.myVote, 10) || 0);
 
+    const isCompact = options.isCompact !== undefined
+      ? Boolean(options.isCompact)
+      : (options.compact !== undefined
+          ? Boolean(options.compact)
+          : (targetType === 'comment' || targetType === 'answer'));
+
     const user = getCurrentUser();
     const isGuest = !user || Boolean(user.isGuest);
     const isAuthor = Boolean(options.isAuthor || (user && options.authorId && user.id === options.authorId));
@@ -195,14 +201,15 @@
     const upClass = 'vote-btn vote-btn-up' + (myVote === 1 ? ' is-voted' : '');
     const downClass = 'vote-btn vote-btn-down' + (myVote === -1 ? ' is-voted' : '');
 
+    const svgSize = isCompact ? '12' : '14';
     const upArrowSvg =
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<svg width="' + svgSize + '" height="' + svgSize + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<line x1="12" y1="19" x2="12" y2="5"></line>' +
         '<polyline points="5 12 12 5 19 12"></polyline>' +
       '</svg>';
 
     const downArrowSvg =
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<svg width="' + svgSize + '" height="' + svgSize + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<line x1="12" y1="5" x2="12" y2="19"></line>' +
         '<polyline points="19 12 12 19 5 12"></polyline>' +
       '</svg>';
@@ -231,6 +238,7 @@
     const scoreHtml = '<span class="' + scoreClass + '" data-score="' + score + '">' + score + '</span>';
 
     const capsuleClass = 'vote-capsule' +
+      (isCompact ? ' vote-capsule--compact' : '') +
       (myVote === 1 ? ' has-voted-up' : (myVote === -1 ? ' has-voted-down' : '')) +
       (isPreview ? ' is-preview' : '') +
       (isPending ? ' is-pending' : '') +
@@ -243,6 +251,7 @@
         'data-score="' + score + '" ' +
         'data-my-vote="' + myVote + '" ' +
         'data-can-vote="' + (canVote ? 'true' : 'false') + '"' +
+        (isCompact ? ' data-is-compact="true"' : '') +
         (isAuthor ? ' data-is-author="true"' : '') +
         (isDeleted ? ' data-is-deleted="true"' : '') +
         (isGuest ? ' data-is-guest="true"' : '') + '>' +
