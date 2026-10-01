@@ -1197,6 +1197,18 @@
           '</button>';
       }
 
+      let deleteBtnHtml = '';
+      if (isMyComment && !isAnswer && !comment.isDeleted) {
+        deleteBtnHtml =
+          '<button type="button" class="btn-action-text btn-delete-comment" title="Удалить комментарий">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<polyline points="3 6 5 6 21 6"></polyline>' +
+              '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>' +
+            '</svg>' +
+            '<span>Удалить</span>' +
+          '</button>';
+      }
+
       const mainContainer = document.createElement('div');
       mainContainer.className = 'comment-main';
 
@@ -1279,12 +1291,20 @@
         '</div>' +
         '<div class="comment-actions">' +
           editBtnHtml +
+          deleteBtnHtml +
           '<button type="button" class="btn-action-text btn-reply-comment">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
               '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
             '</svg>' +
             '<span>Ответить</span>' +
           '</button>' +
+        '</div>' +
+        '<div class="comment-delete-confirm" style="display: none;" role="alertdialog" aria-label="Подтверждение удаления комментария">' +
+          '<span class="comment-delete-confirm-text">Удалить этот комментарий?</span>' +
+          '<div class="comment-delete-confirm-actions">' +
+            '<button type="button" class="btn btn-secondary btn-sm btn-cancel-delete-comment">Отмена</button>' +
+            '<button type="button" class="btn btn-danger btn-sm btn-confirm-delete-comment">Удалить</button>' +
+          '</div>' +
         '</div>' +
         '<div class="comment-reply-form-wrap" style="display: none;">' +
           '<div class="comment-reply-header">Ответ для <strong>' + escapeHtml(authorName) + '</strong></div>' +
@@ -1320,6 +1340,11 @@
       if (editBtn && editWrap && contentWrap) {
         editBtn.addEventListener('click', function (e) {
           e.preventDefault();
+          const deleteConfirm = el.querySelector('.comment-delete-confirm');
+          const cancelDel = el.querySelector('.btn-cancel-delete-comment');
+          if (deleteConfirm && deleteConfirm.style.display !== 'none' && cancelDel) {
+            cancelDel.click();
+          }
           const conflictBox = editWrap.querySelector('.edit-conflict-box');
           if (conflictBox) conflictBox.remove();
           contentWrap.style.display = 'none';
@@ -1431,6 +1456,125 @@
         }
       }
 
+      // Inline delete handlers
+      const deleteBtn = el.querySelector('.btn-delete-comment');
+      const deleteConfirmWrap = el.querySelector('.comment-delete-confirm');
+      const cancelDeleteBtn = el.querySelector('.btn-cancel-delete-comment');
+      const confirmDeleteBtn = el.querySelector('.btn-confirm-delete-comment');
+
+      if (deleteBtn && deleteConfirmWrap && confirmDeleteBtn) {
+        let isDeletePending = false;
+
+        deleteBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (isDeletePending) return;
+          if (editWrap && editWrap.style.display !== 'none' && cancelEditBtn) {
+            cancelEditBtn.click();
+          }
+          if (replyWrap && replyWrap.style.display !== 'none' && cancelReplyBtn) {
+            cancelReplyBtn.click();
+          }
+          deleteConfirmWrap.style.display = 'flex';
+          deleteBtn.style.display = 'none';
+          if (cancelDeleteBtn) {
+            try { cancelDeleteBtn.focus(); } catch (fErr) {}
+          }
+        });
+
+        if (cancelDeleteBtn) {
+          cancelDeleteBtn.addEventListener('click', function () {
+            if (isDeletePending) return;
+            deleteConfirmWrap.style.display = 'none';
+            deleteBtn.style.display = '';
+            try { deleteBtn.focus(); } catch (fErr) {}
+          });
+        }
+
+        deleteConfirmWrap.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            if (cancelDeleteBtn && !isDeletePending) {
+              cancelDeleteBtn.click();
+            }
+          }
+        });
+
+        confirmDeleteBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (isDeletePending) return;
+          isDeletePending = true;
+          confirmDeleteBtn.disabled = true;
+          if (cancelDeleteBtn) cancelDeleteBtn.disabled = true;
+          const origText = confirmDeleteBtn.textContent;
+          confirmDeleteBtn.textContent = 'Удаление...';
+
+          const requestSessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+            ? window.SmartContractumVotes.getSessionToken()
+            : currentAuthSessionToken;
+
+          const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
+
+          fetch('/api/articles/' + encodeURIComponent(targetArtId) + '/comments/' + encodeURIComponent(comment.id), {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { status: res.status, ok: res.ok, data: data };
+            });
+          })
+          .then(function (result) {
+            const currentSessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+              ? window.SmartContractumVotes.getSessionToken()
+              : currentAuthSessionToken;
+
+            if (requestSessionToken !== currentSessionToken) {
+              return;
+            }
+
+            if (result.ok && result.data && result.data.success) {
+              showToast('Комментарий удален');
+              try {
+                window.dispatchEvent(new CustomEvent('smartcontractum:voted', {
+                  detail: { targetType: 'comment', targetId: comment.id, action: 'delete' }
+                }));
+              } catch (evErr) {}
+
+              if (treeContext && typeof treeContext.onReload === 'function') {
+                treeContext.onReload();
+              } else if (currentArticle) {
+                loadComments(currentArticle.id);
+              }
+            } else {
+              isDeletePending = false;
+              confirmDeleteBtn.disabled = false;
+              if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+              confirmDeleteBtn.textContent = origText;
+
+              if (result.status === 401 || (result.data && result.data.requireAuth)) {
+                invokeAuthModal();
+              } else {
+                showToast((result.data && result.data.error) || 'Не удалось удалить комментарий', 'error');
+              }
+            }
+          })
+          .catch(function () {
+            const currentSessionToken = (window.SmartContractumVotes && typeof window.SmartContractumVotes.getSessionToken === 'function')
+              ? window.SmartContractumVotes.getSessionToken()
+              : currentAuthSessionToken;
+            if (requestSessionToken !== currentSessionToken) {
+              return;
+            }
+
+            isDeletePending = false;
+            confirmDeleteBtn.disabled = false;
+            if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+            confirmDeleteBtn.textContent = origText;
+            showToast('Ошибка сети при удалении комментария', 'error');
+          });
+        });
+      }
+
       // Inline reply handlers
       const replyBtn = el.querySelector('.btn-reply-comment');
       const replyWrap = el.querySelector('.comment-reply-form-wrap');
@@ -1452,6 +1596,11 @@
       if (replyBtn && replyWrap) {
         replyBtn.addEventListener('click', function (e) {
           e.preventDefault();
+          const deleteConfirm = el.querySelector('.comment-delete-confirm');
+          const cancelDel = el.querySelector('.btn-cancel-delete-comment');
+          if (deleteConfirm && deleteConfirm.style.display !== 'none' && cancelDel) {
+            cancelDel.click();
+          }
           if (!currentUser) {
             openAuthModal();
             showToast('Войдите, чтобы ответить на комментарий');
@@ -1660,9 +1809,18 @@
 
         el.appendChild(toggleRow);
 
+        const deleteConfirm = el.querySelector('.comment-delete-confirm');
+        if (deleteConfirm) {
+          toggleRow.insertAdjacentElement('afterend', deleteConfirm);
+        }
+
         const replyWrap = el.querySelector('.comment-reply-form-wrap');
         if (replyWrap) {
-          toggleRow.insertAdjacentElement('afterend', replyWrap);
+          if (deleteConfirm) {
+            deleteConfirm.insertAdjacentElement('afterend', replyWrap);
+          } else {
+            toggleRow.insertAdjacentElement('afterend', replyWrap);
+          }
         }
 
         function setLocalToggleHighlight(active) {

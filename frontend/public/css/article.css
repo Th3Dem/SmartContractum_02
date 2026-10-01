@@ -1856,6 +1856,35 @@ body,
   outline-offset: 2px;
 }
 
+.btn-action-text.btn-delete-comment:hover {
+  color: var(--danger-color, #ef4444);
+  background-color: var(--danger-bg, rgba(239, 68, 68, 0.08));
+}
+
+.comment-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+}
+
+.comment-delete-confirm-text {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.comment-delete-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Windowing / Drilldown Navigation */
 .thread-drilldown-bar {
   display: flex;

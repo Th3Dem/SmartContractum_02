@@ -4610,10 +4610,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
                 if art_id:
-                    cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (art_id, art_id))
+                    cur.execute("SELECT id, draft_id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (art_id, art_id))
                     art_row = cur.fetchone()
                     canonical_art_id = art_row["id"] if art_row else art_id
-                    if canonical_art_id != comment["article_id"]:
+                    draft_art_id = art_row["draft_id"] if art_row else None
+                    valid_art_ids = {canonical_art_id}
+                    if draft_art_id:
+                        valid_art_ids.add(draft_art_id)
+                    if comment["article_id"] not in valid_art_ids:
                         self.send_json_response(400, {
                             "success": False,
                             "error": "Идентификатор публикации не совпадает с комментарием"
@@ -4629,8 +4633,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     return
 
+                comm_type = (comment["comment_type"] if "comment_type" in comment.keys() else None) or "comment"
+                if comm_type != "comment" and user_role != "admin":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Удаление доступно только для обычных комментариев"
+                    })
+                    return
+
                 now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                cur.execute("UPDATE article_comments SET status = 'deleted', updated_at = ? WHERE id = ?", (now_iso, comm_id))
+                cur.execute("UPDATE article_comments SET status = 'deleted', is_solution = 0, updated_at = ? WHERE id = ?", (now_iso, comm_id))
 
             self.send_json_response(200, {
                 "success": True,
