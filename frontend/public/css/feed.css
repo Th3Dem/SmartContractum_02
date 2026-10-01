@@ -2748,18 +2748,24 @@ button.author-name:focus-visible,
 }
 
 .btn-card-action {
-  background: transparent;
-  border: 1px solid transparent;
+  height: 36px;
+  min-height: 36px;
+  min-width: 36px;
+  box-sizing: border-box;
+  background: var(--bg-surface, transparent);
+  border: 1px solid var(--border-color);
   color: var(--text-muted);
   cursor: pointer;
-  padding: 5px 8px;
+  padding: 0 6px;
   border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;
+  user-select: none;
   transition: all var(--transition-fast);
 }
 
@@ -2772,14 +2778,23 @@ button.author-name:focus-visible,
 
 .btn-card-action svg {
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
 
 .btn-card-like {
-  transition: color var(--transition-fast), transform var(--transition-fast);
+  padding: 0 6px;
+  min-width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  transition: color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 
 .btn-card-like.is-liked {
   color: #ef4444;
+  border-color: #ef4444;
+  background: transparent;
 }
 
 .btn-card-like.is-liked svg {
@@ -2787,20 +2802,47 @@ button.author-name:focus-visible,
   stroke: #ef4444;
 }
 
+.btn-card-like.is-liked .like-count {
+  color: #ef4444;
+}
+
 .btn-card-like:active {
   transform: scale(0.92);
 }
 
+.btn-card-comments {
+  padding: 0 6px;
+  min-width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
 .btn-card-comments:hover {
   color: #38bdf8;
+  border-color: var(--border-color);
+}
+
+.btn-card-comments:active,
+.btn-card-comments:focus-visible {
+  color: var(--accent-color, #3b82f6);
+  border-color: var(--accent-color, #3b82f6);
 }
 
 .btn-card-bookmark {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   background: transparent;
-  border: 1px solid transparent;
+  border: 1px solid var(--border-color);
   color: var(--text-muted);
   cursor: pointer;
-  padding: 5px 8px;
+  padding: 0;
   border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
@@ -2811,14 +2853,18 @@ button.author-name:focus-visible,
 .btn-card-bookmark:hover {
   color: var(--accent-color);
   background: var(--bg-hover);
+  border-color: var(--border-color);
 }
 
 .btn-card-bookmark.is-bookmarked {
   color: #f59e0b;
+  border-color: #f59e0b;
+  background: transparent;
 }
 
 .btn-card-bookmark.is-bookmarked svg {
   fill: #f59e0b;
+  stroke: #f59e0b;
 }
 
 .card-read-more,
@@ -4530,21 +4576,30 @@ button.author-name:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  height: 36px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0 8px;
+  box-sizing: border-box;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-secondary);
-  background: transparent;
-  border: none;
+  background: var(--bg-surface, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   text-decoration: none;
-  transition: color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .btn-card-answers:hover {
   color: var(--accent-color);
+  border-color: var(--accent-color);
 }
 
-.btn-card-answers.has-solution {
+.btn-card-answers.has-solution,
+.btn-card-answers.is-solved {
   color: #16c784;
+  border-color: #16c784;
 }
 
 .card-matched-snippet {

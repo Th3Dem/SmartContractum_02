@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Создание статьи — Antigravity Editor</title>
+  <title>Создание статьи - Antigravity Editor</title>
 
   <!-- Early Theme Initialization -->
   <script>
@@ -1384,6 +1384,21 @@
                           </svg>
                           <span class="like-count">0</span>
                         </button>
+                        <div class="vote-capsule is-preview" id="preview-card-vote-capsule" data-vote-target-type="article" data-vote-target-id="" data-score="0" data-my-vote="0" data-can-vote="false">
+                          <button type="button" class="vote-btn vote-btn-up" data-dir="1" aria-label="Предпросмотр" title="Предпросмотр" aria-pressed="false" disabled aria-disabled="true">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <line x1="12" y1="19" x2="12" y2="5"></line>
+                              <polyline points="5 12 12 5 19 12"></polyline>
+                            </svg>
+                          </button>
+                          <span class="vote-score is-zero" data-score="0">0</span>
+                          <button type="button" class="vote-btn vote-btn-down" data-dir="-1" aria-label="Предпросмотр" title="Предпросмотр" aria-pressed="false" disabled aria-disabled="true">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <polyline points="19 12 12 19 5 12"></polyline>
+                            </svg>
+                          </button>
+                        </div>
                         <button type="button" class="btn-card-action btn-card-comments" id="preview-card-comments" title="Комментарии" aria-label="Комментарии" disabled>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -1391,7 +1406,7 @@
                           <span class="comments-count">0</span>
                         </button>
                         <button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить статью" aria-label="Сохранить статью" disabled>
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
                           </svg>
                         </button>

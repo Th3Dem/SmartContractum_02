@@ -68,11 +68,15 @@ body,
 .btn-action-share {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 14px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  box-sizing: border-box;
   font-size: 0.86rem;
   font-weight: 600;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm, 6px);
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
@@ -90,8 +94,8 @@ body,
 
 .btn-action-like.is-liked {
   color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: #ef4444;
+  background: transparent;
 }
 
 .btn-action-like.is-liked svg {
@@ -101,12 +105,13 @@ body,
 
 .btn-action-bookmark.is-bookmarked {
   color: #f59e0b;
-  border-color: rgba(245, 158, 11, 0.4);
-  background: rgba(245, 158, 11, 0.1);
+  border-color: #f59e0b;
+  background: transparent;
 }
 
 .btn-action-bookmark.is-bookmarked svg {
   fill: #f59e0b;
+  stroke: #f59e0b;
 }
 
 /* ==========================================================================

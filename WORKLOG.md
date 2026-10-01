@@ -537,3 +537,5 @@
 [2026-10-01 23:38] | git_bot | GIT_COMMITTED | Фиксация упрощения контентной модели (Fixes #61) и обновлений #55-#59 в ветку feat/issue-54-sc026-feed-card-redesign (Task: issue-54-sc026-feed-card-redesign)
 [2026-10-02 00:04] | dev_bot | IMPLEMENTATION_COMPLETE | Реализация выпадающего меню выбора формата публикации в редакторе с поддержкой Новость и Заметка (Task: issue-54-sc026-feed-card-redesign)
 [2026-10-02 00:06] | git_bot | GIT_COMMITTED | Фиксация выпадающего меню выбора формата публикации в редакторе (Fixes #61, #54) в ветку feat/issue-54-sc026-feed-card-redesign (Task: issue-54-sc026-feed-card-redesign)
+[2026-10-02 00:37] | pm_bot | TASK_INIT | Старт задачи Issue #62 (SC-028): Редизайн панели действий карточки и капсулы рейтинга (Task: issue-62-sc028-action-bar-redesign)
+[2026-10-02 00:49] | dev_bot | IMPLEMENTATION_COMPLETE | Редизайн панели действий (рамки 1:1, рейтинг 3:1) и капсулы рейтинга (локальная подсветка рамки, мягкое радиальное свечение) (Task: issue-62-sc028-action-bar-redesign)

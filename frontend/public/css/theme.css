@@ -946,21 +946,81 @@ button.author-name:focus-visible,
    Voting Capsule Component (.vote-capsule)
    ========================================================================== */
 .vote-capsule {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 4px;
   padding: 0 4px;
-  height: 34px;
   min-height: 34px;
+  height: 34px;
+  height: 36px;
+  min-height: 36px;
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+  aspect-ratio: 3 / 1;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm, 6px);
   box-sizing: border-box;
   user-select: none;
   line-height: 1;
   vertical-align: middle;
   box-shadow: none;
+  overflow: hidden;
+  overflow-clip-margin: border-box;
+  isolation: isolate;
   transition: border-color var(--transition-fast), background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+/* Soft Radial Glow Inside Capsule (Issue #62 SC-028) */
+.vote-capsule::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms) ease;
+  z-index: 0;
+}
+
+.vote-capsule.has-voted-up::before {
+  opacity: 1;
+  background: radial-gradient(circle 28px at 20px 50%, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.10) 40%, rgba(16, 185, 129, 0.02) 70%, transparent 100%);
+}
+
+.vote-capsule.has-voted-down::before {
+  opacity: 1;
+  background: radial-gradient(circle 28px at calc(100% - 20px) 50%, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0.10) 40%, rgba(239, 68, 68, 0.02) 70%, transparent 100%);
+}
+
+/* Local Outer Border Highlight (Issue #62 SC-028) */
+.vote-capsule::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid transparent;
+  transition: opacity var(--transition-fast, 150ms) ease;
+  z-index: 2;
+}
+
+.vote-capsule.has-voted-up::after {
+  opacity: 1;
+  border: 1px solid var(--success-color, #10b981);
+  -webkit-mask: linear-gradient(to right, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
+  mask: linear-gradient(to right, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
+}
+
+.vote-capsule.has-voted-down::after {
+  opacity: 1;
+  border: 1px solid var(--error-color, #ef4444);
+  -webkit-mask: linear-gradient(to left, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
+  mask: linear-gradient(to left, #000 0%, #000 24%, rgba(0, 0, 0, 0) 50%, transparent 100%);
 }
 
 .comment-vote-row {
@@ -973,6 +1033,8 @@ button.author-name:focus-visible,
 .comment-vote-row .vote-capsule {
   height: 34px;
   min-height: 34px;
+  height: 36px;
+  min-height: 36px;
 }
 
 .vote-btn {
@@ -992,6 +1054,8 @@ button.author-name:focus-visible,
   cursor: pointer;
   box-sizing: border-box;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
   transition: color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
 }
 
@@ -1006,21 +1070,29 @@ button.author-name:focus-visible,
   width: 14px;
   height: 14px;
   pointer-events: none;
+  stroke-width: 2.4;
+  transition: stroke var(--transition-fast), fill var(--transition-fast), transform var(--transition-fast);
 }
 
 .vote-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: transparent;
   color: var(--text-primary);
 }
 
 .vote-btn-up:hover:not(:disabled) {
   color: var(--success-color, #10b981);
-  background: rgba(16, 185, 129, 0.12);
+}
+
+.vote-btn-up:hover:not(:disabled) svg {
+  stroke: var(--success-color, #10b981);
 }
 
 .vote-btn-down:hover:not(:disabled) {
   color: var(--danger-color, #ef4444);
-  background: rgba(239, 68, 68, 0.12);
+}
+
+.vote-btn-down:hover:not(:disabled) svg {
+  stroke: var(--danger-color, #ef4444);
 }
 
 .vote-btn:active:not(:disabled) {
@@ -1035,20 +1107,27 @@ button.author-name:focus-visible,
 /* Active Voted States */
 .vote-btn-up.is-voted {
   color: var(--success-color, #10b981);
-  background: rgba(16, 185, 129, 0.14);
+  background: rgba(16, 185, 129, 0.04);
 }
 
 .vote-btn-up.is-voted svg {
   stroke-width: 2.5;
+  stroke: var(--success-color, #10b981);
 }
 
 .vote-btn-down.is-voted {
   color: var(--danger-color, #ef4444);
-  background: rgba(239, 68, 68, 0.14);
+  background: rgba(239, 68, 68, 0.04);
 }
 
 .vote-btn-down.is-voted svg {
   stroke-width: 2.5;
+  stroke: var(--danger-color, #ef4444);
+}
+
+.vote-capsule .vote-btn-up.is-voted,
+.vote-capsule .vote-btn-down.is-voted {
+  background: transparent;
 }
 
 .vote-capsule.has-voted-up,
@@ -1060,7 +1139,8 @@ button.author-name:focus-visible,
 /* Score display */
 .vote-score {
   display: inline-block;
-  min-width: 26px;
+  width: 28px;
+  min-width: 28px;
   padding: 0 2px;
   font-size: 0.85rem;
   font-weight: 700;
@@ -1069,6 +1149,10 @@ button.author-name:focus-visible,
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  transition: color var(--transition-fast);
 }
 
 .vote-score.is-positive {
@@ -1115,18 +1199,37 @@ button.author-name:focus-visible,
 .article-actions-group .vote-capsule {
   height: 36px;
   min-height: 36px;
-  padding: 2px 6px;
+  width: 108px;
+  min-width: 108px;
+  aspect-ratio: 3 / 1;
 }
 
 .article-bottom-actions .vote-capsule {
-  height: 38px;
-  min-height: 38px;
-  padding: 2px 8px;
+  height: 36px;
+  min-height: 36px;
+  width: 108px;
+  min-width: 108px;
+  aspect-ratio: 3 / 1;
 }
 
 .card-footer-left .vote-capsule {
-  height: 34px;
-  min-height: 34px;
+  height: 36px;
+  min-height: 36px;
+  width: 108px;
+  min-width: 108px;
+  aspect-ratio: 3 / 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vote-capsule,
+  .vote-capsule::before,
+  .vote-capsule::after,
+  .vote-btn,
+  .vote-score,
+  .btn-card-action {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /* Mobile & Touch Responsive */
