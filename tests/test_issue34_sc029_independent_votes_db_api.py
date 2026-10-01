@@ -14,6 +14,7 @@ Must Prove Checklist:
 6. Coexistence: like and vote are completely independent.
 7. Sorting: sort=rating and tab=top sort by score (including negative), sort=popular and focus preserve likes.
 8. Canonical ID alias: voting via draft_id resolves to canonical article_id.
+9. Legacy draft_id comments binding and author rating: comments on draft_id bind to canonical article, resolve without duplicate, and contribute to author rating.
 
 Strict compliance: 100% offline-first, zero emojis, zero em dashes.
 """
@@ -583,6 +584,95 @@ class TestIssue34IndependentVotesDbApi(unittest.TestCase):
         cur.execute("SELECT COUNT(*) FROM article_votes WHERE user_id = ?", ("user_canon_1",))
         self.assertEqual(cur.fetchone()[0], 1)
         conn.close()
+
+    def test_09_legacy_draft_id_comments_binding_and_author_rating(self):
+        """Invariant 9: Legacy comments tied to draft_id bind properly to canonical publication, resolve in comments/article endpoints, and contribute to author total rating."""
+        probe_a = "art_probe_a_canonical"
+        probe_d = "draft_probe_d_legacy"
+        author_id = "author_probe_09"
+        voter_id = "voter_probe_09"
+        comment_id = "probe_alias_c"
+
+        # 1. Setup approved publication id=probe_a, draft_id=probe_d
+        self._insert_article(probe_a, probe_d, author_id, "Legacy Draft Article")
+
+        # 2. Insert published comment probe_alias_c with article_id=probe_d
+        self._insert_comment(comment_id, probe_d, author_id, "Legacy draft comment text", comment_type="comment", status="published")
+
+        # 3. Vote +1 on probe_alias_c: verify 200 OK, score=1
+        cookie_voter = self._login(voter_id, "Probe Voter User")
+        status_vote, res_vote = self._post_json(f"/api/comments/{comment_id}/vote", {"value": 1}, cookie_voter)
+        self.assertEqual(status_vote, 200)
+        self.assertTrue(res_vote.get("success"))
+        self.assertEqual(res_vote.get("score"), 1)
+        self.assertEqual(res_vote.get("targetId"), comment_id)
+
+        # 4. GET /api/articles/probe_d/comments: verify comment is returned, score=1, commentsCount=1
+        status_d_comm, res_d_comm = self._get_json(f"/api/articles/{probe_d}/comments")
+        self.assertEqual(status_d_comm, 200)
+        self.assertTrue(res_d_comm.get("success"))
+        self.assertEqual(res_d_comm.get("commentsCount"), 1)
+        comm_ids_d = [c["id"] for c in res_d_comm.get("comments", [])]
+        self.assertIn(comment_id, comm_ids_d)
+        comm_d = next(c for c in res_d_comm["comments"] if c["id"] == comment_id)
+        self.assertEqual(comm_d["score"], 1)
+
+        # 5. GET /api/articles/probe_a/comments: verify comment is returned, not duplicated, commentsCount=1
+        status_a_comm, res_a_comm = self._get_json(f"/api/articles/{probe_a}/comments")
+        self.assertEqual(status_a_comm, 200)
+        self.assertTrue(res_a_comm.get("success"))
+        self.assertEqual(res_a_comm.get("commentsCount"), 1)
+        comm_ids_a = [c["id"] for c in res_a_comm.get("comments", [])]
+        self.assertEqual(comm_ids_a.count(comment_id), 1)
+        comm_a = next(c for c in res_a_comm["comments"] if c["id"] == comment_id)
+        self.assertEqual(comm_a["score"], 1)
+
+        # 6. GET /api/articles/probe_a: verify commentsCount=1
+        status_a, res_a = self._get_json(f"/api/articles/{probe_a}")
+        self.assertEqual(status_a, 200)
+        self.assertTrue(res_a.get("success"))
+        self.assertEqual(res_a.get("commentsCount"), 1)
+
+        # 7. GET /api/articles/probe_d: verify commentsCount=1
+        status_d, res_d = self._get_json(f"/api/articles/{probe_d}")
+        self.assertEqual(status_d, 200)
+        self.assertTrue(res_d.get("success"))
+        self.assertEqual(res_d.get("commentsCount"), 1)
+
+        # 8. GET /api/users/<author_id>: verify author total rating includes the comment vote
+        status_u, res_u = self._get_json(f"/api/users/{author_id}")
+        self.assertEqual(status_u, 200)
+        self.assertTrue(res_u.get("success"))
+        author_rating = res_u.get("rating") if "rating" in res_u else res_u.get("stats", {}).get("rating")
+        self.assertEqual(author_rating, 1)
+
+        # 9. Verify repeated init_db preserves data without error or duplication
+        conn1 = init_db(self.db_path, seed=False)
+        conn1.close()
+        conn2 = init_moderation_db(self.db_path, seed=False)
+        conn2.close()
+
+        # Check in DB that comment article_id has been healed to canonical probe_a
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT article_id FROM article_comments WHERE id = ?", (comment_id,))
+        healed_row = cur.fetchone()
+        self.assertIsNotNone(healed_row)
+        self.assertEqual(healed_row[0], probe_a)
+        cur.execute("SELECT COUNT(*) FROM article_comments WHERE id = ?", (comment_id,))
+        self.assertEqual(cur.fetchone()[0], 1)
+        conn.close()
+
+        # Verify endpoints still work and return commentsCount=1, no duplicates
+        status_a_after, res_a_after = self._get_json(f"/api/articles/{probe_a}/comments")
+        self.assertEqual(status_a_after, 200)
+        self.assertEqual(res_a_after.get("commentsCount"), 1)
+        self.assertEqual(len([c for c in res_a_after.get("comments", []) if c["id"] == comment_id]), 1)
+
+        status_u_after, res_u_after = self._get_json(f"/api/users/{author_id}")
+        self.assertEqual(status_u_after, 200)
+        author_rating_after = res_u_after.get("rating") if "rating" in res_u_after else res_u_after.get("stats", {}).get("rating")
+        self.assertEqual(author_rating_after, 1)
 
 
 if __name__ == "__main__":
