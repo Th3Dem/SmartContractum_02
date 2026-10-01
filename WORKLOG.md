@@ -499,3 +499,4 @@
 [2026-10-01 01:59] | git_bot | GIT_COMMITTED | Фиксация коммита реализации Issue #30 и #31 в feat/issue-29-comments-idempotency-and-conflicts (Task: issue-30-comments-navigation-and-highlighting)
 [2026-10-01 07:26] | dev_bot | BUGFIX_COMPLETE | Исправление проверок бейджа изменен и лимита глубины десктопа в browser smoke tests (Task: issue-30-comments-navigation-and-highlighting)
 [2026-10-01 07:27] | git_bot | GIT_COMMITTED | Фиксация фикса тестов браузерного смоука в feat/issue-29-comments-idempotency-and-conflicts и feat/issue-30-31-comments-navigation-and-polish (Task: issue-30-comments-navigation-and-highlighting)
+[2026-10-01 14:52] | pm_bot | PROCESS_REFACTOR | Переработка правил агентной разработки и закрепление единого GitHub-first workflow с гейтом аппрува владельца (Task: refactor-agent-development-workflow)
