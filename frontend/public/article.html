@@ -169,6 +169,8 @@
             <span class="like-count" id="articleLikeCount">0</span>
           </button>
 
+          <div id="voteArticleTop" class="article-vote-wrapper"></div>
+
           <button type="button" class="btn btn-secondary btn-action-bookmark" id="btnArticleBookmark" title="Сохранить в закладки" aria-label="Сохранить в закладки">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
@@ -291,6 +293,7 @@
               <span class="like-text">Нравится</span>
               <span class="like-count" id="articleLikeCountBottom">0</span>
             </button>
+            <div id="voteArticleBottom" class="article-vote-wrapper"></div>
             <button type="button" class="btn btn-secondary btn-action-bookmark" id="btnArticleBookmarkBottom">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
@@ -503,6 +506,7 @@
   <!-- 100% Offline-First Vendor Scripts & Logic -->
   <script src="vendor/highlight/highlight.min.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/votes.js"></script>
   <script src="js/article.js"></script>
 </body>
 </html>

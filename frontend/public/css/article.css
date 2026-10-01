@@ -736,6 +736,7 @@ body,
 
   .btn-back-feed-bottom,
   .article-bottom-actions .btn-action-like,
+  .article-bottom-actions .article-vote-wrapper,
   .article-bottom-actions .btn-action-bookmark {
     width: 100%;
     justify-content: center;

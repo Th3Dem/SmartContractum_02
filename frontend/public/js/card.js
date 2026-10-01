@@ -1,5 +1,5 @@
 /**
- * card.js — Единый общий компонент карточки публикации SmartContractum
+ * card.js - Единый общий компонент карточки публикации SmartContractum
  *
  * Используется совместно в:
  * 1. Ленте публикаций (feed.html, feed.js)
@@ -111,6 +111,13 @@
       return '<span class="meta-badge complexity-badge ' + complexityClass + '"' + (isPreview ? ' id="preview-card-badge-complexity"' : '') + '>' + escapeHtml(complexityTitle) + '</span>';
     } else if (isPreview) {
       return '<span class="meta-badge complexity-badge" id="preview-card-badge-complexity" style="display: none;"></span>';
+    }
+    return '';
+  }
+
+  function renderVoteCapsuleHtml(params) {
+    if (window.SmartContractumVotes && typeof window.SmartContractumVotes.renderVoteCapsuleHtml === 'function') {
+      return window.SmartContractumVotes.renderVoteCapsuleHtml(params);
     }
     return '';
   }
@@ -334,6 +341,20 @@
         '</button>';
     }
 
+    const score = item.score !== undefined ? item.score : 0;
+    const myVote = item.myVote !== undefined ? item.myVote : 0;
+    const canVote = item.canVote !== undefined ? Boolean(item.canVote) : true;
+    const isAuthor = Boolean(options.currentUserId && (options.currentUserId === (item.authorId || item.author_id)));
+    const voteCapsuleHtml = renderVoteCapsuleHtml({
+      targetType: 'article',
+      targetId: item.id || '',
+      score: score,
+      myVote: myVote,
+      canVote: canVote && !isAuthor,
+      isAuthor: isAuthor,
+      isPreview: isPreview
+    });
+
     let footerLeftHtml = '';
     let readMoreText = 'Читать далее';
     let actionTargetUrl = articleUrl;
@@ -353,13 +374,13 @@
           '</svg>' +
           '<span>' + (item.hasSolution ? 'Решение принято • ' : '') + aText + '</span>' +
         '</a>';
-      footerLeftHtml = answersBtnHtml + bookmarkHtml;
+      footerLeftHtml = likeBtnHtml + voteCapsuleHtml + answersBtnHtml + bookmarkHtml;
       readMoreText = (aCount === 0 ? 'Ответить' : 'Смотреть вопрос');
       if (aCount === 0) {
         actionTargetUrl = questionAnswerUrl;
       }
     } else {
-      footerLeftHtml = likeBtnHtml + commentsBtnHtml + bookmarkHtml;
+      footerLeftHtml = likeBtnHtml + voteCapsuleHtml + commentsBtnHtml + bookmarkHtml;
       readMoreText = 'Читать далее';
       actionTargetUrl = articleUrl;
     }
@@ -543,6 +564,7 @@
     cleanString: cleanString,
     getBadgesHtml: getBadgesHtml,
     getComplexityBadgeHtml: getComplexityBadgeHtml,
+    renderVoteCapsuleHtml: renderVoteCapsuleHtml,
     renderCardInnerHtml: renderCardInnerHtml,
     createCardElement: createCardElement,
     createAvatarEl: createAvatarEl
