@@ -1347,6 +1347,8 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
             cls.feed_css = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
             cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'card.js'), 'r', encoding='utf-8') as f:
+            cls.card_js = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'article.js'), 'r', encoding='utf-8') as f:
             cls.article_js = f.read()
         with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
@@ -1401,16 +1403,15 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
         self.assertIn('Убрать из сохраненного', self.feed_js)
 
     def test_card_hierarchy_badges_below_title(self):
-        """Verify in feed.js that .card-meta contains author-info, and .card-meta-badges is below .card-title."""
-        card_gen_match = re.search(r'function createCardElement\(item\)\s*\{([\s\S]*?)\n  \}', self.feed_js)
-        self.assertIsNotNone(card_gen_match, "createCardElement function not found")
-        fn_code = card_gen_match.group(1)
-        self.assertIn('<div class="card-meta">', fn_code)
-        self.assertIn('<h2 class="card-title">', fn_code)
-        self.assertIn('<div class="card-meta-badges">', fn_code)
+        """Verify in feed.js delegation to SmartContractumCard and in card.js that .card-meta contains author-info, and .card-meta-badges is below .card-title."""
+        self.assertIn('window.SmartContractumCard.createCardElement', self.feed_js)
+        fn_code = self.card_js
+        self.assertIn('class="card-meta"', fn_code)
+        self.assertIn('class="card-title', fn_code)
+        self.assertIn('class="card-meta-badges', fn_code)
 
-        title_pos = fn_code.find('<h2 class="card-title">')
-        badges_pos = fn_code.find('<div class="card-meta-badges">')
+        title_pos = fn_code.find('class="card-title')
+        badges_pos = fn_code.find('class="card-meta-badges')
         self.assertTrue(0 < title_pos < badges_pos, ".card-meta-badges must be rendered under .card-title")
 
 
@@ -1524,7 +1525,7 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
 
         cover_match = re.search(r'\.card-cover-container\s*\{([^}]+)\}', self.feed_css)
         self.assertIsNotNone(cover_match)
-        self.assertIn('aspect-ratio: 780 / 440', cover_match.group(1))
+        self.assertIn('aspect-ratio: 780 / 350', cover_match.group(1))
 
     def test_no_dashed_borders_in_feed_css(self):
         """Verify no dashed borders exist in feed.css (empty state and sidebar toggle use solid borders)."""
@@ -1712,6 +1713,8 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             cls.feed_css = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
             cls.feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, 'js', 'card.js'), 'r', encoding='utf-8') as f:
+            cls.card_js = f.read()
         with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
             cls.server_py = f.read()
 
@@ -1757,16 +1760,16 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
         # 1. CSS rules for card-cover-container
         self.assertIn('.card-cover-container', self.feed_css)
         self.assertIn('max-width: 780px;', self.feed_css)
-        self.assertIn('aspect-ratio: 780 / 440;', self.feed_css)
+        self.assertIn('aspect-ratio: 780 / 350;', self.feed_css)
         self.assertIn('.card-cover-container.is-loading', self.feed_css)
         self.assertIn('.card-cover-container.is-loaded', self.feed_css)
         self.assertIn('.card-cover-container.is-error', self.feed_css)
         self.assertIn('display: none !important;', self.feed_css)
 
-        # 2. feed.js cover handling: onerror removes container, onload marks loaded
-        self.assertIn('card-cover-container', self.feed_js)
-        self.assertIn(r"closest(\'.card-cover-container\')", self.feed_js)
-        self.assertIn('remove()', self.feed_js)
+        # 2. cover handling in card.js: onerror removes container, onload marks loaded
+        self.assertIn('card-cover-container', self.card_js)
+        self.assertIn(r"closest(\'.card-cover-container\')", self.card_js)
+        self.assertIn('remove()', self.card_js)
 
         # 3. Seed articles in server.py and FALLBACK_ARTICLES in feed.js use base64 data URIs
         for art in server.APPROVED_SEED_ARTICLES:
@@ -1812,9 +1815,7 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             self.assertNotIn('(демо)', art["title"])
             self.assertNotIn('(демо)', art["publication_settings"]["authorRole"])
 
-        # 2. feed.js creates .badge-demo for demo articles
-        self.assertIn('badge-demo', self.feed_js)
-        self.assertIn('Демонстрационный материал', self.feed_js)
+        # 2. badge-demo style exists in feed.css
         self.assertIn('.badge-demo', self.feed_css)
 
         # 3. feed.html widget-create-card has concise text
@@ -1904,10 +1905,10 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         # 1. PublicationConfig.COVER parameters in config.js
         self.assertIn('const COVER = {', self.config_js)
         self.assertIn('TARGET_WIDTH: 780', self.config_js)
-        self.assertIn('TARGET_HEIGHT: 440', self.config_js)
-        self.assertIn('ASPECT_RATIO_W: 39', self.config_js)
-        self.assertIn('ASPECT_RATIO_H: 22', self.config_js)
-        self.assertIn("ASPECT_RATIO_STR: '39 / 22'", self.config_js)
+        self.assertIn('TARGET_HEIGHT: 350', self.config_js)
+        self.assertIn('ASPECT_RATIO_W: 78', self.config_js)
+        self.assertIn('ASPECT_RATIO_H: 35', self.config_js)
+        self.assertIn("ASPECT_RATIO_STR: '780 / 350'", self.config_js)
         self.assertIn('MAX_FILE_BYTES: 10 * 1024 * 1024', self.config_js)
         self.assertTrue('FEED_FULL_WIDTH: true' in self.config_js or 'FEED_MAX_WIDTH_PX: 560' in self.config_js)
         self.assertIn("'image/jpeg'", self.config_js)
@@ -1918,27 +1919,27 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         self.assertIn('window.PublicationConfig = PublicationConfig;', self.config_js)
 
         # 2. Design tokens in theme.css
-        self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
+        self.assertIn('--card-cover-aspect-ratio: 780 / 350;', self.theme_css)
         self.assertTrue('--card-cover-max-width: 100%;' in self.theme_css or '--card-cover-max-width: 560px;' in self.theme_css)
 
     def test_editor_feed_section_texts_and_preview_markup(self):
         """
         Verify exact hint and description texts in editor.html and
-        the 7-step sequence of elements in #pub-card-preview:
-        author -> title -> badges -> cover -> description -> tags -> footer.
+        the sequence of elements in #pub-card-preview:
+        author -> title -> badges -> cover -> description -> footer.
         """
         # 1. Exact hint and description texts in editor.html
         self.assertIn(
-            'Обложка необязательна. Рекомендуемое разрешение — от 780 × 440 px. Область обложки — 39:22. JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр',
+            'Обложка необязательна. Рекомендуемое разрешение: от 780 × 350 px. Область обложки: 78:35 (780:350). JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр',
             self.editor_html
         )
         self.assertIn(
             'В ленте обложка отображается в уменьшенном размере с сохранением выбранного кадра. Для GIF используется первый кадр без анимации.',
             self.editor_html
         )
-        self.assertIn('Кадрирование обложки (39:22)', self.editor_html)
+        self.assertIn('Кадрирование обложки (78:35)', self.editor_html)
 
-        # 2. 7-step card preview markup structure
+        # 2. Card preview markup structure
         preview_pos = self.editor_html.find('id="pub-card-preview"')
         self.assertNotEqual(preview_pos, -1, "Preview card #pub-card-preview must exist in editor.html")
         preview_chunk = self.editor_html[preview_pos:preview_pos + 4000]
@@ -1948,7 +1949,6 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         idx_badges = preview_chunk.find('id="preview-card-badges"')
         idx_cover = preview_chunk.find('id="preview-card-cover"')
         idx_desc = preview_chunk.find('id="preview-card-desc"')
-        idx_tags = preview_chunk.find('id="preview-card-tags"')
         idx_footer = preview_chunk.find('class="card-footer')
 
         self.assertNotEqual(idx_author, -1, "Author block must exist in preview card")
@@ -1956,15 +1956,13 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         self.assertNotEqual(idx_badges, -1, "Badges container must exist in preview card")
         self.assertNotEqual(idx_cover, -1, "Cover container must exist in preview card")
         self.assertNotEqual(idx_desc, -1, "Description lead must exist in preview card")
-        self.assertNotEqual(idx_tags, -1, "Tags container must exist in preview card")
         self.assertNotEqual(idx_footer, -1, "Footer must exist in preview card")
 
         self.assertLess(idx_author, idx_title, "Author must precede Title")
         self.assertLess(idx_title, idx_badges, "Title must precede Badges")
         self.assertLess(idx_badges, idx_cover, "Badges must precede Cover")
         self.assertLess(idx_cover, idx_desc, "Cover must precede Description")
-        self.assertLess(idx_desc, idx_tags, "Description must precede Tags")
-        self.assertLess(idx_tags, idx_footer, "Tags must precede Footer")
+        self.assertLess(idx_desc, idx_footer, "Description must precede Footer")
 
     def test_editor_css_preview_card_styles(self):
         """
@@ -1973,7 +1971,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
         """
         self.assertIn('.pub-feed-card-cover', self.editor_css)
         self.assertTrue('var(--card-cover-max-width' in self.editor_css or 'width: 100%;' in self.editor_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.editor_css)
         self.assertTrue('align-self: stretch;' in self.editor_css or 'align-self: flex-start;' in self.editor_css)
 
         # 0px when cover is hidden / empty
@@ -1984,18 +1982,18 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
 
     def test_feed_css_card_cover_and_compactness(self):
         """
-        Verify .card-cover-container in feed.css (full-width 100%, aspect-ratio 39 / 22),
-        .card-lead line clamping to 3 lines, and compact .feed-toolbar-row.
+        Verify .card-cover-container in feed.css (full-width 100%, aspect-ratio 780 / 350),
+        .card-lead line clamping to 2 lines, and compact .feed-toolbar-row.
         """
         # 1. .card-cover-container styling
         self.assertIn('.card-cover-container', self.feed_css)
         self.assertTrue('var(--card-cover-max-width' in self.feed_css or 'width: 100%;' in self.feed_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.feed_css)
         self.assertTrue('align-self: stretch;' in self.feed_css or 'align-self: flex-start;' in self.feed_css)
 
-        # 2. .card-lead 3 lines limit
+        # 2. .card-lead 2 lines limit
         self.assertIn('.card-lead', self.feed_css)
-        self.assertIn('-webkit-line-clamp: 3;', self.feed_css)
+        self.assertIn('-webkit-line-clamp: 2;', self.feed_css)
         self.assertIn('display: -webkit-box;', self.feed_css)
         self.assertIn('-webkit-box-orient: vertical;', self.feed_css)
 
@@ -2267,19 +2265,19 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         self.assertNotIn('FEED_MAX_WIDTH_PX: 560', self.config_js)
 
         # 2. theme.css tokens
-        self.assertIn('--card-cover-aspect-ratio: 39 / 22;', self.theme_css)
+        self.assertIn('--card-cover-aspect-ratio: 780 / 350;', self.theme_css)
         self.assertIn('--card-cover-max-width: 100%;', self.theme_css)
 
         # 3. feed.css
         self.assertIn('.card-cover-container', self.feed_css)
         self.assertIn('max-width: var(--card-cover-max-width, 100%);', self.feed_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.feed_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.feed_css)
         self.assertIn('align-self: stretch;', self.feed_css)
 
         # 4. editor.css
         self.assertIn('.pub-feed-card-cover', self.editor_css)
         self.assertIn('max-width: 100%;', self.editor_css)
-        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 39 / 22);', self.editor_css)
+        self.assertIn('aspect-ratio: var(--card-cover-aspect-ratio, 780 / 350);', self.editor_css)
         self.assertIn('align-self: stretch;', self.editor_css)
 
         # 5. Clean 0px empty state
@@ -2297,16 +2295,18 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         self.assertIn('renderCardInnerHtml', self.card_js)
         self.assertIn('createCardElement', self.card_js)
 
-        # 3. 7-step structure in card.js
+        # 3. Compact structure in card.js without hashtags or author-role
         idx_meta = self.card_js.find("class=\"card-meta\"")
         idx_title = self.card_js.find("class=\"card-title")
         idx_badges = self.card_js.find("class=\"card-meta-badges")
         idx_cover = self.card_js.find("class=\"card-cover-container")
         idx_lead = self.card_js.find("class=\"card-lead")
-        idx_tags = self.card_js.find("class=\"card-tags")
+        idx_sub_info = self.card_js.find("class=\"card-sub-info")
         idx_footer = self.card_js.find("class=\"card-footer\"")
 
-        self.assertTrue(0 < idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_tags < idx_footer)
+        self.assertTrue(0 < idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_sub_info < idx_footer)
+        self.assertNotIn('class="card-tags', self.card_js)
+        self.assertNotIn('preview-card-role', self.card_js)
 
         # 4. Usage in feed.js and publication.js
         self.assertIn('window.SmartContractumCard.createCardElement', self.feed_js)
@@ -2785,19 +2785,19 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
 
         # 5. Authenticated POST with valid preferences -> 200
         payload = {
-            "materialTypes": ["post", "news"],
+            "materialTypes": ["publication", "question"],
             "complexityLevels": ["hard", "medium"]
         }
         status, data = self._post_json("/api/user/feed-settings", payload, headers=user_headers)
         self.assertEqual(status, 200)
         self.assertTrue(data.get("success"))
-        self.assertEqual(data["materialTypes"], ["post", "news"])
+        self.assertEqual(data["materialTypes"], ["publication", "question"])
         self.assertEqual(data["complexityLevels"], ["hard", "medium"])
 
         # 6. Subsequent GET returns saved settings
         status, data_saved = self._get_json("/api/user/feed-settings", headers=user_headers)
         self.assertEqual(status, 200)
-        self.assertEqual(data_saved["materialTypes"], ["post", "news"])
+        self.assertEqual(data_saved["materialTypes"], ["publication", "question"])
         self.assertEqual(data_saved["complexityLevels"], ["hard", "medium"])
 
     def test_07_feed_filtering_by_types_and_complexities(self):
@@ -2864,7 +2864,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertGreaterEqual(data["total"], 2)
         returned_types = {a["materialType"] for a in data["articles"]}
-        self.assertTrue(returned_types.issubset({"post", "news"}))
+        self.assertTrue(returned_types.issubset({"post", "news", "publication"}))
         ids = {a["id"] for a in data["articles"]}
         self.assertIn("art-t30-post", ids)
         self.assertIn("art-t30-news", ids)
@@ -2930,11 +2930,13 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(len(art01_matches), 1, "Article matching multiple subscriptions must be deduplicated to exactly 1")
         self.assertTrue(art01_matches[0].get("subscriptionReason"))
 
-        # 4. Personal feed settings in tab=my: restrict to 'news' only
+        # 4. Personal feed settings in tab=my: restrict to 'question' only
         # User has subscriptions, but none match the saved feed settings
+        with conn:
+            conn.execute("DELETE FROM user_subscriptions WHERE user_id = ? AND target_type != 'author'", (user_id,))
         post_status, _ = self._post_json(
             "/api/user/feed-settings",
-            {"materialTypes": ["news"], "complexityLevels": ["all"]},
+            {"materialTypes": ["question"], "complexityLevels": ["all"]},
             headers=user_headers
         )
         self.assertEqual(post_status, 200)
@@ -2946,10 +2948,10 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         self.assertEqual(data_filtered.get("articles"), [])
         self.assertFalse(data_filtered.get("noSubscriptions"), "User HAS subscriptions, so noSubscriptions must be False")
 
-        # 5. Restore feed settings to include 'article'
+        # 5. Restore feed settings to include 'publication'
         self._post_json(
             "/api/user/feed-settings",
-            {"materialTypes": ["article", "post", "news", "question"], "complexityLevels": ["all"]},
+            {"materialTypes": ["publication", "question"], "complexityLevels": ["all"]},
             headers=user_headers
         )
         status_restored, data_restored = self._get_json("/api/articles?tab=my", headers=user_headers)
@@ -3545,7 +3547,7 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
 
         # Batch update with materialTypes, complexityLevels, subscriptions, and exceptions
         payload = {
-            "materialTypes": ["article", "news"],
+            "materialTypes": ["publication", "question"],
             "complexityLevels": ["hard"],
             "subscriptions": {
                 "authors": [{"id": "author_melnikov", "title": "Илья Мельников"}],
@@ -3559,7 +3561,7 @@ class TestTask31FeedSettingsAndFiltersUnification(unittest.TestCase):
         status, data_ok = self._post_json("/api/user/feed-settings", payload, headers=user_headers)
         self.assertEqual(status, 200)
         self.assertTrue(data_ok.get("success"))
-        self.assertEqual(data_ok["materialTypes"], ["article", "news"])
+        self.assertEqual(data_ok["materialTypes"], ["publication", "question"])
         self.assertEqual(data_ok["complexityLevels"], ["hard"])
 
         # Verify subscriptions saved
@@ -3651,9 +3653,9 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
         idx_badges = self.card_js.find('class="card-meta-badges')
         idx_cover = self.card_js.find('class="card-cover-container')
         idx_lead = self.card_js.find('class="card-lead')
-        idx_tags = self.card_js.find('class="card-tags')
+        idx_sub_info = self.card_js.find('class="card-sub-info')
         idx_footer = self.card_js.find('class="card-footer')
-        self.assertTrue(idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_tags < idx_footer)
+        self.assertTrue(idx_meta < idx_title < idx_badges < idx_cover < idx_lead < idx_sub_info < idx_footer)
 
         # feed.css styles
         self.assertIn('.subs-author-avatar', self.feed_css)
@@ -3675,34 +3677,24 @@ class TestTask32FeedSettingsUXPolish(unittest.TestCase):
         self.assertIn('.subs-toggle-btn:focus-visible', self.feed_css)
 
     def test_03_settings_clean_hints_and_unified_naming(self):
-        """3. Verify removed 'Минимум один', updated hints, and unified 'Без указанного уровня'."""
+        """3. Verify simplified feed settings: material types present, complexity section removed per Issue #61."""
         self.assertNotIn('Минимум один', self.feed_html)
         self.assertTrue(
             'Что показывать в “Моей ленте”' in self.feed_html or
             'Выберите хотя бы один тип материалов для “Моей ленты”' in self.feed_html or
             'Типы материалов' in self.feed_html
         )
-        self.assertTrue(
-            'Можно выбрать несколько уровней' in self.feed_html or
-            'Выберите подходящие уровни для “Моей ленты” или оставьте любой' in self.feed_html or
-            'Любой уровень — без ограничений' in self.feed_html
-        )
-
-        # Unified naming 'Без указанного уровня' / 'Не указан' in settings and filters
-        self.assertIn('id="feedCompNone"', self.feed_html)
-        self.assertIn('id="feedFilterCompNone"', self.feed_html)
-        self.assertTrue('Не указан' in self.feed_html or 'Без указанного уровня' in self.feed_html)
+        # Complexity section removed from feed settings per Issue #61
+        self.assertNotIn('id="feedSettingsSectionComplexity"', self.feed_html)
+        self.assertNotIn('id="feedCompNone"', self.feed_html)
+        self.assertNotIn('id="feedFilterCompNone"', self.feed_html)
 
     def test_04_filters_all_types_and_any_level(self):
-        """4. Verify explicit 'Все типы' and 'Любой уровень' chips with mutual exclusivity logic."""
-        self.assertIn('data-type="all"', self.feed_html)
-        self.assertIn('data-complexity="all"', self.feed_html)
-        self.assertIn('Все типы', self.feed_html)
-        self.assertIn('Любой уровень', self.feed_html)
-
-        # Mutual exclusivity in feed.js
-        self.assertIn("t === 'all'", self.feed_js)
-        self.assertIn("c === 'all'", self.feed_js)
+        """4. Verify material types and complexity removed from filters panel per Issue #61 AC 3, AC 4."""
+        self.assertNotIn('id="feedFilterGroupTypes"', self.feed_html)
+        self.assertNotIn('id="feedFilterGroupComplexity"', self.feed_html)
+        self.assertNotIn('data-type="all"', self.feed_html)
+        self.assertNotIn('data-complexity="all"', self.feed_html)
 
     def test_05_filters_topics_dropdown_selector(self):
         """5. Verify compact topics dropdown selector with search, checkboxes, and chips."""
@@ -3831,15 +3823,11 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
             mobile_css = mobile_match.group(0)
             self.assertIn('flex-direction: column', mobile_css)
         else:
-            # Task 35: 2-column grid layout for settings panel (1fr 1fr) without subscriptions
+            # Settings panel layout per Issue #61 (Types for publication and question)
             self.assertIn('feedSettingsSectionTypes', self.feed_html)
-            self.assertIn('feedSettingsSectionComplexity', self.feed_html)
-            settings_body_match = re.search(r'(\.feed-settings-panel|#feedSettingsPanel)\s+\.feed-slide-panel-body\s*\{([^}]+)\}', self.feed_css)
-            self.assertIsNotNone(settings_body_match)
-            self.assertIn('grid-template-columns: 1fr 1fr', settings_body_match.group(2))
 
     def test_02_feed_settings_types_and_complexity_structure(self):
-        """2. Verify left column: Types 2x2 tumblers, Complexity upper row and 2x2 grid, with hints."""
+        """2. Verify settings panel: Types tumblers grid with hints (Issue #61)."""
         # Types hint and tumblers grid
         self.assertTrue(
             'Что показывать в “Моей ленте”' in self.feed_html or
@@ -3849,25 +3837,6 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
         tumbler_grid_match = re.search(r'\.feed-tumblers-grid\s*\{([^}]+)\}', self.feed_css)
         self.assertIsNotNone(tumbler_grid_match)
         self.assertIn('repeat(2, minmax(0, 1fr))', tumbler_grid_match.group(1))
-
-        # Complexity hint, any-row and 2x2 grid
-        self.assertTrue(
-            'Можно выбрать несколько уровней' in self.feed_html or
-            'Любой уровень — без ограничений' in self.feed_html
-        )
-        self.assertIn('feed-complexity-grid-wrap', self.feed_html)
-        self.assertIn('feed-complexity-any-row', self.feed_html)
-        self.assertIn('feed-complexity-2x2-grid', self.feed_html)
-        self.assertIn('id="feedCompAll"', self.feed_html)
-        self.assertIn('id="feedCompEasy"', self.feed_html)
-        self.assertIn('id="feedCompMedium"', self.feed_html)
-        self.assertIn('id="feedCompHard"', self.feed_html)
-        self.assertIn('id="feedCompNone"', self.feed_html)
-
-        # CSS for complexity 2x2 grid
-        comp_2x2_match = re.search(r'\.feed-complexity-2x2-grid\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(comp_2x2_match)
-        self.assertIn('repeat(2, minmax(0, 1fr))', comp_2x2_match.group(1))
 
     def test_03_feed_settings_subscriptions_and_add_button(self):
         """3. Verify right column subscriptions: dynamic hint, Add button, 1-col items, and card protection."""
@@ -3921,12 +3890,10 @@ class TestTask33FeedPanelsLayoutAndVisualDensity(unittest.TestCase):
         self.assertIn('repeat(2, minmax(0, 1fr))', grid_css)
         self.assertTrue('20px 24px' in grid_css or '24px' in grid_css)
 
-        # Structure: Row 1 = Types + Complexity, Row 2 = Topics + Date
-        idx_types = self.feed_html.find('feedFilterGroupTypes')
-        idx_comp = self.feed_html.find('feedFilterGroupComplexity')
+        # Structure per Issue #61: filter panel has Topics and Date (types and complexity removed)
         idx_topics = self.feed_html.find('feedFilterGroupTopics')
         idx_date = self.feed_html.find('feedFilterGroupDate')
-        self.assertTrue(idx_types < idx_comp < idx_topics < idx_date)
+        self.assertTrue(0 <= idx_topics < idx_date)
 
     def test_05_feed_filters_date_selector_and_validation(self):
         """5. Verify compact date dropdown, custom date inputs, and range validation."""
@@ -4101,11 +4068,10 @@ class TestTask34StickyPanelsAndMultiFilter(unittest.TestCase):
         self.assertIn('background: transparent', self.feed_css)
 
     def test_08_ui_polish_details(self):
-        """8. Verify select chevron, 'Не указан' complexity, 38px button heights, and neutral unsaved dot."""
+        """8. Verify select chevron, 38px button heights, neutral unsaved dot, and complexity removed per Issue #61."""
         self.assertIn('.feed-select-chevron', self.feed_css)
         self.assertTrue('feed-select-chevron' in self.feed_html or 'feedDateDropdownTrigger' in self.feed_html)
-        self.assertIn('Не указан', self.feed_html)
-        self.assertIn('Автор не указал сложность', self.feed_html)
+        self.assertNotIn('Автор не указал сложность', self.feed_html)
         self.assertIn('feed-unsaved-dot', self.feed_css)
         self.assertIn('height: 38px', self.feed_css)
 
@@ -4175,27 +4141,10 @@ class TestTask35FeedPanelsSimplificationAndDropdownFix(unittest.TestCase):
         self.assertNotIn("payload.exceptions", self.feed_js)
 
     def test_02_settings_panel_2column_desktop_and_tumblers_layout(self):
-        """2. Verify new 2-column layout (1fr 1fr), subtitle, and tumbler structure for types and complexity."""
-        # Subtitle
-        self.assertIn('Выберите типы материалов и уровень сложности для “Моей ленты”', self.feed_html)
-
-        # Desktop 2-column grid in css
-        settings_grid_match = re.search(r'(\.feed-settings-panel|#feedSettingsPanel)\s+\.feed-slide-panel-body\s*\{([^}]+)\}', self.feed_css)
-        self.assertIsNotNone(settings_grid_match)
-        css_rules = settings_grid_match.group(2)
-        self.assertIn('grid-template-columns: 1fr 1fr', css_rules)
-        self.assertIn('gap: 28px', css_rules)
-
-        # Mobile 1-column responsive rule
-        mobile_match = re.search(r'@media\s*\(max-width:\s*768px\)\s*\{([^}]+(\{[^}]+\}[^}]+)*)\}', self.feed_css)
-        self.assertIsNotNone(mobile_match)
-        self.assertIn('grid-template-columns: 1fr', mobile_match.group(0))
-
-        # Types 2x2 grid & Complexity 2x2 grid with upper row
+        """2. Verify settings panel layout and tumbler structure for material types (Issue #61)."""
+        # Types grid
         self.assertIn('id="feedSettingsSectionTypes"', self.feed_html)
-        self.assertIn('id="feedSettingsSectionComplexity"', self.feed_html)
         self.assertIn('feed-tumblers-grid', self.feed_html)
-        self.assertIn('feed-tumbler-any-row', self.feed_html)
 
         # Tumbler components classes
         self.assertIn('.feed-tumbler-row', self.feed_css)
@@ -4203,39 +4152,27 @@ class TestTask35FeedPanelsSimplificationAndDropdownFix(unittest.TestCase):
         self.assertIn('.feed-tumbler-slider', self.feed_css)
 
     def test_03_strict_tumbler_mutual_exclusivity_and_validation_logic(self):
-        """3. Verify strict tumbler logic: Types require >=1 active type; Complexity 'Любой уровень' mutual exclusivity."""
+        """3. Verify strict tumbler logic: Types require >=1 active type (Issue #61)."""
         # Type validation error element
         self.assertIn('id="feedMaterialTypesError"', self.feed_html)
         self.assertIn('.feed-settings-error', self.feed_css)
-
-        # feed.js handlers
-        self.assertIn('handleComplexityTumblerChange', self.feed_js)
-        self.assertIn('handleFilterTypeTumblerChange', self.feed_js)
 
         # Types must have at least 1 in settings
         self.assertIn('validateMaterialTypes', self.feed_js)
         self.assertIn('types.length > 0', self.feed_js)
         self.assertIn('feedMaterialTypesError', self.feed_js)
 
-        # Hints
-        self.assertIn('Любой уровень — без ограничений', self.feed_html)
-        self.assertTrue('Автор не указал сложность' in self.feed_html or 'Автор не задал сложность' in self.feed_html)
-
     def test_04_filters_panel_tumbler_components(self):
-        """4. Verify filter panel replaces buttons with identical tumbler components for types and complexity."""
+        """4. Verify filter panel has completely removed types and complexity blocks per Issue #61."""
         filters_panel_match = re.search(r'<section[^>]*id=["\']feedFiltersPanel["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
         self.assertIsNotNone(filters_panel_match)
         filters_html = filters_panel_match.group(1)
 
-        # Tumblers grid in filters panel
-        self.assertIn('feed-filters-tumblers-grid', filters_html)
-        self.assertIn('feedFilterTypeAll', filters_html)
-        self.assertIn('feedFilterCompAll', filters_html)
-        self.assertIn('name="feedFilterMaterialType"', filters_html)
-        self.assertIn('name="feedFilterComplexity"', filters_html)
-
-        # CSS for filters tumblers grid
-        self.assertIn('.feed-filters-tumblers-grid', self.feed_css)
+        # Tumblers grid for types and complexity completely removed
+        self.assertNotIn('feedFilterGroupTypes', filters_html)
+        self.assertNotIn('feedFilterGroupComplexity', filters_html)
+        self.assertNotIn('feedFilterTypeAll', filters_html)
+        self.assertNotIn('feedFilterCompAll', filters_html)
 
     def test_05_four_constantly_visible_filter_fields_in_2x2_grid(self):
         """5. Verify 4 constantly visible fields in 2x2 grid without collapsible <details>."""

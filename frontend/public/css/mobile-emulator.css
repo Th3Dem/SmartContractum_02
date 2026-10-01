@@ -1,0 +1,700 @@
+/* ==========================================================================
+   SmartContractum Mobile Emulator Styles
+   100% Offline-first, Zero-emojis, Strict Vector UI
+   ========================================================================== */
+
+:root {
+  --em-bg: #0b0f19;
+  --em-header-bg: rgba(15, 23, 42, 0.94);
+  --em-border: rgba(255, 255, 255, 0.1);
+  --em-border-focus: #38bdf8;
+  --em-text: #f8fafc;
+  --em-text-muted: #94a3b8;
+  --em-accent: #38bdf8;
+  --em-accent-hover: #0284c7;
+  --em-surface: #1e293b;
+  --em-surface-hover: #334155;
+  --phone-w: 393px;
+  --phone-h: 852px;
+  --phone-radius: 48px;
+  --phone-bezel-w: 12px;
+  --phone-scale: 1;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.emulator-body {
+  background-color: var(--em-bg);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--em-text);
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ==========================================================================
+   Header Bar
+   ========================================================================== */
+.emulator-header {
+  height: 56px;
+  background: var(--em-header-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--em-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.emulator-header-left,
+.emulator-address-group,
+.emulator-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emulator-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--em-text);
+  font-weight: 700;
+  font-size: 15px;
+  padding-right: 12px;
+  border-right: 1px solid var(--em-border);
+}
+
+.emulator-brand-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.emulator-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Quick Page Tabs */
+.emulator-page-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.page-tab {
+  background: transparent;
+  border: none;
+  color: var(--em-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.page-tab:hover {
+  color: var(--em-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.page-tab.active {
+  color: #ffffff;
+  background: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Address Bar */
+.emulator-address-group {
+  flex: 1;
+  max-width: 580px;
+}
+
+.nav-button-group {
+  display: flex;
+  gap: 3px;
+}
+
+.address-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  padding: 0 8px 0 12px;
+  height: 34px;
+  transition: border-color 0.2s;
+}
+
+.address-input-wrapper:focus-within {
+  border-color: var(--em-border-focus);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
+}
+
+.url-protocol-prefix {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.address-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f1f5f9;
+  font-size: 12px;
+  font-family: monospace;
+  padding: 0 8px;
+  min-width: 0;
+}
+
+.address-go-btn {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.address-go-btn:hover {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+/* Buttons and Controls */
+.ctrl-btn {
+  background: var(--em-surface);
+  border: 1px solid var(--em-border);
+  color: var(--em-text-muted);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ctrl-btn:hover {
+  background: var(--em-surface-hover);
+  color: var(--em-text);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ctrl-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--em-accent);
+  color: var(--em-accent);
+}
+
+.ctrl-btn.icon-btn {
+  width: 34px;
+  padding: 0;
+}
+
+.ctrl-select {
+  background: var(--em-surface);
+  border: 1px solid var(--em-border);
+  color: var(--em-text);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  height: 34px;
+  padding: 0 10px;
+  cursor: pointer;
+  outline: none;
+}
+
+.ctrl-select:focus {
+  border-color: var(--em-border-focus);
+}
+
+.control-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.control-label {
+  font-size: 11px;
+  color: var(--em-text-muted);
+}
+
+.zoom-button-group {
+  display: flex;
+  align-items: center;
+  background: var(--em-surface);
+  border: 1px solid var(--em-border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.zoom-button-group .ctrl-btn {
+  border: none;
+  border-radius: 0;
+}
+
+.zoom-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f1f5f9;
+  min-width: 44px;
+  text-align: center;
+  padding: 0 4px;
+}
+
+.more-controls-wrap {
+  display: flex;
+  gap: 4px;
+}
+
+/* ==========================================================================
+   Workstation Stage & Scalable Wrapper
+   ========================================================================== */
+.emulator-stage {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.device-scaler {
+  transform-origin: center center;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Smartphone Mockup Frame
+   ========================================================================== */
+.smartphone-frame {
+  position: relative;
+  width: var(--phone-w);
+  height: var(--phone-h);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.35s ease;
+}
+
+/* Hardware Buttons on outer rim */
+.chassis-button {
+  position: absolute;
+  background: #2a2e39;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  z-index: 1;
+  transition: all 0.1s ease;
+}
+
+.chassis-button:active {
+  transform: scale(0.96);
+  background: #1e222d;
+}
+
+.smartphone-frame[data-orientation="portrait"] .btn-action {
+  left: -14px;
+  top: 108px;
+  width: 4px;
+  height: 28px;
+}
+
+.smartphone-frame[data-orientation="portrait"] .btn-vol-up {
+  left: -14px;
+  top: 154px;
+  width: 4px;
+  height: 52px;
+}
+
+.smartphone-frame[data-orientation="portrait"] .btn-vol-down {
+  left: -14px;
+  top: 220px;
+  width: 4px;
+  height: 52px;
+}
+
+.smartphone-frame[data-orientation="portrait"] .btn-power {
+  right: -14px;
+  top: 170px;
+  width: 4px;
+  height: 74px;
+}
+
+/* Landscape Button Positions */
+.smartphone-frame[data-orientation="landscape"] .btn-action {
+  top: -14px;
+  left: 108px;
+  height: 4px;
+  width: 28px;
+}
+
+.smartphone-frame[data-orientation="landscape"] .btn-vol-up {
+  top: -14px;
+  left: 154px;
+  height: 4px;
+  width: 52px;
+}
+
+.smartphone-frame[data-orientation="landscape"] .btn-vol-down {
+  top: -14px;
+  left: 220px;
+  height: 4px;
+  width: 52px;
+}
+
+.smartphone-frame[data-orientation="landscape"] .btn-power {
+  bottom: -14px;
+  left: 170px;
+  height: 4px;
+  width: 74px;
+}
+
+/* Outer Titanium Bezel */
+.phone-bezel {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--phone-radius);
+  background: #17181c;
+  padding: var(--phone-bezel-w);
+  box-shadow:
+    0 0 0 1px #000000,
+    0 0 0 2px #383a42,
+    0 0 0 3px #1f2024,
+    0 25px 60px -10px rgba(0, 0, 0, 0.75),
+    0 12px 24px -5px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+}
+
+/* Inner Screen Display */
+.phone-screen {
+  position: relative;
+  flex: 1;
+  background: #000000;
+  border-radius: calc(var(--phone-radius) - var(--phone-bezel-w));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Status Bar & Dynamic Island
+   ========================================================================== */
+.phone-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 46px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #ffffff;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.status-bar-left,
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 80px;
+}
+
+.status-bar-right {
+  justify-content: flex-end;
+}
+
+.status-clock {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.status-icon {
+  opacity: 0.9;
+}
+
+/* Battery Indicator */
+.battery-pill {
+  width: 22px;
+  height: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 3px;
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.battery-pill::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: 3px;
+  width: 2px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 0 1px 1px 0;
+}
+
+.battery-level {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 1.5px;
+}
+
+/* Dynamic Island */
+.dynamic-island {
+  position: relative;
+  width: 120px;
+  height: 32px;
+  background: #000000;
+  border-radius: 20px;
+  margin: 0 auto;
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  box-shadow: 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dynamic-island:hover {
+  width: 170px;
+  height: 38px;
+}
+
+.island-camera {
+  width: 11px;
+  height: 11px;
+  background: #0a0d14;
+  border-radius: 50%;
+  box-shadow: inset 0 0 2px #1e293b;
+  position: relative;
+}
+
+.island-camera::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  background: #1e3a8a;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.island-sensor {
+  width: 8px;
+  height: 8px;
+  background: #050508;
+  border-radius: 50%;
+}
+
+/* ==========================================================================
+   The Iframe
+   ========================================================================== */
+.iframe-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.iframe-container iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #0b0f19;
+}
+
+/* ==========================================================================
+   Home Indicator Pill
+   ========================================================================== */
+.home-indicator-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  cursor: pointer;
+}
+
+.home-indicator-pill {
+  width: 136px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.home-indicator-bar:hover .home-indicator-pill {
+  width: 150px;
+  background: #ffffff;
+}
+
+/* ==========================================================================
+   Screen Lock Overlay
+   ========================================================================== */
+.screen-lock-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.94);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.screen-lock-overlay.is-locked {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lock-clock {
+  font-size: 64px;
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  margin-bottom: 8px;
+}
+
+.lock-date {
+  font-size: 16px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-bottom: 40px;
+}
+
+.lock-prompt {
+  font-size: 13px;
+  color: #64748b;
+  animation: pulsePrompt 2s infinite;
+}
+
+@keyframes pulsePrompt {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ==========================================================================
+   Touch Pointer Simulation
+   ========================================================================== */
+.touch-cursor-dot {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.25);
+  border: 1.5px solid rgba(56, 189, 248, 0.8);
+  pointer-events: none;
+  z-index: 40;
+  transform: translate(-50%, -50%);
+  display: none;
+  transition: width 0.1s, height 0.1s;
+}
+
+.touch-cursor-dot.active-tap {
+  width: 24px;
+  height: 24px;
+  background: rgba(56, 189, 248, 0.45);
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.emulator-footer {
+  height: 36px;
+  background: var(--em-header-bg);
+  border-top: 1px solid var(--em-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 12px;
+  color: var(--em-text-muted);
+  flex-shrink: 0;
+}
+
+.footer-left,
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-value {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.info-divider {
+  color: rgba(255, 255, 255, 0.15);
+}
+
+.shortcut-hint kbd {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: monospace;
+  color: #f1f5f9;
+}

@@ -146,6 +146,8 @@
         </div>
       </div>
     </header>
+    <!-- Mobile Emulator Link -->
+    <div style="display:none;"><a href="mobile.html?page=feed.html" id="btnMobileEmulator" title="Открыть в мобильном эмуляторе" aria-label="Мобильный эмулятор"></a></div>
 
     <!-- ================================================================
          SECOND LEVEL MENU (FEED SUB-NAV BAR) - Sticky top: 56px
@@ -193,9 +195,9 @@
             data-tab="all"
             role="tab"
             aria-selected="true"
-            title="Все публикации сообщества"
+            title="Публикации сообщества"
           >
-            Все публикации
+            Публикации
           </button>
 
           <button
@@ -296,24 +298,10 @@
             <p class="feed-settings-section-hint">Что показывать в “Моей ленте”</p>
             
             <div class="feed-tumblers-grid" id="feedMaterialTypesList">
-              <label class="feed-tumbler-row" for="feedTypeArticle">
-                <span class="feed-tumbler-label">Статьи</span>
+              <label class="feed-tumbler-row" for="feedTypePublication">
+                <span class="feed-tumbler-label">Публикации</span>
                 <span class="feed-tumbler-switch">
-                  <input type="checkbox" id="feedTypeArticle" name="feedMaterialType" value="article" checked class="feed-tumbler-input">
-                  <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="feed-tumbler-row" for="feedTypePost">
-                <span class="feed-tumbler-label">Посты</span>
-                <span class="feed-tumbler-switch">
-                  <input type="checkbox" id="feedTypePost" name="feedMaterialType" value="post" checked class="feed-tumbler-input">
-                  <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="feed-tumbler-row" for="feedTypeNews">
-                <span class="feed-tumbler-label">Новости</span>
-                <span class="feed-tumbler-switch">
-                  <input type="checkbox" id="feedTypeNews" name="feedMaterialType" value="news" checked class="feed-tumbler-input">
+                  <input type="checkbox" id="feedTypePublication" name="feedMaterialType" value="publication" checked class="feed-tumbler-input">
                   <span class="feed-tumbler-slider" aria-hidden="true"></span>
                 </span>
               </label>
@@ -327,58 +315,6 @@
             </div>
             <div id="feedMaterialTypesError" class="feed-settings-error" style="display: none;">
               Выберите хотя бы один тип материала
-            </div>
-          </div>
-
-          <!-- Правая колонка: Уровень сложности -->
-          <div class="feed-settings-section feed-settings-col" id="feedSettingsSectionComplexity">
-            <div class="feed-section-header-row">
-              <h3 class="feed-settings-section-title">Уровень сложности</h3>
-            </div>
-            <p class="feed-settings-section-hint">Любой уровень — без ограничений. «Не указан» — автор не задал сложность</p>
-            
-            <div class="feed-complexity-grid-wrap" id="feedComplexityLevelsWrap" role="group" aria-label="Уровень сложности">
-              <!-- Верхняя строка: Любой уровень -->
-              <div class="feed-complexity-any-row">
-                <label class="feed-tumbler-row" for="feedCompAll">
-                  <span class="feed-tumbler-label">Любой уровень</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedCompAll" name="feedComplexityLevel" value="all" checked class="feed-tumbler-input" data-complexity="all">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-              </div>
-              <!-- Сетка 2x2: конкретные уровни -->
-              <div class="feed-tumblers-grid feed-complexity-2x2-grid" id="feedComplexityLevelsList">
-                <label class="feed-tumbler-row" for="feedCompEasy">
-                  <span class="feed-tumbler-label">Простой</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedCompEasy" name="feedComplexityLevel" value="easy" class="feed-tumbler-input" data-complexity="easy">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedCompMedium">
-                  <span class="feed-tumbler-label">Средний</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedCompMedium" name="feedComplexityLevel" value="medium" class="feed-tumbler-input" data-complexity="medium">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedCompHard">
-                  <span class="feed-tumbler-label">Сложный</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedCompHard" name="feedComplexityLevel" value="hard" class="feed-tumbler-input" data-complexity="hard">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedCompNone" title="Автор не указал сложность" aria-label="Не указан (Автор не указал сложность)">
-                  <span class="feed-tumbler-label">Не указан</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedCompNone" name="feedComplexityLevel" value="none" class="feed-tumbler-input" data-complexity="none">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-              </div>
             </div>
           </div>
         </div>
@@ -425,97 +361,7 @@
 
         <!-- Panel Body -->
         <div class="feed-slide-panel-body">
-          <!-- Tumblers Grid: 2 columns on desktop (Types left, Complexity right) -->
-          <div class="feed-filters-tumblers-grid">
-            <!-- Строка 1, Колонка 1: Типы материалов -->
-            <div class="feed-filter-group" id="feedFilterGroupTypes">
-              <label class="feed-filter-label">Тип материала</label>
-              <div class="feed-tumbler-any-row">
-                <label class="feed-tumbler-row" for="feedFilterTypeAll">
-                  <span class="feed-tumbler-label">Все типы</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterTypeAll" name="feedFilterMaterialType" value="all" checked class="feed-tumbler-input" data-type="all">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-              </div>
-              <div class="feed-tumblers-grid" id="feedFilterMaterialTypes">
-                <label class="feed-tumbler-row" for="feedFilterTypeArticle">
-                  <span class="feed-tumbler-label">Статьи</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterTypeArticle" name="feedFilterMaterialType" value="article" class="feed-tumbler-input" data-type="article">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedFilterTypePost">
-                  <span class="feed-tumbler-label">Посты</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterTypePost" name="feedFilterMaterialType" value="post" class="feed-tumbler-input" data-type="post">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedFilterTypeNews">
-                  <span class="feed-tumbler-label">Новости</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterTypeNews" name="feedFilterMaterialType" value="news" class="feed-tumbler-input" data-type="news">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedFilterTypeQuestion">
-                  <span class="feed-tumbler-label">Вопросы</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterTypeQuestion" name="feedFilterMaterialType" value="question" class="feed-tumbler-input" data-type="question">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-              </div>
-            </div>
 
-            <!-- Строка 1, Колонка 2: Уровень сложности -->
-            <div class="feed-filter-group" id="feedFilterGroupComplexity">
-              <label class="feed-filter-label">Уровень сложности</label>
-              <select id="feedComplexitySelect" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true"></select>
-              <div class="feed-tumbler-any-row">
-                <label class="feed-tumbler-row" for="feedFilterCompAll">
-                  <span class="feed-tumbler-label">Любой уровень</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterCompAll" name="feedFilterComplexity" value="all" checked class="feed-tumbler-input" data-complexity="all">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-              </div>
-              <div class="feed-tumblers-grid" id="feedFilterComplexityLevels">
-                <label class="feed-tumbler-row" for="feedFilterCompEasy">
-                  <span class="feed-tumbler-label">Простой</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterCompEasy" name="feedFilterComplexity" value="easy" class="feed-tumbler-input" data-complexity="easy">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedFilterCompMedium">
-                  <span class="feed-tumbler-label">Средний</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterCompMedium" name="feedFilterComplexity" value="medium" class="feed-tumbler-input" data-complexity="medium">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedFilterCompHard">
-                  <span class="feed-tumbler-label">Сложный</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterCompHard" name="feedFilterComplexity" value="hard" class="feed-tumbler-input" data-complexity="hard">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="feed-tumbler-row" for="feedFilterCompNone" title="Автор не указал сложность" aria-label="Не указан (Автор не указал сложность)">
-                  <span class="feed-tumbler-label">Не указан</span>
-                  <span class="feed-tumbler-switch">
-                    <input type="checkbox" id="feedFilterCompNone" name="feedFilterComplexity" value="none" class="feed-tumbler-input" data-complexity="none">
-                    <span class="feed-tumbler-slider" aria-hidden="true"></span>
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
 
           <!-- 4 Constantly Visible Filter Fields: 2x2 Grid (Desktop) / 1 Column (Mobile) -->
           <div class="feed-filters-primary-grid feed-filters-fields-grid">

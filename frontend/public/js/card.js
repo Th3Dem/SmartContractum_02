@@ -6,15 +6,15 @@
  * 2. Живом предпросмотре формы публикации (editor.html, publication.js)
  *
  * Обеспечивает:
- * - Единый 7-ступенчатый порядок блоков:
- *   1. Автор и дата
+ * - Единый порядок блоков (Хабр-подобный компактный лейаут):
+ *   1. Автор (аватар, имя, компания)
  *   2. Заголовок
- *   3. Бейджи (тема, формат, сложность, демо)
- *   4. Полноширинная обложка (100% внутренней ширины, пропорции 39:22)
- *   5. Краткое описание
- *   6. Ключевые слова (#хэштеги)
- *   7. Футер (время чтения, закладка)
- * - Чистоту обложки: на обложку НЕ накладываются никакие элементы сайта (заголовки, бейджи, водяные знаки).
+ *   3. Бейджи (вопрос, все темы 1-5, клуб)
+ *   4. Полноширинная обложка (100% внутренней ширины, пропорции 780:350 / 78:35)
+ *   5. Краткое описание (clamped до 2 строк)
+ *   6. Сервисная строка (дата публикации, время чтения, формат публикации)
+ *   7. Футер (лайк, рейтинг капсула, комментарии / ответы, закладка, читать далее)
+ * - Чистоту обложки: на обложку НЕ накладываются никакие элементы сайта.
  * - Состояния: 0px при отсутствии обложки или ошибке, шиммер при загрузке, 100% ширина при показе.
  */
 
@@ -54,64 +54,81 @@
       badgesHtml += '<span class="meta-badge question-badge"' + (isPreview ? ' id="preview-card-badge-question"' : '') + '>Вопрос</span>';
     }
 
-    // 1. Topic Title & Badge
-    let topicTitle = '';
-    if (window.PublicationConfig && item.topic) {
-      const t = window.PublicationConfig.getTopicById(item.topic);
-      if (t) topicTitle = t.title;
-    } else if (item.topicTitle) {
-      topicTitle = item.topicTitle;
-    }
-    if (topicTitle) {
-      badgesHtml += '<span class="meta-badge topic-badge"' + (isPreview ? ' id="preview-card-badge-topic"' : '') + '>' + escapeHtml(topicTitle) + '</span>';
+    // 1. Topic Titles & Badges (all topics 1 to 5)
+    let topicIds = [];
+    if (Array.isArray(item.topics) && item.topics.length > 0) {
+      topicIds = item.topics;
+    } else if (item.topic) {
+      topicIds = [item.topic];
     }
 
-    // 2. Format Badge (only for standard publications, NOT questions)
-    if (!isQuestion) {
-      let formatTitle = '';
-      if (window.PublicationConfig && item.format && item.format !== 'not_specified' && item.format !== 'none') {
-        const f = window.PublicationConfig.getFormatById(item.format);
-        if (f && f.title && f.title.toLowerCase() !== 'не указан') {
-          formatTitle = f.title;
+    if (topicIds.length > 0) {
+      topicIds.forEach(function (topicId, idx) {
+        let topicTitle = '';
+        if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
+          const t = window.PublicationConfig.getTopicById(topicId);
+          if (t) topicTitle = t.title;
         }
-      } else if (item.formatTitle) {
-        formatTitle = item.formatTitle;
-      }
-      if (formatTitle) {
-        badgesHtml += '<span class="meta-badge format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(formatTitle) + '</span>';
-      }
+        if (!topicTitle && item.topicTitles && Array.isArray(item.topicTitles) && item.topicTitles[idx]) {
+          topicTitle = item.topicTitles[idx];
+        }
+        if (!topicTitle && idx === 0 && item.topicTitle) {
+          topicTitle = item.topicTitle;
+        }
+        if (!topicTitle && typeof topicId === 'string') {
+          topicTitle = topicId;
+        }
+        if (topicTitle) {
+          const idAttr = (isPreview && idx === 0) ? ' id="preview-card-badge-topic"' : '';
+          badgesHtml += '<span class="meta-badge topic-badge"' + idAttr + '>' + escapeHtml(topicTitle) + '</span>';
+        }
+      });
+    } else if (item.topicTitle) {
+      badgesHtml += '<span class="meta-badge topic-badge"' + (isPreview ? ' id="preview-card-badge-topic"' : '') + '>' + escapeHtml(item.topicTitle) + '</span>';
     }
 
     if (item.clubTitle) {
       badgesHtml += '<span class="meta-badge club-badge"' + (isPreview ? ' id="preview-card-badge-club"' : '') + '>' + escapeHtml(item.clubTitle) + '</span>';
     }
 
-    // Note: Complexity badge has been moved down to the bottom service row.
-    // Note: "Демонстрационный материал" badge has been completely removed per requirements.
+    // Note: Format badge is rendered in the bottom service row.
+    // Note: Complexity and audience badges are completely removed per Issue #61.
 
     return badgesHtml;
   }
 
-  function getComplexityBadgeHtml(item, options) {
+  function getFormatBadgeHtml(item, options) {
     options = options || {};
     const isPreview = Boolean(options.isPreview);
-    let complexityTitle = '';
-    let complexityClass = '';
-    if (window.PublicationConfig && item.complexity && item.complexity !== 'none') {
-      const c = window.PublicationConfig.getComplexityById(item.complexity);
-      if (c && c.title && c.title.toLowerCase() !== 'не указан') {
-        complexityTitle = c.title;
-        complexityClass = 'complexity-' + item.complexity;
+    const isQuestion = Boolean(
+      item.materialType === 'question' ||
+      item.type === 'question' ||
+      item.material_type === 'question'
+    );
+    if (isQuestion) {
+      return '';
+    }
+
+    let formatTitle = '';
+    if (window.PublicationConfig && typeof window.PublicationConfig.getFormatById === 'function' && item.format && item.format !== 'not_specified' && item.format !== 'none') {
+      const f = window.PublicationConfig.getFormatById(item.format);
+      if (f && f.title && f.title.toLowerCase() !== 'не указан') {
+        formatTitle = f.title;
       }
-    } else if (item.complexityTitle) {
-      complexityTitle = item.complexityTitle;
-      complexityClass = item.complexity ? 'complexity-' + item.complexity : '';
+    } else if (item.formatTitle) {
+      formatTitle = item.formatTitle;
     }
-    if (complexityTitle) {
-      return '<span class="meta-badge complexity-badge ' + complexityClass + '"' + (isPreview ? ' id="preview-card-badge-complexity"' : '') + '>' + escapeHtml(complexityTitle) + '</span>';
+    if (formatTitle) {
+      // Strip any legacy 'Формат: ' prefix
+      const cleanFormat = formatTitle.replace(/^формат:\s*/i, '').trim();
+      return '<span class="meta-badge format-badge card-format-badge"' + (isPreview ? ' id="preview-card-badge-format"' : '') + '>' + escapeHtml(cleanFormat) + '</span>';
     } else if (isPreview) {
-      return '<span class="meta-badge complexity-badge" id="preview-card-badge-complexity" style="display: none;"></span>';
+      return '<span class="meta-badge format-badge card-format-badge" id="preview-card-badge-format" style="display: none;"></span>';
     }
+    return '';
+  }
+
+  function getComplexityBadgeHtml() {
     return '';
   }
 
@@ -127,7 +144,6 @@
     const isPreview = Boolean(options.isPreview);
 
     const cleanTitle = cleanString(item.title) || (isPreview ? 'Заголовок публикации' : '');
-    const cleanRole = cleanString(item.authorRole);
     const authorName = item.author || 'Автор платформы';
     const authorInitials = item.authorInitials ||
       authorName.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'АП';
@@ -163,10 +179,6 @@
               ) +
               companyBadgeHtml +
             '</div>' +
-            (cleanRole
-              ? ('<div class="meta-sub-row"><span class="author-role"' + (isPreview ? ' id="preview-card-role"' : '') + '>' + escapeHtml(cleanRole) + '</span></div>')
-              : (isPreview ? '<div class="meta-sub-row"><span class="author-role" id="preview-card-role" style="display: none;"></span></div>' : '')
-            ) +
           '</div>' +
         '</div>' +
       '</div>';
@@ -219,46 +231,10 @@
         '</div>';
     }
 
-    // 6. Keywords (#hashtags)
-    const tags = Array.isArray(item.keywords) ? item.keywords : [];
-    let tagsHtml = '';
-    if (tags.length > 0) {
-      const maxVisible = 3;
-      const visible = tags.slice(0, maxVisible);
-      const hidden = tags.slice(maxVisible);
-
-      visible.forEach(function (tag) {
-        tagsHtml +=
-          '<button type="button" class="tag-chip" data-tag="' + escapeHtml(tag) + '" tabindex="' + (isPreview ? '-1' : '0') + '">' +
-            '#' + escapeHtml(tag) +
-          '</button>';
-      });
-
-      if (hidden.length > 0) {
-        if (isPreview) {
-          tagsHtml += '<span class="tag-expand-btn">+' + hidden.length + ' еще</span>';
-        } else {
-          tagsHtml +=
-            '<button type="button" class="tag-expand-btn" aria-expanded="false">+' + hidden.length + ' еще</button>' +
-            '<span class="extra-tags" style="display: none;">';
-          hidden.forEach(function (tag) {
-            tagsHtml +=
-              '<button type="button" class="tag-chip" data-tag="' + escapeHtml(tag) + '">' +
-                '#' + escapeHtml(tag) +
-              '</button>';
-          });
-          tagsHtml += '</span>';
-        }
-      }
-    }
-    const tagsContainerHtml =
-      '<div class="card-tags' + (isPreview ? ' pub-feed-card-tags' : '') + '"' + (isPreview ? ' id="preview-card-tags"' : '') + (tagsHtml ? '' : (isPreview ? ' style="display: none;"' : '')) + '>' +
-        tagsHtml +
-      '</div>';
 
     // 7. Bottom in 2 compact rows:
     const readingTimeText = item.readingTime || (isPreview ? '~1 мин чтения' : '5 мин чтения');
-    const complexityBadgeHtml = getComplexityBadgeHtml(item, options);
+    const formatBadgeHtml = getFormatBadgeHtml(item, options);
 
     let subInfoHtml = '';
     if (isQuestion) {
@@ -275,7 +251,7 @@
             '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>' +
             '<span' + (isPreview ? ' class="pub-feed-card-time" id="preview-card-time"' : '') + '>' + escapeHtml(readingTimeText) + '</span>' +
           '</div>' +
-          (complexityBadgeHtml ? ('<span class="meta-dot"></span>' + complexityBadgeHtml) : '') +
+          (formatBadgeHtml ? ('<span class="meta-dot"></span>' + formatBadgeHtml) : '') +
         '</div>';
     }
 
@@ -425,7 +401,6 @@
       coverHtml +
       leadHtml +
       snippetHtml +
-      tagsContainerHtml +
       subInfoHtml +
       footerHtml;
   }
@@ -504,20 +479,6 @@
         });
       }
 
-      const expandBtn = card.querySelector('.tag-expand-btn');
-      if (expandBtn) {
-        expandBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          const extraTags = card.querySelector('.extra-tags');
-          if (extraTags) {
-            const isExpanded = extraTags.style.display !== 'none';
-            extraTags.style.display = isExpanded ? 'none' : 'inline';
-            const hiddenCount = (item.keywords && item.keywords.length > 3) ? (item.keywords.length - 3) : 0;
-            expandBtn.textContent = isExpanded ? ('+' + hiddenCount + ' еще') : 'Свернуть';
-            expandBtn.setAttribute('aria-expanded', String(!isExpanded));
-          }
-        });
-      }
     }
 
     return card;
@@ -563,6 +524,7 @@
     escapeHtml: escapeHtml,
     cleanString: cleanString,
     getBadgesHtml: getBadgesHtml,
+    getFormatBadgeHtml: getFormatBadgeHtml,
     getComplexityBadgeHtml: getComplexityBadgeHtml,
     renderVoteCapsuleHtml: renderVoteCapsuleHtml,
     renderCardInnerHtml: renderCardInnerHtml,

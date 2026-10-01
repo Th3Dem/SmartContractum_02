@@ -1244,52 +1244,25 @@
             <div class="pub-section-header">
               <span class="pub-section-num">4</span>
               <div>
-                <h3 class="pub-section-title">Формат публикации</h3>
+                <h3 class="pub-section-title" id="pub-section-format-title">Формат публикации</h3>
                 <p class="pub-section-hint">Определяет подачу материала (необязательное поле). По умолчанию «Не указан».</p>
               </div>
             </div>
-            <div id="pub-format-options" class="pub-format-grid"></div>
-          </section>
-
-          <!-- 5. Уровень сложности -->
-          <section class="pub-section" id="pub-section-complexity">
-            <div class="pub-section-header">
-              <span class="pub-section-num">5</span>
-              <div>
-                <h3 class="pub-section-title">Уровень сложности</h3>
-                <p class="pub-section-hint">Помогает читателю оценить порог входа для понимания материала.</p>
-              </div>
-            </div>
-            <div id="pub-complexity-options" class="pub-segmented-control" role="radiogroup">
-              <button type="button" class="pub-segment-btn is-active" data-complexity="none">Не указан</button>
-              <button type="button" class="pub-segment-btn" data-complexity="easy">Простой</button>
-              <button type="button" class="pub-segment-btn" data-complexity="medium">Средний</button>
-              <button type="button" class="pub-segment-btn" data-complexity="hard">Сложный</button>
-            </div>
-            <div id="pub-complexity-desc" class="pub-complexity-hint">Материал подходит для широкого круга читателей без требований к опыту</div>
-          </section>
-
-          <!-- 6. Тип материала -->
-          <section class="pub-section" id="pub-section-material-type">
-            <div class="pub-section-header">
-              <span class="pub-section-num">6</span>
-              <div>
-                <h3 class="pub-section-title">Тип материала</h3>
-                <p class="pub-section-hint">Выберите тип публикации: статья, пост, новость или вопрос сообществу.</p>
-              </div>
-            </div>
-            <div id="pub-material-type-options" class="pub-segmented-control" role="radiogroup" aria-label="Тип материала">
-              <button type="button" class="pub-segment-btn is-active" data-type="article" data-material-type="article">Статья</button>
-              <button type="button" class="pub-segment-btn" data-type="post" data-material-type="post">Пост</button>
-              <button type="button" class="pub-segment-btn" data-type="news" data-material-type="news">Новость</button>
-              <button type="button" class="pub-segment-btn" data-type="question" data-material-type="question">Вопрос</button>
+            <div class="pub-format-dropdown-wrap" id="pub-format-dropdown-wrap">
+              <button type="button" class="pub-format-dropdown-trigger" id="pub-format-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="pub-section-format-title pub-format-trigger-text">
+                <span class="pub-format-trigger-text" id="pub-format-trigger-text">Не указан</span>
+                <svg class="pub-format-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div id="pub-format-options" class="pub-format-dropdown-menu" role="listbox" aria-labelledby="pub-section-format-title" style="display: none;"></div>
             </div>
           </section>
 
-          <!-- 7. Отображение в ленте -->
+          <!-- 5. Отображение в ленте -->
           <section class="pub-section" id="pub-section-feed">
             <div class="pub-section-header">
-              <span class="pub-section-num">7</span>
+              <span class="pub-section-num">5</span>
               <div>
                 <h3 class="pub-section-title">Отображение в ленте</h3>
                 <p class="pub-section-hint">Настройте обложку и краткое описание статьи, а также проверьте вид карточки в ленте.</p>
@@ -1299,7 +1272,7 @@
             <!-- Cover Image Upload & Canvas Cropper -->
             <div class="pub-subsection">
               <h4 class="pub-subsection-title">Обложка статьи</h4>
-              <p class="pub-subsection-hint">Обложка необязательна. Рекомендуемое разрешение — от 780 × 440 px. Область обложки — 39:22. JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр</p>
+              <p class="pub-subsection-hint">Обложка необязательна. Рекомендуемое разрешение: от 780 × 350 px. Область обложки: 78:35 (780:350). JPG/JPEG, PNG, WebP или GIF, до 10 МБ. При необходимости можно выбрать кадр</p>
               <p class="pub-subsection-hint" style="margin-top: 4px; font-size: 0.8rem; color: var(--text-muted);">В ленте обложка отображается в уменьшенном размере с сохранением выбранного кадра. Для GIF используется первый кадр без анимации.</p>
               
               <div id="pub-cover-dropzone" class="pub-dropzone">
@@ -1316,14 +1289,14 @@
               <!-- Cropper Container -->
               <div id="pub-cropper-wrapper" class="pub-cropper-wrapper">
                 <div class="pub-cropper-header">
-                  <span class="pub-cropper-title">Кадрирование обложки (39:22)</span>
+                  <span class="pub-cropper-title">Кадрирование обложки (78:35)</span>
                   <div class="pub-cropper-zoom-box">
                     <span>Масштаб:</span>
                     <input type="range" id="pub-cropper-zoom" min="1" max="3" step="0.05" value="1">
                   </div>
                 </div>
                 <div class="pub-cropper-canvas-box">
-                  <canvas id="pub-cropper-canvas" width="780" height="440"></canvas>
+                  <canvas id="pub-cropper-canvas" width="780" height="350"></canvas>
                 </div>
                 <div class="pub-cropper-actions">
                   <button type="button" id="pub-cropper-cancel-btn" class="btn">Отмена</button>
@@ -1365,16 +1338,12 @@
               <p class="pub-subsection-hint">Так ваша статья будет выглядеть в ленте публикаций.</p>
               <div class="pub-card-preview-container">
                 <article class="feed-card pub-feed-card" id="pub-card-preview">
-                  <!-- 1. Автор и дата -->
+                  <!-- 1. Автор -->
                   <div class="card-meta">
                     <div class="author-info">
                       <div class="author-avatar" id="preview-card-avatar">АП</div>
                       <div class="author-details">
                         <span class="author-name" id="preview-card-author">Автор платформы</span>
-                        <div class="meta-sub-row">
-                          <span class="meta-dot" id="preview-card-dot" style="display: none;"></span>
-                          <span class="author-role" id="preview-card-role" style="display: none;"></span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -1382,10 +1351,9 @@
                   <!-- 2. Заголовок статьи -->
                   <h3 class="card-title pub-feed-card-title" id="preview-card-title">Заголовок публикации</h3>
 
-                  <!-- 3. Бейджи (темы, формат) -->
+                  <!-- 3. Бейджи (только темы) -->
                   <div class="card-meta-badges pub-feed-card-meta" id="preview-card-badges">
                     <span class="meta-badge topic-badge" id="preview-card-badge-topic" style="display: none;"></span>
-                    <span class="meta-badge format-badge pub-badge pub-badge-format" id="preview-card-badge-format" style="display: none;"></span>
                   </div>
 
                   <!-- 4. Обложка -->
@@ -1394,11 +1362,8 @@
                   <!-- 5. Краткое описание -->
                   <p class="card-lead pub-feed-card-desc" id="preview-card-desc">Краткое описание публикации появится здесь...</p>
 
-                  <!-- 6. Ключевые слова -->
-                  <div class="card-tags pub-feed-card-tags" id="preview-card-tags" style="display: none;"></div>
-
-                  <!-- 7. Служебная строка и футер действий (2 компактные строки) -->
-                  <!-- Строка 1: Служебная информация (дата публикации, время чтения, сложность) -->
+                  <!-- 6. Служебная строка и футер действий (2 компактные строки) -->
+                  <!-- Строка 1: Служебная информация (дата публикации, время чтения, формат) -->
                   <div class="card-sub-info card-meta-row-bottom">
                     <span class="publish-date" id="preview-card-date">Недавно</span>
                     <span class="meta-dot"></span>
@@ -1406,7 +1371,7 @@
                       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                       <span class="pub-feed-card-time" id="preview-card-time">~1 мин чтения</span>
                     </div>
-                    <span class="meta-badge complexity-badge pub-badge" id="preview-card-badge-complexity" style="display: none;"></span>
+                    <span class="meta-badge format-badge card-format-badge pub-badge pub-badge-format" id="preview-card-badge-format" style="display: none;"></span>
                   </div>
 
                   <!-- Строка 2: Строка действий (лайк, комментарии, закладка, читать далее) -->
@@ -1447,10 +1412,10 @@
             </div>
           </section>
 
-          <!-- 8. Авторство и сообщество -->
+          <!-- 6. Авторство и сообщество -->
           <section class="pub-section" id="pub-section-entity">
             <div class="pub-section-header">
-              <span class="pub-section-num">8</span>
+              <span class="pub-section-num">6</span>
               <div>
                 <h3 class="pub-section-title">Авторство и сообщество</h3>
                 <p class="pub-section-hint">Публикация от личного имени или от технологической компании, а также размещение статьи в инженерном клубе.</p>

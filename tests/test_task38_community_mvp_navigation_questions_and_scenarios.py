@@ -231,10 +231,10 @@ class TestTask38StreamToolbarAndControls(TestTask38Base):
         self.assertIn('id="btnFeedFiltersToggle"', toolbar_html)
 
     def test_02_feed_filters_panel_reused_and_has_all_filter_fields(self):
-        """Filters panel is preserved and retains material types, topics, complexity, audience, format."""
+        """Filters panel is preserved and retains topics, audience, format, date (complexity removed per Issue #61)."""
         self.assertIn('id="feedFiltersPanel"', self.feed_html)
         self.assertIn('id="feedFilterTopics"', self.feed_html)
-        self.assertIn('id="feedComplexitySelect"', self.feed_html)
+        self.assertNotIn('id="feedComplexitySelect"', self.feed_html)
         self.assertIn('id="feedFormatSelect"', self.feed_html)
         self.assertIn('id="feedAudienceSelect"', self.feed_html)
         self.assertIn('id="feedDateFilterSelect"', self.feed_html)

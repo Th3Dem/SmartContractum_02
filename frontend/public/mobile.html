@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Мобильный эмулятор — SmartContractum</title>
+
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/mobile-emulator.css">
+</head>
+<body class="emulator-body">
+
+  <!-- Top Control Bar -->
+  <header class="emulator-header" id="emulatorHeader">
+    <div class="emulator-header-left">
+      <a href="feed.html" class="emulator-brand" title="Перейти на главную">
+        <svg class="emulator-brand-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="emGrad" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#38bdf8"></stop>
+              <stop offset="0.5" stop-color="#6188ff"></stop>
+              <stop offset="1" stop-color="#16c784"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M7 3.5h11.5l7.5 7.5v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z" fill="rgba(56, 189, 248, 0.08)" stroke="url(#emGrad)" stroke-width="1.8" stroke-linejoin="round"></path>
+          <path d="M18.5 3.5v6a1.5 1.5 0 0 0 1.5 1.5h6" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          <circle cx="23" cy="23" r="5" fill="#0b1426" stroke="#16c784" stroke-width="1.8"></circle>
+          <path d="M21 23l1.5 1.5 3-3" stroke="#16c784" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <span class="emulator-brand-title">SmartContractum</span>
+        <span class="emulator-badge">Mobile Lab</span>
+      </a>
+
+      <!-- Quick page tabs -->
+      <nav class="emulator-page-tabs" aria-label="Быстрый выбор страницы">
+        <button type="button" class="page-tab active" data-url="feed.html">Лента</button>
+        <button type="button" class="page-tab" data-url="article.html">Статья</button>
+        <button type="button" class="page-tab" data-url="editor.html">Редактор</button>
+      </nav>
+    </div>
+
+    <!-- Center: Address Bar & Navigation -->
+    <div class="emulator-address-group">
+      <div class="nav-button-group">
+        <button type="button" class="ctrl-btn icon-btn" id="btnBack" title="Назад" aria-label="Назад">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </button>
+        <button type="button" class="ctrl-btn icon-btn" id="btnForward" title="Вперед" aria-label="Вперед">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+        <button type="button" class="ctrl-btn icon-btn" id="btnReload" title="Перезагрузить страницу (R)" aria-label="Перезагрузить страницу">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="address-input-wrapper">
+        <span class="url-protocol-prefix">http://localhost:8000/</span>
+        <input type="text" id="urlInput" class="address-input" value="feed.html" placeholder="например, feed.html или article.html" spellcheck="false" autocomplete="off">
+        <button type="button" class="address-go-btn" id="btnGo" title="Перейти">Перейти</button>
+      </div>
+
+      <button type="button" class="ctrl-btn icon-btn" id="btnOpenExternal" title="Открыть в новой вкладке браузера" aria-label="Открыть в новой вкладке">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Right: Device Controls & Scaling -->
+    <div class="emulator-header-right">
+      <!-- Device Preset Select -->
+      <div class="control-field">
+        <label for="deviceSelect" class="control-label">Устройство:</label>
+        <select id="deviceSelect" class="ctrl-select">
+          <option value="iphone15pro" selected>iPhone 15 Pro (393 × 852)</option>
+          <option value="iphone14">iPhone 14 / 13 (390 × 844)</option>
+          <option value="iphonese">iPhone SE (375 × 667)</option>
+          <option value="galaxys23">Samsung Galaxy S23 (360 × 780)</option>
+          <option value="pixel7">Google Pixel 7 (412 × 915)</option>
+          <option value="xiaomi13">Xiaomi 13 (393 × 873)</option>
+          <option value="ipadmini">iPad Mini (768 × 1024)</option>
+          <option value="custom">Свой размер...</option>
+        </select>
+      </div>
+
+      <!-- Rotate Orientation -->
+      <button type="button" class="ctrl-btn" id="btnRotate" title="Повернуть ориентацию (O)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+          <path d="M12 18h.01"></path>
+        </svg>
+        <span id="orientationLabel">Книжная</span>
+      </button>
+
+      <!-- Zoom Controls -->
+      <div class="zoom-button-group">
+        <button type="button" class="ctrl-btn icon-btn" id="btnZoomOut" title="Уменьшить масштаб (-)" aria-label="Уменьшить масштаб">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <span class="zoom-value" id="zoomValue">Fit</span>
+        <button type="button" class="ctrl-btn icon-btn" id="btnZoomIn" title="Увеличить масштаб (+)" aria-label="Увеличить масштаб">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button type="button" class="ctrl-btn text-btn active" id="btnFit" title="Подогнать под высоту экрана (F)">По экрану</button>
+      </div>
+
+      <!-- Device Theme / Extras Dropdown -->
+      <div class="more-controls-wrap">
+        <button type="button" class="ctrl-btn icon-btn" id="btnToggleSiteTheme" title="Переключить тему сайта (светлая/темная)" aria-label="Тема сайта">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+          </svg>
+        </button>
+
+        <button type="button" class="ctrl-btn icon-btn" id="btnTouchCursor" title="Симуляция касания пальцем (тач-курсор)" aria-label="Тач-курсор">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="7"></circle>
+            <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workstation Stage -->
+  <main class="emulator-stage" id="emulatorStage">
+
+    <!-- Scalable Frame Wrapper -->
+    <div class="device-scaler" id="deviceScaler">
+      <div class="smartphone-frame" id="smartphoneFrame" data-device="iphone15pro" data-orientation="portrait">
+
+        <!-- Physical Hardware Buttons on Chassis -->
+        <div class="chassis-button btn-action" title="Кнопка действия"></div>
+        <div class="chassis-button btn-vol-up" id="btnHardwareVolUp" title="Громкость + (прокрутка вверх)"></div>
+        <div class="chassis-button btn-vol-down" id="btnHardwareVolDown" title="Громкость - (прокрутка вниз)"></div>
+        <div class="chassis-button btn-power" id="btnHardwarePower" title="Кнопка питания (блокировка экрана)"></div>
+
+        <!-- Phone Outer Bezel -->
+        <div class="phone-bezel">
+
+          <!-- Inner Screen Display -->
+          <div class="phone-screen" id="phoneScreen">
+
+            <!-- iOS / Mobile Status Bar -->
+            <div class="phone-status-bar" id="phoneStatusBar">
+              <div class="status-bar-left">
+                <span class="status-clock" id="statusClock">09:41</span>
+              </div>
+
+              <!-- Dynamic Island Pill -->
+              <div class="dynamic-island" id="dynamicIsland" title="Dynamic Island">
+                <div class="island-camera"></div>
+                <div class="island-sensor"></div>
+              </div>
+
+              <div class="status-bar-right">
+                <!-- Cellular signal -->
+                <svg class="status-icon" width="15" height="11" viewBox="0 0 17 11" fill="currentColor">
+                  <rect x="0" y="8" width="3" height="3" rx="0.5"></rect>
+                  <rect x="4.5" y="5.5" width="3" height="5.5" rx="0.5"></rect>
+                  <rect x="9" y="3" width="3" height="8" rx="0.5"></rect>
+                  <rect x="13.5" y="0" width="3" height="11" rx="0.5"></rect>
+                </svg>
+                <!-- Wi-Fi -->
+                <svg class="status-icon" width="15" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                  <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                </svg>
+                <!-- Battery pill -->
+                <div class="battery-pill">
+                  <div class="battery-level"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- The Active Web View Frame -->
+            <div class="iframe-container" id="iframeContainer">
+              <iframe id="phoneFrame" src="feed.html" title="Мобильный просмотр сайта" loading="eager"></iframe>
+            </div>
+
+            <!-- iOS Home Indicator Pill -->
+            <div class="home-indicator-bar" id="homeIndicatorBar" title="Нажмите, чтобы прокрутить страницу наверх">
+              <div class="home-indicator-pill"></div>
+            </div>
+
+            <!-- Screen Lock Overlay (when power button is pressed) -->
+            <div class="screen-lock-overlay" id="screenLockOverlay">
+              <div class="lock-clock" id="lockClock">09:41</div>
+              <div class="lock-date" id="lockDate">Четверг, 1 октября</div>
+              <div class="lock-prompt">Нажмите для разблокировки</div>
+            </div>
+
+            <!-- Touch Simulation Pointer -->
+            <div class="touch-cursor-dot" id="touchCursorDot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Information Bar -->
+  <footer class="emulator-footer">
+    <div class="footer-left">
+      <span class="info-label">Текущее разрешение:</span>
+      <span class="info-value" id="resValue">393 × 852 px</span>
+      <span class="info-divider">|</span>
+      <span class="info-label">Масштаб:</span>
+      <span class="info-value" id="scaleValue">100%</span>
+      <span class="info-divider">|</span>
+      <span class="info-label">Соотношение:</span>
+      <span class="info-value" id="aspectValue">19.5:9</span>
+    </div>
+    <div class="footer-right">
+      <span class="shortcut-hint"><kbd>R</kbd> Обновить</span>
+      <span class="shortcut-hint"><kbd>O</kbd> Повернуть</span>
+      <span class="shortcut-hint"><kbd>F</kbd> По экрану</span>
+      <span class="shortcut-hint"><kbd>T</kbd> Тема</span>
+    </div>
+  </footer>
+
+  <script src="js/mobile-emulator.js"></script>
+</body>
+</html>

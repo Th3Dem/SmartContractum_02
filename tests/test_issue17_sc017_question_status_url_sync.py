@@ -519,7 +519,7 @@ class TestIssue17QuestionsAPI(unittest.TestCase):
 
         items = data.get("items") or data.get("articles") or []
         types = {item.get("material_type") for item in items}
-        self.assertIn("article", types, "Tab 'all' must return articles regardless of questionStatus param")
+        self.assertTrue("publication" in types or "article" in types, "Tab 'all' must return publications regardless of questionStatus param")
 
 
 class TestIssue17StandardsAndQuality(unittest.TestCase):
