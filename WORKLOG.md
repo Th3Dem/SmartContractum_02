@@ -546,3 +546,4 @@
 [2026-10-02 01:44] | git_bot | GIT_COMMITTED | Фиксация interaction states для Сохранить, Комментариев и кнопки Читать далее, обновление PR #63 (Fixes #62) (Task: issue-62-sc028-action-bar-redesign)
 [2026-10-02 01:57] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный модификатор рейтинга для комментариев и ответов с уменьшенной высотой и плотными отступами (Task: issue-62-sc028-action-bar-redesign)
 [2026-10-02 01:58] | git_bot | GIT_COMMITTED | Фиксация компактного модификатора рейтинга комментариев и обновление PR #63 (Fixes #62) (Task: issue-62-sc028-action-bar-redesign)
+[2026-10-02 02:10] | pm_bot | TASK_INIT | Старт задачи Issue #64 (SC-029): Упрощенный отдельный редактор создания вопросов (question-editor.html) (Task: issue-64-sc029-question-editor)
