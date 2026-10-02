@@ -588,3 +588,4 @@
 [2026-10-02 18:25] | pm_bot | TASK_INIT | Старт задачи Issue #80: Reading layout публикации и sticky глобальная шапка (Task: issue-80-sc031-reading-layout-sticky-header)
 [2026-10-02 18:25] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #80 (Task: issue-80-sc031-reading-layout-sticky-header)
 [2026-10-02 18:32] | dev_bot | IMPLEMENTATION_COMPLETE | Reading layout публикации и sticky глобальная шапка (Task: issue-80-sc031-reading-layout-sticky-header)
+[2026-10-02 18:44] | git_bot | PR_CREATED | Открыт PR #93 для Issue #80 (Fixes #80), ветка feat/issue-80-sc031-reading-layout-sticky-header (Task: issue-80-sc031-reading-layout-sticky-header)
