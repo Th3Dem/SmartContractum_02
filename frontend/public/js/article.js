@@ -5168,6 +5168,7 @@
     }
     initComments(article.id);
     initReadingProgressBar();
+    loadRelatedArticles(article);
 
     // Scroll to #comments or #comment-form if specified in URL hash
     const hash = window.location.hash;
@@ -5275,6 +5276,148 @@
   window.updateReadingProgress = updateReadingProgress;
   window.initReadingProgressBar = initReadingProgressBar;
 
+  // --------------------------------------------------------------------------
+  // Related Articles Recommendations (Issue #92)
+  // --------------------------------------------------------------------------
+  function getRelatedArticles(articlesList, currentArt) {
+    if (!Array.isArray(articlesList) || !currentArt) return [];
+    const curId = currentArt.id;
+    const curDraftId = currentArt.draftId;
+    const curTopics = Array.isArray(currentArt.topics)
+      ? currentArt.topics
+      : (currentArt.topic ? [currentArt.topic] : []);
+
+    // 1. Strict exclusion of current article
+    const candidates = articlesList.filter(function (item) {
+      if (!item || !item.id) return false;
+      if (item.id === curId || (curDraftId && item.id === curDraftId)) return false;
+      if (item.draftId && (item.draftId === curId || item.draftId === curDraftId)) return false;
+      return true;
+    });
+
+    if (candidates.length === 0) return [];
+
+    // 2. Score candidates by matching topics
+    const scored = candidates.map(function (item) {
+      const itemTopics = Array.isArray(item.topics)
+        ? item.topics
+        : (item.topic ? [item.topic] : []);
+      let matchCount = 0;
+      for (let i = 0; i < itemTopics.length; i++) {
+        if (curTopics.indexOf(itemTopics[i]) !== -1) {
+          matchCount++;
+        }
+      }
+      return {
+        article: item,
+        score: matchCount
+      };
+    });
+
+    // 3. Sort: higher score first, then newest
+    scored.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      const dateA = a.article.createdAt || a.article.date || '';
+      const dateB = b.article.createdAt || b.article.date || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    // 4. Return top 2-3 items
+    return scored.slice(0, 3).map(function (s) { return s.article; });
+  }
+
+  function renderRelatedCardHtml(item) {
+    const title = escapeHtml(item.title || 'Публикация');
+    const author = escapeHtml(item.author || 'Автор платформы');
+    const date = escapeHtml(item.date || '');
+    const readingTime = escapeHtml(item.readingTime || '3 мин');
+    const articleUrl = 'article.html?id=' + encodeURIComponent(item.id);
+
+    // Topics chips (up to 2)
+    const topics = Array.isArray(item.topics) ? item.topics : (item.topic ? [item.topic] : []);
+    let topicsHtml = '';
+    const maxTopics = Math.min(topics.length, 2);
+    for (let i = 0; i < maxTopics; i++) {
+      topicsHtml += '<span class="related-topic-chip">' + escapeHtml(topics[i]) + '</span>';
+    }
+
+    // Cover image
+    let coverHtml = '';
+    if (item.coverImage) {
+      coverHtml =
+        '<div class="related-card-cover-wrap">' +
+          '<img src="' + escapeHtml(item.coverImage) + '" alt="' + title + '" class="related-card-cover" loading="lazy">' +
+        '</div>';
+    } else {
+      coverHtml =
+        '<div class="related-card-cover-wrap" style="display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(97,136,255,0.1));">' +
+          '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color, #38bdf8)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>' +
+            '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>' +
+          '</svg>' +
+        '</div>';
+    }
+
+    return (
+      '<a href="' + articleUrl + '" class="related-card" aria-label="' + title + '">' +
+        coverHtml +
+        '<div class="related-card-content">' +
+          (topicsHtml ? '<div class="related-card-topics">' + topicsHtml + '</div>' : '') +
+          '<h3 class="related-card-title">' + title + '</h3>' +
+          '<div class="related-card-meta">' +
+            '<span class="related-card-author">' + author + '</span>' +
+            '<span class="related-card-dot">&bull;</span>' +
+            '<span class="related-card-reading-time">' + readingTime + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</a>'
+    );
+  }
+
+  function loadRelatedArticles(currentArt) {
+    const section = document.getElementById('relatedArticlesSection');
+    const grid = document.getElementById('relatedArticlesGrid');
+    if (!section || !grid || !currentArt || !currentArt.id) {
+      if (section) section.style.display = 'none';
+      return;
+    }
+
+    function applyRecommendations(articlesList) {
+      const related = getRelatedArticles(articlesList, currentArt);
+      if (!related || related.length === 0) {
+        section.style.display = 'none';
+        grid.innerHTML = '';
+        return;
+      }
+      let cardsHtml = '';
+      for (let i = 0; i < related.length; i++) {
+        cardsHtml += renderRelatedCardHtml(related[i]);
+      }
+      grid.innerHTML = cardsHtml;
+      section.style.display = 'block';
+    }
+
+    fetch('/api/articles?limit=12&tab=all')
+      .then(function (res) {
+        if (!res.ok) throw new Error('FETCH_FAILED');
+        return res.json();
+      })
+      .then(function (data) {
+        const list = (data && data.success && Array.isArray(data.articles)) ? data.articles : [];
+        if (list.length > 0) {
+          applyRecommendations(list);
+        } else {
+          applyRecommendations(FALLBACK_ARTICLES);
+        }
+      })
+      .catch(function () {
+        applyRecommendations(FALLBACK_ARTICLES);
+      });
+  }
+
+  window.getRelatedArticles = getRelatedArticles;
+  window.loadRelatedArticles = loadRelatedArticles;
+
   function showErrorState(title, desc) {
     const loadingState = document.getElementById('articleLoadingState');
     const contentWrap = document.getElementById('articleContentWrap');
@@ -5282,6 +5425,11 @@
     const errorTitle = document.getElementById('articleErrorTitle');
     const errorDesc = document.getElementById('articleErrorDesc');
     const pb = document.getElementById('readingProgressBar');
+    const relSec = document.getElementById('relatedArticlesSection');
+
+    if (relSec) {
+      relSec.style.display = 'none';
+    }
 
     if (pb) {
       pb.style.width = '0%';
