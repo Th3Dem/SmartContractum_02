@@ -1964,6 +1964,21 @@ body,
   pointer-events: none;
 }
 
+/* Comment Action Buttons: Disabled */
+.btn-comment-action:disabled,
+.btn-comment-action.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.btn-comment-action:disabled:hover,
+.btn-comment-action.is-disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
 /* Comment Share Popover Styles */
 .comment-share-popover {
   position: absolute;

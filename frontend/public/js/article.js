@@ -748,6 +748,14 @@
     modal.style.display = 'flex';
   }
 
+  function isCommentEditExpired(createdAt) {
+    if (!createdAt) return false;
+    const createdTime = new Date(createdAt).getTime();
+    if (isNaN(createdTime)) return false;
+    const diffHours = (Date.now() - createdTime) / (1000 * 60 * 60);
+    return diffHours >= 48;
+  }
+
   // Export helpers for contracts and testing
   window.getCommentBookmarks = getCommentBookmarks;
   window.isCommentBookmarked = isCommentBookmarked;
@@ -766,6 +774,7 @@
   window.markCommentAsReported = markCommentAsReported;
   window.isCommentReported = isCommentReported;
   window.getOrInitCommentReportModal = getOrInitCommentReportModal;
+  window.isCommentEditExpired = isCommentEditExpired;
 
   // --------------------------------------------------------------------------
   // 3. Auth & Profile Management
@@ -1769,13 +1778,20 @@
 
       let editBtnHtml = '';
       if (isMyComment) {
-        editBtnHtml =
-          '<button type="button" class="btn-comment-action btn-edit-comment" title="Редактировать" aria-label="Редактировать">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-              '<path d="M12 20h9"></path>' +
-              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
-            '</svg>' +
-          '</button>';
+        const isExpired = isCommentEditExpired(comment.createdAt || comment.created_at);
+        editBtnHtml = isExpired
+          ? '<button type="button" class="btn-comment-action btn-edit-comment is-disabled" title="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." aria-label="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." disabled>' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M12 20h9"></path>' +
+                '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+              '</svg>' +
+            '</button>'
+          : '<button type="button" class="btn-comment-action btn-edit-comment" title="Редактировать" aria-label="Редактировать">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M12 20h9"></path>' +
+                '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+              '</svg>' +
+            '</button>';
       }
 
       const mainContainer = document.createElement('div');
@@ -1906,6 +1922,9 @@
       if (editBtn && editWrap && contentWrap) {
         editBtn.addEventListener('click', function (e) {
           e.preventDefault();
+          if (editBtn.disabled || editBtn.classList.contains('is-disabled')) {
+            return;
+          }
           const deleteConfirm = el.querySelector('.comment-delete-confirm');
           const cancelDel = el.querySelector('.btn-cancel-delete-comment');
           if (deleteConfirm && deleteConfirm.style.display !== 'none' && cancelDel) {
@@ -1978,6 +1997,23 @@
               })
               .then(function (result) {
                 saveEditBtn.disabled = false;
+                if (result.status === 403 || (result.data && result.data.code === 'EDIT_WINDOW_EXPIRED')) {
+                  const errorMsg = (result.data && result.data.error) || 'Срок редактирования комментария истек (максимум 48 часов с момента публикации)';
+                  showToast(errorMsg);
+                  if (editBtn) {
+                    editBtn.disabled = true;
+                    editBtn.classList.add('is-disabled');
+                    editBtn.setAttribute('title', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                    editBtn.setAttribute('aria-label', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                  }
+                  if (cancelEditBtn) {
+                    cancelEditBtn.click();
+                  } else {
+                    editWrap.style.display = 'none';
+                    contentWrap.style.display = 'block';
+                  }
+                  return;
+                }
                 if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
                   showConcurrencyConflictBox(editWrap, comment, result.data, editTextarea, editCharCount, editDraftKey);
                   return;
@@ -2632,13 +2668,20 @@
 
     let editBtnHtml = '';
     if (isMyAnswer) {
-      editBtnHtml =
-        '<button type="button" class="btn-comment-action btn-edit-answer" title="Редактировать" aria-label="Редактировать">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-            '<path d="M12 20h9"></path>' +
-            '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
-          '</svg>' +
-        '</button>';
+      const isExpired = isCommentEditExpired(comment.createdAt || comment.created_at);
+      editBtnHtml = isExpired
+        ? '<button type="button" class="btn-comment-action btn-edit-answer is-disabled" title="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." aria-label="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." disabled>' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
+          '</button>'
+        : '<button type="button" class="btn-comment-action btn-edit-answer" title="Редактировать" aria-label="Редактировать">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
+          '</button>';
     }
 
     let replies = comment.comments;
@@ -2788,7 +2831,11 @@
     const updatedWrap = el.querySelector('.answer-updated-wrap');
 
     if (editBtn && editWrap && contentWrap && actionsWrap) {
-      editBtn.addEventListener('click', function () {
+      editBtn.addEventListener('click', function (e) {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        if (editBtn.disabled || editBtn.classList.contains('is-disabled')) {
+          return;
+        }
         const conflictBox = editWrap.querySelector('.edit-conflict-box');
         if (conflictBox) conflictBox.remove();
         contentWrap.style.display = 'none';
@@ -2852,6 +2899,24 @@
             })
             .then(function (result) {
               saveEditBtn.disabled = false;
+              if (result.status === 403 || (result.data && result.data.code === 'EDIT_WINDOW_EXPIRED')) {
+                const errorMsg = (result.data && result.data.error) || 'Срок редактирования комментария истек (максимум 48 часов с момента публикации)';
+                showToast(errorMsg);
+                if (editBtn) {
+                  editBtn.disabled = true;
+                  editBtn.classList.add('is-disabled');
+                  editBtn.setAttribute('title', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                  editBtn.setAttribute('aria-label', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                }
+                if (cancelEditBtn) {
+                  cancelEditBtn.click();
+                } else {
+                  editWrap.style.display = 'none';
+                  contentWrap.style.display = 'block';
+                  actionsWrap.style.display = 'flex';
+                }
+                return;
+              }
               if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
                 showConcurrencyConflictBox(editWrap, comment, result.data, editTextarea, editCharCount, null);
                 return;

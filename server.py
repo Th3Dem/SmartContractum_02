@@ -4755,6 +4755,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     return
 
+                # Enforce 48-hour editing window (Issue #73)
+                created_at_raw = comment["created_at"] if "created_at" in comment.keys() else None
+                if created_at_raw:
+                    try:
+                        created_dt = datetime.datetime.fromisoformat(created_at_raw.replace("Z", "+00:00"))
+                        if created_dt.tzinfo is None:
+                            created_dt = created_dt.replace(tzinfo=datetime.timezone.utc)
+                        now_utc = datetime.datetime.now(datetime.timezone.utc)
+                        diff_seconds = (now_utc - created_dt).total_seconds()
+                        if diff_seconds >= 48 * 3600:
+                            self.send_json_response(403, {
+                                "success": False,
+                                "error": "Срок редактирования комментария истек (максимум 48 часов с момента публикации)",
+                                "code": "EDIT_WINDOW_EXPIRED"
+                            })
+                            return
+                    except Exception:
+                        pass
+
                 # Invariant: reject attempts to modify immutable bindings
                 if "articleId" in payload or "article_id" in payload:
                     p_art = payload.get("articleId") or payload.get("article_id")
