@@ -348,11 +348,15 @@
       .catch(function () {});
   }
 
-  function copyCommentLink(articleId, commentId) {
+  function generateCommentPermalink(articleId, commentId) {
     const origin = window.location.origin || '';
     const pathname = window.location.pathname || '';
     const targetArtId = articleId || (currentArticle ? currentArticle.id : '');
-    const url = origin + pathname + '?id=' + encodeURIComponent(targetArtId) + '#comm_' + encodeURIComponent(commentId);
+    return origin + pathname + '?id=' + encodeURIComponent(targetArtId) + '#comm_' + encodeURIComponent(commentId);
+  }
+
+  function copyCommentLink(articleId, commentId) {
+    const url = generateCommentPermalink(articleId, commentId);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url)
         .then(function () {
@@ -379,6 +383,136 @@
     }
     document.body.removeChild(input);
   }
+
+  let activeSharePopoverCommentId = null;
+  let activeSharePopoverTrigger = null;
+
+  function isCommentSharePopoverOpen() {
+    const popover = document.getElementById('commentSharePopover');
+    return !!(popover && popover.style.display !== 'none');
+  }
+
+  function closeCommentSharePopover() {
+    const popover = document.getElementById('commentSharePopover');
+    if (popover) {
+      popover.style.display = 'none';
+    }
+    if (activeSharePopoverTrigger) {
+      activeSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+      activeSharePopoverTrigger = null;
+    }
+    activeSharePopoverCommentId = null;
+  }
+
+  function openCommentSharePopover(triggerBtn, articleId, commentId) {
+    const popover = document.getElementById('commentSharePopover');
+    if (!popover || !triggerBtn) return;
+
+    if (activeSharePopoverCommentId === commentId && isCommentSharePopoverOpen()) {
+      closeCommentSharePopover();
+      return;
+    }
+
+    if (activeSharePopoverTrigger && activeSharePopoverTrigger !== triggerBtn) {
+      activeSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    activeSharePopoverCommentId = commentId;
+    activeSharePopoverTrigger = triggerBtn;
+    triggerBtn.setAttribute('aria-haspopup', 'true');
+    triggerBtn.setAttribute('aria-expanded', 'true');
+
+    const permalink = generateCommentPermalink(articleId, commentId);
+    const title = (currentArticle && currentArticle.title) ? currentArticle.title : document.title || 'SmartContractum';
+    const encodedUrl = encodeURIComponent(permalink);
+    const encodedText = encodeURIComponent(title);
+
+    const tgLink = popover.querySelector('[data-action="telegram"]');
+    if (tgLink) {
+      tgLink.href = 'https:' + '//t.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
+    }
+    const vkLink = popover.querySelector('[data-action="vk"]');
+    if (vkLink) {
+      vkLink.href = 'https:' + '//vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
+    }
+    const okLink = popover.querySelector('[data-action="ok"]');
+    if (okLink) {
+      okLink.href = 'https:' + '//connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
+    }
+
+    const copyBtn = popover.querySelector('[data-action="copy"]');
+    if (copyBtn) {
+      copyBtn.onclick = function (e) {
+        e.preventDefault();
+        copyCommentLink(articleId, commentId);
+        closeCommentSharePopover();
+      };
+    }
+
+    const socialLinks = popover.querySelectorAll('a.comment-share-item');
+    socialLinks.forEach(function (link) {
+      link.onclick = function () {
+        setTimeout(closeCommentSharePopover, 100);
+      };
+    });
+
+    const rect = triggerBtn.getBoundingClientRect();
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const popoverWidth = 190;
+    let top = rect.bottom + scrollY + 4;
+    let left = rect.left + scrollX;
+
+    if (left + popoverWidth > window.innerWidth - 10) {
+      left = Math.max(10, window.innerWidth - popoverWidth - 10);
+    }
+
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+    popover.style.display = 'flex';
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!isCommentSharePopoverOpen()) return;
+    const popover = document.getElementById('commentSharePopover');
+    if (popover && popover.contains(e.target)) return;
+    if (e.target.closest('.btn-share-comment, .btn-share-answer')) return;
+    closeCommentSharePopover();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!isCommentSharePopoverOpen()) return;
+    const popover = document.getElementById('commentSharePopover');
+    if (!popover) return;
+
+    if (e.key === 'Escape') {
+      closeCommentSharePopover();
+      if (activeSharePopoverTrigger) {
+        activeSharePopoverTrigger.focus();
+      }
+      return;
+    }
+
+    const items = Array.from(popover.querySelectorAll('.comment-share-item'));
+    if (!items.length) return;
+    const activeIdx = items.indexOf(document.activeElement);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIdx = activeIdx < 0 ? 0 : (activeIdx + 1) % items.length;
+      items[nextIdx].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIdx = activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length;
+      items[prevIdx].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    }
+  });
 
   function handleSubscribeComment(btn, commentId) {
     if (!currentUser) {
@@ -624,6 +758,10 @@
   window.loadUserCommentSubscriptions = loadUserCommentSubscriptions;
   window.handleSubscribeComment = handleSubscribeComment;
   window.copyCommentLink = copyCommentLink;
+  window.generateCommentPermalink = generateCommentPermalink;
+  window.openCommentSharePopover = openCommentSharePopover;
+  window.closeCommentSharePopover = closeCommentSharePopover;
+  window.isCommentSharePopoverOpen = isCommentSharePopoverOpen;
   window.openCommentReportModal = openCommentReportModal;
   window.markCommentAsReported = markCommentAsReported;
   window.isCommentReported = isCommentReported;
@@ -2155,10 +2293,13 @@
 
       const shareBtn = el.querySelector('.btn-share-comment');
       if (shareBtn) {
+        shareBtn.setAttribute('aria-haspopup', 'true');
+        shareBtn.setAttribute('aria-expanded', 'false');
         shareBtn.addEventListener('click', function (e) {
           e.preventDefault();
+          e.stopPropagation();
           const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
-          copyCommentLink(targetArtId, comment.id);
+          openCommentSharePopover(shareBtn, targetArtId, comment.id);
         });
       }
 
@@ -2889,9 +3030,12 @@
 
     const shareBtn = el.querySelector('.btn-share-answer');
     if (shareBtn) {
+      shareBtn.setAttribute('aria-haspopup', 'true');
+      shareBtn.setAttribute('aria-expanded', 'false');
       shareBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        copyCommentLink(articleId, comment.id);
+        e.stopPropagation();
+        openCommentSharePopover(shareBtn, articleId, comment.id);
       });
     }
 
@@ -2948,7 +3092,12 @@
   }
 
   function handleDeepLink() {
-    const hash = window.location.hash;
+    let hash = window.location.hash;
+    const urlParams = new URLSearchParams(window.location.search);
+    const commentParam = urlParams.get('comment');
+    if (!hash && commentParam) {
+      hash = '#comm_' + commentParam;
+    }
     if (!hash) return;
     if (hash.startsWith('#comm_') || hash.startsWith('#comment-')) {
       let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');
