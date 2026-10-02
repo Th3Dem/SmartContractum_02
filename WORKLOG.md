@@ -551,3 +551,4 @@
 [2026-10-02 02:21] | git_bot | PR_CREATED | Открыт PR для Issue #64 (SC-029) - Упрощенный отдельный редактор создания вопросов (Task: issue-64-sc029-question-editor)
 [2026-10-02 09:47] | pm_bot | TASK_INIT | Старт задачи Issue #66: Question Editor унификация layout, document bar и CTA с Editor (Task: issue-66-sc029-question-editor-layout-cta)
 [2026-10-02 09:56] | dev_bot | IMPLEMENTATION_COMPLETE | Унификация layout, document bar и CTA Question Editor с Editor (Task: issue-66-sc029-question-editor-layout-cta)
+[2026-10-02 10:00] | git_bot | PR_CREATED | Открыт PR для Issue #66: Унификация layout, document bar и CTA Question Editor (Task: issue-66-sc029-question-editor-layout-cta)
