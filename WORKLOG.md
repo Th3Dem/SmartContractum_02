@@ -552,3 +552,4 @@
 [2026-10-02 09:47] | pm_bot | TASK_INIT | Старт задачи Issue #66: Question Editor унификация layout, document bar и CTA с Editor (Task: issue-66-sc029-question-editor-layout-cta)
 [2026-10-02 09:56] | dev_bot | IMPLEMENTATION_COMPLETE | Унификация layout, document bar и CTA Question Editor с Editor (Task: issue-66-sc029-question-editor-layout-cta)
 [2026-10-02 10:00] | git_bot | PR_CREATED | Открыт PR для Issue #66: Унификация layout, document bar и CTA Question Editor (Task: issue-66-sc029-question-editor-layout-cta)
+[2026-10-02 10:02] | pm_bot | TASK_INIT | Старт задачи Issue #67: Question Editor полноценная система черновиков и автосохранения (Task: issue-67-sc029-question-drafts-system)
