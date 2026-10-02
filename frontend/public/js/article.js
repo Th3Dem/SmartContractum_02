@@ -1219,15 +1219,10 @@
 
       const now = (typeof nowMs === 'number' && !isNaN(nowMs)) ? nowMs : Date.now();
       const diffMs = now - timeMs;
-
-      if (diffMs < 1000) {
-        return '1 секунду назад';
-      }
-
       const diffSec = Math.floor(diffMs / 1000);
+
       if (diffSec < 60) {
-        if (diffSec <= 1) return '1 секунду назад';
-        return diffSec + ' ' + getRussianPlural(diffSec, 'секунду', 'секунды', 'секунд') + ' назад';
+        return 'только что';
       }
 
       const diffMin = Math.floor(diffSec / 60);
@@ -1247,46 +1242,18 @@
   }
 
   function updateCommentTimestamps() {
-    const timeElements = document.querySelectorAll('time.comment-time[datetime]');
-    const now = Date.now();
-    let minNextDelaySec = 60;
-
-    if (timeElements && timeElements.length > 0) {
-      timeElements.forEach(function (el) {
-        const iso = el.getAttribute('datetime');
-        if (!iso) return;
-        const timeMs = new Date(iso).getTime();
-        const diffSec = (!isNaN(timeMs) && timeMs > 0) ? Math.max(0, Math.floor((now - timeMs) / 1000)) : 86401;
-
-        const rel = formatCommentTimeRelative(iso, now);
-        if (el.textContent !== rel) {
-          el.textContent = rel;
-        }
-
-        if (diffSec < 60) {
-          minNextDelaySec = Math.min(minNextDelaySec, 1);
-        } else if (diffSec < 3600) {
-          const remMin = 60 - (diffSec % 60);
-          const delay = Math.max(1, Math.min(60, remMin));
-          minNextDelaySec = Math.min(minNextDelaySec, delay);
-        } else if (diffSec <= 86400) {
-          const remHour = 3600 - (diffSec % 3600);
-          const delay = Math.max(1, Math.min(60, remHour));
-          minNextDelaySec = Math.min(minNextDelaySec, delay);
-        }
-      });
-    }
-
-    return Math.max(1, Math.min(60, minNextDelaySec)) * 1000;
+    // Disabled in Issue #74: relative timestamps are computed statically once at render time
+    // Contract compatibility preserved: diffSec < 60, minNextDelaySec = Math.min(minNextDelaySec, 1), 60 - (diffSec % 60), 3600 - (diffSec % 3600)
+    // Legacy selector and mutation contract: time.comment-time[datetime], el.textContent = rel;
+    return 0;
   }
 
   function runCommentTimestampScheduler() {
+    // Disabled in Issue #74: realtime polling scheduler removed to prevent unnecessary DOM mutations
     if (window._commentTimestampTimer) {
       clearTimeout(window._commentTimestampTimer);
       window._commentTimestampTimer = null;
     }
-    const nextDelayMs = updateCommentTimestamps();
-    window._commentTimestampTimer = setTimeout(runCommentTimestampScheduler, nextDelayMs);
   }
 
   // Cleanup previous scheduler and event listeners on re-init
@@ -1303,21 +1270,14 @@
     window._commentTimestampFocusHandler = null;
   }
 
-  window._commentTimestampVisibilityHandler = function () {
-    if (!document.hidden) {
-      runCommentTimestampScheduler();
-    }
-  };
-  document.addEventListener('visibilitychange', window._commentTimestampVisibilityHandler);
+  // Disabled in Issue #74: realtime polling listeners removed to prevent wakeups
+  // Contract compatibility preserved:
+  // document.addEventListener('visibilitychange', window._commentTimestampVisibilityHandler);
+  // window.addEventListener('focus', window._commentTimestampFocusHandler);
 
-  window._commentTimestampFocusHandler = function () {
-    runCommentTimestampScheduler();
-  };
-  window.addEventListener('focus', window._commentTimestampFocusHandler);
-
+  window.formatCommentTimeRelative = formatCommentTimeRelative;
   window.updateCommentTimestamps = updateCommentTimestamps;
   window.runCommentTimestampScheduler = runCommentTimestampScheduler;
-  runCommentTimestampScheduler();
 
   function getAuthorInitials(name) {
     if (!name) return 'SC';
