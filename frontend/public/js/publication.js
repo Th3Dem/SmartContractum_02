@@ -191,6 +191,7 @@
         this.titleInput.addEventListener('input', () => {
           this.updateReadinessUI();
           this.updateCardPreview();
+          this.checkH1Duplicate();
         });
       }
 
@@ -199,7 +200,22 @@
           this.updateReadinessUI();
           this.updateCardPreview();
         });
+        if (this.editor.root) {
+          this.editor.root.addEventListener('paste', () => {
+            setTimeout(() => this.checkH1Duplicate(), 100);
+          });
+        }
       }
+
+      // H1 Duplicate Warning Banner buttons (Issue #83)
+      const btnConvertH2 = document.getElementById('btnConvertH2');
+      if (btnConvertH2) btnConvertH2.addEventListener('click', () => this.convertH1ToH2());
+
+      const btnRemoveH1 = document.getElementById('btnRemoveDuplicateH1');
+      if (btnRemoveH1) btnRemoveH1.addEventListener('click', () => this.removeDuplicateH1());
+
+      const btnDismissH1 = document.getElementById('btnDismissH1Warning');
+      if (btnDismissH1) btnDismissH1.addEventListener('click', () => this.dismissH1Warning());
 
       // Modal close handlers (Save on close, no backdrop close)
       if (this.modalCloseBtn) {
@@ -2060,6 +2076,116 @@
         this.btnPubSubmit.disabled = false;
         this.btnPubSubmit.innerHTML = originalSubmitText;
       }
+    }
+
+    normalizeHeading(text) {
+      if (!text) return '';
+      let str = String(text).replace(/<[^>]*>/g, ' ');
+      str = str.replace(/^#+\s*/, '');
+      str = str.toLowerCase();
+      str = str.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»\u2013\u2014]/g, ' ');
+      str = str.replace(/\s+/g, ' ').trim();
+      return str;
+    }
+
+    checkH1Duplicate() {
+      const banner = document.getElementById('h1DuplicateWarningBanner');
+      if (!banner) return false;
+
+      const title = (this.titleInput ? this.titleInput.value : '').trim();
+      const normTitle = this.normalizeHeading(title);
+      if (!normTitle) {
+        banner.style.display = 'none';
+        return false;
+      }
+
+      const editorRoot = (this.editor && this.editor.root) ? this.editor.root : document.getElementById('editor');
+      if (!editorRoot) return false;
+
+      // Find first non-empty block
+      let firstEl = null;
+      const children = editorRoot.children;
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        if (el.textContent && el.textContent.trim().length > 0) {
+          firstEl = el;
+          break;
+        }
+      }
+
+      if (firstEl && firstEl.tagName === 'H1') {
+        const normHeading = this.normalizeHeading(firstEl.textContent);
+        if (normHeading && normHeading === normTitle) {
+          banner.style.display = 'flex';
+          this.duplicateH1Element = firstEl;
+          return true;
+        }
+      }
+
+      banner.style.display = 'none';
+      this.duplicateH1Element = null;
+      return false;
+    }
+
+    convertH1ToH2() {
+      const banner = document.getElementById('h1DuplicateWarningBanner');
+      const editorRoot = (this.editor && this.editor.root) ? this.editor.root : document.getElementById('editor');
+      let targetEl = this.duplicateH1Element;
+      if (!targetEl && editorRoot) {
+        const children = editorRoot.children;
+        for (let i = 0; i < children.length; i++) {
+          if (children[i].tagName === 'H1') {
+            targetEl = children[i];
+            break;
+          }
+        }
+      }
+
+      if (targetEl && targetEl.tagName === 'H1') {
+        const h2 = document.createElement('h2');
+        h2.innerHTML = targetEl.innerHTML;
+        if (targetEl.className) h2.className = targetEl.className;
+        targetEl.replaceWith(h2);
+
+        if (this.editor && typeof this.editor.update === 'function') {
+          this.editor.update();
+        }
+      }
+
+      if (banner) banner.style.display = 'none';
+      this.duplicateH1Element = null;
+    }
+
+    removeDuplicateH1() {
+      const banner = document.getElementById('h1DuplicateWarningBanner');
+      const editorRoot = (this.editor && this.editor.root) ? this.editor.root : document.getElementById('editor');
+      let targetEl = this.duplicateH1Element;
+      if (!targetEl && editorRoot) {
+        const children = editorRoot.children;
+        for (let i = 0; i < children.length; i++) {
+          if (children[i].tagName === 'H1') {
+            targetEl = children[i];
+            break;
+          }
+        }
+      }
+
+      if (targetEl && targetEl.tagName === 'H1') {
+        targetEl.remove();
+
+        if (this.editor && typeof this.editor.update === 'function') {
+          this.editor.update();
+        }
+      }
+
+      if (banner) banner.style.display = 'none';
+      this.duplicateH1Element = null;
+    }
+
+    dismissH1Warning() {
+      const banner = document.getElementById('h1DuplicateWarningBanner');
+      if (banner) banner.style.display = 'none';
+      this.duplicateH1Element = null;
     }
 
     escapeHTML(str) {

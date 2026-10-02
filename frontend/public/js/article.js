@@ -4127,6 +4127,37 @@
           }
         }
       });
+  function normalizeHeading(text) {
+    if (!text) return '';
+    let str = String(text).replace(/<[^>]*>/g, ' ');
+    str = str.replace(/^#+\s*/, '');
+    str = str.toLowerCase();
+    str = str.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'«»\u2013\u2014]/g, ' ');
+    str = str.replace(/\s+/g, ' ').trim();
+    return str;
+  }
+
+  function preventDuplicateH1InBody(container, articleTitle) {
+    if (!container || !articleTitle) return;
+    const normTitle = normalizeHeading(articleTitle);
+    if (!normTitle) return;
+
+    const children = container.children;
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i];
+      if (el.textContent && el.textContent.trim().length > 0) {
+        if (el.tagName === 'H1') {
+          const normHeading = normalizeHeading(el.textContent);
+          if (normHeading === normTitle) {
+            const h2 = document.createElement('h2');
+            h2.innerHTML = el.innerHTML;
+            if (el.className) h2.className = el.className;
+            el.replaceWith(h2);
+          }
+        }
+        break;
+      }
+    }
   }
 
   function populateArticle(article) {
@@ -4334,6 +4365,7 @@
     if (bodyEl) {
       const sanitized = sanitizeArticleHtml(article.html || '');
       bodyEl.innerHTML = sanitized || '<p>Текст статьи пуст.</p>';
+      preventDuplicateH1InBody(bodyEl, article.title);
       enhanceArticleContent(bodyEl);
       buildTableOfContents(bodyEl);
     }
@@ -4753,4 +4785,10 @@
       loadArticle();
     });
   });
+
+  if (typeof window !== 'undefined') {
+    window.ArticleReader = window.ArticleReader || {};
+    window.ArticleReader.preventDuplicateH1InBody = preventDuplicateH1InBody;
+    window.ArticleReader.normalizeHeading = normalizeHeading;
+  }
 })();

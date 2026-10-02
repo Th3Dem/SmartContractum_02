@@ -466,6 +466,26 @@
             <textarea id="article-title" class="article-title-input" rows="1" placeholder="Заголовок статьи"></textarea>
           </div>
 
+          <!-- H1 Duplicate Warning Banner (Issue #83) -->
+          <div id="h1DuplicateWarningBanner" class="h1-duplicate-warning-banner" style="display: none;" role="alert">
+            <div class="banner-content">
+              <svg class="banner-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <div class="banner-text">
+                <strong>Внимание: дублирование заголовка.</strong>
+                <span>Первый заголовок в тексте статьи совпадает с названием публикации. Рекомендуется преобразовать его в подзаголовок H2 или удалить из текста, чтобы избежать дублирования.</span>
+              </div>
+            </div>
+            <div class="banner-actions">
+              <button type="button" class="btn-banner-action btn-convert-h2" id="btnConvertH2">Сделать H2</button>
+              <button type="button" class="btn-banner-action btn-remove-duplicate-h1" id="btnRemoveDuplicateH1">Удалить из текста</button>
+              <button type="button" class="btn-banner-action btn-dismiss-h1-warning" id="btnDismissH1Warning">Оставить</button>
+            </div>
+          </div>
+
           <!-- Quill Canvas -->
           <div id="editor"></div>
         </div>
@@ -1489,6 +1509,7 @@
   <script src="js/converter.js?v=3"></script>
   <script src="js/drafts.js?v=3"></script>
   <script src="js/publication.js?v=3"></script>
+  <script src="js/editor.js?v=3"></script>
   <script src="js/typograph.js?v=3"></script>
   <script src="js/node-controls.js?v=3"></script>
   <script src="js/main.js?v=3"></script>
