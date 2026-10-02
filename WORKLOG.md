@@ -618,3 +618,4 @@
 [2026-10-03 00:45] | pm_bot | TASK_INIT | Старт задачи Issue #87: Улучшение Table of Contents и правая боковая навигация (Task: issue-87-sc031-sidebar-table-of-contents)
 [2026-10-03 00:45] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #87 (Task: issue-87-sc031-sidebar-table-of-contents)
 [2026-10-03 00:49] | dev_bot | IMPLEMENTATION_COMPLETE | Улучшение Table of Contents и правая боковая навигация (Task: issue-87-sc031-sidebar-table-of-contents)
+[2026-10-03 00:51] | git_bot | PR_CREATED | Открыт PR #99 для Issue #87 (Fixes #87), ветка feat/issue-87-sc031-sidebar-table-of-contents (Task: issue-87-sc031-sidebar-table-of-contents)
