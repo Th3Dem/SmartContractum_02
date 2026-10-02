@@ -154,21 +154,8 @@
     <!-- Modern Reading Shell Layout (Issue #80) -->
     <main class="article-reading-shell" id="articleReadingShell">
       <!-- 1. Left Contextual Rail Slot (Prepared for Issue #84) -->
-      <aside class="article-rail-slot" id="articleRailSlot" aria-label="Панель действий статьи"></aside>
-
-      <!-- 2. Central Reading Column -->
-      <div class="article-main-slot article-page-container" id="articleMainSlot">
-        <!-- Article Top Action Bar -->
-        <nav class="article-top-bar" aria-label="Действия со статьей">
-        <button type="button" class="btn btn-secondary btn-back-feed" id="btnBackToFeed" title="Вернуться к ленте публикаций">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-          <span>В ленту</span>
-        </button>
-
-        <div class="article-actions-group">
+      <aside class="article-rail-slot" id="articleRailSlot" aria-label="Панель действий статьи">
+        <div class="article-rail-actions" style="display: none;">
           <button type="button" class="btn btn-secondary btn-action-like" id="btnArticleLike" title="Нравится" aria-label="Нравится">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
@@ -176,25 +163,28 @@
             <span class="like-text">Нравится</span>
             <span class="like-count" id="articleLikeCount">0</span>
           </button>
-
           <div id="voteArticleTop" class="article-vote-wrapper"></div>
-
           <button type="button" class="btn btn-secondary btn-action-bookmark" id="btnArticleBookmark" title="Сохранить в закладки" aria-label="Сохранить в закладки">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
             </svg>
             <span class="bookmark-text">В закладки</span>
           </button>
-
-          <button type="button" class="btn btn-secondary btn-action-share" id="btnCopyLink" title="Скопировать постоянную ссылку на статью" aria-label="Скопировать ссылку">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-            </svg>
-            <span>Поделиться</span>
-          </button>
         </div>
-      </nav>
+      </aside>
+
+      <!-- 2. Central Reading Column -->
+      <div class="article-main-slot article-page-container" id="articleMainSlot">
+        <!-- Lightweight Navigation Header (Issue #81) -->
+        <nav class="article-nav-header" id="articleNavHeader" aria-label="Навигация публикации">
+          <button type="button" class="btn-back-feed-link" id="btnBackToFeed" title="Вернуться к ленте публикаций" aria-label="Вернуться к ленте публикаций">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Лента</span>
+          </button>
+        </nav>
 
       <!-- Loading State Skeleton -->
       <div id="articleLoadingState" class="article-skeleton">

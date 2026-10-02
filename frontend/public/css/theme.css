@@ -57,6 +57,8 @@
   --border-focus: #3b82f6;
 
   --accent-color: #2563eb;
+  --accent: #2563eb;
+  --surface-2: #f1f3f5;
   --accent-hover: #1d4ed8;
   --accent-subtle: #eff6ff;
   --accent-text: #1d4ed8;
@@ -177,6 +179,8 @@
   --border-focus: #3861fb;
 
   --accent-color: #3861fb;     /* CMC Royal Blue */
+  --accent: #3861fb;
+  --surface-2: rgba(255, 255, 255, 0.06);
   --accent-hover: #2752e7;
   --accent-subtle: rgba(56, 97, 251, 0.15);
   --accent-text: #6188ff;
