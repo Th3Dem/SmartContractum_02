@@ -4315,16 +4315,17 @@
       }
     }
 
-    // Cover Image
+    // Cover Image (Issue #88)
     const coverContainer = document.getElementById('articleCoverContainer');
     const coverImg = document.getElementById('articleCoverImg');
     if (coverContainer && coverImg) {
       if (article.coverImage) {
         coverImg.src = article.coverImage;
-        coverImg.alt = article.title || 'Обложка статьи';
+        coverImg.alt = article.title || 'Обложка публикации';
         coverContainer.style.display = 'block';
       } else {
         coverContainer.style.display = 'none';
+        coverImg.removeAttribute('src');
       }
     }
 
