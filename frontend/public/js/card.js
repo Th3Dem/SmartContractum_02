@@ -364,7 +364,7 @@
         reportHtml =
           '<button type="button" class="btn-card-action btn-card-report" id="preview-card-report" title="Пожаловаться" aria-label="Пожаловаться" disabled>' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1z"></path>' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
               '<line x1="4" y1="22" x2="4" y2="15"></line>' +
             '</svg>' +
           '</button>';
@@ -372,7 +372,7 @@
         reportHtml =
           '<button type="button" class="btn-card-action btn-card-report' + (isReported ? ' is-reported' : '') + '" data-id="' + escapeHtml(item.id) + '" title="' + reportTooltip + '" aria-label="Пожаловаться">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1z"></path>' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
               '<line x1="4" y1="22" x2="4" y2="15"></line>' +
             '</svg>' +
           '</button>';

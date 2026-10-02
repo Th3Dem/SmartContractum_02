@@ -579,3 +579,7 @@
 [2026-10-02 14:45] | dev_bot | IMPLEMENTATION_COMPLETE | Отключение realtime таймера и статичный расчет relative timestamp комментариев (Task: issue-74-sc030-comment-static-relative-time)
 [2026-10-02 14:48] | git_bot | PR_CREATED | Открыт PR #79 для Issue #74 (Fixes #74), ветка feat/issue-74-sc030-comment-static-relative-time (Task: issue-74-sc030-comment-static-relative-time)
 [2026-10-02 16:20] | dev_bot | FEATURE_UPDATE | Уникальная цветовая палитра кнопок действий, активный оранжевый статус жалобы, кнопки Поделиться и Пожаловаться в карточках ленты (Task: issue-71-sc030-comment-new-actions)
+[2026-10-02 16:57] | pm_bot | TASK_INIT | Старт задачи по устранению замечаний владельца: восстановление демо-данных (комментарии, лайки, рейтинги), фикс иконки флага жалобы и малиновый цвет кнопки жалобы (Task: issue-71-sc030-comment-new-actions)
+[2026-10-02 16:57] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot и seed/backend на py_bot (Task: issue-71-sc030-comment-new-actions)
+[2026-10-02 16:58] | dev_bot | IMPLEMENTATION_COMPLETE | Исправление иконки флага и малиновый цвет кнопки жалобы на карточках и в комментариях (Task: issue-71-sc030-comment-new-actions)
+[2026-10-02 16:58] | py_bot | IMPLEMENTATION_COMPLETE | Восстановление и наполнение демо-данных: комментарии, ответы, лайки и рейтинги для вопросов и публикаций (Task: issue-71-sc030-comment-new-actions)

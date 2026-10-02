@@ -1362,6 +1362,8 @@ def seed_database(conn: sqlite3.Connection) -> None:
             seed_data.seed_articles(conn)
             seed_data.seed_user_subscriptions(conn)
             seed_data.seed_article_likes(conn)
+            if hasattr(seed_data, "seed_article_votes"):
+                seed_data.seed_article_votes(conn)
             seed_data.seed_article_comments(conn)
             if hasattr(seed_data, "seed_user_profiles"):
                 seed_data.seed_user_profiles(conn)

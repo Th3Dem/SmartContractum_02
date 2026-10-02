@@ -8,12 +8,12 @@ Automated test suite verifying:
    - Save/Bookmark: Amber (#f59e0b)
    - Share: Purple (#a855f7)
    - Subscribe: Teal (#14b8a6)
-   - Report: Orange (#f97316)
+   - Report: Raspberry (#e11d48)
    - Delete: Red (#ef4444)
    - Edit: Indigo (#6366f1)
 2. Report button active state:
    - Does NOT remain grey/inactive (opacity 0.5 eliminated).
-   - Lights up in Orange (#f97316) with subtle background (rgba(249, 115, 22, 0.12)) and filled icon.
+   - Lights up in Raspberry (#e11d48) with subtle background (rgba(225, 29, 72, 0.12)) and filled icon.
    - Clicking reported button notifies user with toast.
 3. Feed card action bar buttons for publications and questions:
    - Adds "Поделиться" (.btn-card-share) and "Пожаловаться" (.btn-card-report).
@@ -288,10 +288,10 @@ class TestUniqueColorsAndCardActionsFrontend(unittest.TestCase):
             self.assertIsNotNone(sub_match, f"Subscribe hover rule must exist in {source_name}")
             self.assertIn("#14b8a6", sub_match.group(1))
 
-            # Report: Orange (#f97316)
+            # Report: Raspberry (#e11d48)
             rep_match = re.search(r'\.btn-comment-action\.btn-report-comment:hover[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(rep_match, f"Report hover rule must exist in {source_name}")
-            self.assertIn("#f97316", rep_match.group(1))
+            self.assertIn("#e11d48", rep_match.group(1))
 
             # Delete: Red (#ef4444)
             del_match = re.search(r'\.btn-comment-action\.btn-delete-comment:hover[^{]*\{([^}]+)\}', css_content)
@@ -303,13 +303,13 @@ class TestUniqueColorsAndCardActionsFrontend(unittest.TestCase):
             self.assertIsNotNone(edit_match, f"Edit hover rule must exist in {source_name}")
             self.assertIn("#6366f1", edit_match.group(1))
 
-    def test_07_reported_state_lights_up_in_orange_not_grey_opacity(self):
-        """Reported button (.is-reported) must light up in orange with fill, not grey opacity."""
+    def test_07_reported_state_lights_up_in_raspberry_not_grey_opacity(self):
+        """Reported button (.is-reported) must light up in raspberry with fill, not grey opacity."""
         for css_content, source_name in [(self.article_css, "article.css"), (self.theme_css, "theme.css")]:
             rep_active_match = re.search(r'\.btn-comment-action\.is-reported[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(rep_active_match, f".is-reported rule must exist in {source_name}")
             block = rep_active_match.group(1)
-            self.assertIn("#f97316", block)
+            self.assertIn("#e11d48", block)
             self.assertIn("cursor: pointer;", block)
             self.assertNotIn("opacity: 0.5;", block)
 
@@ -340,7 +340,7 @@ class TestUniqueColorsAndCardActionsFrontend(unittest.TestCase):
         self.assertIn(".btn-card-share", self.feed_css)
         self.assertIn(".btn-card-report", self.feed_css)
         self.assertIn("#a855f7", self.feed_css)  # purple for share
-        self.assertIn("#f97316", self.feed_css)  # orange for report
+        self.assertIn("#e11d48", self.feed_css)  # raspberry for report
 
     def test_10_popover_and_modal_present_in_feed_html_and_feed_js(self):
         """Verify feed.html includes #feedSharePopover and #articleReportModal, and feed.js binds events."""
@@ -372,6 +372,10 @@ class TestUniqueColorsAndCardActionsFrontend(unittest.TestCase):
         ]:
             urls = re.findall(r'url\s*\(\s*["\']?(https?://[^"\')]+)', css_content)
             self.assertEqual(len(urls), 0, f"External CDN url found in {source_name}: {urls}")
+
+    def test_12_card_report_icon_full_flag_svg_path(self):
+        """Verify card.js report icon includes full flag SVG path with top contour."""
+        self.assertIn("V3s-1 1-4 1-5-2-8-2-4 1-4 1z", self.card_js)
 
 
 if __name__ == "__main__":

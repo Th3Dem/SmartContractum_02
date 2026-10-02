@@ -634,13 +634,13 @@ class TestIssue71CommentNewActionsFrontend(unittest.TestCase):
             # Report hover
             rep_hover = re.search(r'\.btn-comment-action\.btn-report-comment:hover[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(rep_hover, f"Report hover rule must exist in {source_name}")
-            self.assertIn("#f97316", rep_hover.group(1))
+            self.assertIn("#e11d48", rep_hover.group(1))
 
             # Report .is-reported
             rep_active = re.search(r'\.btn-comment-action(?:\.btn-report-comment)?\.is-reported[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(rep_active, f"Report .is-reported rule must exist in {source_name}")
             rep_block = rep_active.group(1)
-            self.assertIn("#f97316", rep_block)
+            self.assertIn("#e11d48", rep_block)
             self.assertIn("cursor: pointer;", rep_block)
 
             # Report modal styling

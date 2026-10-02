@@ -274,7 +274,7 @@ ARTICLES_DATA = [
         "companyId": "cryptosolutions-lab",
         "companyName": "АО «КриптоРешения Лаб»",
         "created_at": "2026-09-25T18:15:00Z",
-        "likes_count": 0,
+        "likes_count": 15,
         "badge_text": "БЕЗОПАСНОСТЬ",
         "subtext": "Превентивный анализ • ReentrancyGuard • Формальная верификация"
     },
@@ -1097,33 +1097,35 @@ def seed_user_subscriptions(conn: sqlite3.Connection):
 
 
 def seed_article_likes(conn: sqlite3.Connection):
-    """Seeds realistic likes across articles with timestamps to create distinct feed rankings."""
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) AS cnt FROM article_likes")
-    if cur.fetchone()["cnt"] >= 10:
-        return
+    """Seeds realistic likes across all 30 articles with timestamps to create distinct feed rankings."""
+    users_pool = [
+        "user_demo", "author_petrov", "author_kuznetsov", "author_volkova",
+        "author_fedorov", "author_smirnov", "author_morozova", "author_pavlov",
+        "author_romanova", "author_nesterov", "author_kovalev", "author_semenov",
+        "author_volkov", "reader_01", "reader_02", "reader_03", "reader_04",
+        "reader_05", "reader_06", "reader_07"
+    ] + [f"reader_{i:02d}" for i in range(8, 60)]
 
-    likes_map = {
-        "art-07": 4,
-        "art-01": 3,
-        "art-06": 2,
-        "art-05": 1,
-        "art-03": 1,
-        "art-04": 1,
-    }
-    users = ["user_demo", "author_petrov", "author_kuznetsov", "author_volkova", "author_fedorov"]
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
     likes_rows = []
+
     for art in ARTICLES_DATA:
         art_id = art["id"]
-        target_likes = likes_map.get(art_id, 0)
-        if target_likes == 0:
+        author_id = art.get("author_id", "")
+        target_likes = int(art.get("likes_count", 0))
+        if target_likes <= 0:
             continue
+
         created_dt = datetime.datetime.fromisoformat(art["created_at"].replace("Z", "+00:00"))
-        now_dt = datetime.datetime.now(datetime.timezone.utc)
-        for i in range(min(target_likes, len(users))):
-            uid = users[i]
+        eligible_users = [u for u in users_pool if u != author_id]
+
+        for i in range(min(target_likes, len(eligible_users))):
+            uid = eligible_users[i]
             if art_id in ("art-07", "art-01"):
-                like_dt = max(created_dt + datetime.timedelta(hours=i * 2 + 1), now_dt - datetime.timedelta(hours=(i + 1) * 3))
+                like_dt = max(
+                    created_dt + datetime.timedelta(hours=i * 2 + 1),
+                    now_dt - datetime.timedelta(hours=(i + 1) * 3)
+                )
             else:
                 like_dt = created_dt + datetime.timedelta(hours=i * 2 + 1)
             likes_rows.append((art_id, uid, like_dt.strftime("%Y-%m-%dT%H:%M:%SZ")))
@@ -1134,16 +1136,100 @@ def seed_article_likes(conn: sqlite3.Connection):
     """, likes_rows)
 
 
+def seed_article_votes(conn: sqlite3.Connection):
+    """Seeds realistic votes into article_votes for positive community score and ranking."""
+    votes_map = {
+        "art-01": 42,
+        "art-02": 28,
+        "art-03": 35,
+        "art-04": 48,
+        "art-05": 31,
+        "art-06": 89,
+        "art-07": 54,
+        "art-08": 19,
+        "art-09": 38,
+        "art-10": 45,
+        "art-11": 40,
+        "art-12": 33,
+        "art-13": 27,
+        "art-14": 25,
+        "art-15": 76,
+        "art-16": 51,
+        "art-17": 44,
+        "art-18": 62,
+        "art-19": 39,
+        "art-20": 47,
+        "art-21": 58,
+        "art-22": 65,
+        "art-23": 36,
+        "art-24": 12,
+        "art-25": 22,
+        "art-26": 26,
+        "art-27": 38,
+        "art-28": 71,
+        "art-29": 5,
+        "art-30": 8,
+    }
+
+    voters_pool = [
+        "user_demo", "author_petrov", "author_kuznetsov", "author_volkova",
+        "author_fedorov", "author_smirnov", "author_morozova", "author_pavlov",
+        "author_romanova", "author_nesterov", "author_kovalev", "author_semenov",
+        "author_volkov", "reader_01", "reader_02", "reader_03", "reader_04",
+        "reader_05", "reader_06", "reader_07"
+    ] + [f"voter_{i:03d}" for i in range(1, 150)]
+
+    votes_rows = []
+    for art in ARTICLES_DATA:
+        art_id = art["id"]
+        target_score = votes_map.get(art_id, 10)
+        author_id = art.get("author_id", "")
+        eligible = [u for u in voters_pool if u != author_id]
+
+        created_dt = datetime.datetime.fromisoformat(art["created_at"].replace("Z", "+00:00"))
+        for i in range(min(target_score, len(eligible))):
+            voter_id = eligible[i]
+            vote_dt = created_dt + datetime.timedelta(hours=i * 2 + 1)
+            ts_iso = vote_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            votes_rows.append((art_id, voter_id, 1, ts_iso, ts_iso))
+
+    conn.executemany("""
+        INSERT OR IGNORE INTO article_votes (article_id, user_id, value, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, votes_rows)
+
+
 def seed_article_comments(conn: sqlite3.Connection):
     """Seeds comments and answers for articles with timestamps for rich discussions."""
     comments_data = [
-        ("comm-seed-04", "art-06", "reader_05", "Павел Белов", None, "Read-only reentrancy — одна из самых коварных ошибок, спасибо за подробный PoC.", "published", "comment", 0, "2026-09-28T08:15:00Z"),
+        # Publications art-06, art-05, art-07 baseline
+        ("comm-seed-04", "art-06", "reader_05", "Павел Белов", None, "Read-only reentrancy: одна из самых коварных ошибок, спасибо за подробный PoC.", "published", "comment", 0, "2026-09-28T08:15:00Z"),
         ("comm-seed-05", "art-06", "reader_06", "Татьяна Ильина", None, "Применяется ли подобная защита в продакшене?", "published", "comment", 0, "2026-09-28T08:45:00Z"),
         ("comm-seed-06", "art-05", "reader_04", "Ольга Васильева", None, "Очень вовремя! Как раз проектируем пул с высокой частотой вызовов.", "published", "comment", 0, "2026-09-28T10:15:00Z"),
         ("comm-seed-07", "art-07", "reader_07", "Артем Ковалев", None, "Двухфазный коммит отлично закрывает риски рассинхронизации.", "published", "comment", 0, "2026-09-27T21:00:00Z"),
-        ("comm-seed-08", "art-24", "reader_01", "Иван Соколов", None, "Мы перешли на Foundry около 6 месяцев назад. Скорость прогона тестов выросла примерно в 7 раз по сравнению с hardhat/ts. Возможность писать тесты на Solidity и фаззинг из коробки — главное преимущество.", "published", "answer", 0, "2026-09-28T09:00:00Z"),
+        # Question art-24 (Hardhat vs Foundry)
+        ("comm-seed-08", "art-24", "reader_01", "Иван Соколов", None, "Мы перешли на Foundry около 6 месяцев назад. Скорость прогона тестов выросла примерно в 7 раз по сравнению с hardhat/ts. Возможность писать тесты на Solidity и фаззинг из коробки: главное преимущество.", "published", "answer", 0, "2026-09-28T09:00:00Z"),
         ("comm-seed-09", "art-24", "reader_02", "Анна Куликова", None, "Уточните, как вы решаете задачу деплоймент-скриптов с интеграцией в корпоративный CI/CD на gitlab?", "published", "comment", 0, "2026-09-28T09:30:00Z"),
+        ("comm-seed-11", "art-24", "reader_03", "Максим Орлов", None, "Для деплоя в GitLab CI отлично подходит forge script с переменными окружения и KMS-провайдером ключей.", "published", "comment", 0, "2026-09-28T10:00:00Z"),
+        # Question art-30 (Out of gas in dividends)
         ("comm-seed-10", "art-30", "author_fedorov", "Сергей Федоров", None, "Рекомендую перейти на pull-паттерн (Claiming) с использованием SafeMath и ReentrancyGuard: смарт-контракт фиксирует общую сумму и номер транша, а каждый держатель самостоятельно забирает причитающуюся сумму отдельной транзакцией, либо через генерацию Merkle proof. Это снижает сложность до O(1) на стороне эмитента и полностью исключает блокировку блока.", "published", "answer", 1, "2026-09-27T14:30:00Z"),
+        ("comm-seed-16", "art-30", "author_morozova", "Елена Морозова", None, "Спасибо за рекомендацию. Реализовали Merkle proof для 50 000 держателей, потребление газа при клейме стабильно держится около 65 000 gas.", "published", "comment", 0, "2026-09-27T15:10:00Z"),
+        # Publications technical discussions
+        ("comm-seed-17", "art-01", "author_volkova", "Елена Волкова", None, "Очень ценный разбор взаимодействия с API шлюза Банка России. Как организована проверка цифровой подписи ГОСТ на узлах?", "published", "comment", 0, "2026-09-26T17:00:00Z"),
+        ("comm-seed-18", "art-01", "author_smirnov", "Алексей Смирнов", None, "Подпись проверяется в HSM-модуле перед подачей транзакции в консенсус, что снимает нагрузку со смарт-контракта.", "published", "comment", 0, "2026-09-26T17:30:00Z"),
+        ("comm-seed-19", "art-02", "author_fedorov", "Сергей Федоров", None, "При аудите по ГОСТ 57580 критично проверять не только логику контрактов, но и конфигурацию сетевых узлов и ротацию ключей валидаторов.", "published", "comment", 0, "2026-09-25T19:00:00Z"),
+        ("comm-seed-20", "art-02", "reader_04", "Ольга Васильева", None, "Используются ли статические анализаторы Slither или Mythril для поиска уязвимостей в корпоративных репозиториях?", "published", "comment", 0, "2026-09-25T19:45:00Z"),
+        ("comm-seed-21", "art-03", "reader_02", "Анна Куликова", None, "Каким образом решается проблема консенсуса оракулов при сильном расхождении котировок из разных источников?", "published", "comment", 0, "2026-09-26T11:00:00Z"),
+        ("comm-seed-22", "art-03", "author_kuznetsov", "Михаил Кузнецов", None, "Используется медианная фильтрация с отсечением выбросов и порогом отклонения не более 2% от предыдущего окна.", "published", "comment", 0, "2026-09-26T11:40:00Z"),
+        ("comm-seed-23", "art-04", "author_petrov", "Дмитрий Петров", None, "Какова трудоемкость подготовки математических спецификаций на Coq/Certora для типичного токенизационного контракта?", "published", "comment", 0, "2026-09-27T10:15:00Z"),
+        ("comm-seed-24", "art-04", "author_volkova", "Елена Волкова", None, "В среднем 2-3 недели на контракт средней сложности. Зато это дает полную гарантию отсутствия переполнений и нарушений инвариантов.", "published", "comment", 0, "2026-09-27T11:00:00Z"),
+        ("comm-seed-25", "art-05", "reader_05", "Павел Белов", None, "Упаковка переменных в storage slot (uint128 + uint128) действительно снижает затраты на sstore вдвое при первом вызове.", "published", "comment", 0, "2026-09-28T11:30:00Z"),
+        ("comm-seed-26", "art-06", "author_fedorov", "Сергей Федоров", None, "Важно помнить, что даже view-функции могут быть подвержены read-only reentrancy, если на них опираются внешние ценовые пулы.", "published", "comment", 0, "2026-09-28T09:15:00Z"),
+        ("comm-seed-27", "art-07", "author_smirnov", "Алексей Смирнов", None, "Таймаут фазы Prepare в 2PC должен выбираться с запасом на время подтверждения блока в обоих реестрах.", "published", "comment", 0, "2026-09-27T21:45:00Z"),
+        ("comm-seed-28", "art-27", "author_morozova", "Елена Морозова", None, "Черновик стандарта выглядит зрелым. Предлагаю добавить обязательное поле для ссылки на электронную фактуру в реестре ФНС.", "published", "comment", 0, "2026-09-28T12:00:00Z"),
+        ("comm-seed-29", "art-27", "reader_07", "Артем Ковалев", None, "Поддерживаю интеграцию с ФНС. Это существенно упростит вторичный оборот ЦФА среди институциональных инвесторов.", "published", "comment", 0, "2026-09-28T12:45:00Z"),
+        ("comm-seed-30", "art-28", "author_petrov", "Дмитрий Петров", None, "На криптографических вычислениях WASM показывает колоссальное преимущество перед EVM за счет JIT-компиляции.", "published", "comment", 0, "2026-09-28T14:00:00Z"),
+        ("comm-seed-31", "art-28", "author_pavlov", "Игорь Павлов", None, "Именно поэтому для узлов ПКСК мы выбрали гибридный подход: бизнес-логика в EVM, а тяжелая криптография в WASM-модулях.", "published", "comment", 0, "2026-09-28T14:30:00Z"),
     ]
     conn.executemany("""
         INSERT OR IGNORE INTO article_comments (id, article_id, user_id, author_name, author_avatar, content, status, comment_type, is_solution, created_at)
@@ -1165,4 +1251,21 @@ def seed_user_profiles(conn: sqlite3.Connection):
             INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (uid, name, spec, comp, bio, avatar, now_iso, now_iso))
+
+
+def seed_database(conn: sqlite3.Connection):
+    """Seeds all extended demo data idempotently."""
+    seed_clubs(conn)
+    seed_companies(conn)
+    conn.execute("""
+        INSERT OR IGNORE INTO company_members (company_id, user_id, role, created_at)
+        SELECT id, owner_id, 'owner', created_at FROM companies WHERE owner_id IS NOT NULL AND owner_id != '';
+    """)
+    seed_articles(conn)
+    seed_user_subscriptions(conn)
+    seed_article_likes(conn)
+    seed_article_votes(conn)
+    seed_article_comments(conn)
+    seed_user_profiles(conn)
+
 

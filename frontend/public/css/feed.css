@@ -2898,21 +2898,21 @@ button.author-name:focus-visible,
 
 .btn-card-report:hover,
 .btn-card-report:focus-visible {
-  color: #f97316;
-  background: rgba(249, 115, 22, 0.08);
-  border-color: #f97316;
+  color: #e11d48;
+  border-color: #e11d48;
+  background: rgba(225, 29, 72, 0.08);
 }
 
 .btn-card-report.is-reported {
-  color: #f97316;
-  border-color: #f97316;
-  background: rgba(249, 115, 22, 0.12);
+  color: #e11d48;
+  border-color: #e11d48;
+  background: rgba(225, 29, 72, 0.12);
   cursor: pointer;
 }
 
 .btn-card-report.is-reported svg {
-  fill: #f97316;
-  stroke: #f97316;
+  fill: #e11d48;
+  stroke: #e11d48;
 }
 
 .card-read-more,

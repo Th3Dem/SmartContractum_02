@@ -1187,17 +1187,17 @@ button.author-name:focus-visible,
 .btn-comment-action.btn-report-comment:focus,
 .btn-comment-action.btn-report-answer:hover,
 .btn-comment-action.btn-report-answer:focus {
-  border-color: #f97316;
-  color: #f97316;
-  background: rgba(249, 115, 22, 0.08);
+  border-color: #e11d48;
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.08);
 }
 
 .btn-comment-action.is-reported,
 .btn-comment-action.btn-report-comment.is-reported,
 .btn-comment-action.btn-report-answer.is-reported {
-  border-color: #f97316;
-  color: #f97316;
-  background: rgba(249, 115, 22, 0.12);
+  border-color: #e11d48;
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.12);
   cursor: pointer;
   opacity: 1;
 }
@@ -1205,8 +1205,8 @@ button.author-name:focus-visible,
 .btn-comment-action.is-reported svg,
 .btn-comment-action.btn-report-comment.is-reported svg,
 .btn-comment-action.btn-report-answer.is-reported svg {
-  fill: #f97316;
-  stroke: #f97316;
+  fill: #e11d48;
+  stroke: #e11d48;
 }
 
 /* Comment Action Buttons: Disabled */
