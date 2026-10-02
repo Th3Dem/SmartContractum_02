@@ -331,6 +331,54 @@
       isPreview: isPreview
     });
 
+    let shareHtml = '';
+    if (isPreview) {
+      shareHtml =
+        '<button type="button" class="btn-card-action btn-card-share" id="preview-card-share" title="Поделиться" aria-label="Поделиться" disabled>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="18" cy="5" r="3"></circle>' +
+            '<circle cx="6" cy="12" r="3"></circle>' +
+            '<circle cx="18" cy="19" r="3"></circle>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+            '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+          '</svg>' +
+        '</button>';
+    } else {
+      shareHtml =
+        '<button type="button" class="btn-card-action btn-card-share" data-id="' + escapeHtml(item.id) + '" title="Поделиться" aria-label="Поделиться" aria-haspopup="true" aria-expanded="false">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="18" cy="5" r="3"></circle>' +
+            '<circle cx="6" cy="12" r="3"></circle>' +
+            '<circle cx="18" cy="19" r="3"></circle>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+            '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+          '</svg>' +
+        '</button>';
+    }
+
+    const isReported = typeof options.isReported === 'function' ? options.isReported(item.id) : Boolean(options.isReported);
+    let reportHtml = '';
+    if (!isAuthor) {
+      const reportTooltip = isReported ? 'Жалоба уже отправлена' : 'Пожаловаться';
+      if (isPreview) {
+        reportHtml =
+          '<button type="button" class="btn-card-action btn-card-report" id="preview-card-report" title="Пожаловаться" aria-label="Пожаловаться" disabled>' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+              '<line x1="4" y1="22" x2="4" y2="15"></line>' +
+            '</svg>' +
+          '</button>';
+      } else {
+        reportHtml =
+          '<button type="button" class="btn-card-action btn-card-report' + (isReported ? ' is-reported' : '') + '" data-id="' + escapeHtml(item.id) + '" title="' + reportTooltip + '" aria-label="Пожаловаться">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+              '<line x1="4" y1="22" x2="4" y2="15"></line>' +
+            '</svg>' +
+          '</button>';
+      }
+    }
+
     let footerLeftHtml = '';
     let readMoreText = 'Читать далее';
     let actionTargetUrl = articleUrl;
@@ -351,12 +399,14 @@
           '<span>' + (item.hasSolution ? 'Решение принято • ' : '') + aText + '</span>' +
         '</a>';
       footerLeftHtml = likeBtnHtml + voteCapsuleHtml + answersBtnHtml + bookmarkHtml;
+      footerLeftHtml += shareHtml + reportHtml;
       readMoreText = (aCount === 0 ? 'Ответить' : 'Смотреть вопрос');
       if (aCount === 0) {
         actionTargetUrl = questionAnswerUrl;
       }
     } else {
       footerLeftHtml = likeBtnHtml + voteCapsuleHtml + commentsBtnHtml + bookmarkHtml;
+      footerLeftHtml += shareHtml + reportHtml;
       readMoreText = 'Читать далее';
       actionTargetUrl = articleUrl;
     }
@@ -475,6 +525,28 @@
           e.stopPropagation();
           if (typeof options.onBookmarkToggle === 'function') {
             options.onBookmarkToggle(item.id, bookmarkBtn, item);
+          }
+        });
+      }
+
+      const shareBtn = card.querySelector('.btn-card-share');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof options.onShareClick === 'function') {
+            options.onShareClick(item.id, shareBtn, item);
+          }
+        });
+      }
+
+      const reportBtn = card.querySelector('.btn-card-report');
+      if (reportBtn) {
+        reportBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof options.onReportClick === 'function') {
+            options.onReportClick(item.id, reportBtn, item);
           }
         });
       }

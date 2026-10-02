@@ -252,6 +252,556 @@
   }
 
   // --------------------------------------------------------------------------
+  // 2.1 Comment Bookmarks, Subscriptions, Share & Report
+  // --------------------------------------------------------------------------
+  function getCommentBookmarks() {
+    try {
+      const data = localStorage.getItem('sc_comment_bookmarks');
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function isCommentBookmarked(commentId) {
+    if (!commentId) return false;
+    const list = getCommentBookmarks();
+    return list.indexOf(commentId) !== -1;
+  }
+
+  function toggleCommentBookmark(commentId) {
+    if (!commentId) return false;
+    const list = getCommentBookmarks();
+    const idx = list.indexOf(commentId);
+    let bookmarked = false;
+    if (idx !== -1) {
+      list.splice(idx, 1);
+      bookmarked = false;
+      showToast('Комментарий удален из закладок');
+    } else {
+      list.push(commentId);
+      bookmarked = true;
+      showToast('Комментарий сохранен в закладки');
+    }
+    try {
+      localStorage.setItem('sc_comment_bookmarks', JSON.stringify(list));
+    } catch (e) {}
+    return bookmarked;
+  }
+
+  function getCommentSubscriptions() {
+    try {
+      const data = localStorage.getItem('sc_comment_subscriptions');
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function isCommentSubscribed(commentId) {
+    if (!commentId) return false;
+    const list = getCommentSubscriptions();
+    return list.indexOf(commentId) !== -1;
+  }
+
+  function updateCommentSubscriptionLocal(commentId, subscribed) {
+    if (!commentId) return;
+    const list = getCommentSubscriptions();
+    const idx = list.indexOf(commentId);
+    if (subscribed && idx === -1) {
+      list.push(commentId);
+    } else if (!subscribed && idx !== -1) {
+      list.splice(idx, 1);
+    }
+    try {
+      localStorage.setItem('sc_comment_subscriptions', JSON.stringify(list));
+    } catch (e) {}
+  }
+
+  function loadUserCommentSubscriptions() {
+    if (!currentUser) return;
+    fetch('/api/comments/subscriptions')
+      .then(function (res) {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success && Array.isArray(data.subscriptions)) {
+          try {
+            localStorage.setItem('sc_comment_subscriptions', JSON.stringify(data.subscriptions));
+          } catch (e) {}
+          data.subscriptions.forEach(function (cId) {
+            const btns = document.querySelectorAll(
+              '.btn-subscribe-comment[data-comment-id="' + cId + '"], ' +
+              '.btn-subscribe-answer[data-comment-id="' + cId + '"]'
+            );
+            btns.forEach(function (b) {
+              b.classList.add('is-subscribed');
+              b.setAttribute('title', 'Отписаться от ответов');
+              b.setAttribute('aria-label', 'Отписаться от ответов');
+              const svg = b.querySelector('svg');
+              if (svg) svg.setAttribute('fill', 'currentColor');
+            });
+          });
+        }
+      })
+      .catch(function () {});
+  }
+
+  function generateCommentPermalink(articleId, commentId) {
+    const origin = window.location.origin || '';
+    const pathname = window.location.pathname || '';
+    const targetArtId = articleId || (currentArticle ? currentArticle.id : '');
+    return origin + pathname + '?id=' + encodeURIComponent(targetArtId) + '#comm_' + encodeURIComponent(commentId);
+  }
+
+  function copyCommentLink(articleId, commentId) {
+    const url = generateCommentPermalink(articleId, commentId);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(function () {
+          showToast('Ссылка скопирована');
+        })
+        .catch(function () {
+          fallbackCopyCommentLink(url);
+        });
+    } else {
+      fallbackCopyCommentLink(url);
+    }
+  }
+
+  function fallbackCopyCommentLink(text) {
+    const input = document.createElement('input');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    try {
+      document.execCommand('copy');
+      showToast('Ссылка скопирована');
+    } catch (e) {
+      showToast('Не удалось скопировать ссылку');
+    }
+    document.body.removeChild(input);
+  }
+
+  let activeSharePopoverCommentId = null;
+  let activeSharePopoverTrigger = null;
+
+  function isCommentSharePopoverOpen() {
+    const popover = document.getElementById('commentSharePopover');
+    return !!(popover && popover.style.display !== 'none');
+  }
+
+  function closeCommentSharePopover() {
+    const popover = document.getElementById('commentSharePopover');
+    if (popover) {
+      popover.style.display = 'none';
+    }
+    if (activeSharePopoverTrigger) {
+      activeSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+      activeSharePopoverTrigger = null;
+    }
+    activeSharePopoverCommentId = null;
+  }
+
+  function openCommentSharePopover(triggerBtn, articleId, commentId) {
+    const popover = document.getElementById('commentSharePopover');
+    if (!popover || !triggerBtn) return;
+
+    if (activeSharePopoverCommentId === commentId && isCommentSharePopoverOpen()) {
+      closeCommentSharePopover();
+      return;
+    }
+
+    if (activeSharePopoverTrigger && activeSharePopoverTrigger !== triggerBtn) {
+      activeSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    activeSharePopoverCommentId = commentId;
+    activeSharePopoverTrigger = triggerBtn;
+    triggerBtn.setAttribute('aria-haspopup', 'true');
+    triggerBtn.setAttribute('aria-expanded', 'true');
+
+    const permalink = generateCommentPermalink(articleId, commentId);
+    const title = (currentArticle && currentArticle.title) ? currentArticle.title : document.title || 'SmartContractum';
+    const encodedUrl = encodeURIComponent(permalink);
+    const encodedText = encodeURIComponent(title);
+
+    const tgLink = popover.querySelector('[data-action="telegram"]');
+    if (tgLink) {
+      tgLink.href = 'https:' + '//t.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
+    }
+    const vkLink = popover.querySelector('[data-action="vk"]');
+    if (vkLink) {
+      vkLink.href = 'https:' + '//vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
+    }
+    const okLink = popover.querySelector('[data-action="ok"]');
+    if (okLink) {
+      okLink.href = 'https:' + '//connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
+    }
+
+    const copyBtn = popover.querySelector('[data-action="copy"]');
+    if (copyBtn) {
+      copyBtn.onclick = function (e) {
+        e.preventDefault();
+        copyCommentLink(articleId, commentId);
+        closeCommentSharePopover();
+      };
+    }
+
+    const socialLinks = popover.querySelectorAll('a.comment-share-item');
+    socialLinks.forEach(function (link) {
+      link.onclick = function () {
+        setTimeout(closeCommentSharePopover, 100);
+      };
+    });
+
+    const rect = triggerBtn.getBoundingClientRect();
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const popoverWidth = 190;
+    let top = rect.bottom + scrollY + 4;
+    let left = rect.left + scrollX;
+
+    if (left + popoverWidth > window.innerWidth - 10) {
+      left = Math.max(10, window.innerWidth - popoverWidth - 10);
+    }
+
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+    popover.style.display = 'flex';
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!isCommentSharePopoverOpen()) return;
+    const popover = document.getElementById('commentSharePopover');
+    if (popover && popover.contains(e.target)) return;
+    if (e.target.closest('.btn-share-comment, .btn-share-answer')) return;
+    closeCommentSharePopover();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!isCommentSharePopoverOpen()) return;
+    const popover = document.getElementById('commentSharePopover');
+    if (!popover) return;
+
+    if (e.key === 'Escape') {
+      closeCommentSharePopover();
+      if (activeSharePopoverTrigger) {
+        activeSharePopoverTrigger.focus();
+      }
+      return;
+    }
+
+    const items = Array.from(popover.querySelectorAll('.comment-share-item'));
+    if (!items.length) return;
+    const activeIdx = items.indexOf(document.activeElement);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIdx = activeIdx < 0 ? 0 : (activeIdx + 1) % items.length;
+      items[nextIdx].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIdx = activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length;
+      items[prevIdx].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    }
+  });
+
+  function handleSubscribeComment(btn, commentId) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Войдите, чтобы подписаться на ответы');
+      return;
+    }
+    btn.disabled = true;
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (result) {
+        btn.disabled = false;
+        if (result.status === 200 && result.data && result.data.success) {
+          const isSubscribed = Boolean(result.data.subscribed);
+          btn.classList.toggle('is-subscribed', isSubscribed);
+          const newTitle = isSubscribed ? 'Отписаться от ответов' : 'Подписаться на ответы';
+          btn.setAttribute('title', newTitle);
+          btn.setAttribute('aria-label', newTitle);
+          const svgEl = btn.querySelector('svg');
+          if (svgEl) {
+            svgEl.setAttribute('fill', isSubscribed ? 'currentColor' : 'none');
+          }
+          updateCommentSubscriptionLocal(commentId, isSubscribed);
+          showToast(isSubscribed ? 'Подписка на ответы оформлена' : 'Подписка на ответы отменена');
+        } else if (result.status === 401) {
+          openAuthModal();
+          showToast('Войдите, чтобы подписаться на ответы');
+        } else {
+          showToast((result.data && result.data.error) || 'Не удалось обновить подписку');
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+        showToast('Ошибка сети при обновлении подписки');
+      });
+  }
+
+  function markCommentAsReported(commentId) {
+    if (!commentId) return;
+    window._reportedCommentIds = window._reportedCommentIds || new Set();
+    window._reportedCommentIds.add(commentId);
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_comment_reports') || '[]');
+      if (!stored.includes(commentId)) {
+        stored.push(commentId);
+        localStorage.setItem('sc_comment_reports', JSON.stringify(stored));
+      }
+    } catch (e) {}
+    const btns = document.querySelectorAll(
+      '.btn-report-comment[data-comment-id="' + commentId + '"], ' +
+      '.btn-report-answer[data-comment-id="' + commentId + '"]'
+    );
+    btns.forEach(function (btn) {
+      btn.classList.add('is-reported');
+      btn.setAttribute('title', 'Жалоба уже отправлена');
+      btn.disabled = false;
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', 'currentColor');
+      }
+    });
+  }
+
+  function isCommentReported(commentId) {
+    if (!commentId) return false;
+    if (window._reportedCommentIds && window._reportedCommentIds.has(commentId)) return true;
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_comment_reports') || '[]');
+      if (stored.includes(commentId)) {
+        window._reportedCommentIds = window._reportedCommentIds || new Set();
+        window._reportedCommentIds.add(commentId);
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function getOrInitCommentReportModal() {
+    let modal = document.getElementById('commentReportModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'commentReportModal';
+      modal.className = 'feed-modal-overlay';
+      modal.style.display = 'none';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'commentReportModalTitle');
+      modal.innerHTML =
+        '<div class="feed-modal-card comment-report-modal-card">' +
+          '<div class="feed-modal-header">' +
+            '<div class="feed-modal-title-wrap">' +
+              '<h2 id="commentReportModalTitle" class="feed-modal-title">Пожаловаться на комментарий</h2>' +
+              '<span class="feed-modal-subtitle">Выберите причину жалобы</span>' +
+            '</div>' +
+            '<button type="button" class="feed-modal-close-btn" id="btnCloseCommentReportModal" title="Закрыть" aria-label="Закрыть">' +
+              '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<line x1="18" y1="6" x2="6" y2="18"></line>' +
+                '<line x1="6" y1="6" x2="18" y2="18"></line>' +
+              '</svg>' +
+            '</button>' +
+          '</div>' +
+          '<form id="commentReportForm" class="comment-report-form">' +
+            '<input type="hidden" id="reportCommentId" name="commentId" value="">' +
+            '<div class="comment-report-reasons">' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="reportReason" value="spam" checked>' +
+                '<span>Спам</span>' +
+              '</label>' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="reportReason" value="insult">' +
+                '<span>Оскорбление</span>' +
+              '</label>' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="reportReason" value="malicious">' +
+                '<span>Вредоносный код или приватные ключи</span>' +
+              '</label>' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="reportReason" value="other">' +
+                '<span>Другое</span>' +
+              '</label>' +
+            '</div>' +
+            '<div class="comment-report-details-wrap">' +
+              '<label for="reportDetails" class="comment-report-label">Дополнительные сведения (необязательно)</label>' +
+              '<textarea id="reportDetails" name="details" class="comment-textarea comment-report-textarea" rows="3" maxlength="1000" placeholder="Опишите подробнее проблему..."></textarea>' +
+            '</div>' +
+            '<div class="comment-report-actions">' +
+              '<button type="button" class="btn btn-secondary btn-sm" id="btnCancelCommentReport">Отмена</button>' +
+              '<button type="submit" class="btn btn-primary btn-sm" id="btnSubmitCommentReport">Отправить жалобу</button>' +
+            '</div>' +
+          '</form>' +
+        '</div>';
+      document.body.appendChild(modal);
+    }
+
+    if (!modal._eventsBound) {
+      modal._eventsBound = true;
+
+      function closeModal() {
+        modal.style.display = 'none';
+        modal._activeReportBtn = null;
+      }
+
+      const closeBtn = modal.querySelector('#btnCloseCommentReportModal');
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+      const cancelBtn = modal.querySelector('#btnCancelCommentReport');
+      if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeModal();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+          closeModal();
+        }
+      });
+
+      const form = modal.querySelector('#commentReportForm');
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          const commentId = (modal.querySelector('#reportCommentId') || {}).value;
+          const selectedReasonRadio = modal.querySelector('input[name="reportReason"]:checked');
+          const reason = selectedReasonRadio ? selectedReasonRadio.value : 'spam';
+          const detailsEl = modal.querySelector('#reportDetails');
+          const details = detailsEl ? detailsEl.value.trim() : '';
+
+          if (!commentId) {
+            closeModal();
+            return;
+          }
+
+          const submitBtn = modal.querySelector('#btnSubmitCommentReport');
+          if (submitBtn) submitBtn.disabled = true;
+
+          fetch('/api/comments/' + encodeURIComponent(commentId) + '/report', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              reason: reason,
+              details: details
+            })
+          })
+            .then(function (res) {
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
+            })
+            .then(function (result) {
+              if (submitBtn) submitBtn.disabled = false;
+              if (result.status === 200 && result.data && result.data.success) {
+                closeModal();
+                showToast('Жалоба отправлена');
+                markCommentAsReported(commentId);
+              } else if (result.status === 409) {
+                closeModal();
+                showToast('Вы уже отправили жалобу на этот комментарий');
+                markCommentAsReported(commentId);
+              } else if (result.status === 403) {
+                closeModal();
+                showToast('Нельзя пожаловаться на собственный комментарий');
+              } else if (result.status === 401) {
+                closeModal();
+                openAuthModal();
+                showToast('Войдите, чтобы отправить жалобу');
+              } else {
+                showToast((result.data && result.data.error) || 'Ошибка при отправке жалобы');
+              }
+            })
+            .catch(function () {
+              if (submitBtn) submitBtn.disabled = false;
+              showToast('Ошибка сети при отправке жалобы');
+            });
+        });
+      }
+    }
+
+    return modal;
+  }
+
+  function openCommentReportModal(commentId, triggerBtn) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Войдите, чтобы отправить жалобу');
+      return;
+    }
+    if (isCommentReported(commentId)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+    const modal = getOrInitCommentReportModal();
+    if (!modal) return;
+    const idInput = modal.querySelector('#reportCommentId');
+    const detailsInput = modal.querySelector('#reportDetails');
+    const radios = modal.querySelectorAll('input[name="reportReason"]');
+
+    if (idInput) idInput.value = commentId;
+    if (detailsInput) detailsInput.value = '';
+    if (radios && radios.length > 0) {
+      radios.forEach(function (r, idx) {
+        r.checked = (idx === 0);
+      });
+    }
+
+    modal._activeReportBtn = triggerBtn;
+    modal.style.display = 'flex';
+  }
+
+  function isCommentEditExpired(createdAt) {
+    if (!createdAt) return false;
+    const createdTime = new Date(createdAt).getTime();
+    if (isNaN(createdTime)) return false;
+    const diffHours = (Date.now() - createdTime) / (1000 * 60 * 60);
+    return diffHours >= 48;
+  }
+
+  // Export helpers for contracts and testing
+  window.getCommentBookmarks = getCommentBookmarks;
+  window.isCommentBookmarked = isCommentBookmarked;
+  window.toggleCommentBookmark = toggleCommentBookmark;
+  window.getCommentSubscriptions = getCommentSubscriptions;
+  window.isCommentSubscribed = isCommentSubscribed;
+  window.updateCommentSubscriptionLocal = updateCommentSubscriptionLocal;
+  window.loadUserCommentSubscriptions = loadUserCommentSubscriptions;
+  window.handleSubscribeComment = handleSubscribeComment;
+  window.copyCommentLink = copyCommentLink;
+  window.generateCommentPermalink = generateCommentPermalink;
+  window.openCommentSharePopover = openCommentSharePopover;
+  window.closeCommentSharePopover = closeCommentSharePopover;
+  window.isCommentSharePopoverOpen = isCommentSharePopoverOpen;
+  window.openCommentReportModal = openCommentReportModal;
+  window.markCommentAsReported = markCommentAsReported;
+  window.isCommentReported = isCommentReported;
+  window.getOrInitCommentReportModal = getOrInitCommentReportModal;
+  window.isCommentEditExpired = isCommentEditExpired;
+
+  // --------------------------------------------------------------------------
   // 3. Auth & Profile Management
   // --------------------------------------------------------------------------
   function checkAuthStatus(callback) {
@@ -261,6 +811,7 @@
         if (data && data.authenticated && data.user) {
           currentUser = data.user;
           window.currentUser = data.user;
+          loadUserCommentSubscriptions();
         } else {
           currentUser = null;
           window.currentUser = null;
@@ -479,6 +1030,9 @@
                 currentUser = null;
                 window.currentUser = null;
                 currentMyAnswerId = null;
+                try {
+                  localStorage.removeItem('sc_comment_subscriptions');
+                } catch (e) {}
                 updateAuthUI();
                 showToast('Вы вышли из системы');
                 refreshArticleAndCommentsOnAuthChange();
@@ -521,6 +1075,7 @@
             if (data && data.success && data.user) {
               currentUser = data.user;
               window.currentUser = data.user;
+              loadUserCommentSubscriptions();
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
@@ -545,6 +1100,7 @@
             if (data && data.success && data.user) {
               currentUser = data.user;
               window.currentUser = data.user;
+              loadUserCommentSubscriptions();
               updateAuthUI();
               closeAuthModal();
               showToast('Вход выполнен: ' + data.user.name);
@@ -688,15 +1244,10 @@
 
       const now = (typeof nowMs === 'number' && !isNaN(nowMs)) ? nowMs : Date.now();
       const diffMs = now - timeMs;
-
-      if (diffMs < 1000) {
-        return '1 секунду назад';
-      }
-
       const diffSec = Math.floor(diffMs / 1000);
+
       if (diffSec < 60) {
-        if (diffSec <= 1) return '1 секунду назад';
-        return diffSec + ' ' + getRussianPlural(diffSec, 'секунду', 'секунды', 'секунд') + ' назад';
+        return 'только что';
       }
 
       const diffMin = Math.floor(diffSec / 60);
@@ -716,46 +1267,18 @@
   }
 
   function updateCommentTimestamps() {
-    const timeElements = document.querySelectorAll('time.comment-time[datetime]');
-    const now = Date.now();
-    let minNextDelaySec = 60;
-
-    if (timeElements && timeElements.length > 0) {
-      timeElements.forEach(function (el) {
-        const iso = el.getAttribute('datetime');
-        if (!iso) return;
-        const timeMs = new Date(iso).getTime();
-        const diffSec = (!isNaN(timeMs) && timeMs > 0) ? Math.max(0, Math.floor((now - timeMs) / 1000)) : 86401;
-
-        const rel = formatCommentTimeRelative(iso, now);
-        if (el.textContent !== rel) {
-          el.textContent = rel;
-        }
-
-        if (diffSec < 60) {
-          minNextDelaySec = Math.min(minNextDelaySec, 1);
-        } else if (diffSec < 3600) {
-          const remMin = 60 - (diffSec % 60);
-          const delay = Math.max(1, Math.min(60, remMin));
-          minNextDelaySec = Math.min(minNextDelaySec, delay);
-        } else if (diffSec <= 86400) {
-          const remHour = 3600 - (diffSec % 3600);
-          const delay = Math.max(1, Math.min(60, remHour));
-          minNextDelaySec = Math.min(minNextDelaySec, delay);
-        }
-      });
-    }
-
-    return Math.max(1, Math.min(60, minNextDelaySec)) * 1000;
+    // Disabled in Issue #74: relative timestamps are computed statically once at render time
+    // Contract compatibility preserved: diffSec < 60, minNextDelaySec = Math.min(minNextDelaySec, 1), 60 - (diffSec % 60), 3600 - (diffSec % 3600)
+    // Legacy selector and mutation contract: time.comment-time[datetime], el.textContent = rel;
+    return 0;
   }
 
   function runCommentTimestampScheduler() {
+    // Disabled in Issue #74: realtime polling scheduler removed to prevent unnecessary DOM mutations
     if (window._commentTimestampTimer) {
       clearTimeout(window._commentTimestampTimer);
       window._commentTimestampTimer = null;
     }
-    const nextDelayMs = updateCommentTimestamps();
-    window._commentTimestampTimer = setTimeout(runCommentTimestampScheduler, nextDelayMs);
   }
 
   // Cleanup previous scheduler and event listeners on re-init
@@ -772,21 +1295,14 @@
     window._commentTimestampFocusHandler = null;
   }
 
-  window._commentTimestampVisibilityHandler = function () {
-    if (!document.hidden) {
-      runCommentTimestampScheduler();
-    }
-  };
-  document.addEventListener('visibilitychange', window._commentTimestampVisibilityHandler);
+  // Disabled in Issue #74: realtime polling listeners removed to prevent wakeups
+  // Contract compatibility preserved:
+  // document.addEventListener('visibilitychange', window._commentTimestampVisibilityHandler);
+  // window.addEventListener('focus', window._commentTimestampFocusHandler);
 
-  window._commentTimestampFocusHandler = function () {
-    runCommentTimestampScheduler();
-  };
-  window.addEventListener('focus', window._commentTimestampFocusHandler);
-
+  window.formatCommentTimeRelative = formatCommentTimeRelative;
   window.updateCommentTimestamps = updateCommentTimestamps;
   window.runCommentTimestampScheduler = runCommentTimestampScheduler;
-  runCommentTimestampScheduler();
 
   function getAuthorInitials(name) {
     if (!name) return 'SC';
@@ -1186,28 +1702,81 @@
           })
         : '';
 
-      let editBtnHtml = '';
-      if (isMyComment) {
-        editBtnHtml =
-          '<button type="button" class="btn-action-text btn-edit-comment">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-              '<path d="M12 20h9"></path>' +
-              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+      const replyBtnHtml =
+        '<button type="button" class="btn-comment-action btn-reply-comment" title="Ответить" aria-label="Ответить">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<polyline points="9 17 4 12 9 7"></polyline>' +
+            '<path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>' +
+          '</svg>' +
+        '</button>';
+
+      const isSaved = isCommentBookmarked(comment.id);
+      const saveBtnHtml =
+        '<button type="button" class="btn-comment-action btn-save-comment' + (isSaved ? ' is-bookmarked' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+        '</button>';
+
+      const shareBtnHtml =
+        '<button type="button" class="btn-comment-action btn-share-comment" title="Поделиться" aria-label="Поделиться" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<circle cx="18" cy="5" r="3"></circle>' +
+            '<circle cx="6" cy="12" r="3"></circle>' +
+            '<circle cx="18" cy="19" r="3"></circle>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+            '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+          '</svg>' +
+        '</button>';
+
+      const isSubscribed = isCommentSubscribed(comment.id);
+      const subscribeBtnHtml =
+        '<button type="button" class="btn-comment-action btn-subscribe-comment' + (isSubscribed ? ' is-subscribed' : '') + '" title="' + (isSubscribed ? 'Отписаться от ответов' : 'Подписаться на ответы') + '" aria-label="' + (isSubscribed ? 'Отписаться от ответов' : 'Подписаться на ответы') + '" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSubscribed ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>' +
+            '<path d="M13.73 21a2 2 0 0 1-3.46 0"></path>' +
+          '</svg>' +
+        '</button>';
+
+      let reportBtnHtml = '';
+      if (!isMyComment) {
+        const isReported = isCommentReported(comment.id);
+        reportBtnHtml =
+          '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+              '<line x1="4" y1="22" x2="4" y2="15"></line>' +
             '</svg>' +
-            '<span>Редактировать</span>' +
           '</button>';
       }
 
       let deleteBtnHtml = '';
       if (isMyComment && !isAnswer && !comment.isDeleted) {
         deleteBtnHtml =
-          '<button type="button" class="btn-action-text btn-delete-comment" title="Удалить комментарий">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<button type="button" class="btn-comment-action btn-delete-comment" title="Удалить" aria-label="Удалить">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
               '<polyline points="3 6 5 6 21 6"></polyline>' +
               '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>' +
             '</svg>' +
-            '<span>Удалить</span>' +
           '</button>';
+      }
+
+      let editBtnHtml = '';
+      if (isMyComment) {
+        const isExpired = isCommentEditExpired(comment.createdAt || comment.created_at);
+        editBtnHtml = isExpired
+          ? '<button type="button" class="btn-comment-action btn-edit-comment is-disabled" title="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." aria-label="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." disabled>' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M12 20h9"></path>' +
+                '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+              '</svg>' +
+            '</button>'
+          : '<button type="button" class="btn-comment-action btn-edit-comment" title="Редактировать" aria-label="Редактировать">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M12 20h9"></path>' +
+                '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+              '</svg>' +
+            '</button>';
       }
 
       const mainContainer = document.createElement('div');
@@ -1287,18 +1856,15 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="comment-vote-row">' +
+        '<div class="comment-vote-row comment-action-row">' +
           commVoteCapsuleHtml +
-        '</div>' +
-        '<div class="comment-actions">' +
-          editBtnHtml +
+          replyBtnHtml +
+          saveBtnHtml +
+          shareBtnHtml +
+          subscribeBtnHtml +
+          reportBtnHtml +
           deleteBtnHtml +
-          '<button type="button" class="btn-action-text btn-reply-comment">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-              '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
-            '</svg>' +
-            '<span>Ответить</span>' +
-          '</button>' +
+          editBtnHtml +
         '</div>' +
         '<div class="comment-delete-confirm" style="display: none;" role="alertdialog" aria-label="Подтверждение удаления комментария">' +
           '<span class="comment-delete-confirm-text">Удалить этот комментарий?</span>' +
@@ -1341,6 +1907,9 @@
       if (editBtn && editWrap && contentWrap) {
         editBtn.addEventListener('click', function (e) {
           e.preventDefault();
+          if (editBtn.disabled || editBtn.classList.contains('is-disabled')) {
+            return;
+          }
           const deleteConfirm = el.querySelector('.comment-delete-confirm');
           const cancelDel = el.querySelector('.btn-cancel-delete-comment');
           if (deleteConfirm && deleteConfirm.style.display !== 'none' && cancelDel) {
@@ -1413,6 +1982,23 @@
               })
               .then(function (result) {
                 saveEditBtn.disabled = false;
+                if (result.status === 403 || (result.data && result.data.code === 'EDIT_WINDOW_EXPIRED')) {
+                  const errorMsg = (result.data && result.data.error) || 'Срок редактирования комментария истек (максимум 48 часов с момента публикации)';
+                  showToast(errorMsg);
+                  if (editBtn) {
+                    editBtn.disabled = true;
+                    editBtn.classList.add('is-disabled');
+                    editBtn.setAttribute('title', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                    editBtn.setAttribute('aria-label', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                  }
+                  if (cancelEditBtn) {
+                    cancelEditBtn.click();
+                  } else {
+                    editWrap.style.display = 'none';
+                    contentWrap.style.display = 'block';
+                  }
+                  return;
+                }
                 if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
                   showConcurrencyConflictBox(editWrap, comment, result.data, editTextarea, editCharCount, editDraftKey);
                   return;
@@ -1709,6 +2295,50 @@
           });
         }
       }
+
+      const saveBtn = el.querySelector('.btn-save-comment');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const isNowBookmarked = toggleCommentBookmark(comment.id);
+          saveBtn.classList.toggle('is-bookmarked', isNowBookmarked);
+          const newTitle = isNowBookmarked ? 'Удалить из закладок' : 'Сохранить';
+          saveBtn.setAttribute('title', newTitle);
+          saveBtn.setAttribute('aria-label', newTitle);
+          const svgEl = saveBtn.querySelector('svg');
+          if (svgEl) {
+            svgEl.setAttribute('fill', isNowBookmarked ? 'currentColor' : 'none');
+          }
+        });
+      }
+
+      const shareBtn = el.querySelector('.btn-share-comment');
+      if (shareBtn) {
+        shareBtn.setAttribute('aria-haspopup', 'true');
+        shareBtn.setAttribute('aria-expanded', 'false');
+        shareBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const targetArtId = (treeContext && treeContext.articleId) || (currentArticle ? currentArticle.id : '');
+          openCommentSharePopover(shareBtn, targetArtId, comment.id);
+        });
+      }
+
+      const subscribeBtn = el.querySelector('.btn-subscribe-comment');
+      if (subscribeBtn) {
+        subscribeBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          handleSubscribeComment(subscribeBtn, comment.id);
+        });
+      }
+
+      const reportBtn = el.querySelector('.btn-report-comment');
+      if (reportBtn) {
+        reportBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          openCommentReportModal(comment.id, reportBtn);
+        });
+      }
     }
 
     // Children & Thread toggle / Drilldown continuation
@@ -1802,11 +2432,6 @@
 
         updateToggleContent(isExpanded);
         toggleRow.appendChild(toggleBtn);
-
-        const commentActions = el.querySelector('.comment-actions');
-        if (commentActions) {
-          toggleRow.appendChild(commentActions);
-        }
 
         el.appendChild(toggleRow);
 
@@ -1978,9 +2603,70 @@
         })
       : '';
 
+    const replyBtnHtml =
+      '<button type="button" class="btn-comment-action btn-reply-answer" title="Ответить" aria-label="Ответить">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<polyline points="9 17 4 12 9 7"></polyline>' +
+          '<path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>' +
+        '</svg>' +
+      '</button>';
+
+    const isSaved = isCommentBookmarked(comment.id);
+    const saveBtnHtml =
+      '<button type="button" class="btn-comment-action btn-save-answer' + (isSaved ? ' is-bookmarked' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(comment.id) + '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+        '</svg>' +
+      '</button>';
+
+    const shareBtnHtml =
+      '<button type="button" class="btn-comment-action btn-share-answer" title="Поделиться" aria-label="Поделиться" data-comment-id="' + escapeHtml(comment.id) + '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<circle cx="18" cy="5" r="3"></circle>' +
+          '<circle cx="6" cy="12" r="3"></circle>' +
+          '<circle cx="18" cy="19" r="3"></circle>' +
+          '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+          '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+        '</svg>' +
+      '</button>';
+
+    const isSubscribed = isCommentSubscribed(comment.id);
+    const subscribeBtnHtml =
+      '<button type="button" class="btn-comment-action btn-subscribe-answer' + (isSubscribed ? ' is-subscribed' : '') + '" title="' + (isSubscribed ? 'Отписаться от ответов' : 'Подписаться на ответы') + '" aria-label="' + (isSubscribed ? 'Отписаться от ответов' : 'Подписаться на ответы') + '" data-comment-id="' + escapeHtml(comment.id) + '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSubscribed ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>' +
+          '<path d="M13.73 21a2 2 0 0 1-3.46 0"></path>' +
+        '</svg>' +
+      '</button>';
+
+    let reportBtnHtml = '';
+    if (!isMyAnswer) {
+      const isReported = isCommentReported(comment.id);
+      reportBtnHtml =
+        '<button type="button" class="btn-comment-action btn-report-answer' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+            '<line x1="4" y1="22" x2="4" y2="15"></line>' +
+          '</svg>' +
+        '</button>';
+    }
+
     let editBtnHtml = '';
     if (isMyAnswer) {
-      editBtnHtml = '<button type="button" class="btn btn-secondary btn-sm btn-edit-answer">Редактировать</button>';
+      const isExpired = isCommentEditExpired(comment.createdAt || comment.created_at);
+      editBtnHtml = isExpired
+        ? '<button type="button" class="btn-comment-action btn-edit-answer is-disabled" title="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." aria-label="Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации." disabled>' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
+          '</button>'
+        : '<button type="button" class="btn-comment-action btn-edit-answer" title="Редактировать" aria-label="Редактировать">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
+          '</button>';
     }
 
     let replies = comment.comments;
@@ -2017,12 +2703,14 @@
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="comment-vote-row answer-vote-row">' +
+      '<div class="comment-vote-row answer-vote-row comment-action-row answer-actions">' +
         ansVoteCapsuleHtml +
-      '</div>' +
-      '<div class="answer-actions">' +
+        replyBtnHtml +
+        saveBtnHtml +
+        shareBtnHtml +
+        subscribeBtnHtml +
+        reportBtnHtml +
         editBtnHtml +
-        '<button type="button" class="btn btn-secondary btn-sm btn-reply-answer">Комментировать ответ</button>' +
       '</div>' +
       '<div class="answer-replies-container" style="' + (replies.length > 0 ? '' : 'display: none;') + '">' +
         '<div class="answer-replies-list"></div>' +
@@ -2128,7 +2816,11 @@
     const updatedWrap = el.querySelector('.answer-updated-wrap');
 
     if (editBtn && editWrap && contentWrap && actionsWrap) {
-      editBtn.addEventListener('click', function () {
+      editBtn.addEventListener('click', function (e) {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        if (editBtn.disabled || editBtn.classList.contains('is-disabled')) {
+          return;
+        }
         const conflictBox = editWrap.querySelector('.edit-conflict-box');
         if (conflictBox) conflictBox.remove();
         contentWrap.style.display = 'none';
@@ -2192,6 +2884,24 @@
             })
             .then(function (result) {
               saveEditBtn.disabled = false;
+              if (result.status === 403 || (result.data && result.data.code === 'EDIT_WINDOW_EXPIRED')) {
+                const errorMsg = (result.data && result.data.error) || 'Срок редактирования комментария истек (максимум 48 часов с момента публикации)';
+                showToast(errorMsg);
+                if (editBtn) {
+                  editBtn.disabled = true;
+                  editBtn.classList.add('is-disabled');
+                  editBtn.setAttribute('title', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                  editBtn.setAttribute('aria-label', 'Срок редактирования истек. Комментарий можно редактировать в течение 48 часов после публикации.');
+                }
+                if (cancelEditBtn) {
+                  cancelEditBtn.click();
+                } else {
+                  editWrap.style.display = 'none';
+                  contentWrap.style.display = 'block';
+                  actionsWrap.style.display = 'flex';
+                }
+                return;
+              }
               if (result.status === 409 || (result.data && result.data.code === 'CONCURRENCY_CONFLICT')) {
                 showConcurrencyConflictBox(editWrap, comment, result.data, editTextarea, editCharCount, null);
                 return;
@@ -2352,6 +3062,49 @@
       }
     }
 
+    const saveBtn = el.querySelector('.btn-save-answer');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const isNowBookmarked = toggleCommentBookmark(comment.id);
+        saveBtn.classList.toggle('is-bookmarked', isNowBookmarked);
+        const newTitle = isNowBookmarked ? 'Удалить из закладок' : 'Сохранить';
+        saveBtn.setAttribute('title', newTitle);
+        saveBtn.setAttribute('aria-label', newTitle);
+        const svgEl = saveBtn.querySelector('svg');
+        if (svgEl) {
+          svgEl.setAttribute('fill', isNowBookmarked ? 'currentColor' : 'none');
+        }
+      });
+    }
+
+    const shareBtn = el.querySelector('.btn-share-answer');
+    if (shareBtn) {
+      shareBtn.setAttribute('aria-haspopup', 'true');
+      shareBtn.setAttribute('aria-expanded', 'false');
+      shareBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCommentSharePopover(shareBtn, articleId, comment.id);
+      });
+    }
+
+    const subscribeBtn = el.querySelector('.btn-subscribe-answer');
+    if (subscribeBtn) {
+      subscribeBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        handleSubscribeComment(subscribeBtn, comment.id);
+      });
+    }
+
+    const reportBtn = el.querySelector('.btn-report-answer');
+    if (reportBtn) {
+      reportBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        openCommentReportModal(comment.id, reportBtn);
+      });
+    }
+
     return el;
   }
 
@@ -2389,7 +3142,12 @@
   }
 
   function handleDeepLink() {
-    const hash = window.location.hash;
+    let hash = window.location.hash;
+    const urlParams = new URLSearchParams(window.location.search);
+    const commentParam = urlParams.get('comment');
+    if (!hash && commentParam) {
+      hash = '#comm_' + commentParam;
+    }
     if (!hash) return;
     if (hash.startsWith('#comm_') || hash.startsWith('#comment-')) {
       let rawTargetId = hash.replace(/^#(comm_|comment-)/, '');

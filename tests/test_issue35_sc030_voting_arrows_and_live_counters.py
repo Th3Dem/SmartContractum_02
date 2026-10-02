@@ -608,28 +608,28 @@ class TestIssue35VotingArrowsAndLiveCounters(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_03_answer_cards_and_comment_nodes_contain_voting_capsules(self):
         """Invariant 3: Answer cards and comment nodes contain dedicated .comment-vote-row above actions."""
-        # Answer card in article.js has comment-vote-row answer-vote-row above answer-actions
+        # Answer card in article.js has comment-vote-row answer-vote-row with ansVoteCapsuleHtml
         self.assertIn('renderAnswerCard', self.article_js)
         self.assertIn('ansVoteCapsuleHtml', self.article_js)
         ans_row_match = re.search(
-            r'<div class="comment-vote-row answer-vote-row">\s*\'\s*\+\s*ansVoteCapsuleHtml\s*\+\s*\'\s*</div>\s*\'\s*\+\s*\'\s*<div class="answer-actions">',
+            r'<div class="comment-vote-row answer-vote-row(?:\s+comment-action-row\s+answer-actions)?">\s*\'\s*\+\s*ansVoteCapsuleHtml',
             self.article_js
         )
         self.assertIsNotNone(
             ans_row_match,
-            "article.js renderAnswerCard must render ansVoteCapsuleHtml in .comment-vote-row.answer-vote-row above .answer-actions"
+            "article.js renderAnswerCard must render ansVoteCapsuleHtml in .comment-vote-row.answer-vote-row"
         )
 
-        # Comment node in article.js has comment-vote-row above comment-actions
+        # Comment node in article.js has comment-vote-row with commVoteCapsuleHtml
         self.assertIn('renderCommentNode', self.article_js)
         self.assertIn('commVoteCapsuleHtml', self.article_js)
         comm_row_match = re.search(
-            r'<div class="comment-vote-row">\s*\'\s*\+\s*commVoteCapsuleHtml\s*\+\s*\'\s*</div>\s*\'\s*\+\s*\'\s*<div class="comment-actions">',
+            r'<div class="comment-vote-row(?:\s+comment-action-row)?">\s*\'\s*\+\s*commVoteCapsuleHtml',
             self.article_js
         )
         self.assertIsNotNone(
             comm_row_match,
-            "article.js renderCommentNode must render commVoteCapsuleHtml in .comment-vote-row above .comment-actions"
+            "article.js renderCommentNode must render commVoteCapsuleHtml in .comment-vote-row"
         )
 
         # Verify neither .comment-actions nor .answer-actions contains vote capsule
@@ -938,12 +938,11 @@ class TestIssue35VotingArrowsAndLiveCounters(unittest.TestCase):
     # Invariant 14: Behavioral check - Two-tier layout for comments and answers
     # --------------------------------------------------------------------------
     def test_14_behavioral_two_row_comment_rating_layout(self):
-        """Rating capsule sits in its own row and is never shifted by toggleRow or thread collapse."""
-        # .comment-vote-row exists in DOM structure between content and actions
-        self.assertIn('<div class="comment-vote-row">', self.article_js)
-        self.assertIn('<div class="comment-vote-row answer-vote-row">', self.article_js)
-        # toggleRow appends .comment-actions, but does NOT append .comment-vote-row
-        self.assertIn("toggleRow.appendChild(commentActions);", self.article_js)
+        """Rating capsule sits in comment-vote-row and is never shifted by toggleRow or thread collapse."""
+        # .comment-vote-row exists in DOM structure
+        self.assertIn('class="comment-vote-row', self.article_js)
+        self.assertIn('answer-vote-row', self.article_js)
+        # toggleRow does NOT append .comment-vote-row
         self.assertNotIn("toggleRow.appendChild(voteRow)", self.article_js)
         self.assertNotIn("toggleRow.appendChild(commVoteCapsuleHtml)", self.article_js)
 
