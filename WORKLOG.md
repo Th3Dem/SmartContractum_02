@@ -639,3 +639,4 @@
 [2026-10-03 01:40] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #90 (Task: issue-90-sc031-compact-collapsed-comment-composer)
 [2026-10-03 01:43] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный свернутый composer комментария (Task: issue-90-sc031-compact-collapsed-comment-composer)
 [2026-10-03 01:44] | git_bot | PR_CREATED | Открыт PR #103 для Issue #90 (Fixes #90), ветка feat/issue-90-sc031-compact-collapsed-comment-composer (Task: issue-90-sc031-compact-collapsed-comment-composer)
+[2026-10-03 01:46] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #103 готов к слиянию владельцем (Task: issue-90-sc031-compact-collapsed-comment-composer)
