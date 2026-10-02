@@ -594,3 +594,4 @@
 [2026-10-02 18:55] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #81 (Task: issue-81-sc031-simplify-article-top-hierarchy)
 [2026-10-02 19:07] | dev_bot | IMPLEMENTATION_COMPLETE | Упрощение верхней части публикации и визуальной иерархии (Task: issue-81-sc031-simplify-article-top-hierarchy)
 [2026-10-02 19:20] | git_bot | PR_CREATED | Открыт PR #94 для Issue #81 (Fixes #81), ветка feat/issue-81-sc031-simplify-article-top-hierarchy (Task: issue-81-sc031-simplify-article-top-hierarchy)
+[2026-10-02 19:24] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #94 готов к слиянию владельцем (Task: issue-81-sc031-simplify-article-top-hierarchy)
