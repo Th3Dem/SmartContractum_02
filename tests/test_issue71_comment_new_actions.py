@@ -614,12 +614,22 @@ class TestIssue71CommentNewActionsFrontend(unittest.TestCase):
             # Subscribe hover
             sub_hover = re.search(r'\.btn-comment-action\.btn-subscribe-comment:hover[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(sub_hover, f"Subscribe hover rule must exist in {source_name}")
-            self.assertIn("#38bdf8", sub_hover.group(1))
+            self.assertIn("#14b8a6", sub_hover.group(1))
 
             # Subscribe active .is-subscribed
             sub_active = re.search(r'\.btn-comment-action(?:\.btn-subscribe-comment)?\.is-subscribed[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(sub_active, f"Subscribe .is-subscribed rule must exist in {source_name}")
-            self.assertIn("#38bdf8", sub_active.group(1))
+            self.assertIn("#14b8a6", sub_active.group(1))
+
+            # Share hover
+            share_hover = re.search(r'\.btn-comment-action\.btn-share-comment:hover[^{]*\{([^}]+)\}', css_content)
+            self.assertIsNotNone(share_hover, f"Share hover rule must exist in {source_name}")
+            self.assertIn("#a855f7", share_hover.group(1))
+
+            # Edit hover
+            edit_hover = re.search(r'\.btn-comment-action\.btn-edit-comment:hover[^{]*\{([^}]+)\}', css_content)
+            self.assertIsNotNone(edit_hover, f"Edit hover rule must exist in {source_name}")
+            self.assertIn("#6366f1", edit_hover.group(1))
 
             # Report hover
             rep_hover = re.search(r'\.btn-comment-action\.btn-report-comment:hover[^{]*\{([^}]+)\}', css_content)
@@ -630,8 +640,8 @@ class TestIssue71CommentNewActionsFrontend(unittest.TestCase):
             rep_active = re.search(r'\.btn-comment-action(?:\.btn-report-comment)?\.is-reported[^{]*\{([^}]+)\}', css_content)
             self.assertIsNotNone(rep_active, f"Report .is-reported rule must exist in {source_name}")
             rep_block = rep_active.group(1)
-            self.assertIn("opacity: 0.5;", rep_block)
-            self.assertIn("cursor: default;", rep_block)
+            self.assertIn("#f97316", rep_block)
+            self.assertIn("cursor: pointer;", rep_block)
 
             # Report modal styling
             self.assertIn(".comment-report-modal-card", css_content)

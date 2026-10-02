@@ -2867,6 +2867,54 @@ button.author-name:focus-visible,
   stroke: #f59e0b;
 }
 
+/* Card Action Buttons: Share & Report */
+.btn-card-share,
+.btn-card-report {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.btn-card-share:hover,
+.btn-card-share:focus-visible {
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.08);
+  border-color: #a855f7;
+}
+
+.btn-card-report:hover,
+.btn-card-report:focus-visible {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+  border-color: #f97316;
+}
+
+.btn-card-report.is-reported {
+  color: #f97316;
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.12);
+  cursor: pointer;
+}
+
+.btn-card-report.is-reported svg {
+  fill: #f97316;
+  stroke: #f97316;
+}
+
 .card-read-more,
 .btn-read-more {
   display: inline-flex;

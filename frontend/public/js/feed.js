@@ -4126,12 +4126,296 @@
       });
   }
 
+  // --------------------------------------------------------------------------
+  // Article Share Popover & Article Report Modal Logic
+  // --------------------------------------------------------------------------
+  function isArticleReported(articleId) {
+    if (!articleId) return false;
+    if (window._reportedArticleIds && window._reportedArticleIds.has(articleId)) return true;
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
+      if (stored.includes(articleId)) {
+        window._reportedArticleIds = window._reportedArticleIds || new Set();
+        window._reportedArticleIds.add(articleId);
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function markArticleAsReported(articleId) {
+    if (!articleId) return;
+    window._reportedArticleIds = window._reportedArticleIds || new Set();
+    window._reportedArticleIds.add(articleId);
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
+      if (!stored.includes(articleId)) {
+        stored.push(articleId);
+        localStorage.setItem('sc_reported_articles', JSON.stringify(stored));
+      }
+    } catch (e) {}
+    const btns = document.querySelectorAll('.btn-card-report[data-id="' + articleId + '"]');
+    btns.forEach(function (btn) {
+      btn.classList.add('is-reported');
+      btn.setAttribute('title', 'Жалоба уже отправлена');
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', 'currentColor');
+      }
+    });
+  }
+
+  let activeFeedSharePopoverArticleId = null;
+  let activeFeedSharePopoverTrigger = null;
+
+  function isFeedSharePopoverOpen() {
+    const popover = document.getElementById('feedSharePopover');
+    return Boolean(popover && popover.style.display !== 'none');
+  }
+
+  function closeFeedSharePopover() {
+    const popover = document.getElementById('feedSharePopover');
+    if (popover) {
+      popover.style.display = 'none';
+    }
+    if (activeFeedSharePopoverTrigger) {
+      activeFeedSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+      activeFeedSharePopoverTrigger = null;
+    }
+    activeFeedSharePopoverArticleId = null;
+  }
+
+  function openArticleSharePopover(articleId, triggerBtn, item) {
+    const popover = document.getElementById('feedSharePopover');
+    if (!popover || !triggerBtn) return;
+
+    if (activeFeedSharePopoverArticleId === articleId && isFeedSharePopoverOpen()) {
+      closeFeedSharePopover();
+      return;
+    }
+
+    if (activeFeedSharePopoverTrigger && activeFeedSharePopoverTrigger !== triggerBtn) {
+      activeFeedSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    activeFeedSharePopoverArticleId = articleId;
+    activeFeedSharePopoverTrigger = triggerBtn;
+    triggerBtn.setAttribute('aria-haspopup', 'true');
+    triggerBtn.setAttribute('aria-expanded', 'true');
+
+    const origin = window.location.origin || '';
+    const permalink = origin + '/article.html?id=' + encodeURIComponent(articleId);
+    const title = (item && item.title) || document.title || 'SmartContractum';
+    const encodedUrl = encodeURIComponent(permalink);
+    const encodedText = encodeURIComponent(title);
+
+    const proto = 'https:' + '//';
+    const tgLink = popover.querySelector('[data-action="telegram"]');
+    if (tgLink) {
+      tgLink.href = proto + 't.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
+    }
+    const vkLink = popover.querySelector('[data-action="vk"]');
+    if (vkLink) {
+      vkLink.href = proto + 'vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
+    }
+    const okLink = popover.querySelector('[data-action="ok"]');
+    if (okLink) {
+      okLink.href = proto + 'connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
+    }
+
+    const copyBtn = popover.querySelector('[data-action="copy"]');
+    if (copyBtn) {
+      copyBtn.onclick = function (e) {
+        e.preventDefault();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(permalink)
+            .then(function () {
+              showToast('Ссылка скопирована');
+            })
+            .catch(function () {
+              fallbackCopyArticleLink(permalink);
+            });
+        } else {
+          fallbackCopyArticleLink(permalink);
+        }
+        closeFeedSharePopover();
+      };
+    }
+
+    const socialLinks = popover.querySelectorAll('a.comment-share-item');
+    socialLinks.forEach(function (link) {
+      link.onclick = function () {
+        setTimeout(closeFeedSharePopover, 100);
+      };
+    });
+
+    const rect = triggerBtn.getBoundingClientRect();
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const popoverWidth = 190;
+    let top = rect.bottom + scrollY + 4;
+    let left = rect.left + scrollX;
+
+    if (left + popoverWidth > window.innerWidth - 10) {
+      left = Math.max(10, window.innerWidth - popoverWidth - 10);
+    }
+
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+    popover.style.display = 'flex';
+  }
+
+  function fallbackCopyArticleLink(text) {
+    const input = document.createElement('input');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    try {
+      document.execCommand('copy');
+      showToast('Ссылка скопирована');
+    } catch (e) {
+      showToast('Не удалось скопировать ссылку');
+    }
+    document.body.removeChild(input);
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!isFeedSharePopoverOpen()) return;
+    const popover = document.getElementById('feedSharePopover');
+    if (popover && popover.contains(e.target)) return;
+    if (e.target.closest('.btn-card-share')) return;
+    closeFeedSharePopover();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isFeedSharePopoverOpen()) {
+      closeFeedSharePopover();
+      if (activeFeedSharePopoverTrigger) {
+        activeFeedSharePopoverTrigger.focus();
+      }
+    }
+  });
+
+  function openArticleReportModal(articleId, triggerBtn, item) {
+    if (isArticleReported(articleId)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+    if (!currentUser) {
+      showToast('Войдите, чтобы отправить жалобу');
+      return;
+    }
+    const modal = document.getElementById('articleReportModal');
+    if (!modal) return;
+
+    modal._activeReportBtn = triggerBtn;
+    const idInput = modal.querySelector('#reportArticleId');
+    if (idInput) idInput.value = articleId;
+    const defaultRadio = modal.querySelector('input[name="articleReportReason"][value="spam"]');
+    if (defaultRadio) defaultRadio.checked = true;
+    const detailsEl = modal.querySelector('#articleReportDetails');
+    if (detailsEl) detailsEl.value = '';
+
+    modal.style.display = 'flex';
+  }
+
+  function initArticleReportModalEvents() {
+    const modal = document.getElementById('articleReportModal');
+    if (!modal || modal._eventsBound) return;
+    modal._eventsBound = true;
+
+    function closeModal() {
+      modal.style.display = 'none';
+      modal._activeReportBtn = null;
+    }
+
+    const closeBtn = modal.querySelector('#btnCloseArticleReportModal');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    const cancelBtn = modal.querySelector('#btnCancelArticleReport');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.style.display === 'flex') {
+        closeModal();
+      }
+    });
+
+    const form = modal.querySelector('#articleReportForm');
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const articleId = (modal.querySelector('#reportArticleId') || {}).value;
+        const selectedReasonRadio = modal.querySelector('input[name="articleReportReason"]:checked');
+        const reason = selectedReasonRadio ? selectedReasonRadio.value : 'spam';
+        const detailsEl = modal.querySelector('#articleReportDetails');
+        const details = detailsEl ? detailsEl.value.trim() : '';
+
+        if (!articleId) {
+          closeModal();
+          return;
+        }
+
+        const submitBtn = modal.querySelector('#btnSubmitArticleReport');
+        if (submitBtn) submitBtn.disabled = true;
+
+        fetch('/api/articles/' + encodeURIComponent(articleId) + '/report', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reason: reason,
+            details: details
+          })
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { status: res.status, data: data };
+            });
+          })
+          .then(function (result) {
+            if (submitBtn) submitBtn.disabled = false;
+            if (result.status === 200 && result.data && result.data.success) {
+              closeModal();
+              showToast('Жалоба отправлена');
+              markArticleAsReported(articleId);
+            } else if (result.status === 409) {
+              closeModal();
+              showToast('Вы уже отправили жалобу на этот материал');
+              markArticleAsReported(articleId);
+            } else if (result.status === 403) {
+              closeModal();
+              showToast('Нельзя пожаловаться на собственный материал');
+            } else if (result.status === 401) {
+              closeModal();
+              showToast('Войдите, чтобы отправить жалобу');
+            } else {
+              showToast((result.data && result.data.error) || 'Ошибка при отправке жалобы');
+            }
+          })
+          .catch(function () {
+            if (submitBtn) submitBtn.disabled = false;
+            showToast('Ошибка сети при отправке жалобы');
+          });
+      });
+    }
+  }
+
   function createCardElement(item) {
     if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
+      initArticleReportModalEvents();
       return window.SmartContractumCard.createCardElement(item, {
         isBookmarked: isBookmarked,
+        isReported: isArticleReported,
         currentUserId: currentUser ? currentUser.id : '',
         onLikeToggle: toggleArticleLike,
+        onShareClick: openArticleSharePopover,
+        onReportClick: openArticleReportModal,
         onBookmarkToggle: function (id, btn) {
           const active = toggleBookmark(id);
           btn.classList.toggle('is-bookmarked', active);

@@ -429,6 +429,13 @@
     if (!commentId) return;
     window._reportedCommentIds = window._reportedCommentIds || new Set();
     window._reportedCommentIds.add(commentId);
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_comment_reports') || '[]');
+      if (!stored.includes(commentId)) {
+        stored.push(commentId);
+        localStorage.setItem('sc_comment_reports', JSON.stringify(stored));
+      }
+    } catch (e) {}
     const btns = document.querySelectorAll(
       '.btn-report-comment[data-comment-id="' + commentId + '"], ' +
       '.btn-report-answer[data-comment-id="' + commentId + '"]'
@@ -436,12 +443,26 @@
     btns.forEach(function (btn) {
       btn.classList.add('is-reported');
       btn.setAttribute('title', 'Жалоба уже отправлена');
-      btn.disabled = true;
+      btn.disabled = false;
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', 'currentColor');
+      }
     });
   }
 
   function isCommentReported(commentId) {
-    return Boolean(window._reportedCommentIds && window._reportedCommentIds.has(commentId));
+    if (!commentId) return false;
+    if (window._reportedCommentIds && window._reportedCommentIds.has(commentId)) return true;
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_comment_reports') || '[]');
+      if (stored.includes(commentId)) {
+        window._reportedCommentIds = window._reportedCommentIds || new Set();
+        window._reportedCommentIds.add(commentId);
+        return true;
+      }
+    } catch (e) {}
+    return false;
   }
 
   function getOrInitCommentReportModal() {
@@ -594,6 +615,10 @@
     if (!currentUser) {
       openAuthModal();
       showToast('Войдите, чтобы отправить жалобу');
+      return;
+    }
+    if (isCommentReported(commentId)) {
+      showToast('Жалоба уже отправлена');
       return;
     }
     const modal = getOrInitCommentReportModal();
@@ -1610,8 +1635,8 @@
       if (!isMyComment) {
         const isReported = isCommentReported(comment.id);
         reportBtnHtml =
-          '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '"' + (isReported ? ' disabled' : '') + '>' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
               '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
               '<line x1="4" y1="22" x2="4" y2="15"></line>' +
             '</svg>' +
@@ -2481,8 +2506,8 @@
     if (!isMyAnswer) {
       const isReported = isCommentReported(comment.id);
       reportBtnHtml =
-        '<button type="button" class="btn-comment-action btn-report-answer' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '"' + (isReported ? ' disabled' : '') + '>' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<button type="button" class="btn-comment-action btn-report-answer' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
             '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
             '<line x1="4" y1="22" x2="4" y2="15"></line>' +
           '</svg>' +

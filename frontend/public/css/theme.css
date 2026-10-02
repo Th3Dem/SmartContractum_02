@@ -1093,14 +1093,19 @@ button.author-name:focus-visible,
 .btn-comment-action.btn-reply-comment:hover,
 .btn-comment-action.btn-reply-comment:focus,
 .btn-comment-action.btn-reply-answer:hover,
-.btn-comment-action.btn-reply-answer:focus,
+.btn-comment-action.btn-reply-answer:focus {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+  background: var(--accent-subtle, rgba(56, 189, 248, 0.08));
+}
+
 .btn-comment-action.btn-edit-comment:hover,
 .btn-comment-action.btn-edit-comment:focus,
 .btn-comment-action.btn-edit-answer:hover,
 .btn-comment-action.btn-edit-answer:focus {
-  border-color: var(--accent-color, #38bdf8);
-  color: var(--accent-color, #38bdf8);
-  background: var(--accent-subtle, rgba(56, 189, 248, 0.08));
+  border-color: #6366f1;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .btn-comment-action.btn-delete-comment:hover,
@@ -1130,6 +1135,7 @@ button.author-name:focus-visible,
 .btn-comment-action.btn-save-answer.is-bookmarked {
   border-color: #f59e0b;
   color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
   fill: #f59e0b;
 }
 
@@ -1145,9 +1151,9 @@ button.author-name:focus-visible,
 .btn-comment-action.btn-share-comment:focus,
 .btn-comment-action.btn-share-answer:hover,
 .btn-comment-action.btn-share-answer:focus {
-  border-color: var(--accent-color, #38bdf8);
-  color: var(--accent-color, #38bdf8);
-  background: var(--accent-subtle, rgba(56, 189, 248, 0.08));
+  border-color: #a855f7;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.08);
 }
 
 /* Comment Action Buttons: Subscribe (Bell) */
@@ -1155,24 +1161,25 @@ button.author-name:focus-visible,
 .btn-comment-action.btn-subscribe-comment:focus,
 .btn-comment-action.btn-subscribe-answer:hover,
 .btn-comment-action.btn-subscribe-answer:focus {
-  border-color: #38bdf8;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.08);
+  border-color: #14b8a6;
+  color: #14b8a6;
+  background: rgba(20, 184, 166, 0.08);
 }
 
 .btn-comment-action.is-subscribed,
 .btn-comment-action.btn-subscribe-comment.is-subscribed,
 .btn-comment-action.btn-subscribe-answer.is-subscribed {
-  border-color: #38bdf8;
-  color: #38bdf8;
-  fill: #38bdf8;
+  border-color: #14b8a6;
+  color: #14b8a6;
+  background: rgba(20, 184, 166, 0.12);
+  fill: #14b8a6;
 }
 
 .btn-comment-action.is-subscribed svg,
 .btn-comment-action.btn-subscribe-comment.is-subscribed svg,
 .btn-comment-action.btn-subscribe-answer.is-subscribed svg {
-  fill: #38bdf8;
-  stroke: #38bdf8;
+  fill: #14b8a6;
+  stroke: #14b8a6;
 }
 
 /* Comment Action Buttons: Report (Flag) */
@@ -1188,9 +1195,18 @@ button.author-name:focus-visible,
 .btn-comment-action.is-reported,
 .btn-comment-action.btn-report-comment.is-reported,
 .btn-comment-action.btn-report-answer.is-reported {
-  opacity: 0.5;
-  cursor: default;
-  pointer-events: none;
+  border-color: #f97316;
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.12);
+  cursor: pointer;
+  opacity: 1;
+}
+
+.btn-comment-action.is-reported svg,
+.btn-comment-action.btn-report-comment.is-reported svg,
+.btn-comment-action.btn-report-answer.is-reported svg {
+  fill: #f97316;
+  stroke: #f97316;
 }
 
 /* Comment Report Modal Styles */
