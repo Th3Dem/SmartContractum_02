@@ -1186,27 +1186,33 @@
           })
         : '';
 
-      let editBtnHtml = '';
-      if (isMyComment) {
-        editBtnHtml =
-          '<button type="button" class="btn-action-text btn-edit-comment">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-              '<path d="M12 20h9"></path>' +
-              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
-            '</svg>' +
-            '<span>Редактировать</span>' +
-          '</button>';
-      }
+      const replyBtnHtml =
+        '<button type="button" class="btn-comment-action btn-reply-comment" title="Ответить" aria-label="Ответить">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<polyline points="9 17 4 12 9 7"></polyline>' +
+            '<path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>' +
+          '</svg>' +
+        '</button>';
 
       let deleteBtnHtml = '';
       if (isMyComment && !isAnswer && !comment.isDeleted) {
         deleteBtnHtml =
-          '<button type="button" class="btn-action-text btn-delete-comment" title="Удалить комментарий">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<button type="button" class="btn-comment-action btn-delete-comment" title="Удалить" aria-label="Удалить">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
               '<polyline points="3 6 5 6 21 6"></polyline>' +
               '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>' +
             '</svg>' +
-            '<span>Удалить</span>' +
+          '</button>';
+      }
+
+      let editBtnHtml = '';
+      if (isMyComment) {
+        editBtnHtml =
+          '<button type="button" class="btn-comment-action btn-edit-comment" title="Редактировать" aria-label="Редактировать">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 20h9"></path>' +
+              '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+            '</svg>' +
           '</button>';
       }
 
@@ -1287,18 +1293,11 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="comment-vote-row">' +
+        '<div class="comment-vote-row comment-action-row">' +
           commVoteCapsuleHtml +
-        '</div>' +
-        '<div class="comment-actions">' +
-          editBtnHtml +
+          replyBtnHtml +
           deleteBtnHtml +
-          '<button type="button" class="btn-action-text btn-reply-comment">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-              '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
-            '</svg>' +
-            '<span>Ответить</span>' +
-          '</button>' +
+          editBtnHtml +
         '</div>' +
         '<div class="comment-delete-confirm" style="display: none;" role="alertdialog" aria-label="Подтверждение удаления комментария">' +
           '<span class="comment-delete-confirm-text">Удалить этот комментарий?</span>' +
@@ -1803,11 +1802,6 @@
         updateToggleContent(isExpanded);
         toggleRow.appendChild(toggleBtn);
 
-        const commentActions = el.querySelector('.comment-actions');
-        if (commentActions) {
-          toggleRow.appendChild(commentActions);
-        }
-
         el.appendChild(toggleRow);
 
         const deleteConfirm = el.querySelector('.comment-delete-confirm');
@@ -1978,9 +1972,23 @@
         })
       : '';
 
+    const replyBtnHtml =
+      '<button type="button" class="btn-comment-action btn-reply-answer" title="Ответить" aria-label="Ответить">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<polyline points="9 17 4 12 9 7"></polyline>' +
+          '<path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>' +
+        '</svg>' +
+      '</button>';
+
     let editBtnHtml = '';
     if (isMyAnswer) {
-      editBtnHtml = '<button type="button" class="btn btn-secondary btn-sm btn-edit-answer">Редактировать</button>';
+      editBtnHtml =
+        '<button type="button" class="btn-comment-action btn-edit-answer" title="Редактировать" aria-label="Редактировать">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M12 20h9"></path>' +
+            '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
+          '</svg>' +
+        '</button>';
     }
 
     let replies = comment.comments;
@@ -2017,12 +2025,10 @@
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="comment-vote-row answer-vote-row">' +
+      '<div class="comment-vote-row answer-vote-row comment-action-row answer-actions">' +
         ansVoteCapsuleHtml +
-      '</div>' +
-      '<div class="answer-actions">' +
+        replyBtnHtml +
         editBtnHtml +
-        '<button type="button" class="btn btn-secondary btn-sm btn-reply-answer">Комментировать ответ</button>' +
       '</div>' +
       '<div class="answer-replies-container" style="' + (replies.length > 0 ? '' : 'display: none;') + '">' +
         '<div class="answer-replies-list"></div>' +

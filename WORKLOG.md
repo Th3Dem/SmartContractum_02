@@ -556,3 +556,5 @@
 [2026-10-02 10:12] | dev_bot | IMPLEMENTATION_COMPLETE | Полноценная система черновиков, autosave и модальное окно для Question Editor (Task: issue-67-sc029-question-drafts-system)
 [2026-10-02 10:13] | git_bot | PR_UPDATED | Оформлен и обновлен PR #69 для Issue #67: Полноценная система черновиков Question Editor (Task: issue-67-sc029-question-drafts-system)
 [2026-10-02 11:38] | pm_bot | TASK_INIT | Старт задачи Issue #70 (SC-030): Компактная панель действий комментария в одном ряду с рейтингом (Task: issue-70-sc030-comment-actions-bar)
+[2026-10-02 11:49] | pm_bot | DEV_ASSIGN | Назначение реализации Issue #70 (SC-030) на dev_bot (Task: issue-70-sc030-comment-actions-bar)
+[2026-10-02 12:17] | dev_bot | IMPLEMENTATION_COMPLETE | Компактная панель действий комментариев и ответов в одном ряду с рейтингом (Task: issue-70-sc030-comment-actions-bar)

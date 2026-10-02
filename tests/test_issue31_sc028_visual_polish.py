@@ -119,8 +119,9 @@ class TestIssue31VisualPolish(unittest.TestCase):
         self.assertIsNotNone(stem_match, ".comment-toggle-stem-upper block not found")
         self.assertIn("left: 15px;", stem_match.group(1))
 
-        # Actions row co-located in toggleRow in JS to prevent shift with long text or forms
-        self.assertIn("toggleRow.appendChild(commentActions);", self.article_js)
+        # In Issue #70 (SC-030), comment actions are unified in .comment-action-row with rating capsule,
+        # and toggleRow strictly contains toggleBtn without embedding action buttons.
+        self.assertIn("toggleRow.appendChild(toggleBtn);", self.article_js)
         self.assertIn("toggleRow.insertAdjacentElement('afterend', replyWrap);", self.article_js)
 
     def test_05_zero_emojis_and_no_em_dashes(self) -> None:

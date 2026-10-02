@@ -1824,12 +1824,66 @@ body,
   transition: box-shadow var(--transition-fast);
 }
 
-.comment-actions {
+.comment-vote-row,
+.comment-action-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 6px;
+  gap: 6px;
   flex-wrap: wrap;
+  margin: 4px 0 3px 0;
+  width: 100%;
+}
+
+.btn-comment-action {
+  height: 25px;
+  width: 25px;
+  min-width: 25px;
+  min-height: 25px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs, 4px);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.btn-comment-action svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  stroke-width: 2px;
+}
+
+.btn-comment-action.btn-reply-comment:hover,
+.btn-comment-action.btn-reply-comment:focus,
+.btn-comment-action.btn-reply-answer:hover,
+.btn-comment-action.btn-reply-answer:focus,
+.btn-comment-action.btn-edit-comment:hover,
+.btn-comment-action.btn-edit-comment:focus,
+.btn-comment-action.btn-edit-answer:hover,
+.btn-comment-action.btn-edit-answer:focus {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+  background: var(--accent-subtle, rgba(56, 189, 248, 0.08));
+}
+
+.btn-comment-action.btn-delete-comment:hover,
+.btn-comment-action.btn-delete-comment:focus,
+.btn-action-text.btn-delete-comment:hover {
+  border-color: var(--error-color, #ef4444);
+  color: var(--error-color, #ef4444);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.btn-comment-action:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
 }
 
 .btn-action-text {
@@ -1864,11 +1918,6 @@ body,
 .btn-action-text:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
-}
-
-.btn-action-text.btn-delete-comment:hover {
-  color: var(--danger-color, #ef4444);
-  background-color: var(--danger-bg, rgba(239, 68, 68, 0.08));
 }
 
 .comment-delete-confirm {
