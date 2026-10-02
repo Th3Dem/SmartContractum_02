@@ -573,4 +573,7 @@
 [2026-10-02 14:18] | pm_bot | DEV_ASSIGN | Назначение реализации backend на py_bot и frontend на dev_bot для Issue #73 (Task: issue-73-sc030-comment-edit-window)
 [2026-10-02 14:30] | dev_bot | IMPLEMENTATION_COMPLETE | Ограничение времени редактирования 48 часами на frontend и backend (Task: issue-73-sc030-comment-edit-window)
 [2026-10-02 14:34] | git_bot | PR_CREATED | Открыт PR #78 для Issue #73 (Fixes #73), ветка feat/issue-73-sc030-comment-edit-window (Task: issue-73-sc030-comment-edit-window)
+[2026-10-02 14:36] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #78 готов к слиянию владельцем (Task: issue-73-sc030-comment-edit-window)
+[2026-10-02 14:40] | pm_bot | TASK_INIT | Старт задачи Issue #74: Отключение realtime таймера и статичный расчет relative timestamp комментариев (Task: issue-74-sc030-comment-static-relative-time)
+[2026-10-02 14:40] | pm_bot | DEV_ASSIGN | Назначение реализации Issue #74 на dev_bot (Task: issue-74-sc030-comment-static-relative-time)
 
