@@ -205,11 +205,11 @@
     if (idx !== -1) {
       bookmarks.splice(idx, 1);
       bookmarked = false;
-      showToast('Статья удалена из закладок');
+      showToast('Публикация удалена из сохраненного');
     } else {
       bookmarks.push(id);
       bookmarked = true;
-      showToast('Статья сохранена в закладки');
+      showToast('Публикация сохранена');
     }
     try {
       localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
@@ -229,12 +229,14 @@
     btns.forEach(function (btn) {
       if (!btn) return;
       btn.classList.toggle('is-bookmarked', bookmarked);
+      btn.classList.toggle('is-saved', bookmarked);
       btn.setAttribute('aria-pressed', bookmarked ? 'true' : 'false');
       const label = btn.querySelector('.bookmark-text') || btn.querySelector('span');
       if (label) {
-        label.textContent = bookmarked ? 'В закладках' : 'В закладки';
+        label.textContent = bookmarked ? 'Сохранено' : 'Сохранить';
       }
-      btn.title = bookmarked ? 'Удалить из закладок' : 'Сохранить в закладки';
+      btn.title = bookmarked ? 'Сохранено' : 'Сохранить';
+      btn.setAttribute('aria-label', bookmarked ? 'Удалить из сохраненного' : 'Сохранить публикацию');
     });
   }
 
@@ -4962,5 +4964,9 @@
     window.ArticleReader.preventDuplicateH1InBody = preventDuplicateH1InBody;
     window.ArticleReader.normalizeHeading = normalizeHeading;
     window.ArticleReader.buildTableOfContents = buildTableOfContents;
+    window.ArticleReader.toggleBookmark = toggleBookmark;
+    window.ArticleReader.syncBookmarkButtons = syncBookmarkButtons;
+    window.ArticleReader.isBookmarked = isBookmarked;
+    window.ArticleReader.getBookmarks = getBookmarks;
   }
 })();

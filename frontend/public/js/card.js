@@ -13,7 +13,7 @@
  *   4. Полноширинная обложка (100% внутренней ширины, пропорции 780:350 / 78:35)
  *   5. Краткое описание (clamped до 2 строк)
  *   6. Сервисная строка (дата публикации, время чтения, формат публикации)
- *   7. Футер (лайк, рейтинг капсула, комментарии / ответы, закладка, читать далее)
+ *   7. Футер (лайк, рейтинг капсула, комментарии / ответы, сохранение публикации, читать далее)
  * - Чистоту обложки: на обложку НЕ накладываются никакие элементы сайта.
  * - Состояния: 0px при отсутствии обложки или ошибке, шиммер при загрузке, 100% ширина при показе.
  */
@@ -299,18 +299,20 @@
         '</a>';
     }
 
-    const bookmarkTooltip = isBookmarked ? 'Убрать из сохраненного' : 'Сохранить';
+    const bookmarkTooltip = isBookmarked ? 'Сохранено' : 'Сохранить';
+    const bookmarkAriaLabel = isBookmarked ? 'Удалить из сохраненного' : 'Сохранить публикацию';
     let bookmarkHtml = '';
     if (isPreview) {
       bookmarkHtml =
-        '<button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить" aria-label="Сохранить" disabled>' +
+        '<button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить" aria-label="Сохранить публикацию" disabled>' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
         '</button>';
     } else {
+      const activeClasses = isBookmarked ? 'is-bookmarked is-saved' : '';
       bookmarkHtml =
-        '<button type="button" class="btn-card-action btn-card-bookmark ' + (isBookmarked ? 'is-bookmarked' : '') + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkTooltip + '">' +
+        '<button type="button" class="btn-card-action btn-card-bookmark ' + activeClasses + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkAriaLabel + '">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="' + (isBookmarked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
@@ -460,7 +462,7 @@
     const isPreview = Boolean(options.isPreview);
     const isBookmarked = typeof options.isBookmarked === 'function'
       ? options.isBookmarked(item.id)
-      : Boolean(options.isBookmarked);
+      : (options.isBookmarked !== undefined ? Boolean(options.isBookmarked) : isCardBookmarked(item.id));
 
     const card = document.createElement('article');
     card.className = 'feed-card' + (isPreview ? ' pub-feed-card is-preview-card' : '');
@@ -525,6 +527,8 @@
           e.stopPropagation();
           if (typeof options.onBookmarkToggle === 'function') {
             options.onBookmarkToggle(item.id, bookmarkBtn, item);
+          } else {
+            toggleCardBookmark(item.id, bookmarkBtn);
           }
         });
       }
@@ -554,6 +558,84 @@
     }
 
     return card;
+  }
+
+  // --------------------------------------------------------------------------
+  // Bookmarks Management & Helpers (sc_bookmarks)
+  // --------------------------------------------------------------------------
+  function getStoredBookmarks() {
+    try {
+      const data = localStorage.getItem('sc_bookmarks');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function isCardBookmarked(id) {
+    if (!id) return false;
+    return getStoredBookmarks().indexOf(id) !== -1;
+  }
+
+  function updateBookmarkButtonState(btn, isBookmarked) {
+    if (!btn) return;
+    btn.classList.toggle('is-bookmarked', Boolean(isBookmarked));
+    btn.classList.toggle('is-saved', Boolean(isBookmarked));
+    const title = isBookmarked ? 'Сохранено' : 'Сохранить';
+    const ariaLabel = isBookmarked ? 'Удалить из сохраненного' : 'Сохранить публикацию';
+    btn.title = title;
+    btn.setAttribute('aria-label', ariaLabel);
+    const svg = btn.querySelector('svg');
+    if (svg) {
+      svg.setAttribute('fill', isBookmarked ? 'currentColor' : 'none');
+    }
+  }
+
+  function showCardToast(message) {
+    if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+      window.showToast(message);
+      return;
+    }
+    let toast = document.getElementById('cardToast') || document.getElementById('feedToast') || document.getElementById('articleToast');
+    if (!toast && typeof document !== 'undefined') {
+      toast = document.createElement('div');
+      toast.id = 'cardToast';
+      toast.className = 'feed-toast';
+      document.body.appendChild(toast);
+    }
+    if (toast) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(function () {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+  }
+
+  function toggleCardBookmark(id, btn) {
+    if (!id) return false;
+    const bookmarks = getStoredBookmarks();
+    const idx = bookmarks.indexOf(id);
+    let bookmarked = false;
+    if (idx !== -1) {
+      bookmarks.splice(idx, 1);
+      bookmarked = false;
+      showCardToast('Публикация удалена из сохраненного');
+    } else {
+      bookmarks.push(id);
+      bookmarked = true;
+      showCardToast('Публикация сохранена');
+    }
+    try {
+      localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
+    } catch (e) {}
+
+    if (btn) {
+      updateBookmarkButtonState(btn, bookmarked);
+    }
+    return bookmarked;
   }
 
   function createAvatarEl(authorData, options) {
@@ -601,7 +683,12 @@
     renderVoteCapsuleHtml: renderVoteCapsuleHtml,
     renderCardInnerHtml: renderCardInnerHtml,
     createCardElement: createCardElement,
-    createAvatarEl: createAvatarEl
+    createAvatarEl: createAvatarEl,
+    getStoredBookmarks: getStoredBookmarks,
+    isCardBookmarked: isCardBookmarked,
+    updateBookmarkButtonState: updateBookmarkButtonState,
+    toggleCardBookmark: toggleCardBookmark,
+    showCardToast: showCardToast
   };
 
 })(window);

@@ -2862,7 +2862,18 @@ button.author-name:focus-visible,
   background: transparent;
 }
 
+.btn-card-bookmark.is-saved {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: transparent;
+}
+
 .btn-card-bookmark.is-bookmarked svg {
+  fill: #f59e0b;
+  stroke: #f59e0b;
+}
+
+.btn-card-bookmark.is-saved svg {
   fill: #f59e0b;
   stroke: #f59e0b;
 }
