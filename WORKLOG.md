@@ -645,3 +645,9 @@
 [2026-10-03 01:48] | dev_bot | IMPLEMENTATION_COMPLETE | Тонкий индикатор прогресса чтения публикации под sticky шапкой (Task: issue-91-sc031-reading-progress-indicator)
 [2026-10-03 01:49] | git_bot | PR_CREATED | Открыт PR #104 для Issue #91 (Fixes #91), ветка feat/issue-91-sc031-reading-progress-indicator (Task: issue-91-sc031-reading-progress-indicator)
 [2026-10-03 01:51] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #104 готов к слиянию владельцем (Task: issue-91-sc031-reading-progress-indicator)
+[2026-10-03 01:52] | pm_bot | TASK_INIT | Старт задачи Issue #92: Рекомендательный блок Еще по теме в конце публикации (Task: issue-92-sc031-recommended-articles-footer)
+[2026-10-03 01:52] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #92 (Task: issue-92-sc031-recommended-articles-footer)
+[2026-10-03 01:55] | dev_bot | IMPLEMENTATION_COMPLETE | Рекомендательный блок Еще по теме в конце публикации (Task: issue-92-sc031-recommended-articles-footer)
+[2026-10-03 01:55] | git_bot | PR_CREATED | Открыт PR #105 для Issue #92 (Fixes #92), ветка feat/issue-92-sc031-recommended-articles-footer (Task: issue-92-sc031-recommended-articles-footer)
+[2026-10-03 01:57] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #105 готов к слиянию владельцем (Task: issue-92-sc031-recommended-articles-footer)
+
