@@ -644,3 +644,4 @@
 [2026-10-03 01:47] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #91 (Task: issue-91-sc031-reading-progress-indicator)
 [2026-10-03 01:48] | dev_bot | IMPLEMENTATION_COMPLETE | Тонкий индикатор прогресса чтения публикации под sticky шапкой (Task: issue-91-sc031-reading-progress-indicator)
 [2026-10-03 01:49] | git_bot | PR_CREATED | Открыт PR #104 для Issue #91 (Fixes #91), ветка feat/issue-91-sc031-reading-progress-indicator (Task: issue-91-sc031-reading-progress-indicator)
+[2026-10-03 01:51] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #104 готов к слиянию владельцем (Task: issue-91-sc031-reading-progress-indicator)
