@@ -19,6 +19,7 @@
     currentUser: null,
     tags: [],
     quill: null,
+    draftsManager: null,
     autosaveTimer: null,
     isSubmitting: false
   };
@@ -324,6 +325,32 @@
     // Enable drag & drop and paste image support
     bindEditorMediaEvents(quill);
 
+    // Initialize DraftsManager with Question Editor settings
+    const titleInput = document.getElementById('questionTitleInput') || document.getElementById('question-title');
+    if (window.DraftsManager) {
+      state.draftsManager = new window.DraftsManager(quill, titleInput, {
+        materialType: 'question',
+        activeDraftKey: 'ag_active_question_draft_id',
+        getTags: getTagsArray,
+        tagsGetter: getTagsArray,
+        setTags: setTagsArray,
+        tagsSetter: setTagsArray,
+        onDraftLoaded: function () {
+          updateTitleCounter();
+          updateSubmitReadiness();
+        },
+        onDraftReset: function () {
+          setTagsArray([]);
+          updateTitleCounter();
+          updateSubmitReadiness();
+        },
+        onDraftSaved: function () {
+          updateSubmitReadiness();
+        },
+        showToast: showToast
+      });
+    }
+
     return quill;
   }
 
@@ -526,6 +553,16 @@
     return true;
   }
 
+  function getTagsArray() {
+    return state.tags.slice();
+  }
+
+  function setTagsArray(tags) {
+    state.tags = Array.isArray(tags) ? tags.slice(0, MAX_TAGS) : [];
+    renderTags();
+    updateSubmitReadiness();
+  }
+
   function addTagFromInput() {
     const input = document.getElementById('questionTagInput');
     if (!input) return;
@@ -534,6 +571,7 @@
       if (addTag(val)) {
         input.value = '';
         renderTags();
+        updateSubmitReadiness();
         triggerAutosave();
       }
     }
@@ -544,6 +582,7 @@
       return t.toLowerCase() !== tagToRemove.toLowerCase();
     });
     renderTags();
+    updateSubmitReadiness();
     triggerAutosave();
     clearFieldError('questionTags');
   }
@@ -681,6 +720,10 @@
      Draft Autosave & Restore
      ========================================================================== */
   function updateAutosaveStatus(status, text) {
+    if (state.draftsManager && typeof state.draftsManager.setStatus === 'function') {
+      state.draftsManager.setStatus(status);
+    }
+
     const statusEl = document.getElementById('save-status');
     const textEl = document.getElementById('save-status-text');
 
@@ -703,7 +746,7 @@
       } else if (status === 'saving') {
         textEl.textContent = 'Сохранение...';
       } else if (status === 'unsaved') {
-        textEl.textContent = 'Несохраненные изменения';
+        textEl.textContent = 'Есть изменения';
       } else if (status === 'error') {
         textEl.textContent = 'Ошибка сохранения';
       } else {
@@ -713,6 +756,10 @@
   }
 
   function updateDraftsBadge() {
+    if (state.draftsManager && typeof state.draftsManager.updateBadge === 'function') {
+      return state.draftsManager.updateBadge();
+    }
+
     const badge = document.getElementById('drafts-badge');
     if (!badge) return;
     try {
@@ -769,14 +816,22 @@
   }
 
   function triggerAutosave() {
-    updateAutosaveStatus('saving', 'Сохранение...');
-    if (state.autosaveTimer) {
-      clearTimeout(state.autosaveTimer);
+    if (state.draftsManager && typeof state.draftsManager.triggerAutosave === 'function') {
+      state.draftsManager.triggerAutosave();
+    } else {
+      updateAutosaveStatus('saving', 'Сохранение...');
+      if (state.autosaveTimer) {
+        clearTimeout(state.autosaveTimer);
+      }
+      state.autosaveTimer = setTimeout(saveDraft, 500);
     }
-    state.autosaveTimer = setTimeout(saveDraft, 500);
   }
 
   function saveDraft() {
+    if (state.draftsManager && typeof state.draftsManager.saveCurrent === 'function') {
+      return state.draftsManager.saveCurrent({ isManual: false });
+    }
+
     const titleInput = document.getElementById('questionTitleInput');
     const title = titleInput ? titleInput.value : '';
     const html = state.quill ? state.quill.root.innerHTML : '';
@@ -809,6 +864,10 @@
   }
 
   function restoreDraft() {
+    if (state.draftsManager && typeof state.draftsManager.autoRestore === 'function') {
+      return state.draftsManager.autoRestore();
+    }
+
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (!saved) {
@@ -832,8 +891,7 @@
       }
 
       if (Array.isArray(draft.tags)) {
-        state.tags = draft.tags.slice(0, MAX_TAGS);
-        renderTags();
+        setTagsArray(draft.tags);
       }
 
       if (state.quill) {
@@ -857,6 +915,10 @@
   }
 
   function clearDraft() {
+    if (state.draftsManager && typeof state.draftsManager.deleteCurrentDraft === 'function') {
+      return state.draftsManager.deleteCurrentDraft();
+    }
+
     try {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       updateDraftsBadge();
@@ -890,8 +952,13 @@
       snippet = (snippet + ' Вопрос сообществу разработчиков смарт-контрактов SmartContractum.').slice(0, 500);
     }
 
+    const draftId = (state.draftsManager && state.draftsManager.currentDraftId) || `draft_q_${Date.now()}`;
+    const idempotencyKey = (state.draftsManager && typeof state.draftsManager.getSubmissionIdempotencyKey === 'function')
+      ? state.draftsManager.getSubmissionIdempotencyKey()
+      : `idemp_q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     const payload = {
-      draftId: `draft_q_${Date.now()}`,
+      draftId: draftId,
       title: title,
       html: quillHtml,
       materialType: 'question',
@@ -901,7 +968,7 @@
         topics: ['smart-contracts-development'],
         description: snippet
       },
-      idempotencyKey: `idemp_q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      idempotencyKey: idempotencyKey
     };
 
     const submitBtn = document.getElementById('btn-submit-question') || document.getElementById('btnSubmitQuestion');
@@ -933,8 +1000,12 @@
       }
 
       if (response.ok && resData.success) {
-        // Clear draft upon successful submission
-        clearDraft();
+        // Clear active draft upon successful submission
+        if (state.draftsManager && typeof state.draftsManager.deleteCurrentDraft === 'function') {
+          await state.draftsManager.deleteCurrentDraft();
+        } else {
+          clearDraft();
+        }
         updateDraftsBadge();
         showToast('Вопрос успешно опубликован!', 'success');
 
@@ -967,8 +1038,11 @@
     initAuthControls();
     initTagsInput();
     initQuillEditor();
-    restoreDraft();
-    updateDraftsBadge();
+
+    if (!state.draftsManager) {
+      restoreDraft();
+      updateDraftsBadge();
+    }
     updateTitleCounter();
     updateSubmitReadiness();
 
@@ -976,8 +1050,12 @@
     const draftsBtn = document.getElementById('btn-drafts-modal');
     if (draftsBtn) {
       draftsBtn.addEventListener('click', function () {
-        restoreDraft();
-        showToast('Черновик загружен', 'info');
+        if (state.draftsManager && typeof state.draftsManager.openDraftsModal === 'function') {
+          state.draftsManager.openDraftsModal();
+        } else {
+          restoreDraft();
+          showToast('Черновик загружен', 'info');
+        }
       });
     }
 
@@ -1014,6 +1092,8 @@
     state: state,
     addTag: addTag,
     removeTag: removeTag,
+    getTagsArray: getTagsArray,
+    setTagsArray: setTagsArray,
     validateForm: validateForm,
     saveDraft: saveDraft,
     restoreDraft: restoreDraft,
@@ -1021,7 +1101,8 @@
     updateSubmitReadiness: updateSubmitReadiness,
     updateTitleCounter: updateTitleCounter,
     updateAutosaveStatus: updateAutosaveStatus,
-    updateDraftsBadge: updateDraftsBadge
+    updateDraftsBadge: updateDraftsBadge,
+    showToast: showToast
   };
 
 })(window);
