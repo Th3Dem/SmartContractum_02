@@ -313,10 +313,11 @@
       }
     });
 
-    // Content change: clear inline details error & trigger autosave
+    // Content change: clear inline details error, update CTA readiness & trigger autosave
     quill.on('text-change', function () {
       clearFieldError('questionDetails');
       clearFormError();
+      updateSubmitReadiness();
       triggerAutosave();
     });
 
@@ -381,11 +382,11 @@
 
       if (response.ok && resData.success && resData.url) {
         insertImageIntoEditor(resData.url, file.name);
-        updateAutosaveStatus('saved', 'Черновик сохранен');
+        updateAutosaveStatus('saved', 'Все изменения сохранены');
       } else {
         const errMsg = resData.error || 'Ошибка загрузки изображения на сервер.';
         setFieldError('questionDetails', errMsg);
-        updateAutosaveStatus('saved', 'Черновик сохранен');
+        updateAutosaveStatus('error', 'Ошибка сохранения');
       }
     } catch (err) {
       console.warn('Network failure during image upload, using data URL fallback:', err);
@@ -393,7 +394,7 @@
       const reader = new FileReader();
       reader.onload = function (e) {
         insertImageIntoEditor(e.target.result, file.name);
-        updateAutosaveStatus('saved', 'Черновик сохранен');
+        updateAutosaveStatus('saved', 'Все изменения сохранены');
       };
       reader.readAsDataURL(file);
     }
@@ -680,18 +681,90 @@
      Draft Autosave & Restore
      ========================================================================== */
   function updateAutosaveStatus(status, text) {
-    const dot = document.getElementById('questionAutosaveDot');
-    const statusText = document.getElementById('questionAutosaveText');
+    const statusEl = document.getElementById('save-status');
+    const textEl = document.getElementById('save-status-text');
 
-    if (dot) {
+    if (statusEl) {
+      statusEl.classList.remove('status-saved', 'status-unsaved', 'status-saving', 'status-error', 'saving');
       if (status === 'saving') {
-        dot.classList.add('saving');
+        statusEl.classList.add('status-saving', 'saving');
+      } else if (status === 'unsaved') {
+        statusEl.classList.add('status-unsaved');
+      } else if (status === 'error') {
+        statusEl.classList.add('status-error');
       } else {
-        dot.classList.remove('saving');
+        statusEl.classList.add('status-saved');
       }
     }
-    if (statusText && text) {
-      statusText.textContent = text;
+
+    if (textEl) {
+      if (text) {
+        textEl.textContent = text;
+      } else if (status === 'saving') {
+        textEl.textContent = 'Сохранение...';
+      } else if (status === 'unsaved') {
+        textEl.textContent = 'Несохраненные изменения';
+      } else if (status === 'error') {
+        textEl.textContent = 'Ошибка сохранения';
+      } else {
+        textEl.textContent = 'Все изменения сохранены';
+      }
+    }
+  }
+
+  function updateDraftsBadge() {
+    const badge = document.getElementById('drafts-badge');
+    if (!badge) return;
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft && typeof draft === 'object') {
+          const hasTitle = Boolean(draft.title && draft.title.trim());
+          const hasTags = Array.isArray(draft.tags) && draft.tags.length > 0;
+          const hasHtml = Boolean(draft.html && draft.html.replace(/<[^>]*>/g, '').trim());
+          if (hasTitle || hasTags || hasHtml) {
+            badge.textContent = '1';
+            return;
+          }
+        }
+      }
+    } catch (e) {}
+    badge.textContent = '0';
+  }
+
+  function updateSubmitReadiness() {
+    const submitBtn = document.getElementById('btn-submit-question') || document.getElementById('btnSubmitQuestion');
+    if (!submitBtn) return;
+
+    const titleInput = document.getElementById('questionTitleInput');
+    const title = titleInput ? titleInput.value.trim() : '';
+    const rawText = state.quill ? state.quill.getText().trim() : '';
+
+    const isReady = title.length >= MIN_TITLE_LEN && rawText.length >= MIN_DETAILS_LEN;
+
+    if (isReady && !state.isSubmitting) {
+      submitBtn.removeAttribute('disabled');
+      submitBtn.disabled = false;
+      submitBtn.setAttribute('title', 'Опубликовать вопрос');
+    } else {
+      submitBtn.setAttribute('disabled', 'disabled');
+      submitBtn.disabled = true;
+      submitBtn.setAttribute('title', 'Добавьте вопрос и его описание');
+    }
+  }
+
+  function updateTitleCounter() {
+    const titleInput = document.getElementById('questionTitleInput');
+    const counter = document.getElementById('title-char-counter');
+    if (!titleInput || !counter) return;
+
+    const len = titleInput.value.length;
+    counter.textContent = `${len} / ${MAX_TITLE_LEN}`;
+    if (len > MAX_TITLE_LEN) {
+      counter.classList.add('error');
+    } else {
+      counter.classList.remove('error');
     }
   }
 
@@ -712,7 +785,8 @@
     // Do not save completely empty drafts
     const rawText = state.quill ? state.quill.getText().trim() : '';
     if (!title.trim() && !rawText && state.tags.length === 0) {
-      updateAutosaveStatus('saved', 'Черновик пуст');
+      updateAutosaveStatus('saved', 'Все изменения сохранены');
+      updateDraftsBadge();
       return;
     }
 
@@ -726,23 +800,34 @@
 
     try {
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
-      updateAutosaveStatus('saved', 'Черновик сохранен');
+      updateAutosaveStatus('saved', 'Все изменения сохранены');
+      updateDraftsBadge();
     } catch (e) {
       console.warn('LocalStorage error while autosaving question draft:', e);
-      updateAutosaveStatus('saved', 'Ошибка сохранения черновика');
+      updateAutosaveStatus('error', 'Ошибка сохранения');
     }
   }
 
   function restoreDraft() {
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (!saved) return;
+      if (!saved) {
+        updateDraftsBadge();
+        updateTitleCounter();
+        updateSubmitReadiness();
+        return;
+      }
 
       const draft = JSON.parse(saved);
-      if (!draft || typeof draft !== 'object') return;
+      if (!draft || typeof draft !== 'object') {
+        updateDraftsBadge();
+        updateTitleCounter();
+        updateSubmitReadiness();
+        return;
+      }
 
       const titleInput = document.getElementById('questionTitleInput');
-      if (titleInput && draft.title) {
+      if (titleInput && typeof draft.title === 'string') {
         titleInput.value = draft.title;
       }
 
@@ -759,15 +844,22 @@
         }
       }
 
-      updateAutosaveStatus('saved', 'Черновик восстановлен');
+      updateTitleCounter();
+      updateSubmitReadiness();
+      updateDraftsBadge();
+      updateAutosaveStatus('saved', 'Все изменения сохранены');
     } catch (e) {
       console.warn('Failed to restore question draft:', e);
+      updateTitleCounter();
+      updateSubmitReadiness();
+      updateDraftsBadge();
     }
   }
 
   function clearDraft() {
     try {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
+      updateDraftsBadge();
     } catch (e) {}
   }
 
@@ -812,12 +904,13 @@
       idempotencyKey: `idemp_q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     };
 
-    const submitBtn = document.getElementById('btnSubmitQuestion');
+    const submitBtn = document.getElementById('btn-submit-question') || document.getElementById('btnSubmitQuestion');
     const originalBtnText = submitBtn ? submitBtn.innerHTML : '';
 
     try {
       state.isSubmitting = true;
       if (submitBtn) {
+        submitBtn.setAttribute('disabled', 'disabled');
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span>Публикация...</span>';
       }
@@ -842,6 +935,7 @@
       if (response.ok && resData.success) {
         // Clear draft upon successful submission
         clearDraft();
+        updateDraftsBadge();
         showToast('Вопрос успешно опубликован!', 'success');
 
         const targetUrl = resData.url || (resData.submissionId ? `/article.html?id=${resData.submissionId}` : '/feed.html?tab=questions');
@@ -858,8 +952,8 @@
     } finally {
       state.isSubmitting = false;
       if (submitBtn) {
-        submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
+        updateSubmitReadiness();
       }
     }
   }
@@ -874,6 +968,18 @@
     initTagsInput();
     initQuillEditor();
     restoreDraft();
+    updateDraftsBadge();
+    updateTitleCounter();
+    updateSubmitReadiness();
+
+    // Drafts modal button in docbar
+    const draftsBtn = document.getElementById('btn-drafts-modal');
+    if (draftsBtn) {
+      draftsBtn.addEventListener('click', function () {
+        restoreDraft();
+        showToast('Черновик загружен', 'info');
+      });
+    }
 
     // Title input listeners
     const titleInput = document.getElementById('questionTitleInput');
@@ -881,12 +987,14 @@
       titleInput.addEventListener('input', function () {
         clearFieldError('questionTitle');
         clearFormError();
+        updateTitleCounter();
+        updateSubmitReadiness();
         triggerAutosave();
       });
     }
 
-    // Submit button listener
-    const submitBtn = document.getElementById('btnSubmitQuestion');
+    // Submit button listener (unified #btn-submit-question and fallback #btnSubmitQuestion)
+    const submitBtn = document.getElementById('btn-submit-question') || document.getElementById('btnSubmitQuestion');
     if (submitBtn) {
       submitBtn.addEventListener('click', handleSubmitQuestion);
     }
@@ -909,7 +1017,11 @@
     validateForm: validateForm,
     saveDraft: saveDraft,
     restoreDraft: restoreDraft,
-    clearDraft: clearDraft
+    clearDraft: clearDraft,
+    updateSubmitReadiness: updateSubmitReadiness,
+    updateTitleCounter: updateTitleCounter,
+    updateAutosaveStatus: updateAutosaveStatus,
+    updateDraftsBadge: updateDraftsBadge
   };
 
 })(window);

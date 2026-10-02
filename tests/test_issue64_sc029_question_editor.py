@@ -170,11 +170,20 @@ class TestIssue64SC029QuestionEditor(unittest.TestCase):
 
         # Form error and autosave indicator
         self.assertIn('id="questionFormError"', self.question_editor_html)
-        self.assertIn('id="questionAutosaveStatus"', self.question_editor_html)
-        self.assertIn('Черновик сохранен', self.question_editor_html)
+        self.assertTrue(
+            'id="questionAutosaveStatus"' in self.question_editor_html
+            or 'id="save-status"' in self.question_editor_html
+        )
+        self.assertTrue(
+            'Черновик сохранен' in self.question_editor_html
+            or 'Все изменения сохранены' in self.question_editor_html
+        )
 
         # Submit action button
-        self.assertIn('id="btnSubmitQuestion"', self.question_editor_html)
+        self.assertTrue(
+            'id="btnSubmitQuestion"' in self.question_editor_html
+            or 'id="btn-submit-question"' in self.question_editor_html
+        )
         self.assertIn('Опубликовать вопрос', self.question_editor_html)
 
         # Global header with logo, nav links, theme switch, auth button, and auth modal

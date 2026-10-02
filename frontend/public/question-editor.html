@@ -184,6 +184,37 @@
     </header>
 
     <!-- ================================================================
+         DEDICATED DOCUMENT BAR (Unified with Editor)
+    ================================================================= -->
+    <div class="editor-document-bar" id="editorDocumentBar">
+      <div class="editor-docbar-container">
+        <div class="editor-docbar-main">
+          <div class="header-left">
+            <button id="btn-drafts-modal" class="btn btn-drafts" type="button" title="Сохраненные черновики">
+              <svg class="btn-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Черновики</span>
+              <span id="drafts-badge" class="badge">0</span>
+            </button>
+            <div id="save-status" class="save-status" title="Статус автосохранения">
+              <span class="save-dot"></span>
+              <span id="save-status-text">Все изменения сохранены</span>
+            </div>
+          </div>
+          <div class="header-right">
+            <button type="button" class="btn btn-primary btn-next-to-pub" id="btn-submit-question" disabled title="Добавьте вопрос и его описание">
+              <span>Опубликовать вопрос</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================
          MAIN QUESTION WORKSPACE
     ================================================================= -->
     <main class="question-workspace" id="questionWorkspace">
@@ -197,7 +228,10 @@
 
           <!-- Field 1: Title Input -->
           <div class="question-form-group">
-            <label for="questionTitleInput" class="question-label">Сформулируйте вопрос <span class="required-star" aria-hidden="true">*</span></label>
+            <div class="question-label-row">
+              <label for="questionTitleInput" class="question-label">Сформулируйте вопрос <span class="required-star" aria-hidden="true">*</span></label>
+              <span id="title-char-counter" class="char-counter">0 / 250</span>
+            </div>
             <input
               type="text"
               id="questionTitleInput"
@@ -257,19 +291,6 @@
 
           <!-- Form-level Inline Error Message Container -->
           <div id="questionFormError" class="question-form-error" role="alert" aria-live="polite" style="display: none;"></div>
-
-          <!-- Form Actions Footer -->
-          <div class="question-form-footer">
-            <div id="questionAutosaveStatus" class="question-autosave-status" aria-live="polite">
-              <span class="autosave-dot" id="questionAutosaveDot"></span>
-              <span id="questionAutosaveText">Черновик сохранен</span>
-            </div>
-            <div class="question-actions">
-              <button type="button" id="btnSubmitQuestion" class="question-submit-btn">
-                <span>Опубликовать вопрос</span>
-              </button>
-            </div>
-          </div>
         </form>
       </div>
     </main>
