@@ -635,3 +635,7 @@
 [2026-10-03 01:37] | dev_bot | IMPLEMENTATION_COMPLETE | Удаление дублирующего нижнего action toolbar и навигация в ленту (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
 [2026-10-03 01:38] | git_bot | PR_CREATED | Открыт PR #102 для Issue #89 (Fixes #89), ветка feat/issue-89-sc031-remove-bottom-duplicate-toolbar (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
 [2026-10-03 01:39] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #102 готов к слиянию владельцем (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
+[2026-10-03 01:40] | pm_bot | TASK_INIT | Старт задачи Issue #90: Компактный свернутый composer комментария (Task: issue-90-sc031-compact-collapsed-comment-composer)
+[2026-10-03 01:40] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #90 (Task: issue-90-sc031-compact-collapsed-comment-composer)
+[2026-10-03 01:43] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный свернутый composer комментария (Task: issue-90-sc031-compact-collapsed-comment-composer)
+[2026-10-03 01:44] | git_bot | PR_CREATED | Открыт PR #103 для Issue #90 (Fixes #90), ветка feat/issue-90-sc031-compact-collapsed-comment-composer (Task: issue-90-sc031-compact-collapsed-comment-composer)
