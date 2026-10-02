@@ -228,12 +228,11 @@
 
           <div class="article-meta-row">
             <div class="article-author-info">
-              <div class="article-author-avatar" id="articleAuthorAvatar">SC</div>
+              <div class="article-author-avatar btn-author-profile" id="articleAuthorAvatar" role="button" tabindex="0" title="Открыть профиль автора">SC</div>
               <div class="article-author-details">
-                <span class="article-author-name" id="articleAuthorName"></span>
-                <span class="article-author-role" id="articleAuthorRole"></span>
+                <span class="article-author-name btn-author-profile" id="articleAuthorName" role="button" tabindex="0" title="Открыть профиль автора"></span>
               </div>
-              <button type="button" class="btn btn-secondary btn-sm btn-author-subscribe" id="btnSubscribeAuthor" style="display: none;" title="Подписаться на автора">
+              <button type="button" class="btn btn-secondary btn-sm btn-author-subscribe" id="btnSubscribeAuthor" style="display: none;" title="Подписаться на автора" aria-label="Подписаться на автора">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                   <circle cx="8.5" cy="7" r="4"></circle>
@@ -246,6 +245,7 @@
 
             <div class="article-meta-side">
               <span class="article-publish-date" id="articlePublishDate"></span>
+              <span class="article-edited-status" id="articleEditedStatus" style="display: none;"></span>
               <span class="meta-dot"></span>
               <div class="article-reading-time">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>

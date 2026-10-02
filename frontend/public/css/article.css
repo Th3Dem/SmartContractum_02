@@ -321,16 +321,18 @@ body,
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 16px 0;
+  min-height: 48px;
+  padding: 6px 0;
   border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .article-author-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-height: 40px;
 }
 
 .article-author-avatar {
@@ -345,18 +347,39 @@ body,
   font-weight: 700;
   font-size: 0.95rem;
   flex-shrink: 0;
+  cursor: pointer;
+  text-decoration: none;
+  border: none;
+  transition: transform var(--transition-fast, 150ms ease), opacity var(--transition-fast, 150ms ease);
+}
+
+.article-author-avatar:hover,
+.article-author-avatar:focus-visible {
+  opacity: 0.9;
+  transform: scale(1.04);
 }
 
 .article-author-details {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
 }
 
 .article-author-name {
-  font-weight: 700;
-  font-size: 0.96rem;
+  font-weight: 600;
+  font-size: 0.95rem;
   color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  transition: color var(--transition-fast, 150ms ease);
+}
+
+.article-author-name:hover,
+.article-author-name:focus-visible {
+  color: var(--accent-color, var(--accent, #3861fb));
 }
 
 .article-author-role {
@@ -364,45 +387,75 @@ body,
   color: var(--text-muted);
 }
 
-.btn-author-subscribe {
+.btn-author-subscribe,
+.btn.btn-author-subscribe {
   height: 28px;
   padding: 0 10px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border-radius: var(--radius-sm);
-  margin-left: 8px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-fast, 150ms ease);
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.btn-author-subscribe.is-subscribed {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.35);
+.btn-author-subscribe:hover,
+.btn.btn-author-subscribe:hover,
+.btn-author-subscribe:focus-visible,
+.btn.btn-author-subscribe:focus-visible {
+  border-color: var(--accent-color, var(--accent, #3861fb));
+  color: var(--accent-color, var(--accent, #3861fb));
+  background: var(--accent-subtle, rgba(56, 97, 251, 0.08));
 }
 
-.btn-author-subscribe.is-subscribed:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+.btn-author-subscribe.is-subscribed,
+.btn.btn-author-subscribe.is-subscribed {
+  background: var(--accent-subtle, rgba(56, 189, 248, 0.12));
+  color: var(--accent-color, #3861fb);
+  border-color: rgba(56, 97, 251, 0.35);
+}
+
+.btn-author-subscribe.is-subscribed:hover,
+.btn.btn-author-subscribe.is-subscribed:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
   border-color: rgba(239, 68, 68, 0.35);
 }
 
 .article-meta-side {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.86rem;
+  gap: 8px;
+  font-size: 0.85rem;
   color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.article-publish-date {
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.article-edited-status {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: help;
+  margin-left: -2px;
 }
 
 .article-reading-time {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-weight: 500;
+  color: var(--text-muted);
 }
 
 .article-reading-time svg {
@@ -421,6 +474,30 @@ body,
   border-radius: 50%;
   background: var(--text-muted);
   display: inline-block;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .article-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+  }
+
+  .article-author-info {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .article-meta-side {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.82rem;
+  }
 }
 
 /* Cover Image */

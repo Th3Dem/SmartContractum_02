@@ -4157,11 +4157,26 @@
     }
 
     // Author & Meta
+    const authorId = article.authorId || article.author_id || article.author || '';
     const avatarEl = document.getElementById('articleAuthorAvatar');
-    if (avatarEl) avatarEl.textContent = article.authorInitials || 'SC';
+    if (avatarEl) {
+      avatarEl.textContent = article.authorInitials || 'SC';
+      if (authorId) {
+        avatarEl.setAttribute('data-author-id', authorId);
+        avatarEl.setAttribute('data-user-id', authorId);
+        avatarEl.title = 'Открыть профиль ' + (article.author || '');
+      }
+    }
 
     const authorNameEl = document.getElementById('articleAuthorName');
-    if (authorNameEl) authorNameEl.textContent = article.author || 'Автор платформы';
+    if (authorNameEl) {
+      authorNameEl.textContent = article.author || 'Автор платформы';
+      if (authorId) {
+        authorNameEl.setAttribute('data-author-id', authorId);
+        authorNameEl.setAttribute('data-user-id', authorId);
+        authorNameEl.title = 'Открыть профиль ' + (article.author || '');
+      }
+    }
 
     const authorRoleEl = document.getElementById('articleAuthorRole');
     if (authorRoleEl) {
@@ -4176,7 +4191,7 @@
     // Author Subscription Button Wiring
     const subBtn = document.getElementById('btnSubscribeAuthor');
     if (subBtn && article.author) {
-      const authorId = article.authorId || article.author;
+      const subAuthorId = article.authorId || article.author;
       const authorTitle = article.author;
       subBtn.style.display = 'inline-flex';
 
@@ -4192,7 +4207,7 @@
         .then(function (data) {
           if (data && data.success && data.subscriptions && Array.isArray(data.subscriptions.authors)) {
             const isSub = data.subscriptions.authors.some(function (a) {
-              return a.id === authorId || a.title === authorTitle;
+              return a.id === subAuthorId || a.title === authorTitle;
             });
             updateSubBtn(isSub);
           }
@@ -4203,7 +4218,7 @@
         fetch('/api/subscriptions/toggle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetType: 'author', targetId: authorId, targetTitle: authorTitle })
+          body: JSON.stringify({ targetType: 'author', targetId: subAuthorId, targetTitle: authorTitle })
         })
         .then(function (res) {
           if (res.status === 401) {
@@ -4234,7 +4249,29 @@
       .catch(function () {});
 
     const dateEl = document.getElementById('articlePublishDate');
-    if (dateEl) dateEl.textContent = article.date || 'Недавно';
+    if (dateEl) {
+      dateEl.textContent = article.date || 'Недавно';
+      const rawIso = article.created_at || article.createdAt || article.timestamp || article.date;
+      if (rawIso) {
+        dateEl.title = rawIso;
+      }
+    }
+
+    const editedEl = document.getElementById('articleEditedStatus');
+    if (editedEl) {
+      const updatedAt = article.updated_at || article.updatedAt || article.edited_at;
+      const createdAt = article.created_at || article.createdAt;
+      const isEdited = Boolean(article.is_edited || article.isEdited || (updatedAt && createdAt && updatedAt > createdAt));
+      if (isEdited || (updatedAt && (!createdAt || updatedAt > createdAt))) {
+        editedEl.textContent = '(ред.)';
+        const updatedDisplay = article.updatedDate || updatedAt || '';
+        editedEl.title = 'Обновлено: ' + updatedDisplay;
+        editedEl.style.display = 'inline-block';
+      } else {
+        editedEl.style.display = 'none';
+        editedEl.textContent = '';
+      }
+    }
 
     const readingTimeEl = document.getElementById('articleReadingTime');
     if (readingTimeEl) readingTimeEl.textContent = (article.readingTime || '5 мин') + ' чтения';
@@ -4674,6 +4711,12 @@
       if (e.key === 'Escape' && userModal && userModal.style.display !== 'none') {
         e.preventDefault();
         closeUserProfileModal();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        const authorBtn = e.target.closest && e.target.closest('.btn-author-profile');
+        if (authorBtn && authorBtn.tagName !== 'BUTTON' && authorBtn.tagName !== 'A') {
+          e.preventDefault();
+          authorBtn.click();
+        }
       }
     });
 
