@@ -584,3 +584,4 @@
 [2026-10-02 16:58] | dev_bot | IMPLEMENTATION_COMPLETE | Исправление иконки флага и малиновый цвет кнопки жалобы на карточках и в комментариях (Task: issue-71-sc030-comment-new-actions)
 [2026-10-02 16:58] | py_bot | IMPLEMENTATION_COMPLETE | Восстановление и наполнение демо-данных: комментарии, ответы, лайки и рейтинги для вопросов и публикаций (Task: issue-71-sc030-comment-new-actions)
 [2026-10-02 17:18] | git_bot | PR_UPDATED | Обновлен PR #79 (Fixes #74), ветка feat/issue-74-sc030-comment-static-relative-time (Task: issue-71-sc030-comment-new-actions)
+[2026-10-02 17:22] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, замечания владельца устранены, PR #79 готов к слиянию владельцем (Task: issue-71-sc030-comment-new-actions)
