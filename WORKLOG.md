@@ -567,3 +567,4 @@
 [2026-10-02 13:28] | pm_bot | TASK_INIT | Старт задачи Issue #72: Меню «Поделиться» (Popover) и логика перехода по permalink (Task: issue-72-sc030-comment-share-menu)
 [2026-10-02 13:28] | pm_bot | DEV_ASSIGN | Назначение реализации Issue #72 на dev_bot (Task: issue-72-sc030-comment-share-menu)
 [2026-10-02 14:06] | dev_bot | IMPLEMENTATION_COMPLETE | Меню кнопки «Поделиться» (Popover) и логика перехода по permalink (Task: issue-72-sc030-comment-share-menu)
+[2026-10-02 14:11] | git_bot | PR_CREATED | Открыт PR #77 для Issue #72 (Fixes #72), ветка feat/issue-72-sc030-comment-share-menu (Task: issue-72-sc030-comment-share-menu)
