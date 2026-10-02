@@ -603,6 +603,31 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_client_operation ON article_comments(user_id, client_operation_id) WHERE client_operation_id IS NOT NULL;")
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS comment_reports (
+                id TEXT PRIMARY KEY,
+                comment_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_reports_comment ON comment_reports(comment_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_reports_user ON comment_reports(user_id);")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS comment_subscriptions (
+                id TEXT PRIMARY KEY,
+                comment_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(comment_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_subscriptions_user ON comment_subscriptions(user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_subscriptions_comment ON comment_subscriptions(comment_id);")
+
+        conn.execute("""
             UPDATE article_comments
             SET article_id = (
                 SELECT ms.id FROM moderation_submissions ms
@@ -2035,6 +2060,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.startswith("/api/articles/") and path.endswith("/comments"):
             art_id = path[len("/api/articles/"): -len("/comments")].strip("/")
             self.handle_get_article_comments(art_id)
+        elif path.rstrip("/") == "/api/comments/subscriptions":
+            self.handle_get_comment_subscriptions()
         elif path == "/api/comments":
             query = urllib.parse.parse_qs(parsed.query)
             art_id = (query.get("articleId", [""])[0] or query.get("article_id", [""])[0] or query.get("id", [""])[0]).strip()
@@ -2136,6 +2163,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.startswith("/api/comments/") and path.endswith("/vote"):
             comm_id = path[len("/api/comments/"): -len("/vote")].strip("/")
             self.handle_comment_vote(comm_id)
+        elif path.startswith("/api/articles/") and "/comments/" in path and path.rstrip("/").endswith("/report"):
+            parts = path.strip("/").split("/")
+            comm_id = parts[4] if len(parts) >= 6 else ""
+            self.handle_comment_report(comm_id)
+        elif path.rstrip("/").startswith("/api/comments/") and path.rstrip("/").endswith("/report"):
+            comm_id = path.rstrip("/")[len("/api/comments/"): -len("/report")].strip("/")
+            self.handle_comment_report(comm_id)
+        elif path.startswith("/api/articles/") and "/comments/" in path and path.rstrip("/").endswith("/subscribe"):
+            parts = path.strip("/").split("/")
+            comm_id = parts[4] if len(parts) >= 6 else ""
+            self.handle_comment_subscribe_toggle(comm_id)
+        elif path.rstrip("/").startswith("/api/comments/") and path.rstrip("/").endswith("/subscribe"):
+            comm_id = path.rstrip("/")[len("/api/comments/"): -len("/subscribe")].strip("/")
+            self.handle_comment_subscribe_toggle(comm_id)
         elif path.startswith("/api/articles/") and path.endswith("/vote"):
             art_id = path[len("/api/articles/"): -len("/vote")].strip("/")
             self.handle_article_vote(art_id)
@@ -3782,6 +3823,224 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "score": score,
             "myVote": val,
             "canVote": True
+        })
+
+    def handle_comment_report(self, comment_id: str):
+        """
+        POST /api/comments/<id>/report
+        Submits a report against a comment or answer.
+        Requires authentication (returns 401 if unauthorized).
+        Validates reason (non-empty string, max length 200).
+        Prevents author from reporting own comment (returns 403 CANNOT_REPORT_OWN_COMMENT).
+        Prevents duplicate report from same user on same comment (returns 409 REPORT_ALREADY_EXISTS).
+        Inserts into comment_reports and returns {"success": true, "message": "Жалоба отправлена"}.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "code": "AUTH_REQUIRED",
+                "requireAuth": True
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if payload is None:
+            return
+
+        if not isinstance(payload, dict):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Неверный формат данных",
+                "code": "INVALID_PAYLOAD"
+            })
+            return
+
+        if not comment_id:
+            comment_id = str(payload.get("commentId") or payload.get("comment_id") or "").strip()
+
+        if not comment_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Идентификатор комментария обязателен",
+                "code": "INVALID_COMMENT_ID"
+            })
+            return
+
+        raw_reason = payload.get("reason")
+        if not isinstance(raw_reason, str) or not raw_reason.strip():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Причина жалобы обязательна",
+                "code": "INVALID_REASON"
+            })
+            return
+
+        reason = raw_reason.strip()
+        if len(reason) > 200:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Причина жалобы не должна превышать 200 символов",
+                "code": "REASON_TOO_LONG"
+            })
+            return
+
+        raw_details = payload.get("details", "")
+        details = str(raw_details).strip() if raw_details is not None else ""
+        if len(details) > 2000:
+            details = details[:2000]
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id, user_id, status FROM article_comments WHERE id = ?", (comment_id,))
+                comment = cur.fetchone()
+                if not comment:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Комментарий не найден",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                if comment["user_id"] == user["id"]:
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Нельзя пожаловаться на собственный комментарий",
+                        "code": "CANNOT_REPORT_OWN_COMMENT"
+                    })
+                    return
+
+                cur.execute(
+                    "SELECT id FROM comment_reports WHERE comment_id = ? AND user_id = ?",
+                    (comment_id, user["id"])
+                )
+                if cur.fetchone():
+                    self.send_json_response(409, {
+                        "success": False,
+                        "error": "Вы уже отправили жалобу на этот комментарий",
+                        "code": "REPORT_ALREADY_EXISTS"
+                    })
+                    return
+
+                report_id = f"rep_{uuid.uuid4().hex[:12]}"
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute("""
+                    INSERT INTO comment_reports (id, comment_id, user_id, reason, details, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (report_id, comment_id, user["id"], reason, details, now_iso))
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "message": "Жалоба отправлена"
+        })
+
+    def handle_comment_subscribe_toggle(self, comment_id: str):
+        """
+        POST /api/comments/<id>/subscribe
+        Toggles subscription to replies on a comment or answer.
+        Requires authentication (returns 401 if unauthorized).
+        Toggles subscription: if exists, delete and return {"success": true, "subscribed": false};
+        if not exists, insert and return {"success": true, "subscribed": true}.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "code": "AUTH_REQUIRED",
+                "requireAuth": True
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
+            return
+
+        if not comment_id and isinstance(payload, dict):
+            comment_id = str(payload.get("commentId") or payload.get("comment_id") or "").strip()
+
+        if not comment_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Идентификатор комментария обязателен",
+                "code": "INVALID_COMMENT_ID"
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM article_comments WHERE id = ?", (comment_id,))
+                comment = cur.fetchone()
+                if not comment:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Комментарий не найден",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                cur.execute(
+                    "SELECT id FROM comment_subscriptions WHERE comment_id = ? AND user_id = ?",
+                    (comment_id, user["id"])
+                )
+                existing = cur.fetchone()
+                if existing:
+                    cur.execute("DELETE FROM comment_subscriptions WHERE id = ?", (existing["id"],))
+                    subscribed = False
+                else:
+                    sub_id = f"csub_{uuid.uuid4().hex[:12]}"
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute("""
+                        INSERT INTO comment_subscriptions (id, comment_id, user_id, created_at)
+                        VALUES (?, ?, ?, ?)
+                    """, (sub_id, comment_id, user["id"], now_iso))
+                    subscribed = True
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "subscribed": subscribed
+        })
+
+    def handle_get_comment_subscriptions(self):
+        """
+        GET /api/comments/subscriptions
+        Returns list of comment IDs the current user is subscribed to:
+        {"success": true, "subscriptions": [...]}
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "code": "AUTH_REQUIRED",
+                "requireAuth": True
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT comment_id FROM comment_subscriptions WHERE user_id = ? ORDER BY created_at ASC",
+                (user["id"],)
+            )
+            rows = cur.fetchall()
+            sub_ids = [r["comment_id"] for r in rows]
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "subscriptions": sub_ids
         })
 
     def handle_get_article_comments(self, article_id: str):

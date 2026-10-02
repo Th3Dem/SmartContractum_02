@@ -1886,6 +1886,155 @@ body,
   outline-offset: 1px;
 }
 
+/* Comment Action Buttons: Bookmark (Save) */
+.btn-comment-action.btn-save-comment:hover,
+.btn-comment-action.btn-save-comment:focus,
+.btn-comment-action.btn-save-answer:hover,
+.btn-comment-action.btn-save-answer:focus {
+  border-color: var(--warning-color, #f59e0b);
+  color: var(--warning-color, #f59e0b);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.btn-comment-action.is-bookmarked,
+.btn-comment-action.btn-save-comment.is-bookmarked,
+.btn-comment-action.btn-save-answer.is-bookmarked {
+  border-color: #f59e0b;
+  color: #f59e0b;
+  fill: #f59e0b;
+}
+
+.btn-comment-action.is-bookmarked svg,
+.btn-comment-action.btn-save-comment.is-bookmarked svg,
+.btn-comment-action.btn-save-answer.is-bookmarked svg {
+  fill: #f59e0b;
+  stroke: #f59e0b;
+}
+
+/* Comment Action Buttons: Share */
+.btn-comment-action.btn-share-comment:hover,
+.btn-comment-action.btn-share-comment:focus,
+.btn-comment-action.btn-share-answer:hover,
+.btn-comment-action.btn-share-answer:focus {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+  background: var(--accent-subtle, rgba(56, 189, 248, 0.08));
+}
+
+/* Comment Action Buttons: Subscribe (Bell) */
+.btn-comment-action.btn-subscribe-comment:hover,
+.btn-comment-action.btn-subscribe-comment:focus,
+.btn-comment-action.btn-subscribe-answer:hover,
+.btn-comment-action.btn-subscribe-answer:focus {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.btn-comment-action.is-subscribed,
+.btn-comment-action.btn-subscribe-comment.is-subscribed,
+.btn-comment-action.btn-subscribe-answer.is-subscribed {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  fill: #38bdf8;
+}
+
+.btn-comment-action.is-subscribed svg,
+.btn-comment-action.btn-subscribe-comment.is-subscribed svg,
+.btn-comment-action.btn-subscribe-answer.is-subscribed svg {
+  fill: #38bdf8;
+  stroke: #38bdf8;
+}
+
+/* Comment Action Buttons: Report (Flag) */
+.btn-comment-action.btn-report-comment:hover,
+.btn-comment-action.btn-report-comment:focus,
+.btn-comment-action.btn-report-answer:hover,
+.btn-comment-action.btn-report-answer:focus {
+  border-color: #f97316;
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.btn-comment-action.is-reported,
+.btn-comment-action.btn-report-comment.is-reported,
+.btn-comment-action.btn-report-answer.is-reported {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Comment Report Modal Styles */
+.comment-report-modal-card {
+  max-width: 480px;
+  width: 100%;
+}
+
+.comment-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.comment-report-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comment-report-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.comment-report-radio input[type="radio"] {
+  accent-color: var(--accent-color, #38bdf8);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.comment-report-details-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comment-report-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.comment-report-textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--bg-surface-elevated, var(--bg-card, #1e293b));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.comment-report-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color, #38bdf8);
+}
+
+.comment-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .btn-action-text {
   display: inline-flex;
   align-items: center;

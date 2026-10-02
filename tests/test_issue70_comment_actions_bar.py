@@ -9,8 +9,8 @@ Acceptance Criteria verified:
 1. Unified single horizontal row: .comment-vote-row.comment-action-row wraps vote capsule and action buttons.
 2. Geometry: 25px height, 25px width, 1px border (var(--border-color)), 4px radius (var(--radius-xs)), 1:1 square.
 3. Strict order:
-   - Comments: [Vote Capsule] -> [Ответить] -> [Удалить] -> [Редактировать].
-   - Answers: [Vote Capsule] -> [Ответить] -> [Редактировать].
+   - Comments: [Vote Capsule] -> [Ответить] -> [Сохранить] -> [Поделиться] -> [Подписаться] -> [Пожаловаться] -> [Удалить] -> [Редактировать].
+   - Answers: [Vote Capsule] -> [Ответить] -> [Сохранить] -> [Поделиться] -> [Подписаться] -> [Пожаловаться] -> [Редактировать].
 4. Icon-only buttons with 14px SVGs, no text spans, aria-label and title tooltips.
 5. Thread toggle button (.btn-toggle-thread) strictly on its own row, never in action row.
 6. Hover states:
@@ -111,11 +111,15 @@ class TestIssue70CommentActionsBar(unittest.TestCase):
         self.assertIn('<svg width="14" height="14"', self.article_js)
 
     def test_03_strict_button_order_in_comment_action_row(self) -> None:
-        """Strict order in comments: [Vote Capsule] -> [Ответить] -> [Удалить] -> [Редактировать]."""
+        """Strict order in comments: [Vote Capsule] -> [Ответить] -> [Сохранить] -> [Поделиться] -> [Подписаться] -> [Пожаловаться] -> [Удалить] -> [Редактировать]."""
         comm_row_pattern = (
             r'<div class="comment-vote-row comment-action-row">\s*\'\s*\+\s*'
             r'commVoteCapsuleHtml\s*\+\s*'
             r'replyBtnHtml\s*\+\s*'
+            r'saveBtnHtml\s*\+\s*'
+            r'shareBtnHtml\s*\+\s*'
+            r'subscribeBtnHtml\s*\+\s*'
+            r'reportBtnHtml\s*\+\s*'
             r'deleteBtnHtml\s*\+\s*'
             r'editBtnHtml\s*\+\s*'
             r'\'\s*</div>'
@@ -123,22 +127,26 @@ class TestIssue70CommentActionsBar(unittest.TestCase):
         match = re.search(comm_row_pattern, self.article_js)
         self.assertIsNotNone(
             match,
-            "Comment action row must strictly assemble: commVoteCapsuleHtml + replyBtnHtml + deleteBtnHtml + editBtnHtml"
+            "Comment action row must strictly assemble: commVoteCapsuleHtml + replyBtnHtml + saveBtnHtml + shareBtnHtml + subscribeBtnHtml + reportBtnHtml + deleteBtnHtml + editBtnHtml"
         )
 
     def test_04_strict_button_order_in_answer_action_row(self) -> None:
-        """Strict order in answers: [Vote Capsule] -> [Ответить] -> [Редактировать]."""
+        """Strict order in answers: [Vote Capsule] -> [Ответить] -> [Сохранить] -> [Поделиться] -> [Подписаться] -> [Пожаловаться] -> [Редактировать]."""
         ans_row_pattern = (
             r'<div class="comment-vote-row answer-vote-row comment-action-row answer-actions">\s*\'\s*\+\s*'
             r'ansVoteCapsuleHtml\s*\+\s*'
             r'replyBtnHtml\s*\+\s*'
+            r'saveBtnHtml\s*\+\s*'
+            r'shareBtnHtml\s*\+\s*'
+            r'subscribeBtnHtml\s*\+\s*'
+            r'reportBtnHtml\s*\+\s*'
             r'editBtnHtml\s*\+\s*'
             r'\'\s*</div>'
         )
         match = re.search(ans_row_pattern, self.article_js)
         self.assertIsNotNone(
             match,
-            "Answer action row must strictly assemble: ansVoteCapsuleHtml + replyBtnHtml + editBtnHtml"
+            "Answer action row must strictly assemble: ansVoteCapsuleHtml + replyBtnHtml + saveBtnHtml + shareBtnHtml + subscribeBtnHtml + reportBtnHtml + editBtnHtml"
         )
 
     def test_05_preservation_of_thread_toggle_button_on_separate_row(self) -> None:
