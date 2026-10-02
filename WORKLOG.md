@@ -630,3 +630,7 @@
 [2026-10-03 01:30] | dev_bot | IMPLEMENTATION_COMPLETE | Полноценное меню Share публикации по аналогии с комментариями (Task: issue-86-sc031-article-share-menu)
 [2026-10-03 01:31] | git_bot | PR_CREATED | Открыт PR #101 для Issue #86 (Fixes #86), ветка feat/issue-86-sc031-article-share-menu (Task: issue-86-sc031-article-share-menu)
 [2026-10-03 01:34] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #101 готов к слиянию владельцем (Task: issue-86-sc031-article-share-menu)
+[2026-10-03 01:35] | pm_bot | TASK_INIT | Старт задачи Issue #89: Удаление дублирующего нижнего action toolbar и навигация в ленту (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
+[2026-10-03 01:35] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #89 (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
+[2026-10-03 01:37] | dev_bot | IMPLEMENTATION_COMPLETE | Удаление дублирующего нижнего action toolbar и навигация в ленту (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
+[2026-10-03 01:38] | git_bot | PR_CREATED | Открыт PR #102 для Issue #89 (Fixes #89), ветка feat/issue-89-sc031-remove-bottom-duplicate-toolbar (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
