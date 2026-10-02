@@ -617,3 +617,4 @@
 [2026-10-03 00:45] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #98 готов к слиянию владельцем (Task: issue-84-sc031-compact-sticky-action-rail)
 [2026-10-03 00:45] | pm_bot | TASK_INIT | Старт задачи Issue #87: Улучшение Table of Contents и правая боковая навигация (Task: issue-87-sc031-sidebar-table-of-contents)
 [2026-10-03 00:45] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #87 (Task: issue-87-sc031-sidebar-table-of-contents)
+[2026-10-03 00:49] | dev_bot | IMPLEMENTATION_COMPLETE | Улучшение Table of Contents и правая боковая навигация (Task: issue-87-sc031-sidebar-table-of-contents)

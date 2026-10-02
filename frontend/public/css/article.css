@@ -89,6 +89,12 @@ body,
     width: 260px;
     flex-shrink: 0;
   }
+
+  .article-toc-box,
+  #articleTocBox,
+  .article-toc-accordion {
+    display: none !important;
+  }
 }
 
 /* Responsive: Tablet (768px - 1199px) */
@@ -600,8 +606,83 @@ body,
 }
 
 /* ==========================================================================
-   Table of Contents (TOC)
+   Table of Contents (TOC) - Desktop Sidebar & Mobile Accordion (Issue #87)
    ========================================================================== */
+
+/* 1. Desktop Sidebar Table of Contents */
+.article-sidebar-toc {
+  position: sticky;
+  top: 80px;
+  width: 250px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  box-sizing: border-box;
+}
+
+.sidebar-toc-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-toc-item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-toc-link {
+  display: block;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-left: 2px solid transparent;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  border-radius: 0 4px 4px 0;
+}
+
+.sidebar-toc-link:hover {
+  color: var(--text-primary);
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+}
+
+.sidebar-toc-link.is-active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+  background: var(--accent-subtle, rgba(99, 102, 241, 0.08));
+  border-radius: 0 4px 4px 0;
+}
+
+.sidebar-toc-link.toc-level-3 {
+  padding-left: 22px;
+  font-size: 12.5px;
+}
+
+.sidebar-toc-link.toc-level-4 {
+  padding-left: 32px;
+  font-size: 12px;
+}
+
+/* 2. Mobile & Tablet Inline Accordion TOC */
 .article-toc-box {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -609,6 +690,48 @@ body,
   padding: 18px 22px;
   margin-bottom: 36px;
   box-shadow: var(--shadow-sm);
+}
+
+.article-toc-accordion {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-1);
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+}
+
+.article-toc-accordion summary.toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  margin-bottom: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.article-toc-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.article-toc-accordion .toc-chevron {
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.article-toc-accordion[open] .toc-chevron {
+  transform: rotate(180deg);
+}
+
+.article-toc-accordion[open] summary.toc-header {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
 }
 
 .toc-header {
@@ -658,6 +781,44 @@ body,
 .toc-link:hover {
   color: var(--accent-color);
   text-decoration: underline;
+}
+
+.toc-link.is-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 3. Heading scroll margins for sticky header offset */
+.article-content h1,
+.article-content h2,
+.article-content h3,
+.article-content h4,
+#articleContent h2,
+#articleContent h3,
+.article-body-content h1,
+.article-body-content h2,
+.article-body-content h3,
+.article-body-content h4 {
+  scroll-margin-top: 80px;
+}
+
+/* Dark theme overrides for Table of Contents */
+[data-theme="dark"] .article-sidebar-toc {
+  background: var(--surface-1, #1e293b);
+  border-color: var(--border-subtle, #334155);
+}
+
+[data-theme="dark"] .sidebar-toc-link:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+}
+
+[data-theme="dark"] .sidebar-toc-link.is-active {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+[data-theme="dark"] .article-toc-accordion {
+  background: var(--surface-1, #1e293b);
+  border-color: var(--border-subtle, #334155);
 }
 
 /* ==========================================================================

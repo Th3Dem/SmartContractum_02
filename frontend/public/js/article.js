@@ -4076,33 +4076,43 @@
   // --------------------------------------------------------------------------
   // 4. Interactive Table of Contents (TOC) Builder
   // --------------------------------------------------------------------------
+  let activeTocObserver = null;
+
   function buildTableOfContents(contentContainer) {
     const tocBox = document.getElementById('articleTocBox');
     const tocList = document.getElementById('articleTocList');
-    if (!tocBox || !tocList || !contentContainer) return;
+    const sidebarToc = document.getElementById('articleSidebarToc');
+    const sidebarList = document.getElementById('sidebarTocList');
+    if (!contentContainer) return;
+
+    if (activeTocObserver) {
+      activeTocObserver.disconnect();
+      activeTocObserver = null;
+    }
 
     const headings = contentContainer.querySelectorAll('h2, h3, h4');
-    if (headings.length < 2) {
-      tocBox.style.display = 'none';
+    // Threshold: 3 or more headings required to render TOC (Issue #87)
+    if (headings.length < 3) {
+      if (tocBox) tocBox.style.display = 'none';
+      if (sidebarToc) sidebarToc.style.display = 'none';
       return;
     }
 
-    tocList.innerHTML = '';
+    if (tocList) tocList.innerHTML = '';
+    if (sidebarList) sidebarList.innerHTML = '';
+
+    const tocLinks = [];
+
     headings.forEach(function (h, idx) {
       if (!h.id) {
         h.id = 'heading-' + (idx + 1);
       }
 
-      const li = document.createElement('li');
       const level = h.tagName.toLowerCase();
-      li.className = 'toc-item toc-level-' + level.charAt(1);
+      const levelNum = level.charAt(1);
+      const headingText = h.textContent.trim();
 
-      const a = document.createElement('a');
-      a.className = 'toc-link';
-      a.href = '#' + h.id;
-      a.textContent = h.textContent.trim();
-
-      a.addEventListener('click', function (e) {
+      function handleTocClick(e) {
         e.preventDefault();
         const target = document.getElementById(h.id);
         if (target) {
@@ -4111,13 +4121,72 @@
             history.pushState(null, '', '#' + h.id);
           } catch (err) {}
         }
-      });
+      }
 
-      li.appendChild(a);
-      tocList.appendChild(li);
+      // 1. Inline Accordion TOC item (mobile/tablet)
+      if (tocList) {
+        const li = document.createElement('li');
+        li.className = 'toc-item toc-level-' + levelNum;
+
+        const a = document.createElement('a');
+        a.className = 'toc-link';
+        a.href = '#' + h.id;
+        a.textContent = headingText;
+        a.addEventListener('click', handleTocClick);
+
+        li.appendChild(a);
+        tocList.appendChild(li);
+        tocLinks.push({ id: h.id, linkEl: a });
+      }
+
+      // 2. Sidebar TOC item (desktop >= 1200px)
+      if (sidebarList) {
+        const li = document.createElement('li');
+        li.className = 'sidebar-toc-item';
+
+        const a = document.createElement('a');
+        a.className = 'sidebar-toc-link toc-level-' + levelNum;
+        a.href = '#' + h.id;
+        a.textContent = headingText;
+        a.addEventListener('click', handleTocClick);
+
+        li.appendChild(a);
+        sidebarList.appendChild(li);
+        tocLinks.push({ id: h.id, linkEl: a });
+      }
     });
 
-    tocBox.style.display = 'block';
+    if (tocBox) tocBox.style.display = 'block';
+    if (sidebarToc) sidebarToc.style.display = 'block';
+
+    // IntersectionObserver to track visible headings and mark active TOC item
+    if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+      function setActiveHeading(activeId) {
+        tocLinks.forEach(function (item) {
+          if (item.id === activeId) {
+            item.linkEl.classList.add('is-active');
+          } else {
+            item.linkEl.classList.remove('is-active');
+          }
+        });
+      }
+
+      activeTocObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            setActiveHeading(entry.target.id);
+          }
+        });
+      }, {
+        root: null,
+        rootMargin: '0px 0px -70% 0px',
+        threshold: 0
+      });
+
+      headings.forEach(function (h) {
+        activeTocObserver.observe(h);
+      });
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -4892,5 +4961,6 @@
     window.ArticleReader = window.ArticleReader || {};
     window.ArticleReader.preventDuplicateH1InBody = preventDuplicateH1InBody;
     window.ArticleReader.normalizeHeading = normalizeHeading;
+    window.ArticleReader.buildTableOfContents = buildTableOfContents;
   }
 })();
