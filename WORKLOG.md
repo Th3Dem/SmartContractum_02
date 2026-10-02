@@ -629,3 +629,4 @@
 [2026-10-03 01:26] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #86 (Task: issue-86-sc031-article-share-menu)
 [2026-10-03 01:30] | dev_bot | IMPLEMENTATION_COMPLETE | Полноценное меню Share публикации по аналогии с комментариями (Task: issue-86-sc031-article-share-menu)
 [2026-10-03 01:31] | git_bot | PR_CREATED | Открыт PR #101 для Issue #86 (Fixes #86), ветка feat/issue-86-sc031-article-share-menu (Task: issue-86-sc031-article-share-menu)
+[2026-10-03 01:34] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #101 готов к слиянию владельцем (Task: issue-86-sc031-article-share-menu)
