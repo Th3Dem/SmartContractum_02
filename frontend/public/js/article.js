@@ -1021,14 +1021,32 @@
 
     const commentForm = document.getElementById('commentForm');
     const guestPrompt = document.getElementById('commentGuestPrompt');
-    if (commentForm && guestPrompt) {
+    const composerAvatar = document.getElementById('commentComposerAvatar');
+
+    if (composerAvatar) {
       if (currentUser) {
-        commentForm.style.display = 'block';
-        guestPrompt.style.display = 'none';
+        if (currentUser.avatar) {
+          composerAvatar.innerHTML = '<img src="' + escapeHtml(currentUser.avatar) + '" alt="' + escapeHtml(currentUser.name || '') + '" class="comment-composer-avatar-img">';
+        } else {
+          const initLetter = (currentUser.name && currentUser.name.charAt(0)) ? currentUser.name.charAt(0).toUpperCase() : 'U';
+          composerAvatar.innerHTML = '<span class="comment-composer-avatar-initials">' + escapeHtml(initLetter) + '</span>';
+        }
       } else {
-        commentForm.style.display = 'none';
-        guestPrompt.style.display = 'flex';
+        composerAvatar.innerHTML =
+          '<span class="comment-composer-avatar-guest">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>' +
+              '<circle cx="12" cy="7" r="4"></circle>' +
+            '</svg>' +
+          '</span>';
       }
+    }
+
+    if (commentForm) {
+      commentForm.style.display = 'block';
+    }
+    if (guestPrompt) {
+      guestPrompt.style.display = 'none';
     }
 
     const questionGuestPrompt = document.getElementById('questionGuestPrompt');
@@ -3783,6 +3801,76 @@
       });
   }
 
+  function saveCommentDraft(artId, text) {
+    if (!artId) return;
+    try {
+      if (text && text.trim().length > 0) {
+        sessionStorage.setItem('draft_comment_' + artId, text);
+      } else {
+        sessionStorage.removeItem('draft_comment_' + artId);
+      }
+    } catch (e) {}
+  }
+
+  function getCommentDraft(artId) {
+    if (!artId) return '';
+    try {
+      return sessionStorage.getItem('draft_comment_' + artId) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function clearCommentDraft(artId) {
+    if (!artId) return;
+    try {
+      sessionStorage.removeItem('draft_comment_' + artId);
+    } catch (e) {}
+  }
+
+  function autoResizeCommentTextarea(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    var newHeight = Math.max(90, Math.min(el.scrollHeight, 400));
+    el.style.height = newHeight + 'px';
+  }
+
+  function renderCommentMarkdown(raw) {
+    if (!raw) return '';
+    var escaped = escapeHtml(raw);
+    escaped = escaped.replace(/```([a-z0-9_-]*)\n?([\s\S]*?)```/g, function (match, lang, code) {
+      return '<pre><code>' + code.replace(/^\n+|\n+$/g, '') + '</code></pre>';
+    });
+    escaped = escaped.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    escaped = escaped.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    escaped = escaped.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    var lines = escaped.split('\n');
+    var inQuote = false;
+    var resultLines = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^(&gt;|>)\s?(.*)$/.test(line)) {
+        var qText = line.replace(/^(&gt;|>)\s?/, '');
+        if (!inQuote) {
+          resultLines.push('<blockquote>' + qText);
+          inQuote = true;
+        } else {
+          resultLines.push('<br>' + qText);
+        }
+      } else {
+        if (inQuote) {
+          resultLines.push('</blockquote>');
+          inQuote = false;
+        }
+        resultLines.push(line);
+      }
+    }
+    if (inQuote) {
+      resultLines.push('</blockquote>');
+    }
+    return resultLines.join('\n').replace(/\n/g, '<br>');
+  }
+
   let isCommentsInitialized = false;
 
   function initComments(articleId) {
@@ -3790,6 +3878,110 @@
     const charCountEl = document.getElementById('commentCharCount');
     const form = document.getElementById('commentForm');
     const submitBtn = document.getElementById('btnSubmitComment');
+    const cancelBtn = document.getElementById('btnCancelComment');
+
+    // Collapsed composer elements
+    const composerTrigger = document.getElementById('commentComposerTrigger');
+    const composerOpenBtn = document.getElementById('btnCommentComposerOpen');
+    const boldBtn = document.getElementById('btnCommentBold');
+    const italicBtn = document.getElementById('btnCommentItalic');
+    const quoteBtn = document.getElementById('btnCommentQuote');
+    const codeBtn = document.getElementById('btnCommentCode');
+    const previewBtn = document.getElementById('btnCommentPreview');
+    const previewWrap = document.getElementById('commentPreviewWrap');
+
+    let isPreviewMode = false;
+
+    function expandCommentComposer(shouldFocus) {
+      if (!form) return;
+      form.classList.remove('is-collapsed');
+      form.classList.add('is-expanded');
+      form.setAttribute('aria-expanded', 'true');
+      if (shouldFocus && textarea) {
+        textarea.focus();
+        autoResizeCommentTextarea(textarea);
+      }
+    }
+
+    function collapseCommentComposer() {
+      if (!form) return;
+      if (isPreviewMode) {
+        toggleCommentPreview();
+      }
+      form.classList.remove('is-expanded');
+      form.classList.add('is-collapsed');
+      form.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleCommentPreview() {
+      if (!previewWrap || !textarea) return;
+      isPreviewMode = !isPreviewMode;
+      if (isPreviewMode) {
+        const raw = textarea.value.trim();
+        if (!raw) {
+          previewWrap.innerHTML = '<p class="comment-preview-empty" style="color: var(--text-muted); font-style: italic; margin: 0;">Пустой комментарий для предпросмотра</p>';
+        } else {
+          previewWrap.innerHTML = renderCommentMarkdown(raw);
+        }
+        previewWrap.style.display = 'block';
+        textarea.style.display = 'none';
+        if (previewBtn) previewBtn.classList.add('is-active');
+      } else {
+        previewWrap.style.display = 'none';
+        textarea.style.display = 'block';
+        if (previewBtn) previewBtn.classList.remove('is-active');
+        textarea.focus();
+        autoResizeCommentTextarea(textarea);
+      }
+    }
+
+    function applyFormat(type) {
+      if (!textarea) return;
+      if (isPreviewMode) toggleCommentPreview();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = textarea.value.substring(start, end);
+      let formatted = '';
+      let cursorOffset = 0;
+
+      if (type === 'bold') {
+        formatted = '**' + (selected || 'жирный текст') + '**';
+        cursorOffset = selected ? formatted.length : 2;
+      } else if (type === 'italic') {
+        formatted = '*' + (selected || 'курсив') + '*';
+        cursorOffset = selected ? formatted.length : 1;
+      } else if (type === 'quote') {
+        formatted = '> ' + (selected || 'цитата');
+        cursorOffset = selected ? formatted.length : 2;
+      } else if (type === 'code') {
+        if (selected.indexOf('\n') !== -1) {
+          formatted = '```\n' + selected + '\n```';
+          cursorOffset = formatted.length;
+        } else {
+          formatted = '`' + (selected || 'код') + '`';
+          cursorOffset = selected ? formatted.length : 1;
+        }
+      }
+
+      textarea.setRangeText(formatted, start, end, 'select');
+      const newPos = start + (selected ? formatted.length : cursorOffset);
+      textarea.setSelectionRange(newPos, newPos);
+      textarea.focus();
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    window.expandCommentComposer = expandCommentComposer;
+    window.collapseCommentComposer = collapseCommentComposer;
+
+    // Restore draft if present
+    if (textarea && articleId) {
+      const savedDraft = getCommentDraft(articleId);
+      if (savedDraft && savedDraft.trim().length > 0) {
+        textarea.value = savedDraft;
+        if (charCountEl) charCountEl.textContent = savedDraft.length;
+        expandCommentComposer(false);
+      }
+    }
 
     // Question clarification elements
     const addClarificationBtn = document.getElementById('btnAddQuestionClarification');
@@ -3814,14 +4006,111 @@
       if (form) {
         getOrCreateClientOpId(form);
       }
-      if (textarea && charCountEl) {
+
+      if (composerTrigger) {
+        composerTrigger.addEventListener('click', function () {
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы оставить комментарий');
+            return;
+          }
+          expandCommentComposer(true);
+        });
+        composerTrigger.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!currentUser) {
+              openAuthModal();
+              showToast('Войдите, чтобы оставить комментарий');
+              return;
+            }
+            expandCommentComposer(true);
+          }
+        });
+      }
+
+      if (composerOpenBtn) {
+        composerOpenBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (!currentUser) {
+            openAuthModal();
+            showToast('Войдите, чтобы оставить комментарий');
+            return;
+          }
+          expandCommentComposer(true);
+        });
+      }
+
+      if (textarea) {
+        textarea.addEventListener('focus', function () {
+          expandCommentComposer(false);
+        });
         textarea.addEventListener('input', function () {
-          charCountEl.textContent = textarea.value.length;
+          if (charCountEl) charCountEl.textContent = textarea.value.length;
+          autoResizeCommentTextarea(textarea);
+          saveCommentDraft(articleId, textarea.value);
           if (form) {
             handleFormTextInput(form, textarea.value);
           }
         });
+        textarea.addEventListener('keydown', function (e) {
+          // Ctrl+Enter or Cmd+Enter to submit
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (form) {
+              if (submitBtn && !submitBtn.disabled) {
+                if (typeof form.requestSubmit === 'function') {
+                  form.requestSubmit();
+                } else {
+                  form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                }
+              }
+            }
+            return;
+          }
+          // Escape to collapse if empty
+          if (e.key === 'Escape') {
+            if (!textarea.value.trim()) {
+              e.preventDefault();
+              collapseCommentComposer();
+              if (composerOpenBtn) composerOpenBtn.focus();
+            }
+            return;
+          }
+          // Ctrl+B / Cmd+B for bold
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B' || e.key === 'и' || e.key === 'И')) {
+            e.preventDefault();
+            applyFormat('bold');
+            return;
+          }
+          // Ctrl+I / Cmd+I for italic
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш')) {
+            e.preventDefault();
+            applyFormat('italic');
+            return;
+          }
+        });
       }
+
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+          const content = textarea ? textarea.value.trim() : '';
+          if (content.length > 0) {
+            saveCommentDraft(articleId, textarea.value);
+            const confirmed = confirm('Свернуть форму? Черновик комментария сохранен.');
+            if (!confirmed) {
+              return;
+            }
+          }
+          collapseCommentComposer();
+        });
+      }
+
+      if (boldBtn) boldBtn.addEventListener('click', function () { applyFormat('bold'); });
+      if (italicBtn) italicBtn.addEventListener('click', function () { applyFormat('italic'); });
+      if (quoteBtn) quoteBtn.addEventListener('click', function () { applyFormat('quote'); });
+      if (codeBtn) codeBtn.addEventListener('click', function () { applyFormat('code'); });
+      if (previewBtn) previewBtn.addEventListener('click', function () { toggleCommentPreview(); });
 
       if (form) {
         form.addEventListener('submit', function (e) {
@@ -3869,8 +4158,10 @@
               const data = result.data;
               if ((result.status === 200 || result.status === 201) && data && data.success) {
                 resetClientOpId(form);
+                clearCommentDraft(articleId);
                 if (textarea) textarea.value = '';
                 if (charCountEl) charCountEl.textContent = '0';
+                collapseCommentComposer();
                 showToast('Комментарий опубликован');
                 loadComments(articleId);
               } else {
@@ -4886,6 +5177,9 @@
         if (hash === '#comment-form' || hash === '#commentForm') {
           if (currentUser && formEl && formEl.style.display !== 'none') {
             formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (typeof expandCommentComposer === 'function') {
+              expandCommentComposer(true);
+            }
             const ta = document.getElementById('commentTextInput');
             if (ta) ta.focus();
           } else if (!currentUser && guestPromptEl) {

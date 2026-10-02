@@ -394,15 +394,76 @@
             </div>
           </div>
 
-          <!-- Logged-in Comment Submission Form -->
-          <form class="comment-form" id="commentForm">
-            <div class="comment-textarea-wrap">
-              <textarea class="comment-textarea" id="commentTextInput" placeholder="Написать комментарий..." maxlength="5000" rows="3" required></textarea>
-              <div class="comment-form-footer">
-                <span class="comment-char-counter"><span id="commentCharCount">0</span> / 5000</span>
-                <button type="submit" class="btn btn-primary btn-submit-comment" id="btnSubmitComment">
-                  <span>Отправить</span>
+          <!-- Logged-in Comment Submission Form (Compact Collapsed Composer) -->
+          <form class="comment-form comment-composer is-collapsed" id="commentForm" role="region" aria-label="Форма добавления комментария" aria-expanded="false">
+            <!-- 1. Collapsed Trigger -->
+            <div class="comment-composer-trigger" id="commentComposerTrigger" role="button" tabindex="0" aria-label="Написать комментарий">
+              <div class="comment-composer-avatar" id="commentComposerAvatar" aria-hidden="true">
+                <span class="comment-composer-avatar-placeholder">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </span>
+              </div>
+              <button type="button" class="comment-composer-placeholder-btn" id="btnCommentComposerOpen" aria-label="Написать комментарий">
+                <span>Поделитесь мнением по публикации...</span>
+              </button>
+            </div>
+
+            <!-- 2. Expanded Editor Body -->
+            <div class="comment-composer-expanded-body" id="commentComposerExpandedBody">
+              <!-- Formatting Toolbar -->
+              <div class="comment-composer-toolbar" id="commentComposerToolbar" role="toolbar" aria-label="Инструменты форматирования комментария">
+                <button type="button" class="btn-composer-tool" id="btnCommentBold" title="Жирный (Ctrl+B)" aria-label="Жирный">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                    <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                  </svg>
                 </button>
+                <button type="button" class="btn-composer-tool" id="btnCommentItalic" title="Курсив (Ctrl+I)" aria-label="Курсив">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="4" x2="10" y2="4"></line>
+                    <line x1="14" y1="20" x2="5" y2="20"></line>
+                    <line x1="15" y1="4" x2="9" y2="20"></line>
+                  </svg>
+                </button>
+                <button type="button" class="btn-composer-tool" id="btnCommentQuote" title="Цитата" aria-label="Цитата">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path>
+                    <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path>
+                  </svg>
+                </button>
+                <button type="button" class="btn-composer-tool" id="btnCommentCode" title="Код" aria-label="Код">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 18 22 12 16 6"></polyline>
+                    <polyline points="8 6 2 12 8 18"></polyline>
+                  </svg>
+                </button>
+                <button type="button" class="btn-composer-tool btn-composer-preview-toggle" id="btnCommentPreview" title="Предпросмотр комментария" aria-label="Предпросмотр">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <span class="preview-btn-label">Предпросмотр</span>
+                </button>
+              </div>
+
+              <!-- Textarea and Preview -->
+              <div class="comment-textarea-wrap">
+                <textarea class="comment-textarea" id="commentTextInput" placeholder="Поделитесь мнением по публикации..." maxlength="5000" rows="3" required></textarea>
+                <div class="comment-preview-pane" id="commentPreviewWrap" style="display: none;" aria-live="polite"></div>
+                <div class="comment-form-footer">
+                  <span class="comment-char-counter"><span id="commentCharCount">0</span> / 5000</span>
+                  <div class="comment-form-actions">
+                    <button type="button" class="btn btn-secondary btn-cancel-comment" id="btnCancelComment">
+                      <span>Отмена</span>
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-submit-comment" id="btnSubmitComment">
+                      <span>Отправить</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </form>
