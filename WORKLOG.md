@@ -599,3 +599,4 @@
 [2026-10-02 23:55] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #82 (Task: issue-82-sc031-compact-author-meta)
 [2026-10-02 23:59] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный блок автора и метаданных публикации (Task: issue-82-sc031-compact-author-meta)
 [2026-10-03 00:03] | git_bot | PR_CREATED | Открыт PR #95 для Issue #82 (Fixes #82), ветка feat/issue-82-sc031-compact-author-meta (Task: issue-82-sc031-compact-author-meta)
+[2026-10-03 00:07] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #95 готов к слиянию владельцем (Task: issue-82-sc031-compact-author-meta)
