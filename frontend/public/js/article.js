@@ -4617,6 +4617,100 @@
       });
     }
 
+    // Bottom Author Bio Card (Issue #89)
+    const bottomAvatarEl = document.getElementById('bottomAuthorAvatar');
+    if (bottomAvatarEl) {
+      bottomAvatarEl.textContent = article.authorInitials || 'SC';
+      if (authorId) {
+        bottomAvatarEl.setAttribute('data-author-id', authorId);
+        bottomAvatarEl.setAttribute('data-user-id', authorId);
+      }
+    }
+
+    const bottomNameEl = document.getElementById('bottomAuthorName');
+    if (bottomNameEl) {
+      bottomNameEl.textContent = article.author || 'Автор платформы';
+      if (authorId) {
+        bottomNameEl.setAttribute('data-author-id', authorId);
+        bottomNameEl.setAttribute('data-user-id', authorId);
+        bottomNameEl.href = '#';
+        bottomNameEl.onclick = function (e) {
+          e.preventDefault();
+          if (typeof window.openUserProfileModal === 'function') {
+            window.openUserProfileModal(authorId);
+          }
+        };
+      }
+    }
+
+    const bottomBioEl = document.getElementById('bottomAuthorBio');
+    if (bottomBioEl) {
+      bottomBioEl.textContent = article.authorBio || article.authorRole || 'Автор публикаций и участник сообщества SmartContractum.';
+    }
+
+    const bottomArticlesCountEl = document.getElementById('bottomAuthorArticlesCount');
+    if (bottomArticlesCountEl) {
+      const count = article.authorArticlesCount || 1;
+      bottomArticlesCountEl.textContent = count + ' ' + (count === 1 ? 'публикация' : (count >= 2 && count <= 4 ? 'публикации' : 'публикаций'));
+    }
+
+    const bottomAllLink = document.getElementById('linkAuthorArticlesBottom');
+    if (bottomAllLink) {
+      bottomAllLink.onclick = function (e) {
+        e.preventDefault();
+        if (typeof window.openUserProfileModal === 'function') {
+          window.openUserProfileModal(authorId);
+        }
+      };
+    }
+
+    const bottomFollowBtn = document.getElementById('btnFollowAuthorBottom');
+    if (bottomFollowBtn && article.author) {
+      const subAuthorId = article.authorId || article.author;
+      const authorTitle = article.author;
+
+      function updateBottomFollowBtn(isSub) {
+        bottomFollowBtn.classList.toggle('is-subscribed', isSub);
+        bottomFollowBtn.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
+        bottomFollowBtn.title = isSub ? 'Отписаться от автора' : 'Подписаться на автора';
+      }
+
+      fetch('/api/subscriptions')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success && data.subscriptions && Array.isArray(data.subscriptions.authors)) {
+            const isSub = data.subscriptions.authors.some(function (a) {
+              return a.id === subAuthorId || a.title === authorTitle;
+            });
+            updateBottomFollowBtn(isSub);
+          }
+        })
+        .catch(function () {});
+
+      bottomFollowBtn.addEventListener('click', function () {
+        fetch('/api/subscriptions/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetType: 'author', targetId: subAuthorId, targetTitle: authorTitle })
+        })
+        .then(function (res) {
+          if (res.status === 401) {
+            showToast('Для подписки на автора необходимо войти в систему');
+            return null;
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          if (data && data.success) {
+            updateBottomFollowBtn(data.subscribed);
+            if (typeof updateSubBtn === 'function') updateSubBtn(data.subscribed);
+            showToast(data.subscribed ? 'Вы подписались на автора ' + authorTitle : 'Вы отписались от автора ' + authorTitle);
+          }
+        })
+        .catch(function () {});
+      });
+    }
+
     // Sync header auth label
     fetch('/api/auth/status')
       .then(function (res) { return res.json(); })
