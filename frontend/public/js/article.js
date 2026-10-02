@@ -5167,6 +5167,7 @@
       commentsSec.style.display = 'block';
     }
     initComments(article.id);
+    initReadingProgressBar();
 
     // Scroll to #comments or #comment-form if specified in URL hash
     const hash = window.location.hash;
@@ -5197,12 +5198,96 @@
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Reading Progress Indicator (Issue #91)
+  // --------------------------------------------------------------------------
+  let isReadingProgressTicking = false;
+  let isReadingProgressBound = false;
+
+  function calculateReadingProgress(articleRect, windowHeight, headerHeight) {
+    if (!articleRect || articleRect.height <= 0) return 0;
+    const totalDistance = articleRect.height - (windowHeight - headerHeight);
+    if (totalDistance <= 0) {
+      return articleRect.top <= headerHeight ? 100 : 0;
+    }
+    const scrolled = headerHeight - articleRect.top;
+    const progress = (scrolled / totalDistance) * 100;
+    return Math.max(0, Math.min(100, Math.round(progress)));
+  }
+
+  function updateReadingProgress() {
+    const progressBar = document.getElementById('readingProgressBar');
+    if (!progressBar) return;
+
+    const articleEl = document.getElementById('articleBodyContent') || document.getElementById('articleContentWrap') || document.getElementById('articleBody');
+    if (!articleEl || articleEl.offsetParent === null || articleEl.style.display === 'none') {
+      progressBar.style.width = '0%';
+      progressBar.setAttribute('aria-valuenow', '0');
+      progressBar.style.opacity = '0';
+      return;
+    }
+
+    const rect = articleEl.getBoundingClientRect();
+    const windowHeight = window.innerHeight || document.documentElement.clientHeight || 800;
+    const headerEl = document.getElementById('appHeader');
+    const headerHeight = headerEl ? (headerEl.offsetHeight || 60) : 60;
+
+    // Fade out when scrolled below the article into comments/footer
+    if (rect.bottom < headerHeight) {
+      progressBar.style.opacity = '0';
+      return;
+    }
+
+    // Hide if article has not entered the reading view yet
+    if (rect.top > windowHeight) {
+      progressBar.style.width = '0%';
+      progressBar.setAttribute('aria-valuenow', '0');
+      progressBar.style.opacity = '0';
+      return;
+    }
+
+    const progress = calculateReadingProgress(rect, windowHeight, headerHeight);
+    progressBar.style.width = progress + '%';
+    progressBar.setAttribute('aria-valuenow', String(progress));
+    progressBar.style.opacity = progress > 0 ? '1' : '0';
+  }
+
+  function onReadingProgressTick() {
+    if (!isReadingProgressTicking) {
+      window.requestAnimationFrame(function () {
+        updateReadingProgress();
+        isReadingProgressTicking = false;
+      });
+      isReadingProgressTicking = true;
+    }
+  }
+
+  function initReadingProgressBar() {
+    updateReadingProgress();
+    if (!isReadingProgressBound) {
+      window.addEventListener('scroll', onReadingProgressTick, { passive: true });
+      window.addEventListener('resize', onReadingProgressTick, { passive: true });
+      isReadingProgressBound = true;
+    }
+  }
+
+  window.calculateReadingProgress = calculateReadingProgress;
+  window.updateReadingProgress = updateReadingProgress;
+  window.initReadingProgressBar = initReadingProgressBar;
+
   function showErrorState(title, desc) {
     const loadingState = document.getElementById('articleLoadingState');
     const contentWrap = document.getElementById('articleContentWrap');
     const errorState = document.getElementById('articleErrorState');
     const errorTitle = document.getElementById('articleErrorTitle');
     const errorDesc = document.getElementById('articleErrorDesc');
+    const pb = document.getElementById('readingProgressBar');
+
+    if (pb) {
+      pb.style.width = '0%';
+      pb.style.opacity = '0';
+      pb.setAttribute('aria-valuenow', '0');
+    }
 
     if (loadingState) loadingState.style.display = 'none';
     if (contentWrap) contentWrap.style.display = 'none';
