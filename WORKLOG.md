@@ -585,3 +585,6 @@
 [2026-10-02 16:58] | py_bot | IMPLEMENTATION_COMPLETE | Восстановление и наполнение демо-данных: комментарии, ответы, лайки и рейтинги для вопросов и публикаций (Task: issue-71-sc030-comment-new-actions)
 [2026-10-02 17:18] | git_bot | PR_UPDATED | Обновлен PR #79 (Fixes #74), ветка feat/issue-74-sc030-comment-static-relative-time (Task: issue-71-sc030-comment-new-actions)
 [2026-10-02 17:22] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, замечания владельца устранены, PR #79 готов к слиянию владельцем (Task: issue-71-sc030-comment-new-actions)
+[2026-10-02 18:25] | pm_bot | TASK_INIT | Старт задачи Issue #80: Reading layout публикации и sticky глобальная шапка (Task: issue-80-sc031-reading-layout-sticky-header)
+[2026-10-02 18:25] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #80 (Task: issue-80-sc031-reading-layout-sticky-header)
+[2026-10-02 18:32] | dev_bot | IMPLEMENTATION_COMPLETE | Reading layout публикации и sticky глобальная шапка (Task: issue-80-sc031-reading-layout-sticky-header)

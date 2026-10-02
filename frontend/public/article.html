@@ -151,10 +151,15 @@
     <!-- Mobile Emulator Link -->
     <div style="display:none;"><a href="mobile.html?page=article.html" id="btnMobileEmulator" title="Открыть в мобильном эмуляторе" aria-label="Мобильный эмулятор"></a></div>
 
-    <!-- Reading Layout Main Container (Comfortable 720px width) -->
-    <main class="article-page-container">
-      <!-- Article Top Action Bar -->
-      <nav class="article-top-bar" aria-label="Действия со статьей">
+    <!-- Modern Reading Shell Layout (Issue #80) -->
+    <main class="article-reading-shell" id="articleReadingShell">
+      <!-- 1. Left Contextual Rail Slot (Prepared for Issue #84) -->
+      <aside class="article-rail-slot" id="articleRailSlot" aria-label="Панель действий статьи"></aside>
+
+      <!-- 2. Central Reading Column -->
+      <div class="article-main-slot article-page-container" id="articleMainSlot">
+        <!-- Article Top Action Bar -->
+        <nav class="article-top-bar" aria-label="Действия со статьей">
         <button type="button" class="btn btn-secondary btn-back-feed" id="btnBackToFeed" title="Вернуться к ленте публикаций">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
@@ -454,6 +459,10 @@
           </section>
         </div>
       </section>
+      </div>
+
+      <!-- 3. Right Table of Contents Slot (Prepared for Issue #87) -->
+      <aside class="article-toc-slot" id="articleTocSlot" aria-label="Оглавление"></aside>
     </main>
   </div>
 
