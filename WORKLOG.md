@@ -603,3 +603,4 @@
 [2026-10-03 00:08] | pm_bot | TASK_INIT | Старт задачи Issue #88: Единое отображение и кадрирование обложки публикации (Task: issue-88-sc031-article-cover-unified-ratio)
 [2026-10-03 00:08] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #88 (Task: issue-88-sc031-article-cover-unified-ratio)
 [2026-10-03 00:10] | dev_bot | IMPLEMENTATION_COMPLETE | Единое отображение и кадрирование обложки публикации (Task: issue-88-sc031-article-cover-unified-ratio)
+[2026-10-03 00:12] | git_bot | PR_CREATED | Открыт PR #96 для Issue #88 (Fixes #88), ветка feat/issue-88-sc031-article-cover-unified-ratio (Task: issue-88-sc031-article-cover-unified-ratio)
