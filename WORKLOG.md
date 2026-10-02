@@ -622,3 +622,5 @@
 [2026-10-03 00:53] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #99 готов к слиянию владельцем (Task: issue-87-sc031-sidebar-table-of-contents)
 [2026-10-03 00:53] | pm_bot | TASK_INIT | Старт задачи Issue #85: Унификация терминологии сохранения публикации в Сохранить (Task: issue-85-sc031-unify-save-terminology)
 [2026-10-03 00:53] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #85 (Task: issue-85-sc031-unify-save-terminology)
+[2026-10-03 01:22] | dev_bot | IMPLEMENTATION_COMPLETE | Унификация терминологии сохранения публикации в Сохранить (Task: issue-85-sc031-unify-save-terminology)
+[2026-10-03 01:23] | git_bot | PR_CREATED | Открыт PR #100 для Issue #85 (Fixes #85), ветка feat/issue-85-sc031-unify-save-terminology (Task: issue-85-sc031-unify-save-terminology)
