@@ -640,3 +640,7 @@
 [2026-10-03 01:43] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный свернутый composer комментария (Task: issue-90-sc031-compact-collapsed-comment-composer)
 [2026-10-03 01:44] | git_bot | PR_CREATED | Открыт PR #103 для Issue #90 (Fixes #90), ветка feat/issue-90-sc031-compact-collapsed-comment-composer (Task: issue-90-sc031-compact-collapsed-comment-composer)
 [2026-10-03 01:46] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #103 готов к слиянию владельцем (Task: issue-90-sc031-compact-collapsed-comment-composer)
+[2026-10-03 01:47] | pm_bot | TASK_INIT | Старт задачи Issue #91: Тонкий индикатор прогресса чтения публикации под sticky шапкой (Task: issue-91-sc031-reading-progress-indicator)
+[2026-10-03 01:47] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #91 (Task: issue-91-sc031-reading-progress-indicator)
+[2026-10-03 01:48] | dev_bot | IMPLEMENTATION_COMPLETE | Тонкий индикатор прогресса чтения публикации под sticky шапкой (Task: issue-91-sc031-reading-progress-indicator)
+[2026-10-03 01:49] | git_bot | PR_CREATED | Открыт PR #104 для Issue #91 (Fixes #91), ветка feat/issue-91-sc031-reading-progress-indicator (Task: issue-91-sc031-reading-progress-indicator)
