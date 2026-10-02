@@ -4127,6 +4127,8 @@
           }
         }
       });
+  }
+
   function normalizeHeading(text) {
     if (!text) return '';
     let str = String(text).replace(/<[^>]*>/g, ' ');
