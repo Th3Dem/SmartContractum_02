@@ -221,12 +221,15 @@
     const bookmarked = isBookmarked(id);
     const btns = [
       document.getElementById('btnArticleBookmark'),
-      document.getElementById('btnArticleBookmarkBottom')
+      document.getElementById('btnArticleBookmarkBottom'),
+      document.getElementById('railBtnBookmark'),
+      document.getElementById('mobileBtnBookmark')
     ];
 
     btns.forEach(function (btn) {
       if (!btn) return;
       btn.classList.toggle('is-bookmarked', bookmarked);
+      btn.setAttribute('aria-pressed', bookmarked ? 'true' : 'false');
       const label = btn.querySelector('.bookmark-text') || btn.querySelector('span');
       if (label) {
         label.textContent = bookmarked ? 'В закладках' : 'В закладки';
@@ -896,6 +899,7 @@
       if (canVote !== undefined) {
         currentArticle.canVote = canVote;
       }
+      syncArticleVoteCapsules(currentArticle);
     }
 
     function updateCommentObj(item) {
@@ -972,6 +976,12 @@
 
     const bottomEl = document.getElementById('voteArticleBottom');
     if (bottomEl) bottomEl.innerHTML = capsuleHtml;
+
+    const railEl = document.getElementById('railArticleVote');
+    if (railEl) railEl.innerHTML = capsuleHtml;
+
+    const mobileEl = document.getElementById('mobileArticleVote');
+    if (mobileEl) mobileEl.innerHTML = capsuleHtml;
   }
 
   function refreshArticleAndCommentsOnAuthChange() {
@@ -1136,11 +1146,15 @@
   function syncLikeButtons(likesCount, hasLiked) {
     const btns = [
       document.getElementById('btnArticleLike'),
-      document.getElementById('btnArticleLikeBottom')
+      document.getElementById('btnArticleLikeBottom'),
+      document.getElementById('railBtnLike'),
+      document.getElementById('mobileBtnLike')
     ];
     const countEls = [
       document.getElementById('articleLikeCount'),
-      document.getElementById('articleLikeCountBottom')
+      document.getElementById('articleLikeCountBottom'),
+      document.getElementById('railLikeCount'),
+      document.getElementById('mobileLikeCount')
     ];
 
     btns.forEach(function (btn) {
@@ -1152,7 +1166,7 @@
 
     countEls.forEach(function (el) {
       if (!el) return;
-      el.textContent = typeof likesCount === 'number' ? likesCount : 0;
+      el.textContent = typeof likesCount === 'number' ? likesCount : (parseInt(likesCount, 10) || 0);
     });
   }
 
@@ -1163,9 +1177,9 @@
       return;
     }
 
-    const topBtn = document.getElementById('btnArticleLike');
+    const topBtn = document.getElementById('railBtnLike') || document.getElementById('btnArticleLike') || document.getElementById('mobileBtnLike');
     const wasLiked = topBtn ? topBtn.classList.contains('is-liked') : false;
-    const countEl = document.getElementById('articleLikeCount');
+    const countEl = document.getElementById('railLikeCount') || document.getElementById('articleLikeCount') || document.getElementById('mobileLikeCount');
     const prevCount = parseInt(countEl ? countEl.textContent : '0', 10) || 0;
 
     const newLiked = !wasLiked;
@@ -1204,6 +1218,51 @@
           showToast('Не удалось обновить отметку');
         }
       });
+  }
+
+  function syncCommentsCount(count) {
+    const num = typeof count === 'number' ? count : (parseInt(count, 10) || 0);
+    const railEl = document.getElementById('railCommentsCount');
+    if (railEl) railEl.textContent = num;
+    const mobileEl = document.getElementById('mobileCommentsCount');
+    if (mobileEl) mobileEl.textContent = num;
+  }
+
+  function scrollToComments() {
+    const target = document.getElementById('commentsSection') || document.getElementById('comments');
+    if (target) {
+      target.style.display = 'block';
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function copyArticleLink() {
+    const url = window.location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(function () {
+          showToast('Ссылка на статью скопирована в буфер обмена');
+        })
+        .catch(function () {
+          fallbackCopyText(url);
+        });
+    } else {
+      fallbackCopyText(url);
+    }
+  }
+
+  function fallbackCopyText(text) {
+    const input = document.createElement('input');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    try {
+      document.execCommand('copy');
+      showToast('Ссылка на статью скопирована в буфер обмена');
+    } catch (e) {
+      showToast('Не удалось скопировать ссылку');
+    }
+    document.body.removeChild(input);
   }
 
   function formatCommentDate(isoStr) {
@@ -3241,6 +3300,7 @@
     if (badgeEl) {
       const activeComments = (comments || []).filter(function (c) { return !c.isDeleted; });
       badgeEl.textContent = activeComments.length;
+      syncCommentsCount(activeComments.length);
     }
 
     if (!listEl) return;
@@ -3393,9 +3453,11 @@
       }
       const aBadge = document.getElementById('answersCountBadge');
       if (aBadge) {
-        aBadge.textContent = data.answersCount !== undefined
+        const aCount = data.answersCount !== undefined
           ? data.answersCount
           : (data.answers ? data.answers.filter(function (a) { return !a.isDeleted; }).length : 0);
+        aBadge.textContent = aCount;
+        syncCommentsCount(aCount);
       }
 
       // Render Question Clarifications
@@ -3925,6 +3987,21 @@
       });
     }
 
+    // Desktop Action Rail & Mobile Action Bar (Issue #84)
+    const railBtnLike = document.getElementById('railBtnLike');
+    if (railBtnLike) {
+      railBtnLike.addEventListener('click', function () {
+        toggleArticleLike(articleId);
+      });
+    }
+
+    const mobileBtnLike = document.getElementById('mobileBtnLike');
+    if (mobileBtnLike) {
+      mobileBtnLike.addEventListener('click', function () {
+        toggleArticleLike(articleId);
+      });
+    }
+
     // Bookmark buttons
     const bookmarkBtnTop = document.getElementById('btnArticleBookmark');
     if (bookmarkBtnTop) {
@@ -3942,37 +4019,57 @@
       });
     }
 
+    const railBtnBookmark = document.getElementById('railBtnBookmark');
+    if (railBtnBookmark) {
+      railBtnBookmark.addEventListener('click', function () {
+        toggleBookmark(articleId);
+        syncBookmarkButtons(articleId);
+      });
+    }
+
+    const mobileBtnBookmark = document.getElementById('mobileBtnBookmark');
+    if (mobileBtnBookmark) {
+      mobileBtnBookmark.addEventListener('click', function () {
+        toggleBookmark(articleId);
+        syncBookmarkButtons(articleId);
+      });
+    }
+
+    // Comments buttons (Smooth scroll to #commentsSection)
+    const railBtnComments = document.getElementById('railBtnComments');
+    if (railBtnComments) {
+      railBtnComments.addEventListener('click', function () {
+        scrollToComments();
+      });
+    }
+
+    const mobileBtnComments = document.getElementById('mobileBtnComments');
+    if (mobileBtnComments) {
+      mobileBtnComments.addEventListener('click', function () {
+        scrollToComments();
+      });
+    }
+
     // Share / Copy Link
     const shareBtn = document.getElementById('btnCopyLink');
     if (shareBtn) {
       shareBtn.addEventListener('click', function () {
-        const url = window.location.href;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(url)
-            .then(function () {
-              showToast('Ссылка на статью скопирована в буфер обмена');
-            })
-            .catch(function () {
-              fallbackCopy(url);
-            });
-        } else {
-          fallbackCopy(url);
-        }
+        copyArticleLink();
       });
     }
 
-    function fallbackCopy(text) {
-      const input = document.createElement('input');
-      input.value = text;
-      document.body.appendChild(input);
-      input.select();
-      try {
-        document.execCommand('copy');
-        showToast('Ссылка на статью скопирована в буфер обмена');
-      } catch (e) {
-        showToast('Не удалось скопировать ссылку');
-      }
-      document.body.removeChild(input);
+    const railBtnShare = document.getElementById('railBtnShare');
+    if (railBtnShare) {
+      railBtnShare.addEventListener('click', function () {
+        copyArticleLink();
+      });
+    }
+
+    const mobileBtnShare = document.getElementById('mobileBtnShare');
+    if (mobileBtnShare) {
+      mobileBtnShare.addEventListener('click', function () {
+        copyArticleLink();
+      });
     }
   }
 
@@ -4401,6 +4498,9 @@
     // Sync Article Vote Capsules (Top and Bottom)
     syncArticleVoteCapsules(article);
 
+    // Sync Comments Count to Rail & Mobile Action Bar
+    syncCommentsCount(article.comments_count !== undefined ? article.comments_count : (article.commentsCount !== undefined ? article.commentsCount : 0));
+
     // Customize Comments / Answers section for Questions
     const isQuestion = Boolean(
       article.materialType === 'question' ||
@@ -4427,7 +4527,7 @@
     initCodeBlockCopyButtons();
 
     // Reveal Comments Section & Load Comments
-    const commentsSec = document.getElementById('comments');
+    const commentsSec = document.getElementById('commentsSection') || document.getElementById('comments');
     if (commentsSec) {
       commentsSec.style.display = 'block';
     }
@@ -4435,7 +4535,7 @@
 
     // Scroll to #comments or #comment-form if specified in URL hash
     const hash = window.location.hash;
-    if (hash === '#comments' || hash === '#comment-form' || hash === '#commentForm') {
+    if (hash === '#comments' || hash === '#commentsSection' || hash === '#comment-form' || hash === '#commentForm') {
       setTimeout(function () {
         const formEl = document.getElementById('commentForm');
         const guestPromptEl = document.getElementById('commentGuestPrompt');
@@ -4448,11 +4548,11 @@
             guestPromptEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             openAuthModal();
           } else {
-            const c = document.getElementById('comments');
+            const c = document.getElementById('commentsSection') || document.getElementById('comments');
             if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         } else {
-          const c = document.getElementById('comments');
+          const c = document.getElementById('commentsSection') || document.getElementById('comments');
           if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }, 150);

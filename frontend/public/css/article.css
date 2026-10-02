@@ -114,9 +114,10 @@ body,
     box-sizing: border-box;
   }
 
+  #articleRailSlot,
   .article-rail-slot,
   .article-toc-slot {
-    display: none;
+    display: none !important;
   }
 
   .article-main-slot {
@@ -125,6 +126,73 @@ body,
     padding-top: 16px;
     padding-bottom: 60px;
     box-sizing: border-box;
+  }
+
+  .mobile-action-bar,
+  #mobileActionBar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    z-index: 990;
+    background: var(--surface-1);
+    border-top: 1px solid var(--border-subtle);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 8px;
+    box-sizing: border-box;
+  }
+
+  .btn-mobile-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 44px;
+    height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+
+  .btn-mobile-action:hover,
+  .btn-mobile-action:active {
+    background: var(--surface-2, rgba(0, 0, 0, 0.05));
+    color: var(--text-primary);
+  }
+
+  .btn-mobile-action svg {
+    flex-shrink: 0;
+  }
+
+  .mobile-action-count {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    color: inherit;
+  }
+
+  .mobile-vote-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-vote-wrapper .vote-capsule {
+    height: 32px;
+    min-height: 32px;
+    width: 86px;
+    min-width: 86px;
   }
 }
 
@@ -2678,4 +2746,196 @@ body,
   touch-action: manipulation;
   font-size: 0.85rem;
 }
+
+/* ==========================================================================
+   Desktop Sticky Action Rail & Mobile Action Bar (Issue #84)
+   ========================================================================== */
+
+/* Rail slot sticky alignment */
+.article-rail-slot {
+  align-self: stretch;
+}
+
+/* Sticky Action Rail (Desktop) */
+.article-action-rail {
+  position: sticky;
+  top: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 48px;
+  padding: 8px 4px;
+  border-radius: 9999px;
+  background: var(--surface-1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.08));
+  z-index: 100;
+  box-sizing: border-box;
+}
+
+/* Action Buttons inside Desktop Rail */
+.btn-rail-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 40px;
+  min-height: 40px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.btn-rail-action:hover {
+  background: var(--surface-2, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.btn-rail-action:active {
+  transform: translateY(0);
+}
+
+.btn-rail-action svg {
+  flex-shrink: 0;
+  transition: transform 0.15s ease, fill 0.15s ease, stroke 0.15s ease;
+}
+
+.btn-rail-action:hover svg {
+  transform: scale(1.1);
+}
+
+.rail-action-count {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: inherit;
+}
+
+/* Thin Divider inside Action Rail */
+.rail-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 2px 0;
+  flex-shrink: 0;
+}
+
+/* Active State: Like */
+.btn-rail-like.is-liked {
+  color: #e11d48;
+}
+
+.btn-rail-like.is-liked svg {
+  fill: #e11d48;
+  stroke: #e11d48;
+}
+
+.btn-mobile-like.is-liked {
+  color: #e11d48;
+}
+
+.btn-mobile-like.is-liked svg {
+  fill: #e11d48;
+  stroke: #e11d48;
+}
+
+/* Active State: Bookmark */
+.btn-rail-bookmark.is-bookmarked {
+  color: #6366f1;
+}
+
+.btn-rail-bookmark.is-bookmarked svg {
+  fill: #6366f1;
+  stroke: #6366f1;
+}
+
+.btn-mobile-bookmark.is-bookmarked {
+  color: #6366f1;
+}
+
+.btn-mobile-bookmark.is-bookmarked svg {
+  fill: #6366f1;
+  stroke: #6366f1;
+}
+
+/* Rail Vote Capsule (Vertical layout) */
+.rail-vote-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.rail-vote-wrapper .vote-capsule {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-height: unset;
+  width: 36px;
+  min-width: 36px;
+  aspect-ratio: auto;
+  padding: 2px 0;
+  border-radius: 9999px;
+  gap: 1px;
+}
+
+.rail-vote-wrapper .vote-capsule .vote-btn {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-vote-wrapper .vote-capsule .vote-score {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 0;
+}
+
+/* Mobile Bottom Action Bar (Default Hidden on Desktop) */
+.mobile-action-bar,
+#mobileActionBar {
+  display: none;
+}
+
+/* Comments section scroll margin for sticky header offset */
+#commentsSection,
+#comments {
+  scroll-margin-top: 80px;
+}
+
+/* Dark Theme Overrides */
+[data-theme="dark"] .article-action-rail {
+  background: var(--surface-1, #1e293b);
+  border-color: var(--border-subtle, #334155);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] #mobileActionBar,
+[data-theme="dark"] .mobile-action-bar {
+  background: var(--surface-1, #1e293b);
+  border-color: var(--border-subtle, #334155);
+}
+
+[data-theme="dark"] .btn-rail-action:hover,
+[data-theme="dark"] .btn-mobile-action:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+}
+
 

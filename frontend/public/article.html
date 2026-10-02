@@ -153,8 +153,49 @@
 
     <!-- Modern Reading Shell Layout (Issue #80) -->
     <main class="article-reading-shell" id="articleReadingShell">
-      <!-- 1. Left Contextual Rail Slot (Prepared for Issue #84) -->
+      <!-- 1. Left Contextual Rail Slot (Issue #84) -->
       <aside class="article-rail-slot" id="articleRailSlot" aria-label="Панель действий статьи">
+        <!-- Desktop Sticky Action Rail (Issue #84) -->
+        <div class="article-action-rail" id="articleActionRail" role="toolbar" aria-label="Действия с публикацией">
+          <!-- 1. Like button with counter -->
+          <button type="button" class="btn-rail-action btn-rail-like" id="railBtnLike" title="Нравится" aria-label="Нравится">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+            </svg>
+            <span class="rail-action-count" id="railLikeCount">0</span>
+          </button>
+
+          <!-- 2. Vote Capsule (Independent Up/Down Score) -->
+          <div id="railArticleVote" class="rail-vote-wrapper" aria-label="Рейтинг публикации"></div>
+
+          <div class="rail-divider" aria-hidden="true"></div>
+
+          <!-- 3. Bookmark button -->
+          <button type="button" class="btn-rail-action btn-rail-bookmark" id="railBtnBookmark" title="Сохранить в закладки" aria-label="Сохранить публикацию">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+            </svg>
+          </button>
+
+          <!-- 4. Comments button with counter -->
+          <button type="button" class="btn-rail-action btn-rail-comments" id="railBtnComments" title="Перейти к комментариям" aria-label="Комментарии">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="rail-action-count" id="railCommentsCount">0</span>
+          </button>
+
+          <!-- 5. Share button -->
+          <button type="button" class="btn-rail-action btn-rail-share" id="railBtnShare" title="Поделиться ссылкой" aria-label="Поделиться">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+              <polyline points="16 6 12 2 8 6"></polyline>
+              <line x1="12" y1="2" x2="12" y2="15"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Legacy actions container for backward compatibility with older test suites -->
         <div class="article-rail-actions" style="display: none;">
           <button type="button" class="btn btn-secondary btn-action-like" id="btnArticleLike" title="Нравится" aria-label="Нравится">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -310,9 +351,10 @@
       </article>
 
       <!-- ================================================================
-           COMMENTS SECTION (#comments)
+           COMMENTS SECTION (#commentsSection / #comments)
       ================================================================= -->
-      <section class="article-comments-section" id="comments" aria-label="Комментарии к публикации" style="display: none;">
+      <section class="article-comments-section" id="commentsSection" aria-label="Комментарии к публикации" style="display: none;">
+        <div id="comments" class="comments-anchor" aria-hidden="true"></div>
         <!-- 1. Standard Article Comments (materialType !== 'question') -->
         <div id="standardCommentsWrapper">
           <div class="comments-header">
@@ -461,6 +503,44 @@
       <!-- 3. Right Table of Contents Slot (Prepared for Issue #87) -->
       <aside class="article-toc-slot" id="articleTocSlot" aria-label="Оглавление"></aside>
     </main>
+
+    <!-- Mobile Bottom Action Bar (Issue #84) -->
+    <nav class="mobile-action-bar" id="mobileActionBar" role="toolbar" aria-label="Панель действий">
+      <!-- 1. Like button with counter -->
+      <button type="button" class="btn-mobile-action btn-mobile-like" id="mobileBtnLike" title="Нравится" aria-label="Нравится">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+        </svg>
+        <span class="mobile-action-count" id="mobileLikeCount">0</span>
+      </button>
+
+      <!-- 2. Vote Capsule (Independent Up/Down Score) -->
+      <div id="mobileArticleVote" class="mobile-vote-wrapper" aria-label="Рейтинг публикации"></div>
+
+      <!-- 3. Bookmark button -->
+      <button type="button" class="btn-mobile-action btn-mobile-bookmark" id="mobileBtnBookmark" title="Сохранить в закладки" aria-label="Сохранить публикацию">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+        </svg>
+      </button>
+
+      <!-- 4. Comments button with counter -->
+      <button type="button" class="btn-mobile-action btn-mobile-comments" id="mobileBtnComments" title="Перейти к комментариям" aria-label="Комментарии">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span class="mobile-action-count" id="mobileCommentsCount">0</span>
+      </button>
+
+      <!-- 5. Share button -->
+      <button type="button" class="btn-mobile-action btn-mobile-share" id="mobileBtnShare" title="Поделиться ссылкой" aria-label="Поделиться">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+          <polyline points="16 6 12 2 8 6"></polyline>
+          <line x1="12" y1="2" x2="12" y2="15"></line>
+        </svg>
+      </button>
+    </nav>
   </div>
 
   <!-- Quick Auth Modal -->
