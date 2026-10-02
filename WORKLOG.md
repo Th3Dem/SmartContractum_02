@@ -614,3 +614,6 @@
 [2026-10-03 00:32] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #84 (Task: issue-84-sc031-compact-sticky-action-rail)
 [2026-10-03 00:40] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный sticky action rail публикации (Task: issue-84-sc031-compact-sticky-action-rail)
 [2026-10-03 00:42] | git_bot | PR_CREATED | Открыт PR #98 для Issue #84 (Fixes #84), ветка feat/issue-84-sc031-compact-sticky-action-rail (Task: issue-84-sc031-compact-sticky-action-rail)
+[2026-10-03 00:45] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #98 готов к слиянию владельцем (Task: issue-84-sc031-compact-sticky-action-rail)
+[2026-10-03 00:45] | pm_bot | TASK_INIT | Старт задачи Issue #87: Улучшение Table of Contents и правая боковая навигация (Task: issue-87-sc031-sidebar-table-of-contents)
+[2026-10-03 00:45] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #87 (Task: issue-87-sc031-sidebar-table-of-contents)
