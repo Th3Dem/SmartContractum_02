@@ -609,3 +609,6 @@
 [2026-10-03 00:19] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #83 (Task: issue-83-sc031-prevent-h1-duplicate-editor)
 [2026-10-03 00:24] | dev_bot | IMPLEMENTATION_COMPLETE | Защита от дублирования заголовка H1 внутри тела публикации в Editor (Task: issue-83-sc031-prevent-h1-duplicate-editor)
 [2026-10-03 00:25] | git_bot | PR_CREATED | Открыт PR #97 для Issue #83 (Fixes #83), ветка feat/issue-83-sc031-prevent-h1-duplicate-editor (Task: issue-83-sc031-prevent-h1-duplicate-editor)
+[2026-10-03 00:32] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #97 готов к слиянию владельцем (Task: issue-83-sc031-prevent-h1-duplicate-editor)
+[2026-10-03 00:32] | pm_bot | TASK_INIT | Старт задачи Issue #84: Компактный sticky action rail публикации (Task: issue-84-sc031-compact-sticky-action-rail)
+[2026-10-03 00:32] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #84 (Task: issue-84-sc031-compact-sticky-action-rail)
