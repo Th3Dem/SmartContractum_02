@@ -608,3 +608,4 @@
 [2026-10-03 00:19] | pm_bot | TASK_INIT | Старт задачи Issue #83: Защита от дублирования заголовка H1 внутри тела публикации в Editor (Task: issue-83-sc031-prevent-h1-duplicate-editor)
 [2026-10-03 00:19] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #83 (Task: issue-83-sc031-prevent-h1-duplicate-editor)
 [2026-10-03 00:24] | dev_bot | IMPLEMENTATION_COMPLETE | Защита от дублирования заголовка H1 внутри тела публикации в Editor (Task: issue-83-sc031-prevent-h1-duplicate-editor)
+[2026-10-03 00:25] | git_bot | PR_CREATED | Открыт PR #97 для Issue #83 (Fixes #83), ветка feat/issue-83-sc031-prevent-h1-duplicate-editor (Task: issue-83-sc031-prevent-h1-duplicate-editor)
