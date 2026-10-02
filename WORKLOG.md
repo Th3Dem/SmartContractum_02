@@ -558,3 +558,4 @@
 [2026-10-02 11:38] | pm_bot | TASK_INIT | Старт задачи Issue #70 (SC-030): Компактная панель действий комментария в одном ряду с рейтингом (Task: issue-70-sc030-comment-actions-bar)
 [2026-10-02 11:49] | pm_bot | DEV_ASSIGN | Назначение реализации Issue #70 (SC-030) на dev_bot (Task: issue-70-sc030-comment-actions-bar)
 [2026-10-02 12:17] | dev_bot | IMPLEMENTATION_COMPLETE | Компактная панель действий комментариев и ответов в одном ряду с рейтингом (Task: issue-70-sc030-comment-actions-bar)
+[2026-10-02 12:19] | git_bot | PR_CREATED | Открыт PR #75 для Issue #70 (SC-030) - Компактная панель действий комментария в одном ряду с рейтингом (Task: issue-70-sc030-comment-actions-bar)
