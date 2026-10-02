@@ -477,12 +477,150 @@
     popover.style.display = 'flex';
   }
 
+  // --------------------------------------------------------------------------
+  // Article Share Popover
+  // --------------------------------------------------------------------------
+  let activeArticleShareTrigger = null;
+
+  function isArticleSharePopoverOpen() {
+    const popover = document.getElementById('articleSharePopover');
+    return !!(popover && popover.style.display !== 'none');
+  }
+
+  function closeArticleSharePopover() {
+    const popover = document.getElementById('articleSharePopover');
+    if (popover) {
+      popover.style.display = 'none';
+      const copyLabel = popover.querySelector('.share-copy-label');
+      if (copyLabel) {
+        copyLabel.textContent = 'Скопировать ссылку';
+      }
+    }
+    if (activeArticleShareTrigger) {
+      activeArticleShareTrigger.setAttribute('aria-expanded', 'false');
+      activeArticleShareTrigger = null;
+    }
+  }
+
+  function getArticleShareUrl() {
+    return window.location.href;
+  }
+
+  function getArticleShareTitle() {
+    return (currentArticle && currentArticle.title) ? currentArticle.title : (document.title || 'SmartContractum');
+  }
+
+  function openArticleSharePopover(triggerBtn) {
+    const popover = document.getElementById('articleSharePopover');
+    if (!popover || !triggerBtn) return;
+
+    if (activeArticleShareTrigger === triggerBtn && isArticleSharePopoverOpen()) {
+      closeArticleSharePopover();
+      return;
+    }
+
+    if (isCommentSharePopoverOpen()) {
+      closeCommentSharePopover();
+    }
+
+    if (activeArticleShareTrigger && activeArticleShareTrigger !== triggerBtn) {
+      activeArticleShareTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    activeArticleShareTrigger = triggerBtn;
+    triggerBtn.setAttribute('aria-haspopup', 'true');
+    triggerBtn.setAttribute('aria-expanded', 'true');
+
+    const permalink = getArticleShareUrl();
+    const title = getArticleShareTitle();
+    const encodedUrl = encodeURIComponent(permalink);
+    const encodedText = encodeURIComponent(title);
+
+    const tgLink = popover.querySelector('[data-action="telegram"]');
+    if (tgLink) {
+      tgLink.href = 'https://t.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
+    }
+    const vkLink = popover.querySelector('[data-action="vk"]');
+    if (vkLink) {
+      vkLink.href = 'https://vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
+    }
+    const okLink = popover.querySelector('[data-action="ok"]');
+    if (okLink) {
+      okLink.href = 'https://connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
+    }
+
+    const copyBtn = popover.querySelector('[data-action="copy"]');
+    if (copyBtn) {
+      const copyLabel = copyBtn.querySelector('.share-copy-label') || copyBtn.querySelector('span');
+      if (copyLabel) {
+        copyLabel.textContent = 'Скопировать ссылку';
+      }
+      copyBtn.onclick = function (e) {
+        e.preventDefault();
+        copyArticleLink();
+        if (copyLabel) {
+          copyLabel.textContent = 'Ссылка скопирована';
+        }
+        setTimeout(function () {
+          closeArticleSharePopover();
+        }, 600);
+      };
+    }
+
+    const socialLinks = popover.querySelectorAll('a.article-share-item, a.comment-share-item');
+    socialLinks.forEach(function (link) {
+      link.onclick = function () {
+        setTimeout(closeArticleSharePopover, 100);
+      };
+    });
+
+    const rect = triggerBtn.getBoundingClientRect();
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const popoverWidth = 190;
+    const popoverHeight = 180;
+
+    let top = rect.bottom + scrollY + 4;
+    let left = rect.left + scrollX;
+
+    const isRail = triggerBtn.id === 'railBtnShare' || triggerBtn.classList.contains('btn-rail-share');
+    const isMobile = triggerBtn.id === 'mobileBtnShare' || triggerBtn.classList.contains('btn-mobile-share');
+
+    if (isRail) {
+      left = rect.right + scrollX + 8;
+      top = rect.top + scrollY - 10;
+    } else if (isMobile || (rect.bottom + popoverHeight > window.innerHeight && rect.top > popoverHeight)) {
+      top = Math.max(10, rect.top + scrollY - popoverHeight - 4);
+    }
+
+    if (left + popoverWidth > window.innerWidth - 10) {
+      left = Math.max(10, window.innerWidth - popoverWidth - 10);
+    }
+
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+    popover.style.display = 'flex';
+
+    const firstItem = popover.querySelector('.article-share-item, .comment-share-item');
+    if (firstItem && document.activeElement === triggerBtn) {
+      firstItem.focus();
+    }
+  }
+
   document.addEventListener('click', function (e) {
     if (!isCommentSharePopoverOpen()) return;
     const popover = document.getElementById('commentSharePopover');
     if (popover && popover.contains(e.target)) return;
     if (e.target.closest('.btn-share-comment, .btn-share-answer')) return;
     closeCommentSharePopover();
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!isArticleSharePopoverOpen()) return;
+    const popover = document.getElementById('articleSharePopover');
+    if (popover && popover.contains(e.target)) return;
+    if (e.target.closest('#railBtnShare, #btnCopyLink, #mobileBtnShare, .btn-action-share, .btn-rail-share, .btn-mobile-share')) return;
+    closeArticleSharePopover();
   });
 
   document.addEventListener('keydown', function (e) {
@@ -499,6 +637,41 @@
     }
 
     const items = Array.from(popover.querySelectorAll('.comment-share-item'));
+    if (!items.length) return;
+    const activeIdx = items.indexOf(document.activeElement);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIdx = activeIdx < 0 ? 0 : (activeIdx + 1) % items.length;
+      items[nextIdx].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIdx = activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length;
+      items[prevIdx].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!isArticleSharePopoverOpen()) return;
+    const popover = document.getElementById('articleSharePopover');
+    if (!popover) return;
+
+    if (e.key === 'Escape') {
+      const trigger = activeArticleShareTrigger;
+      closeArticleSharePopover();
+      if (trigger) {
+        trigger.focus();
+      }
+      return;
+    }
+
+    const items = Array.from(popover.querySelectorAll('.article-share-item, .comment-share-item'));
     if (!items.length) return;
     const activeIdx = items.indexOf(document.activeElement);
 
@@ -4052,25 +4225,31 @@
       });
     }
 
-    // Share / Copy Link
+    // Share Popover triggers
     const shareBtn = document.getElementById('btnCopyLink');
     if (shareBtn) {
-      shareBtn.addEventListener('click', function () {
-        copyArticleLink();
+      shareBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openArticleSharePopover(shareBtn);
       });
     }
 
     const railBtnShare = document.getElementById('railBtnShare');
     if (railBtnShare) {
-      railBtnShare.addEventListener('click', function () {
-        copyArticleLink();
+      railBtnShare.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openArticleSharePopover(railBtnShare);
       });
     }
 
     const mobileBtnShare = document.getElementById('mobileBtnShare');
     if (mobileBtnShare) {
-      mobileBtnShare.addEventListener('click', function () {
-        copyArticleLink();
+      mobileBtnShare.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openArticleSharePopover(mobileBtnShare);
       });
     }
   }
@@ -4968,5 +5147,10 @@
     window.ArticleReader.syncBookmarkButtons = syncBookmarkButtons;
     window.ArticleReader.isBookmarked = isBookmarked;
     window.ArticleReader.getBookmarks = getBookmarks;
+    window.ArticleReader.openArticleSharePopover = openArticleSharePopover;
+    window.ArticleReader.closeArticleSharePopover = closeArticleSharePopover;
+    window.ArticleReader.isArticleSharePopoverOpen = isArticleSharePopoverOpen;
+    window.ArticleReader.getArticleShareUrl = getArticleShareUrl;
+    window.ArticleReader.getArticleShareTitle = getArticleShareTitle;
   }
 })();

@@ -2498,7 +2498,24 @@ body,
   box-sizing: border-box;
 }
 
-.comment-share-item {
+.article-share-popover {
+  position: absolute;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  min-width: 190px;
+  box-sizing: border-box;
+}
+
+.comment-share-item,
+.article-share-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2518,7 +2535,8 @@ body,
   box-sizing: border-box;
 }
 
-.comment-share-item svg {
+.comment-share-item svg,
+.article-share-item svg {
   width: 16px;
   height: 16px;
   min-width: 16px;
@@ -2529,17 +2547,22 @@ body,
 }
 
 .comment-share-item:hover,
-.comment-share-item:focus {
+.comment-share-item:focus,
+.article-share-item:hover,
+.article-share-item:focus {
   background: var(--accent-subtle, rgba(56, 189, 248, 0.08));
   color: var(--accent-color, #38bdf8);
 }
 
 .comment-share-item:hover svg,
-.comment-share-item:focus svg {
+.comment-share-item:focus svg,
+.article-share-item:hover svg,
+.article-share-item:focus svg {
   color: var(--accent-color, #38bdf8);
 }
 
-.comment-share-item:focus-visible {
+.comment-share-item:focus-visible,
+.article-share-item:focus-visible {
   outline: 2px solid var(--accent-color, #38bdf8);
   outline-offset: -1px;
 }
