@@ -616,6 +616,19 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_reports_user ON comment_reports(user_id);")
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS article_reports (
+                id TEXT PRIMARY KEY,
+                article_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_reports_article ON article_reports(article_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_reports_user ON article_reports(user_id);")
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS comment_subscriptions (
                 id TEXT PRIMARY KEY,
                 comment_id TEXT NOT NULL,
@@ -2177,6 +2190,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.rstrip("/").startswith("/api/comments/") and path.rstrip("/").endswith("/subscribe"):
             comm_id = path.rstrip("/")[len("/api/comments/"): -len("/subscribe")].strip("/")
             self.handle_comment_subscribe_toggle(comm_id)
+        elif path.startswith("/api/articles/") and not "/comments/" in path and path.rstrip("/").endswith("/report"):
+            art_id = path.rstrip("/")[len("/api/articles/"): -len("/report")].strip("/")
+            self.handle_article_report(art_id)
         elif path.startswith("/api/articles/") and path.endswith("/vote"):
             art_id = path[len("/api/articles/"): -len("/vote")].strip("/")
             self.handle_article_vote(art_id)
@@ -3931,6 +3947,125 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     INSERT INTO comment_reports (id, comment_id, user_id, reason, details, created_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (report_id, comment_id, user["id"], reason, details, now_iso))
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "message": "Жалоба отправлена"
+        })
+
+    def handle_article_report(self, article_id: str):
+        """
+        POST /api/articles/<id>/report
+        Submits a report against a publication or question.
+        Requires authentication (returns 401 if unauthorized).
+        Validates reason (non-empty string, max length 200).
+        Prevents author from reporting own publication/question (returns 403 CANNOT_REPORT_OWN_ARTICLE).
+        Prevents duplicate report from same user on same article (returns 409 REPORT_ALREADY_EXISTS).
+        Inserts into article_reports and returns {"success": true, "message": "Жалоба отправлена"}.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "code": "AUTH_REQUIRED",
+                "requireAuth": True
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=False)
+        if payload is None:
+            return
+
+        if not isinstance(payload, dict):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Неверный формат данных",
+                "code": "INVALID_PAYLOAD"
+            })
+            return
+
+        if not article_id:
+            article_id = str(payload.get("articleId") or payload.get("article_id") or "").strip()
+
+        if not article_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Идентификатор публикации обязателен",
+                "code": "INVALID_ARTICLE_ID"
+            })
+            return
+
+        raw_reason = payload.get("reason")
+        if not isinstance(raw_reason, str) or not raw_reason.strip():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Причина жалобы обязательна",
+                "code": "INVALID_REASON"
+            })
+            return
+
+        reason = raw_reason.strip()
+        if len(reason) > 200:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Причина жалобы не должна превышать 200 символов",
+                "code": "REASON_TOO_LONG"
+            })
+            return
+
+        raw_details = payload.get("details", "")
+        details = str(raw_details).strip() if raw_details is not None else ""
+        if len(details) > 2000:
+            details = details[:2000]
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT id, draft_id, author_id, status FROM moderation_submissions WHERE (id = ? OR draft_id = ?) AND status = 'approved' LIMIT 1",
+                    (article_id, article_id)
+                )
+                article = cur.fetchone()
+                if not article:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Публикация не найдена",
+                        "code": "NOT_FOUND"
+                    })
+                    return
+
+                canonical_id = article["id"]
+
+                if article["author_id"] == user["id"]:
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Нельзя пожаловаться на собственный материал",
+                        "code": "CANNOT_REPORT_OWN_ARTICLE"
+                    })
+                    return
+
+                cur.execute(
+                    "SELECT id FROM article_reports WHERE article_id = ? AND user_id = ?",
+                    (canonical_id, user["id"])
+                )
+                if cur.fetchone():
+                    self.send_json_response(409, {
+                        "success": False,
+                        "error": "Вы уже отправили жалобу на этот материал",
+                        "code": "REPORT_ALREADY_EXISTS"
+                    })
+                    return
+
+                report_id = f"artrep_{uuid.uuid4().hex[:12]}"
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute("""
+                    INSERT INTO article_reports (id, article_id, user_id, reason, details, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (report_id, canonical_id, user["id"], reason, details, now_iso))
         finally:
             conn.close()
 
