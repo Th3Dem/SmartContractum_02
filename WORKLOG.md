@@ -634,3 +634,4 @@
 [2026-10-03 01:35] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #89 (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
 [2026-10-03 01:37] | dev_bot | IMPLEMENTATION_COMPLETE | Удаление дублирующего нижнего action toolbar и навигация в ленту (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
 [2026-10-03 01:38] | git_bot | PR_CREATED | Открыт PR #102 для Issue #89 (Fixes #89), ветка feat/issue-89-sc031-remove-bottom-duplicate-toolbar (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
+[2026-10-03 01:39] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #102 готов к слиянию владельцем (Task: issue-89-sc031-remove-bottom-duplicate-toolbar)
