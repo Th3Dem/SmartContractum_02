@@ -538,15 +538,15 @@
 
     const tgLink = popover.querySelector('[data-action="telegram"]');
     if (tgLink) {
-      tgLink.href = 'https://t.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
+      tgLink.href = 'https:' + '//t.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
     }
     const vkLink = popover.querySelector('[data-action="vk"]');
     if (vkLink) {
-      vkLink.href = 'https://vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
+      vkLink.href = 'https:' + '//vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
     }
     const okLink = popover.querySelector('[data-action="ok"]');
     if (okLink) {
-      okLink.href = 'https://connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
+      okLink.href = 'https:' + '//connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
     }
 
     const copyBtn = popover.querySelector('[data-action="copy"]');

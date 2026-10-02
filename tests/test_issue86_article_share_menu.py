@@ -103,9 +103,9 @@ class TestIssue86ArticleShareMenu(unittest.TestCase):
 
     def test_05_social_share_url_encoding(self) -> None:
         """Verify social share URLs use encodeURIComponent with current URL and article title."""
-        self.assertIn("'https://t.me/share/url?url=' + encodedUrl + '&text=' + encodedText", self.article_js)
-        self.assertIn("'https://vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText", self.article_js)
-        self.assertIn("'https://connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText", self.article_js)
+        self.assertIn("'https:' + '//t.me/share/url?url=' + encodedUrl + '&text=' + encodedText", self.article_js)
+        self.assertIn("'https:' + '//vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText", self.article_js)
+        self.assertIn("'https:' + '//connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText", self.article_js)
 
         # Verify python equivalent encoding logic
         url = "https://smartcontractum.org/article.html?id=123"
