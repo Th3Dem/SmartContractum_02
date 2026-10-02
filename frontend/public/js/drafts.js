@@ -2,6 +2,7 @@
  * Antigravity WYSIWYG Editor - Local Drafts & Autosave Manager
  * IndexedDB storage with schema versioning (v2), auto-recovery, drafts badge count,
  * and autosave status indicator. 100% offline-first.
+ * Supports materialType: 'publication' (default) and 'question' with strict isolation.
  */
 
 (function (window) {
@@ -12,17 +13,30 @@
   const STORE_NAME = 'drafts';
 
   class DraftsManager {
-    constructor(editor, titleInput) {
+    constructor(editor, titleInput, options = {}) {
+      if (typeof titleInput === 'string') {
+        this.titleInput = document.querySelector(titleInput) || document.getElementById(titleInput);
+      } else {
+        this.titleInput = titleInput || document.getElementById('questionTitleInput') || document.getElementById('question-title') || document.getElementById('article-title');
+      }
       this.editor = editor;
-      this.titleInput = titleInput;
+      this.options = options || {};
+
+      this.materialType = this.options.materialType || 'publication';
+      this.activeDraftKey = this.options.activeDraftKey || (this.materialType === 'question' ? 'ag_active_question_draft_id' : 'ag_active_draft_id');
+      this.tagsGetter = this.options.tagsGetter || this.options.getTags || null;
+      this.tagsSetter = this.options.tagsSetter || this.options.setTags || null;
+      this.onDraftLoaded = this.options.onDraftLoaded || null;
+      this.onDraftReset = this.options.onDraftReset || null;
+      this.onDraftSaved = this.options.onDraftSaved || null;
+      this.debounceDelay = typeof this.options.debounceDelay === 'number' ? this.options.debounceDelay : 2000;
 
       this.db = null;
-      this.currentDraftId = localStorage.getItem('ag_active_draft_id') || ('draft_' + Date.now());
+      this.currentDraftId = localStorage.getItem(this.activeDraftKey) || ((this.materialType === 'question' ? 'draft_q_' : 'draft_') + Date.now());
       this.currentRevision = 1;
       this.lastSavedFingerprint = null;
       this.currentDraft = null;
       this.saveDebounceTimer = null;
-      this.debounceDelay = 2000; // 2 seconds
       this.isDirty = false;
       this.savePromise = null;
 
@@ -99,6 +113,28 @@
           await this.createNewDraft();
         });
       }
+
+      // Drafts modal button in document bar / header
+      const draftsBtn = document.getElementById('btn-drafts-modal');
+      if (draftsBtn) {
+        draftsBtn.addEventListener('click', async () => {
+          await this.openDraftsModal();
+        });
+      }
+
+      // Drafts modal close buttons and backdrop
+      if (this.draftsModal) {
+        this.draftsModal.querySelectorAll('[data-modal-close], #btn-close-drafts, .modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            this.draftsModal.classList.remove('show');
+          });
+        });
+        this.draftsModal.addEventListener('click', (e) => {
+          if (e.target === this.draftsModal) {
+            this.draftsModal.classList.remove('show');
+          }
+        });
+      }
     }
 
     triggerAutosave() {
@@ -139,9 +175,10 @@
 
       const title = this.titleInput ? this.titleInput.value.trim() : '';
       const text = this.editor && typeof this.editor.getText === 'function' ? this.editor.getText().trim() : '';
+      const tags = (this.tagsGetter && typeof this.tagsGetter === 'function') ? (this.tagsGetter() || []) : [];
 
       // Don't save empty blank drafts automatically
-      if (!title && !text) {
+      if (!title && !text && tags.length === 0) {
         this.isDirty = false;
         this.setStatus('saved');
         return;
@@ -158,6 +195,12 @@
     }
 
     setStatus(state) {
+      if (!this.statusEl) {
+        this.statusEl = document.getElementById('save-status');
+      }
+      if (!this.statusTextEl) {
+        this.statusTextEl = document.getElementById('save-status-text');
+      }
       if (!this.statusEl || !this.statusTextEl) return;
       this.statusEl.classList.remove('status-unsaved', 'status-saving', 'status-saved', 'status-error', 'saving');
       switch (state) {
@@ -213,9 +256,12 @@
       const text = this.editor && typeof this.editor.getText === 'function' ? this.editor.getText().trim() : '';
       const delta = this.editor && typeof this.editor.getContents === 'function' ? this.editor.getContents() : null;
       const html = this.editor && this.editor.root ? this.editor.root.innerHTML : '';
+      const tags = (this.tagsGetter && typeof this.tagsGetter === 'function')
+        ? (this.tagsGetter() || [])
+        : ((this.currentDraft && this.currentDraft.tags) || []);
 
       // Don't save empty blank drafts automatically
-      if (!title && !text && isAuto) {
+      if (!title && !text && tags.length === 0 && isAuto) {
         this.setStatus('saved');
         this.isDirty = false;
         return;
@@ -234,7 +280,7 @@
         publicationSettings = window.publicationManager.getSettings();
       }
 
-      const currentFingerprint = this._computeFingerprint(title, delta, html, publicationSettings);
+      const currentFingerprint = this._computeFingerprint(title, delta, html, publicationSettings, tags);
 
       let newRevision = this.currentRevision || 1;
       if (this.lastSavedFingerprint === null) {
@@ -243,18 +289,29 @@
         newRevision = (this.currentRevision || 1) + 1;
       }
 
+      const snippet = text.substring(0, 150) || title;
       const draft = {
         id: this.currentDraftId,
+        materialType: this.materialType,
         schema: 'antigravity-editor-v2',
         title: title || 'Без названия',
+        tags: tags,
         revision: newRevision,
         delta: delta,
         html: html,
-        textSnippet: text.substring(0, 120),
+        snippet: snippet,
+        textSnippet: snippet,
         wordCount: words,
         charCount: chars,
         readingTime: readingTime,
-        publicationSettings: publicationSettings,
+        publicationSettings: publicationSettings || (this.materialType === 'question' ? {
+          materialType: 'question',
+          type: 'question',
+          keywords: tags,
+          targetAudience: 'developers',
+          topics: ['smart-contracts-development'],
+          description: snippet
+        } : null),
         updatedAt: Date.now()
       };
 
@@ -268,13 +325,24 @@
         this.currentRevision = newRevision;
         this.lastSavedFingerprint = currentFingerprint;
         this.currentDraft = draft;
-        localStorage.setItem('ag_active_draft_id', this.currentDraftId);
+        localStorage.setItem(this.activeDraftKey, this.currentDraftId);
         this.setStatus('saved');
         this.isDirty = false;
         await this.updateBadge();
 
-        if (isManual && window.EditorApp && window.EditorApp.showToast) {
-          window.EditorApp.showToast('Черновик успешно сохранен!', 'success');
+        if (this.onDraftSaved && typeof this.onDraftSaved === 'function') {
+          this.onDraftSaved(draft);
+        }
+
+        if (isManual) {
+          const toastFn = (this.options && this.options.showToast) ||
+                          (window.QuestionEditor && window.QuestionEditor.showToast) ||
+                          (window.EditorApp && window.EditorApp.showToast) ||
+                          (typeof window.showToast === 'function' ? window.showToast : null);
+          if (toastFn) {
+            const toastMsg = this.materialType === 'question' ? 'Вопрос успешно сохранен!' : 'Черновик успешно сохранен!';
+            toastFn(toastMsg, 'success');
+          }
         }
       } catch (err) {
         console.error('Failed to save draft:', err);
@@ -300,6 +368,10 @@
 
         if (window.EditorApp && typeof window.EditorApp.showToast === 'function') {
           window.EditorApp.showToast(errMsg, 'error');
+        } else if (window.QuestionEditor && typeof window.QuestionEditor.showToast === 'function') {
+          window.QuestionEditor.showToast(errMsg, 'danger');
+        } else if (this.options && typeof this.options.showToast === 'function') {
+          this.options.showToast(errMsg, 'danger');
         }
 
         throw err;
@@ -334,16 +406,15 @@
     }
 
     async getAllDrafts() {
+      let list = [];
       if (this.db) {
-        return new Promise((resolve) => {
+        list = await new Promise((resolve) => {
           try {
             const tx = this.db.transaction([STORE_NAME], 'readonly');
             const store = tx.objectStore(STORE_NAME);
             const req = store.getAll();
             req.onsuccess = () => {
-              const list = req.result || [];
-              list.sort((a, b) => b.updatedAt - a.updatedAt);
-              resolve(list);
+              resolve(req.result || []);
             };
             req.onerror = () => resolve([]);
             tx.onerror = () => resolve([]);
@@ -353,23 +424,157 @@
         });
       } else {
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
-        const list = Object.values(drafts);
-        list.sort((a, b) => b.updatedAt - a.updatedAt);
-        return list;
+        list = Object.values(drafts);
       }
+
+      if (this.materialType === 'question') {
+        list = list.filter(d => {
+          if (!d) return false;
+          if (d.materialType === 'question') return true;
+          if (d.publicationSettings && (d.publicationSettings.materialType === 'question' || d.publicationSettings.type === 'question')) return true;
+          if (typeof d.id === 'string' && d.id.startsWith('draft_q_')) return true;
+          return false;
+        });
+      } else {
+        list = list.filter(d => {
+          if (!d) return false;
+          if (d.materialType === 'question') return false;
+          if (d.publicationSettings && (d.publicationSettings.materialType === 'question' || d.publicationSettings.type === 'question')) return false;
+          if (typeof d.id === 'string' && d.id.startsWith('draft_q_')) return false;
+          return true;
+        });
+      }
+
+      list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      return list;
+    }
+
+    async getDraftsList() {
+      return this.getAllDrafts();
     }
 
     async updateBadge() {
+      if (!this.draftsBadgeEl) {
+        this.draftsBadgeEl = document.getElementById('drafts-badge');
+      }
       if (!this.draftsBadgeEl) return;
       try {
         const drafts = await this.getAllDrafts();
-        this.draftsBadgeEl.textContent = drafts.length;
+        this.draftsBadgeEl.textContent = String(drafts.length);
       } catch (e) {
         this.draftsBadgeEl.textContent = '0';
       }
     }
 
+    async migrateLegacyQuestionDraft() {
+      try {
+        const legacyStr = localStorage.getItem('smartcontractum_question_draft');
+        if (!legacyStr) return;
+
+        const legacy = JSON.parse(legacyStr);
+        if (legacy && typeof legacy === 'object') {
+          const title = (legacy.title || '').trim();
+          const tags = Array.isArray(legacy.tags) ? legacy.tags : [];
+          const html = legacy.html || '';
+          const text = html.replace(/<[^>]*>/g, '').trim();
+
+          if (title || text || tags.length > 0) {
+            const migrationId = 'draft_q_migrated_' + Date.now();
+            const snippet = text.substring(0, 150) || title;
+            const draft = {
+              id: migrationId,
+              materialType: 'question',
+              schema: 'antigravity-editor-v2',
+              title: title || 'Без названия',
+              tags: tags,
+              revision: 1,
+              delta: legacy.delta || null,
+              html: html,
+              snippet: snippet,
+              textSnippet: snippet,
+              wordCount: text ? text.split(/\s+/).filter(Boolean).length : 0,
+              charCount: text.length,
+              readingTime: 1,
+              publicationSettings: {
+                materialType: 'question',
+                type: 'question',
+                keywords: tags,
+                targetAudience: 'developers',
+                topics: ['smart-contracts-development'],
+                description: snippet
+              },
+              updatedAt: Date.now()
+            };
+
+            if (this.db) {
+              await this.putToDB(draft);
+            } else {
+              this.putToLocalStorage(draft);
+            }
+
+            this.currentDraftId = migrationId;
+            localStorage.setItem(this.activeDraftKey, migrationId);
+          }
+        }
+      } catch (err) {
+        console.warn('Migration of legacy question draft failed:', err);
+      } finally {
+        try {
+          localStorage.removeItem('smartcontractum_question_draft');
+        } catch (_) {}
+      }
+    }
+
+    async restoreQuestionDraft() {
+      await this.migrateLegacyQuestionDraft();
+
+      const activeId = localStorage.getItem(this.activeDraftKey);
+      let draft = null;
+
+      if (activeId) {
+        if (this.db) {
+          draft = await new Promise((resolve) => {
+            try {
+              const tx = this.db.transaction([STORE_NAME], 'readonly');
+              const store = tx.objectStore(STORE_NAME);
+              const req = store.get(activeId);
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => resolve(null);
+              tx.onerror = () => resolve(null);
+            } catch (_) {
+              resolve(null);
+            }
+          });
+        } else {
+          const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
+          draft = drafts[activeId] || null;
+        }
+      }
+
+      const isQuestion = draft && (
+        draft.materialType === 'question' ||
+        (draft.publicationSettings && (draft.publicationSettings.materialType === 'question' || draft.publicationSettings.type === 'question')) ||
+        (typeof draft.id === 'string' && draft.id.startsWith('draft_q_'))
+      );
+
+      if (draft && isQuestion) {
+        await this.loadDraft(draft, false);
+      } else {
+        const questionDrafts = await this.getAllDrafts();
+        if (questionDrafts.length > 0) {
+          await this.loadDraft(questionDrafts[0], false);
+        } else {
+          await this.createNewDraft();
+        }
+      }
+    }
+
     async autoRestore() {
+      if (this.materialType === 'question') {
+        await this.restoreQuestionDraft();
+        return;
+      }
+
       let requestedType = null;
       try {
         if (typeof window !== 'undefined' && window.location && window.location.search) {
@@ -432,7 +637,13 @@
       }
 
       if (draft) {
-        await this.loadDraft(draft, false);
+        const isQuestion = (draft.materialType === 'question') ||
+          (draft.publicationSettings && (draft.publicationSettings.materialType === 'question' || draft.publicationSettings.type === 'question'));
+        if (isQuestion) {
+          await this.createNewDraft();
+        } else {
+          await this.loadDraft(draft, false);
+        }
       }
     }
 
@@ -452,14 +663,20 @@
       }
 
       this.currentDraftId = draft.id;
-      localStorage.setItem('ag_active_draft_id', draft.id);
+      localStorage.setItem(this.activeDraftKey, draft.id);
       this.currentRevision = (draft && typeof draft.revision === 'number' && draft.revision > 0) ? draft.revision : 1;
       this.currentDraft = draft;
+
+      const tags = Array.isArray(draft.tags)
+        ? draft.tags
+        : (draft.publicationSettings && Array.isArray(draft.publicationSettings.keywords) ? draft.publicationSettings.keywords : []);
+
       this.lastSavedFingerprint = this._computeFingerprint(
         draft.title === 'Без названия' ? '' : (draft.title || ''),
         draft.delta,
         draft.html,
-        draft.publicationSettings
+        draft.publicationSettings,
+        tags
       );
       this.isDirty = false;
 
@@ -478,6 +695,10 @@
         this.editor.setText('');
       }
 
+      if (this.tagsSetter && typeof this.tagsSetter === 'function') {
+        this.tagsSetter(tags);
+      }
+
       // Restore publication settings or reset if not present (backward compatibility)
       if (draft.publicationSettings) {
         if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.loadSettings === 'function') {
@@ -493,11 +714,21 @@
         }
       }
 
+      if (this.onDraftLoaded && typeof this.onDraftLoaded === 'function') {
+        this.onDraftLoaded(draft);
+      }
+
       this.isDirty = false;
       this.setSavingStatus(false);
 
-      if (notify && window.EditorApp && window.EditorApp.showToast) {
-        window.EditorApp.showToast(`Черновик «${draft.title || 'Без названия'}» восстановлен`, 'info');
+      if (notify) {
+        const toastFn = (this.options && this.options.showToast) ||
+                        (window.QuestionEditor && window.QuestionEditor.showToast) ||
+                        (window.EditorApp && window.EditorApp.showToast) ||
+                        (typeof window.showToast === 'function' ? window.showToast : null);
+        if (toastFn) {
+          toastFn(`Черновик «${draft.title || 'Без названия'}» восстановлен`, 'info');
+        }
       }
     }
 
@@ -514,8 +745,8 @@
         this.saveDebounceTimer = null;
       }
 
-      this.currentDraftId = 'draft_' + Date.now();
-      localStorage.setItem('ag_active_draft_id', this.currentDraftId);
+      this.currentDraftId = (this.materialType === 'question' ? 'draft_q_' : 'draft_') + Date.now();
+      localStorage.setItem(this.activeDraftKey, this.currentDraftId);
       this.currentRevision = 1;
       this.lastSavedFingerprint = null;
       this.currentDraft = null;
@@ -532,11 +763,19 @@
         this.editor.setText('');
       }
 
+      if (this.tagsSetter && typeof this.tagsSetter === 'function') {
+        this.tagsSetter([]);
+      }
+
       // Reset publication settings for new draft
       if (window.EditorApp && window.EditorApp.Publication && typeof window.EditorApp.Publication.resetSettings === 'function') {
         window.EditorApp.Publication.resetSettings();
       } else if (window.publicationManager && typeof window.publicationManager.resetSettings === 'function') {
         window.publicationManager.resetSettings();
+      }
+
+      if (this.onDraftReset && typeof this.onDraftReset === 'function') {
+        this.onDraftReset();
       }
 
       this.isDirty = false;
@@ -546,8 +785,14 @@
         this.draftsModal.classList.remove('show');
       }
 
-      if (window.EditorApp && window.EditorApp.showToast) {
-        window.EditorApp.showToast('Создан новый чистый черновик', 'success');
+      await this.updateBadge();
+
+      const toastFn = (this.options && this.options.showToast) ||
+                      (window.QuestionEditor && window.QuestionEditor.showToast) ||
+                      (window.EditorApp && window.EditorApp.showToast) ||
+                      (typeof window.showToast === 'function' ? window.showToast : null);
+      if (toastFn) {
+        toastFn(this.materialType === 'question' ? 'Создан новый вопрос' : 'Создан новый чистый черновик', 'success');
       }
     }
 
@@ -581,22 +826,69 @@
       }
 
       if (this.currentDraftId === id) {
-        await this.createNewDraft();
+        const remaining = await this.getAllDrafts();
+        if (remaining.length > 0) {
+          await this.loadDraft(remaining[0], false);
+        } else {
+          await this.createNewDraft();
+        }
       }
 
       await this.updateBadge();
       await this.renderDraftsList();
     }
 
+    async clearActiveDraft() {
+      return this.deleteCurrentDraft();
+    }
+
+    async deleteCurrentDraft() {
+      const draftIdToDelete = this.currentDraftId;
+      if (this.saveDebounceTimer) {
+        clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = null;
+      }
+      this.isDirty = false;
+
+      if (this.db) {
+        await new Promise((resolve) => {
+          try {
+            const tx = this.db.transaction([STORE_NAME], 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.delete(draftIdToDelete);
+            tx.oncomplete = () => resolve();
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            tx.onerror = () => resolve();
+          } catch (_) {
+            resolve();
+          }
+        });
+      } else {
+        const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
+        delete drafts[draftIdToDelete];
+        localStorage.setItem('ag_drafts_fallback', JSON.stringify(drafts));
+      }
+
+      await this.createNewDraft();
+      await this.updateBadge();
+    }
+
     async openDraftsModal() {
       await this.flush();
       await this.renderDraftsList();
+      if (!this.draftsModal) {
+        this.draftsModal = document.getElementById('drafts-modal');
+      }
       if (this.draftsModal) {
         this.draftsModal.classList.add('show');
       }
     }
 
     async renderDraftsList() {
+      if (!this.draftsListEl) {
+        this.draftsListEl = document.getElementById('drafts-list');
+      }
       if (!this.draftsListEl) return;
       this.draftsListEl.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-muted);">Загрузка...</div>';
 
@@ -619,20 +911,33 @@
           minute: '2-digit'
         });
 
+        const snippetText = d.snippet || d.textSnippet || '';
+        const snippetHtml = snippetText
+          ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${snippetText}</div>`
+          : '';
+
+        const tagsHtml = (Array.isArray(d.tags) && d.tags.length > 0)
+          ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">` +
+            d.tags.map(t => `<span style="display: inline-block; font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">${t}</span>`).join('') +
+            `</div>`
+          : '';
+
         item.innerHTML = `
           <div style="flex: 1; overflow: hidden; padding-right: 12px;">
-            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 3px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
               ${d.title || 'Без названия'}
             </div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 12px;">
+            ${snippetHtml}
+            <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 12px; margin-top: 4px;">
               <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${dateStr}</span>
               <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> ${d.wordCount || 0} сл.</span>
               <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${d.readingTime || 1} мин</span>
             </div>
+            ${tagsHtml}
           </div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn btn-sm btn-load" title="Восстановить">Открыть</button>
-            <button class="btn btn-sm btn-delete text-danger" title="Удалить"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-sm btn-load" type="button" title="Восстановить">Открыть</button>
+            <button class="btn btn-sm btn-delete text-danger" type="button" title="Удалить"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
           </div>
         `;
 
@@ -644,7 +949,8 @@
 
         item.querySelector('.btn-delete').addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (confirm(`Удалить черновик «${d.title}»?`)) {
+          const entityName = this.materialType === 'question' ? 'вопрос' : 'черновик';
+          if (confirm(`Удалить ${entityName} «${d.title || 'Без названия'}»?`)) {
             await this.deleteDraft(d.id);
           }
         });
@@ -655,10 +961,12 @@
 
     getSubmissionIdempotencyKey() {
       const rev = this.currentRevision || (this.currentDraft && (this.currentDraft.revision || this.currentDraft.updatedAt)) || 1;
-      return 'pub_' + this.currentDraftId + '_rev_' + rev;
+      return (this.materialType === 'question')
+        ? ('q_' + this.currentDraftId + '_rev_' + rev)
+        : ('pub_' + this.currentDraftId + '_rev_' + rev);
     }
 
-    _computeFingerprint(title, delta, html, publicationSettings) {
+    _computeFingerprint(title, delta, html, publicationSettings, tags) {
       let filteredSettings = null;
       if (publicationSettings && typeof publicationSettings === 'object') {
         filteredSettings = {};
@@ -672,6 +980,7 @@
         title: (title || '').trim(),
         delta: delta || null,
         html: (html || '').trim(),
+        tags: Array.isArray(tags) ? tags.slice().sort() : [],
         settings: filteredSettings
       });
     }

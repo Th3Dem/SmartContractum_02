@@ -343,6 +343,32 @@
       </div>
     </div>
 
+    <!-- ================================================================
+         DRAFTS MODAL (Matching Editor & Unified Design System)
+    ================================================================= -->
+    <div id="drafts-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="draftsModalTitle">
+      <div class="modal-card drafts-modal-card">
+        <div class="modal-header">
+          <div class="modal-title" id="draftsModalTitle">Сохраненные черновики</div>
+          <button type="button" class="modal-close-btn" id="btn-close-drafts-x" data-modal-close aria-label="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+            <button id="btn-new-draft" class="btn btn-primary btn-sm" type="button">+ Новый вопрос</button>
+          </div>
+          <div id="drafts-list" class="drafts-list"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="btn-close-drafts" data-modal-close type="button">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="questionToast" class="feed-toast" role="status" aria-live="polite" style="display: none;"></div>
   </div>
@@ -353,6 +379,9 @@
 
   <!-- Shared Blots & Core Registration -->
   <script src="js/core.js"></script>
+
+  <!-- Local Drafts & Autosave Manager -->
+  <script src="js/drafts.js"></script>
 
   <!-- Dedicated Question Editor Script -->
   <script src="js/question-editor.js"></script>
