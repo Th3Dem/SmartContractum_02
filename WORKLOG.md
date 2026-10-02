@@ -598,3 +598,4 @@
 [2026-10-02 23:55] | pm_bot | TASK_INIT | Старт задачи Issue #82: Компактный блок автора и метаданных публикации (Task: issue-82-sc031-compact-author-meta)
 [2026-10-02 23:55] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #82 (Task: issue-82-sc031-compact-author-meta)
 [2026-10-02 23:59] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный блок автора и метаданных публикации (Task: issue-82-sc031-compact-author-meta)
+[2026-10-03 00:03] | git_bot | PR_CREATED | Открыт PR #95 для Issue #82 (Fixes #82), ветка feat/issue-82-sc031-compact-author-meta (Task: issue-82-sc031-compact-author-meta)
