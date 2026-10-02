@@ -613,3 +613,4 @@
 [2026-10-03 00:32] | pm_bot | TASK_INIT | Старт задачи Issue #84: Компактный sticky action rail публикации (Task: issue-84-sc031-compact-sticky-action-rail)
 [2026-10-03 00:32] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #84 (Task: issue-84-sc031-compact-sticky-action-rail)
 [2026-10-03 00:40] | dev_bot | IMPLEMENTATION_COMPLETE | Компактный sticky action rail публикации (Task: issue-84-sc031-compact-sticky-action-rail)
+[2026-10-03 00:42] | git_bot | PR_CREATED | Открыт PR #98 для Issue #84 (Fixes #84), ветка feat/issue-84-sc031-compact-sticky-action-rail (Task: issue-84-sc031-compact-sticky-action-rail)
