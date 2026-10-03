@@ -3312,16 +3312,21 @@ body,
   transform: translateY(0);
 }
 
-.btn-rail-action svg {
+.btn-rail-action svg,
+.btn-mobile-action svg {
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
   transition: transform 0.15s ease, fill 0.15s ease, stroke 0.15s ease;
 }
 
-.btn-rail-action:hover svg {
+.btn-rail-action:hover svg,
+.btn-mobile-action:hover svg {
   transform: scale(1.1);
 }
 
-.rail-action-count {
+.rail-action-count,
+.mobile-action-count {
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -3337,46 +3342,60 @@ body,
   flex-shrink: 0;
 }
 
-/* Active State: Like */
-.btn-rail-like.is-liked {
-  color: #e11d48;
-}
-
-.btn-rail-like.is-liked svg {
-  fill: #e11d48;
-  stroke: #e11d48;
-}
-
+/* Active State: Like (#ef4444 from feed.css) */
+.btn-rail-like.is-liked,
 .btn-mobile-like.is-liked {
-  color: #e11d48;
+  color: #ef4444;
+  border-color: #ef4444;
 }
 
+.btn-rail-like.is-liked svg,
 .btn-mobile-like.is-liked svg {
-  fill: #e11d48;
-  stroke: #e11d48;
+  fill: #ef4444;
+  stroke: #ef4444;
 }
 
-/* Active State: Bookmark / Saved */
+.btn-rail-like.is-liked .rail-action-count,
+.btn-mobile-like.is-liked .mobile-action-count {
+  color: #ef4444;
+}
+
+/* Active State: Bookmark / Saved (Unified Amber #f59e0b from feed.css) */
 .btn-rail-bookmark.is-bookmarked,
-.btn-rail-bookmark.is-saved {
-  color: #6366f1;
+.btn-rail-bookmark.is-saved,
+.btn-mobile-bookmark.is-bookmarked,
+.btn-mobile-bookmark.is-saved {
+  color: #f59e0b;
+  border-color: #f59e0b;
 }
 
 .btn-rail-bookmark.is-bookmarked svg,
-.btn-rail-bookmark.is-saved svg {
-  fill: #6366f1;
-  stroke: #6366f1;
-}
-
-.btn-mobile-bookmark.is-bookmarked,
-.btn-mobile-bookmark.is-saved {
-  color: #6366f1;
-}
-
+.btn-rail-bookmark.is-saved svg,
 .btn-mobile-bookmark.is-bookmarked svg,
 .btn-mobile-bookmark.is-saved svg {
-  fill: #6366f1;
-  stroke: #6366f1;
+  fill: #f59e0b;
+  stroke: #f59e0b;
+}
+
+/* Hover/Focus State: Comments (#38bdf8 cyan from feed.css) */
+.btn-rail-comments:hover,
+.btn-rail-comments:focus-visible,
+.btn-mobile-comments:hover,
+.btn-mobile-comments:focus-visible {
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+/* Hover/Focus/Active State: Share (#a855f7 purple from feed.css) */
+.btn-rail-share:hover,
+.btn-rail-share:focus-visible,
+.btn-rail-share.is-active,
+.btn-mobile-share:hover,
+.btn-mobile-share:focus-visible,
+.btn-mobile-share.is-active {
+  color: #a855f7;
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.08);
 }
 
 /* Rail Vote Capsule (Vertical layout) */
