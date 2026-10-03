@@ -104,13 +104,12 @@ class TestIssue90CompactCommentComposer(unittest.TestCase):
         """Verify cancel button logic and Escape hotkey behavior."""
         # Cancel button event listener
         self.assertIn('cancelBtn.addEventListener', self.js)
-        # Draft save and confirmation before collapse if text exists
+        # Draft save and collapse without blocking confirm modal (Issue #111)
         self.assertIn('saveCommentDraft', self.js)
-        self.assertIn('confirm(', self.js)
+        self.assertTrue('collapseCommentComposer()' in self.js)
 
-        # Escape keydown listener collapsing when text is empty
+        # Escape keydown listener
         self.assertIn("e.key === 'Escape'", self.js)
-        self.assertIn('!textarea.value.trim()', self.js)
 
     def test_05_js_session_storage_draft_persistence(self):
         """Verify sessionStorage integration with key draft_comment_."""

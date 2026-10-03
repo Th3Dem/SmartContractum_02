@@ -1450,6 +1450,16 @@ body,
   color: var(--text-primary);
 }
 
+/* Draft indicator when composer is collapsed */
+.comment-composer.has-draft .comment-composer-placeholder-btn {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.comment-composer.has-draft .comment-composer-trigger {
+  border-color: var(--accent-subtle, rgba(99, 102, 241, 0.3));
+}
+
 /* Visibility toggling between states */
 .comment-composer.is-collapsed .comment-composer-trigger {
   display: flex;

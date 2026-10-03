@@ -3892,14 +3892,35 @@
 
     let isPreviewMode = false;
 
+    function updateComposerDraftUI() {
+      const draft = (textarea ? textarea.value : '') || getCommentDraft(articleId);
+      const span = composerOpenBtn ? composerOpenBtn.querySelector('span') : null;
+      if (draft && draft.trim().length > 0) {
+        if (form) form.classList.add('has-draft');
+        if (span) span.textContent = 'Продолжить комментарий...';
+      } else {
+        if (form) form.classList.remove('has-draft');
+        if (span) span.textContent = 'Поделитесь мнением по публикации...';
+      }
+    }
+
     function expandCommentComposer(shouldFocus) {
       if (!form) return;
       form.classList.remove('is-collapsed');
       form.classList.add('is-expanded');
       form.setAttribute('aria-expanded', 'true');
-      if (shouldFocus && textarea) {
-        textarea.focus();
-        autoResizeCommentTextarea(textarea);
+      if (textarea) {
+        if (!textarea.value && articleId) {
+          const draft = getCommentDraft(articleId);
+          if (draft) {
+            textarea.value = draft;
+            if (charCountEl) charCountEl.textContent = draft.length;
+          }
+        }
+        if (shouldFocus) {
+          textarea.focus();
+          autoResizeCommentTextarea(textarea);
+        }
       }
     }
 
@@ -3911,6 +3932,7 @@
       form.classList.remove('is-expanded');
       form.classList.add('is-collapsed');
       form.setAttribute('aria-expanded', 'false');
+      updateComposerDraftUI();
     }
 
     function toggleCommentPreview() {
@@ -3979,7 +4001,7 @@
       if (savedDraft && savedDraft.trim().length > 0) {
         textarea.value = savedDraft;
         if (charCountEl) charCountEl.textContent = savedDraft.length;
-        expandCommentComposer(false);
+        updateComposerDraftUI();
       }
     }
 
@@ -4068,13 +4090,14 @@
             }
             return;
           }
-          // Escape to collapse if empty
+          // Escape to collapse
           if (e.key === 'Escape') {
-            if (!textarea.value.trim()) {
-              e.preventDefault();
-              collapseCommentComposer();
-              if (composerOpenBtn) composerOpenBtn.focus();
+            e.preventDefault();
+            if (textarea && textarea.value) {
+              saveCommentDraft(articleId, textarea.value);
             }
+            collapseCommentComposer();
+            if (composerOpenBtn) composerOpenBtn.focus();
             return;
           }
           // Ctrl+B / Cmd+B for bold
@@ -4094,15 +4117,36 @@
 
       if (cancelBtn) {
         cancelBtn.addEventListener('click', function () {
-          const content = textarea ? textarea.value.trim() : '';
-          if (content.length > 0) {
+          if (textarea && textarea.value) {
             saveCommentDraft(articleId, textarea.value);
-            const confirmed = confirm('Свернуть форму? Черновик комментария сохранен.');
-            if (!confirmed) {
-              return;
-            }
           }
           collapseCommentComposer();
+          if (composerOpenBtn) composerOpenBtn.focus();
+        });
+      }
+
+      // Click outside / pointerdown outside: collapse composer when clicking away
+      function handleCommentClickOutside(e) {
+        if (!form || !form.classList.contains('is-expanded')) return;
+        if (!form.contains(e.target)) {
+          if (textarea && textarea.value) {
+            saveCommentDraft(articleId, textarea.value);
+          }
+          collapseCommentComposer();
+        }
+      }
+      document.addEventListener('pointerdown', handleCommentClickOutside);
+
+      if (form) {
+        form.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && form.classList.contains('is-expanded')) {
+            e.preventDefault();
+            if (textarea && textarea.value) {
+              saveCommentDraft(articleId, textarea.value);
+            }
+            collapseCommentComposer();
+            if (composerOpenBtn) composerOpenBtn.focus();
+          }
         });
       }
 

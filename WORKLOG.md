@@ -675,4 +675,7 @@
 [2026-10-03 13:01] | dev_bot | IMPLEMENTATION_COMPLETE | Исправить и синхронизировать sticky Table of Contents с Action Rail (Task: issue-110-toc-sticky-synchronization)
 [2026-10-03 13:02] | git_bot | PR_CREATED | Открыт PR #119 для Issue #110 (Fixes #110), ветка feat/issue-110-toc-sticky-synchronization (Task: issue-110-toc-sticky-synchronization)
 [2026-10-03 13:04] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #119 готов к слиянию владельцем (Task: issue-110-toc-sticky-synchronization)
+[2026-10-03 13:05] | pm_bot | TASK_INIT | Старт задачи Issue #111: Comment Composer: автоматически схлопывать при click outside и blur (Task: issue-111-comment-composer-click-away)
+[2026-10-03 13:05] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #111 (Task: issue-111-comment-composer-click-away)
+[2026-10-03 13:09] | dev_bot | IMPLEMENTATION_COMPLETE | Comment Composer: автоматически схлопывать при click outside и blur (Task: issue-111-comment-composer-click-away)
 
