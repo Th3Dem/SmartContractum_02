@@ -708,6 +708,8 @@
 [2026-10-03 14:26] | pm_bot | TASK_INIT | Старт задачи Issue #127: Добавить публичную метрику количества сохранений публикации (Save Count) (Task: issue-127-publication-save-count-metric)
 [2026-10-03 14:26] | pm_bot | DEV_ASSIGN | Назначение реализации fullstack на py_bot и dev_bot для Issue #127 (Task: issue-127-publication-save-count-metric)
 [2026-10-03 14:44] | dev_bot | IMPLEMENTATION_COMPLETE | Добавить публичную метрику количества сохранений публикации (Save Count) (Task: issue-127-publication-save-count-metric)
+[2026-10-03 14:45] | git_bot | PR_CREATED | Открыт PR #129 для Issue #127 (Fixes #127), ветка feat/issue-127-publication-save-count-metric (Task: issue-127-publication-save-count-metric)
+[2026-10-03 14:47] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #129 готов к слиянию владельцем (Task: issue-127-publication-save-count-metric)
 
 
 
