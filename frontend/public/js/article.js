@@ -5041,43 +5041,11 @@
     const readingTimeEl = document.getElementById('articleReadingTime');
     if (readingTimeEl) readingTimeEl.textContent = (article.readingTime || '5 мин') + ' чтения';
 
-    // Badges: Topic, Format, Complexity
+    // Header badges container hidden; topics relocated to footer (Issue #107)
     const badgesWrap = document.getElementById('articleBadges');
     if (badgesWrap) {
       badgesWrap.innerHTML = '';
-
-      if (window.PublicationConfig && article.topics && article.topics.length > 0) {
-        article.topics.forEach(function (topicId) {
-          const t = window.PublicationConfig.getTopicById(topicId);
-          if (t) {
-            const topicBadge = document.createElement('a');
-            topicBadge.href = 'feed.html?topic=' + encodeURIComponent(t.id);
-            topicBadge.className = 'meta-badge topic-badge';
-            topicBadge.textContent = t.title;
-            badgesWrap.appendChild(topicBadge);
-          }
-        });
-      }
-
-      if (window.PublicationConfig && article.format) {
-        const f = window.PublicationConfig.getFormatById(article.format);
-        if (f) {
-          const formatBadge = document.createElement('span');
-          formatBadge.className = 'meta-badge format-badge';
-          formatBadge.textContent = f.title;
-          badgesWrap.appendChild(formatBadge);
-        }
-      }
-
-      if (window.PublicationConfig && article.complexity && article.complexity !== 'none') {
-        const c = window.PublicationConfig.getComplexityById(article.complexity);
-        if (c) {
-          const complexityBadge = document.createElement('span');
-          complexityBadge.className = 'meta-badge complexity-badge complexity-' + article.complexity;
-          complexityBadge.textContent = c.title;
-          badgesWrap.appendChild(complexityBadge);
-        }
-      }
+      badgesWrap.style.display = 'none';
     }
 
     // Cover Image (Issue #88)
@@ -5121,6 +5089,29 @@
         tagsWrap.style.display = 'flex';
       } else {
         tagsWrap.style.display = 'none';
+      }
+    }
+
+    // Topics Relocation to Footer (Issue #107)
+    const topicsWrap = document.getElementById('articleTopicsWrap');
+    const topicsList = document.getElementById('articleTopicsList');
+    if (topicsWrap && topicsList) {
+      topicsList.innerHTML = '';
+      if (window.PublicationConfig && Array.isArray(article.topics) && article.topics.length > 0) {
+        article.topics.forEach(function (topicId) {
+          const t = window.PublicationConfig.getTopicById(topicId);
+          if (t) {
+            const topicBadge = document.createElement('a');
+            topicBadge.href = 'feed.html?topic=' + encodeURIComponent(t.id);
+            topicBadge.className = 'meta-badge topic-badge';
+            topicBadge.classList.add('article-topic-item');
+            topicBadge.textContent = t.title;
+            topicsList.appendChild(topicBadge);
+          }
+        });
+        topicsWrap.style.display = topicsList.children.length > 0 ? 'flex' : 'none';
+      } else {
+        topicsWrap.style.display = 'none';
       }
     }
 

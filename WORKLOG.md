@@ -655,4 +655,7 @@
 [2026-10-03 12:27] | dev_bot | IMPLEMENTATION_COMPLETE | Унификация геометрии элементов reader с дизайн-системой SmartContractum (Task: issue-106-reader-geometry-unification)
 [2026-10-03 12:28] | git_bot | PR_CREATED | Открыт PR #115 для Issue #106 (Fixes #106), ветка feat/issue-106-reader-geometry-unification (Task: issue-106-reader-geometry-unification)
 [2026-10-03 12:33] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #115 готов к слиянию владельцем (Task: issue-106-reader-geometry-unification)
+[2026-10-03 12:34] | pm_bot | TASK_INIT | Старт задачи Issue #107: Перенести темы публикации из header в footer под ключевые слова (Task: issue-107-topics-relocation-footer)
+[2026-10-03 12:34] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #107 (Task: issue-107-topics-relocation-footer)
+[2026-10-03 12:37] | dev_bot | IMPLEMENTATION_COMPLETE | Перенести темы публикации из header в footer под ключевые слова (Task: issue-107-topics-relocation-footer)
 

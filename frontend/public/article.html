@@ -267,7 +267,8 @@
       <article id="articleContentWrap" class="article-content-wrapper" style="display: none;">
         <!-- Header: Badges, Title, Lead & Author Meta -->
         <header class="article-header">
-          <div class="article-badges" id="articleBadges"></div>
+          <!-- Legacy badges container hidden in header; topics relocated to footer (Issue #107) -->
+          <div class="article-badges" id="articleBadges" style="display: none;" aria-hidden="true"></div>
           <h1 class="article-title" id="articleTitle"></h1>
           <p class="article-lead" id="articleLead"></p>
 
@@ -334,6 +335,12 @@
           <div class="article-tags-wrap" id="articleTagsWrap">
             <span class="tags-label">Ключевые слова:</span>
             <div class="article-tags-list" id="articleTagsList"></div>
+          </div>
+
+          <!-- Topics Relocated to Footer (Issue #107) -->
+          <div class="article-topics-wrap" id="articleTopicsWrap" style="display: none;">
+            <span class="topics-label">Темы:</span>
+            <div class="article-topics-list" id="articleTopicsList"></div>
           </div>
 
           <!-- Expanded Bottom Author Card (Issue #89) -->
