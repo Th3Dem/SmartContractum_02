@@ -485,6 +485,26 @@
               <button type="button" class="feed-status-pill" data-status="solved">Решенные</button>
             </div>
 
+            <!-- Saved Hub material type pills (visible only in saved tab) -->
+            <div class="feed-saved-hub-pills" id="feedSavedHubPills" style="display: none;" role="radiogroup" aria-label="Тип сохраненных материалов">
+              <button type="button" class="feed-saved-pill active" data-saved-type="all" aria-checked="true">
+                <span>Все</span>
+                <span class="feed-saved-pill-count" id="savedCountAll">0</span>
+              </button>
+              <button type="button" class="feed-saved-pill" data-saved-type="publications" aria-checked="false">
+                <span>Публикации</span>
+                <span class="feed-saved-pill-count" id="savedCountPublications">0</span>
+              </button>
+              <button type="button" class="feed-saved-pill" data-saved-type="questions" aria-checked="false">
+                <span>Вопросы</span>
+                <span class="feed-saved-pill-count" id="savedCountQuestions">0</span>
+              </button>
+              <button type="button" class="feed-saved-pill" data-saved-type="comments" aria-checked="false">
+                <span>Комментарии</span>
+                <span class="feed-saved-pill-count" id="savedCountComments">0</span>
+              </button>
+            </div>
+
             <!-- Filters Toggle button -->
             <button
               type="button"
