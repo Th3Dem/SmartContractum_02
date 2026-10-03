@@ -5365,6 +5365,15 @@
     return scored.slice(0, 3).map(function (s) { return s.article; });
   }
 
+  function resolveTopicTitle(topicIdOrTitle) {
+    if (!topicIdOrTitle) return '';
+    if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
+      const t = window.PublicationConfig.getTopicById(topicIdOrTitle);
+      if (t && t.title) return t.title;
+    }
+    return topicIdOrTitle;
+  }
+
   function renderRelatedCardHtml(item) {
     const title = escapeHtml(item.title || 'Публикация');
     const author = escapeHtml(item.author || 'Автор платформы');
@@ -5372,12 +5381,13 @@
     const readingTime = escapeHtml(item.readingTime || '3 мин');
     const articleUrl = 'article.html?id=' + encodeURIComponent(item.id);
 
-    // Topics chips (up to 2)
+    // Topics chips (up to 2) with human-readable titles
     const topics = Array.isArray(item.topics) ? item.topics : (item.topic ? [item.topic] : []);
     let topicsHtml = '';
     const maxTopics = Math.min(topics.length, 2);
     for (let i = 0; i < maxTopics; i++) {
-      topicsHtml += '<span class="related-topic-chip">' + escapeHtml(topics[i]) + '</span>';
+      const topicTitle = resolveTopicTitle(topics[i]);
+      topicsHtml += '<span class="related-topic-chip">' + escapeHtml(topicTitle) + '</span>';
     }
 
     // Cover image
