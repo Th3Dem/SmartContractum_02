@@ -4277,6 +4277,12 @@ button.author-name:focus-visible,
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  object-fit: cover;
+}
+
+.entity-avatar-img {
+  object-fit: cover;
+  display: block;
 }
 
 .entity-info-block {

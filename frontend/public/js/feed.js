@@ -1290,14 +1290,15 @@
       subscriptions: 'Мои подписки — SmartContractum',
       my: 'Мои подписки — SmartContractum',
       clubs: 'Клубы и сообщества — SmartContractum',
-      companies: 'Компании — SmartContractum',
+      companies: 'Блоги - SmartContractum',
+      blogs: 'Блоги - SmartContractum',
       directions: 'Темы — SmartContractum',
       saved: 'Сохраненные — SmartContractum'
     };
     const t = titles[state.tab] || 'Лента публикаций — SmartContractum';
     document.title = t;
     if (titleEl) {
-      titleEl.textContent = t.split(' — ')[0];
+      titleEl.textContent = t.split(' - ')[0].replace(/ \S+ SmartContractum$/, '');
     }
   }
 
@@ -5595,23 +5596,27 @@
     grid.innerHTML = '';
 
     if (!companies || companies.length === 0) {
-      grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Компании не найдены. Зарегистрируйте первую технологическую компанию.</p></div>';
+      grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Блоги компаний не найдены. Создайте первый корпоративный блог.</p></div>';
       return;
     }
 
     companies.forEach(function (comp) {
       const card = document.createElement('div');
-      card.className = 'entity-card';
+      card.className = 'entity-card company-card';
       card.setAttribute('data-company-id', comp.id);
 
       const avatarInitials = getInitials(comp.name);
+      const avatarHtml = comp.logo
+        ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="entity-avatar entity-avatar-img">'
+        : '<div class="entity-avatar">' + escapeHtml(avatarInitials) + '</div>';
+
       const verifiedIcon = comp.isVerified
         ? '<span class="verified-icon" title="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
         : '';
 
       card.innerHTML =
         '<div class="entity-card-header">' +
-          '<div class="entity-avatar">' + escapeHtml(avatarInitials) + '</div>' +
+          avatarHtml +
           '<div class="entity-card-title-wrap">' +
             '<div style="display: flex; align-items: center; gap: 6px;">' +
               '<h3 class="entity-card-title">' + escapeHtml(comp.name) + '</h3>' +
@@ -5633,7 +5638,7 @@
           '</span>' +
         '</div>' +
         '<div class="entity-card-actions">' +
-          '<button type="button" class="btn btn-secondary btn-entity-open">О компании</button>' +
+          '<button type="button" class="btn btn-secondary btn-entity-open">О блоге</button>' +
           '<button type="button" class="btn btn-secondary btn-entity-sub ' + (comp.isSubscribed ? 'is-subscribed' : '') + '">' +
             (comp.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
           '</button>' +
@@ -5641,20 +5646,32 @@
 
       const openBtn = card.querySelector('.btn-entity-open');
       if (openBtn) {
-        openBtn.addEventListener('click', function () { openCompanyDetail(comp.id); });
+        openBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openCompanyDetail(comp.id);
+        });
       }
       const titleEl = card.querySelector('.entity-card-title');
       if (titleEl) {
         titleEl.style.cursor = 'pointer';
-        titleEl.addEventListener('click', function () { openCompanyDetail(comp.id); });
+        titleEl.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openCompanyDetail(comp.id);
+        });
       }
 
       const subBtn = card.querySelector('.btn-entity-sub');
       if (subBtn) {
-        subBtn.addEventListener('click', function () {
+        subBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
           toggleSubscription('company', comp.id, subBtn, comp.name);
         });
       }
+
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        openCompanyDetail(comp.id);
+      });
 
       grid.appendChild(card);
     });
@@ -5695,13 +5712,20 @@
     if (!detailCard) return;
 
     const avatarInitials = getInitials(comp.name);
+    const avatarHtml = comp.logo
+      ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="entity-avatar entity-avatar-large entity-avatar-img">'
+      : '<div class="entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>';
     const verifiedIcon = comp.isVerified
       ? '<span class="verified-icon" title="Верифицированная компания"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
       : '';
 
+    const writeBtnHtml = comp.canPublish
+      ? '<a href="editor.html?companyId=' + encodeURIComponent(comp.id) + '" class="btn btn-primary btn-comp-write" style="margin-left: 8px;">Написать от компании</a>'
+      : '';
+
     detailCard.innerHTML =
       '<div class="entity-detail-top">' +
-        '<div class="entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>' +
+        avatarHtml +
         '<div class="entity-detail-info">' +
           '<div style="display: flex; align-items: center; gap: 8px;">' +
             '<h2 class="entity-detail-title">' + escapeHtml(comp.name) + '</h2>' +
@@ -5724,6 +5748,7 @@
             '<button type="button" class="btn btn-secondary btn-comp-sub ' + (comp.isSubscribed ? 'is-subscribed' : '') + '">' +
               (comp.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
             '</button>' +
+            writeBtnHtml +
           '</div>' +
         '</div>' +
       '</div>';
