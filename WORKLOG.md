@@ -693,6 +693,8 @@
 [2026-10-03 13:34] | pm_bot | TASK_INIT | Старт задачи Issue #114: Финальный reader polish и регрессионное тестирование (Task: issue-114-reader-final-polish-regression)
 [2026-10-03 13:34] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #114 (Task: issue-114-reader-final-polish-regression)
 [2026-10-03 13:38] | dev_bot | IMPLEMENTATION_COMPLETE | Финальный reader polish и регрессионное тестирование (Task: issue-114-reader-final-polish-regression)
+[2026-10-03 13:38] | git_bot | PR_CREATED | Открыт PR #123 для Issue #114 (Fixes #114), ветка feat/issue-114-reader-final-polish-regression (Task: issue-114-reader-final-polish-regression)
+
 
 
 
