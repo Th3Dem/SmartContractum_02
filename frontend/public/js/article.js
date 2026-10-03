@@ -4831,7 +4831,11 @@
     const authorId = article.authorId || article.author_id || article.author || '';
     const avatarEl = document.getElementById('articleAuthorAvatar');
     if (avatarEl) {
-      avatarEl.textContent = article.authorInitials || 'SC';
+      if (article.authorAvatar) {
+        avatarEl.innerHTML = '<img src="' + escapeHtml(article.authorAvatar) + '" alt="' + escapeHtml(article.author || '') + '" class="author-avatar-img">';
+      } else {
+        avatarEl.textContent = article.authorInitials || 'SC';
+      }
       if (authorId) {
         avatarEl.setAttribute('data-author-id', authorId);
         avatarEl.setAttribute('data-user-id', authorId);

@@ -2243,6 +2243,39 @@ body,
   outline-offset: 2px;
 }
 
+/* Ensure author avatar circle, gradient background and text are protected from btn-author-profile (Issue #108) */
+.article-author-avatar.btn-author-profile {
+  width: 40px;
+  height: 40px;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3861fb 0%, #38bdf8 100%) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none !important;
+  border: none;
+  overflow: hidden;
+}
+
+.article-author-avatar.btn-author-profile:hover,
+.article-author-avatar.btn-author-profile:focus-visible {
+  text-decoration: none !important;
+  color: #ffffff !important;
+  opacity: 0.9;
+  transform: scale(1.04);
+}
+
+.article-author-avatar .author-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
 /* ==========================================================================
    Threaded Comments Styles (Issue #27 / SC-025)
    ========================================================================== */
@@ -3420,12 +3453,9 @@ body,
    ========================================================================== */
 
 .article-bottom-author {
-  margin-top: 32px;
-  padding: 24px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg, 12px);
-  box-sizing: border-box;
+  display: none !important;
+  margin: 0;
+  padding: 0;
 }
 
 .bottom-author-header {

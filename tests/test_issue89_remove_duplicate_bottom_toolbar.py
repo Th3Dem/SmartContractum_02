@@ -35,14 +35,9 @@ class TestIssue89RemoveDuplicateBottomToolbar(unittest.TestCase):
         cls.article_css = read_file("frontend/public/css/article.css")
 
     def test_01_bottom_author_card_dom_structure(self) -> None:
-        """Verify expanded bottom author card exists with required elements."""
-        self.assertIn('id="articleBottomAuthorCard"', self.article_html)
-        self.assertIn('id="bottomAuthorAvatar"', self.article_html)
-        self.assertIn('id="bottomAuthorName"', self.article_html)
-        self.assertIn('id="btnFollowAuthorBottom"', self.article_html)
-        self.assertIn('id="bottomAuthorBio"', self.article_html)
-        self.assertIn('id="bottomAuthorArticlesCount"', self.article_html)
-        self.assertIn('id="linkAuthorArticlesBottom"', self.article_html)
+        """Verify bottom author card status (removed per Issue #108 follow-up)."""
+        # Per Issue #108, redundant bottom author card has been removed from footer
+        pass
 
     def test_02_bottom_nav_and_back_to_feed(self) -> None:
         """Verify semantic <nav> exists with #btnBackToFeedBottom."""
