@@ -698,6 +698,8 @@
 [2026-10-03 13:53] | pm_bot | TASK_INIT | Старт задачи Issue #124: Article Rating: локализовать active border и glow вокруг выбранной стрелки в Action Rail (Task: issue-124-article-rail-vote-active-state)
 [2026-10-03 13:53] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #124 (Task: issue-124-article-rail-vote-active-state)
 [2026-10-03 13:55] | dev_bot | IMPLEMENTATION_COMPLETE | Article Rating: локализовать active border и glow вокруг выбранной стрелки в Action Rail (Task: issue-124-article-rail-vote-active-state)
+[2026-10-03 13:55] | git_bot | PR_CREATED | Открыт PR #125 для Issue #124 (Fixes #124), ветка feat/issue-124-article-rail-vote-active-state (Task: issue-124-article-rail-vote-active-state)
+
 
 
 
