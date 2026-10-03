@@ -6541,13 +6541,11 @@
           data.questions.slice(0, 3).forEach(function (q) {
             const item = document.createElement('div');
             item.className = 'unanswered-item';
-            const topicTitle = (window.PublicationConfig && window.PublicationConfig.TOPICS_MAP && window.PublicationConfig.TOPICS_MAP[q.topic]) || q.topic || '';
             const dateStr = q.date || '';
             item.innerHTML =
               '<a href="article.html?id=' + encodeURIComponent(q.id) + '" class="unanswered-item-title">' + escapeHtml(q.title) + '</a>' +
               '<div class="unanswered-item-meta">' +
                 (dateStr ? '<span>' + escapeHtml(dateStr) + '</span>' : '') +
-                (topicTitle ? '<span>' + (dateStr ? ' • ' : '') + escapeHtml(topicTitle) + '</span>' : '') +
               '</div>';
             listEl.appendChild(item);
           });
@@ -6561,13 +6559,8 @@
         allUnansweredLink._boundClick = true;
         allUnansweredLink.addEventListener('click', function (e) {
           e.preventDefault();
-          state.tab = 'questions';
           state.questionStatus = 'unanswered';
-          state.offset = 0;
-          updateSubnavTabsUI();
-          updateQuestionStatusPillsUI();
-          syncURL(false);
-          fetchFeed(true);
+          switchTab('questions');
         });
       }
     }
