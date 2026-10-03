@@ -658,4 +658,5 @@
 [2026-10-03 12:34] | pm_bot | TASK_INIT | Старт задачи Issue #107: Перенести темы публикации из header в footer под ключевые слова (Task: issue-107-topics-relocation-footer)
 [2026-10-03 12:34] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #107 (Task: issue-107-topics-relocation-footer)
 [2026-10-03 12:37] | dev_bot | IMPLEMENTATION_COMPLETE | Перенести темы публикации из header в footer под ключевые слова (Task: issue-107-topics-relocation-footer)
+[2026-10-03 12:38] | git_bot | PR_CREATED | Открыт PR #116 для Issue #107 (Fixes #107), ветка feat/issue-107-topics-relocation-footer (Task: issue-107-topics-relocation-footer)
 
