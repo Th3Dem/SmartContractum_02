@@ -664,4 +664,5 @@
 [2026-10-03 12:40] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #108 (Task: issue-108-author-meta-and-remove-bottom-card)
 [2026-10-03 12:45] | dev_bot | IMPLEMENTATION_COMPLETE | Исправить author meta и удалить избыточную нижнюю карточку автора (Task: issue-108-author-meta-and-remove-bottom-card)
 [2026-10-03 12:45] | git_bot | PR_CREATED | Открыт PR #117 для Issue #108 (Fixes #108), ветка feat/issue-108-author-meta-and-remove-bottom-card (Task: issue-108-author-meta-and-remove-bottom-card)
+[2026-10-03 12:48] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #117 готов к слиянию владельцем (Task: issue-108-author-meta-and-remove-bottom-card)
 
