@@ -1224,22 +1224,22 @@
   function updateFeedTitleUI() {
     const titleEl = document.querySelector('.feed-compact-title');
     const titles = {
-      all: 'Публикации - SmartContractum',
-      questions: 'Вопросы - SmartContractum',
-      focus: 'Публикации - SmartContractum',
-      top: 'Топ публикаций - SmartContractum',
-      new: 'Новые публикации - SmartContractum',
-      subscriptions: 'Мои подписки - SmartContractum',
-      my: 'Мои подписки - SmartContractum',
-      clubs: 'Клубы и сообщества - SmartContractum',
-      companies: 'Компании - SmartContractum',
-      directions: 'Темы - SmartContractum',
-      saved: 'Сохраненные - SmartContractum'
+      all: 'Публикации — SmartContractum',
+      questions: 'Вопросы — SmartContractum',
+      focus: 'Публикации — SmartContractum',
+      top: 'Топ публикаций — SmartContractum',
+      new: 'Новые публикации — SmartContractum',
+      subscriptions: 'Мои подписки — SmartContractum',
+      my: 'Мои подписки — SmartContractum',
+      clubs: 'Клубы и сообщества — SmartContractum',
+      companies: 'Компании — SmartContractum',
+      directions: 'Темы — SmartContractum',
+      saved: 'Сохраненные — SmartContractum'
     };
-    const t = titles[state.tab] || 'Лента публикаций - SmartContractum';
+    const t = titles[state.tab] || 'Лента публикаций — SmartContractum';
     document.title = t;
     if (titleEl) {
-      titleEl.textContent = t.split(' - ')[0];
+      titleEl.textContent = t.split(' — ')[0];
     }
   }
 

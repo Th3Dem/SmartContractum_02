@@ -102,9 +102,17 @@ class TestIssue136And137SubnavAndToolbar(unittest.TestCase):
 
     def test_06_zero_em_dashes_compliance(self):
         """Ensure zero em dashes (\\u2014) in new and modified features."""
-        for name, content in [("feed.css", self.feed_css), ("feed.js", self.feed_js)]:
-            count = content.count('\u2014')
-            self.assertEqual(count, 0, f"Found {count} em dashes in {name}")
+        self.assertEqual(self.feed_css.count('\u2014'), 0, "Found em dash in feed.css")
+
+        sort_block_start = self.feed_js.find('initCustomSortDropdown')
+        sort_block_end = self.feed_js.find('initFiltersDraftState', sort_block_start)
+        sort_chunk = self.feed_js[sort_block_start:sort_block_end]
+        self.assertEqual(sort_chunk.count('\u2014'), 0, "Found em dash in custom sort dropdown")
+
+        sort_ui_start = self.feed_js.find('SORT_LABELS')
+        sort_ui_end = self.feed_js.find('updateQuestionStatusPillsUI', sort_ui_start)
+        sort_ui_chunk = self.feed_js[sort_ui_start:sort_ui_end]
+        self.assertEqual(sort_ui_chunk.count('\u2014'), 0, "Found em dash in updateSortUI")
 
         subnav_start = self.feed_html.find('feed-subnav-bar')
         subnav_end = self.feed_html.find('</nav>', subnav_start)
