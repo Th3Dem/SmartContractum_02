@@ -718,6 +718,8 @@
 [2026-10-03 15:48] | pm_bot | TASK_INIT | Старт задачи Issue #133: Report: user-scoped состояние жалоб для материалов и комментариев (Task: issue-133-user-scoped-report-state)
 [2026-10-03 15:48] | pm_bot | DEV_ASSIGN | Назначение реализации fullstack на py_bot и dev_bot для Issue #133 (Task: issue-133-user-scoped-report-state)
 [2026-10-03 15:55] | dev_bot | IMPLEMENTATION_COMPLETE | Report: user-scoped состояние жалоб для материалов и комментариев (Task: issue-133-user-scoped-report-state)
+[2026-10-03 15:56] | git_bot | PR_CREATED | Открыт PR #135 для Issue #133 (Fixes #133), ветка fix/issue-133-user-scoped-report-state (Task: issue-133-user-scoped-report-state)
+[2026-10-03 15:58] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #135 готов к слиянию владельцем (Task: issue-133-user-scoped-report-state)
 
 
 
