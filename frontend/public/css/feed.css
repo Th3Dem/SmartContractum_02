@@ -355,6 +355,7 @@
   grid-template-rows: 1fr;
   margin-top: 12px;
   margin-bottom: 16px;
+  overflow: visible;
 }
 
 .feed-filters-drawer-wrap > #feedFiltersPanel {
@@ -367,7 +368,13 @@
 
 .feed-filters-drawer-wrap.is-open > #feedFiltersPanel {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
+  overflow: visible;
+}
+
+.feed-filters-drawer-wrap.is-open #feedFiltersPanel .feed-slide-panel-body,
+#feedFiltersPanel.feed-filters-panel .feed-slide-panel-body {
+  overflow: visible;
 }
 
 @media (prefers-reduced-motion: reduce) {

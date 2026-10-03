@@ -1026,6 +1026,7 @@
   }
 
   function closeFeedFiltersPanel() {
+    closeAllFilterDropdowns();
     const panel = document.getElementById('feedFiltersPanel');
     const toggleBtn = document.getElementById('btnFeedFiltersToggle');
     const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
@@ -1281,6 +1282,7 @@
   }
 
   function switchTab(tabName) {
+    closeAllFilterDropdowns();
     if (tabName === 'my') tabName = 'subscriptions';
     if (tabName === 'focus') tabName = 'all';
     if (tabName === 'blogs') tabName = 'companies';
@@ -2547,21 +2549,16 @@
   function positionDropdownMenu(menu, trigger) {
     if (!menu || !trigger || menu.style.display === 'none') return;
     const rect = trigger.getBoundingClientRect();
-    const panelBody = document.querySelector('#feedFiltersPanel .feed-slide-panel-body');
-    if (panelBody) {
-      const bodyRect = panelBody.getBoundingClientRect();
-      if (rect.bottom < bodyRect.top || rect.top > bodyRect.bottom) {
-        closeDropdownMenu(menu, trigger);
-        return;
-      }
-    }
 
     const headerEl = document.getElementById('feedSubnavBar') || document.querySelector('.feed-slide-panel-header');
     const headerBottom = headerEl ? Math.max(0, headerEl.getBoundingClientRect().bottom) : 0;
-    const panelFooter = document.querySelector('#feedFiltersPanel .feed-slide-panel-footer');
-    const footerTop = panelFooter ? panelFooter.getBoundingClientRect().top : window.innerHeight;
 
-    const spaceBelow = Math.max(0, footerTop - rect.bottom - 8);
+    if (rect.bottom < headerBottom || rect.top > window.innerHeight) {
+      closeDropdownMenu(menu, trigger);
+      return;
+    }
+
+    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 8);
     const spaceAbove = Math.max(0, rect.top - headerBottom - 8);
 
     menu.style.position = 'fixed';
