@@ -3456,6 +3456,13 @@ body,
   stroke: #f59e0b;
 }
 
+.btn-rail-bookmark.is-bookmarked .rail-action-count,
+.btn-rail-bookmark.is-saved .rail-action-count,
+.btn-mobile-bookmark.is-bookmarked .mobile-action-count,
+.btn-mobile-bookmark.is-saved .mobile-action-count {
+  color: #f59e0b;
+}
+
 /* Hover/Focus State: Comments (#38bdf8 cyan from feed.css) */
 .btn-rail-comments:hover,
 .btn-rail-comments:focus-visible,

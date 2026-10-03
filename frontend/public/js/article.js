@@ -197,6 +197,20 @@
     return getBookmarks().indexOf(id) !== -1;
   }
 
+  function syncLocalBookmarksWithServer() {
+    if (!currentUser) return;
+    const bookmarks = getBookmarks();
+    if (!bookmarks || bookmarks.length === 0) return;
+    fetch('/api/articles/sync-saves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ articleIds: bookmarks })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function () {})
+    .catch(function () {});
+  }
+
   function toggleBookmark(id) {
     if (!id) return false;
     const bookmarks = getBookmarks();
@@ -214,6 +228,40 @@
     try {
       localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
     } catch (e) {}
+
+    // Optimistic update of saves count
+    if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
+      const prevCount = typeof currentArticle.savesCount === 'number'
+        ? currentArticle.savesCount
+        : (typeof currentArticle.saves_count === 'number' ? currentArticle.saves_count : 0);
+      currentArticle.savesCount = bookmarked ? (prevCount + 1) : Math.max(0, prevCount - 1);
+      currentArticle.saves_count = currentArticle.savesCount;
+      currentArticle.hasSaved = bookmarked;
+      currentArticle.isSaved = bookmarked;
+    }
+    syncBookmarkButtons(id);
+
+    // Sync with backend if user is authenticated
+    if (currentUser) {
+      fetch('/api/articles/' + encodeURIComponent(id) + (bookmarked ? '/save' : '/unsave'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success && typeof data.savesCount === 'number') {
+          if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
+            currentArticle.savesCount = data.savesCount;
+            currentArticle.saves_count = data.savesCount;
+            currentArticle.hasSaved = Boolean(data.hasSaved);
+            currentArticle.isSaved = Boolean(data.hasSaved);
+          }
+          syncBookmarkButtons(id);
+        }
+      })
+      .catch(function () {});
+    }
+
     return bookmarked;
   }
 
@@ -231,13 +279,21 @@
       btn.classList.toggle('is-bookmarked', bookmarked);
       btn.classList.toggle('is-saved', bookmarked);
       btn.setAttribute('aria-pressed', bookmarked ? 'true' : 'false');
-      const label = btn.querySelector('.bookmark-text') || btn.querySelector('span');
+      const label = btn.querySelector('.bookmark-text');
       if (label) {
         label.textContent = bookmarked ? 'Сохранено' : 'Сохранить';
       }
       btn.title = bookmarked ? 'Сохранено' : 'Сохранить';
       btn.setAttribute('aria-label', bookmarked ? 'Удалить из сохраненного' : 'Сохранить публикацию');
     });
+
+    const count = (currentArticle && typeof currentArticle.savesCount === 'number')
+      ? currentArticle.savesCount
+      : ((currentArticle && typeof currentArticle.saves_count === 'number') ? currentArticle.saves_count : 0);
+    const railCount = document.getElementById('railBookmarkCount');
+    if (railCount) railCount.textContent = count;
+    const mobileCount = document.getElementById('mobileBookmarkCount');
+    if (mobileCount) mobileCount.textContent = count;
   }
 
   function showToast(message) {
@@ -1231,6 +1287,7 @@
           currentUser = data.user;
           window.currentUser = data.user;
           loadUserCommentSubscriptions();
+          syncLocalBookmarksWithServer();
         } else {
           currentUser = null;
           window.currentUser = null;
@@ -1453,6 +1510,18 @@
           currentArticle.canVote = fresh.canVote !== undefined ? fresh.canVote : false;
           currentArticle.isAuthor = fresh.isAuthor !== undefined ? fresh.isAuthor : Boolean(currentUser && (currentUser.id === currentArticle.authorId || currentUser.id === currentArticle.author_id));
           syncArticleVoteCapsules(currentArticle);
+          if (fresh.savesCount !== undefined || fresh.saves_count !== undefined) {
+            currentArticle.savesCount = fresh.savesCount !== undefined ? fresh.savesCount : fresh.saves_count;
+            currentArticle.saves_count = currentArticle.savesCount;
+          }
+          if (fresh.hasSaved !== undefined || fresh.isSaved !== undefined) {
+            currentArticle.hasSaved = Boolean(fresh.hasSaved || fresh.isSaved);
+            currentArticle.isSaved = currentArticle.hasSaved;
+          }
+          syncBookmarkButtons(artId);
+          if (currentUser) {
+            syncLocalBookmarksWithServer();
+          }
         }
       })
       .catch(function () {});
@@ -5438,6 +5507,20 @@
     }
 
     // Sync Bookmark State
+    if (article.savesCount !== undefined || article.saves_count !== undefined) {
+      currentArticle.savesCount = article.savesCount !== undefined ? article.savesCount : article.saves_count;
+      currentArticle.saves_count = currentArticle.savesCount;
+    }
+    if (article.hasSaved !== undefined || article.isSaved !== undefined) {
+      const serverSaved = Boolean(article.hasSaved || article.isSaved);
+      currentArticle.hasSaved = serverSaved;
+      currentArticle.isSaved = serverSaved;
+      if (serverSaved && !isBookmarked(article.id)) {
+        const bms = getBookmarks();
+        bms.push(article.id);
+        try { localStorage.setItem('sc_bookmarks', JSON.stringify(bms)); } catch (e) {}
+      }
+    }
     syncBookmarkButtons(article.id);
 
     // Sync Report State (Issue #126)
@@ -6094,6 +6177,7 @@
     window.ArticleReader.syncBookmarkButtons = syncBookmarkButtons;
     window.ArticleReader.isBookmarked = isBookmarked;
     window.ArticleReader.getBookmarks = getBookmarks;
+    window.ArticleReader.syncLocalBookmarksWithServer = syncLocalBookmarksWithServer;
     window.ArticleReader.openArticleSharePopover = openArticleSharePopover;
     window.ArticleReader.closeArticleSharePopover = closeArticleSharePopover;
     window.ArticleReader.isArticleSharePopoverOpen = isArticleSharePopoverOpen;

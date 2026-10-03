@@ -311,21 +311,24 @@
 
     const bookmarkTooltip = isBookmarked ? 'Сохранено' : 'Сохранить';
     const bookmarkAriaLabel = isBookmarked ? 'Удалить из сохраненного' : 'Сохранить публикацию';
+    const savesCount = item.savesCount !== undefined ? item.savesCount : (item.saves_count !== undefined ? item.saves_count : 0);
     let bookmarkHtml = '';
     if (isPreview) {
       bookmarkHtml =
-        '<button type="button" class="btn-card-action btn-card-bookmark" id="preview-card-bookmark" title="Сохранить" aria-label="Сохранить публикацию" disabled>' +
+        '<button type="button" class="btn-card-action btn-card-bookmark has-count" id="preview-card-bookmark" title="Сохранить" aria-label="Сохранить публикацию" disabled>' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
+          '<span class="card-action-count card-save-count">' + savesCount + '</span>' +
         '</button>';
     } else {
       const activeClasses = isBookmarked ? 'is-bookmarked is-saved' : '';
       bookmarkHtml =
-        '<button type="button" class="btn-card-action btn-card-bookmark ' + activeClasses + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkAriaLabel + '">' +
+        '<button type="button" class="btn-card-action btn-card-bookmark has-count ' + activeClasses + '" id="btn-bookmark" title="' + bookmarkTooltip + '" aria-label="' + bookmarkAriaLabel + '">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="' + (isBookmarked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>' +
           '</svg>' +
+          '<span class="card-action-count card-save-count">' + savesCount + '</span>' +
         '</button>';
     }
 
@@ -644,7 +647,28 @@
 
     if (btn) {
       updateBookmarkButtonState(btn, bookmarked);
+      const countEl = btn.querySelector('.card-save-count');
+      if (countEl) {
+        const curCount = parseInt(countEl.textContent, 10) || 0;
+        countEl.textContent = bookmarked ? (curCount + 1) : Math.max(0, curCount - 1);
+      }
     }
+
+    if (typeof window !== 'undefined' && window.currentUser) {
+      fetch('/api/articles/' + encodeURIComponent(id) + (bookmarked ? '/save' : '/unsave'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success && typeof data.savesCount === 'number' && btn) {
+          const countEl = btn.querySelector('.card-save-count');
+          if (countEl) countEl.textContent = data.savesCount;
+        }
+      })
+      .catch(function () {});
+    }
+
     return bookmarked;
   }
 

@@ -103,6 +103,20 @@
     }
   }
 
+  function syncLocalBookmarksWithServer() {
+    if (!currentUser) return;
+    const bookmarks = getBookmarks();
+    if (!bookmarks || bookmarks.length === 0) return;
+    fetch('/api/articles/sync-saves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ articleIds: bookmarks })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function () {})
+    .catch(function () {});
+  }
+
   function showToast(message, actionText, onAction) {
     let toast = document.getElementById('feedToast');
     if (!toast) {
@@ -471,6 +485,7 @@
 
     if (user) {
       loadFeedSettings();
+      syncLocalBookmarksWithServer();
     }
   }
 
@@ -4419,11 +4434,30 @@
         onBookmarkToggle: function (id, btn) {
           const active = toggleBookmark(id);
           btn.classList.toggle('is-bookmarked', active);
+          btn.classList.toggle('is-saved', active);
           const svg = btn.querySelector('svg');
           if (svg) svg.setAttribute('fill', active ? 'currentColor' : 'none');
           const newTooltip = active ? 'Убрать из сохраненного' : 'Сохранить статью';
           btn.title = newTooltip;
           btn.setAttribute('aria-label', newTooltip);
+          const countEl = btn.querySelector('.card-save-count');
+          if (countEl) {
+            const curCount = parseInt(countEl.textContent, 10) || 0;
+            countEl.textContent = active ? (curCount + 1) : Math.max(0, curCount - 1);
+          }
+          if (currentUser) {
+            fetch('/api/articles/' + encodeURIComponent(id) + (active ? '/save' : '/unsave'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.success && typeof data.savesCount === 'number' && countEl) {
+                countEl.textContent = data.savesCount;
+              }
+            })
+            .catch(function () {});
+          }
           if (state.savedOnly && !active) {
             const cardEl = btn.closest('.feed-card');
             if (cardEl) cardEl.remove();

@@ -705,6 +705,9 @@
 [2026-10-03 14:22] | dev_bot | IMPLEMENTATION_COMPLETE | Унифицировать hover/active states action-кнопок публикации и добавить Report в Article Rail (Task: issue-126-unify-action-hovers-and-article-report)
 [2026-10-03 14:23] | git_bot | PR_CREATED | Открыт PR #128 для Issue #126 (Fixes #126), ветка feat/issue-126-unify-action-hovers-and-article-report (Task: issue-126-unify-action-hovers-and-article-report)
 [2026-10-03 14:25] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #128 готов к слиянию владельцем (Task: issue-126-unify-action-hovers-and-article-report)
+[2026-10-03 14:26] | pm_bot | TASK_INIT | Старт задачи Issue #127: Добавить публичную метрику количества сохранений публикации (Save Count) (Task: issue-127-publication-save-count-metric)
+[2026-10-03 14:26] | pm_bot | DEV_ASSIGN | Назначение реализации fullstack на py_bot и dev_bot для Issue #127 (Task: issue-127-publication-save-count-metric)
+[2026-10-03 14:44] | dev_bot | IMPLEMENTATION_COMPLETE | Добавить публичную метрику количества сохранений публикации (Save Count) (Task: issue-127-publication-save-count-metric)
 
 
 

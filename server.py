@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-server.py — Antigravity Moderation Queue Server & Static File Server.
+server.py - Antigravity Moderation Queue Server & Static File Server.
 
 Provides:
 - Standalone Python HTTP server using http.server.ThreadingHTTPServer and SimpleHTTPRequestHandler.
@@ -537,6 +537,18 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_likes_article_user ON article_likes(article_id, user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_likes_article_id ON article_likes(article_id);")
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS article_saves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(article_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_saves_article_user ON article_saves(article_id, user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_saves_article_id ON article_saves(article_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_saves_user_id ON article_saves(user_id);")
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS article_votes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -1041,7 +1053,7 @@ contract SecureVault is ReentrancyGuard {
   <div class="formula-rendered">$$\\text{RiskIndex} = \\frac{1}{N} \\sum_{i=1}^{N} \\left( P_i \\times I_i \\right) \\cdot w_i$$</div>
 </div>
 
-<p>где <span class="editor-inline-formula" data-latex="P_i">\\(P_i\\)</span> — вероятность реализации угрозы, а <span class="editor-inline-formula" data-latex="I_i">\\(I_i\\)</span> — тяжесть последствий инцидента.</p>
+<p>где <span class="editor-inline-formula" data-latex="P_i">\\(P_i\\)</span> - вероятность реализации угрозы, а <span class="editor-inline-formula" data-latex="I_i">\\(I_i\\)</span> - тяжесть последствий инцидента.</p>
 
 <p>Для поиска скрытых дефектов используется <span class="editor-inline-spoiler" title="Нажмите для просмотра">автоматизированный символьный фаззинг Echidna и Slither</span> на этапах CI/CD.</p>
 
@@ -1154,7 +1166,7 @@ contract SecureVault is ReentrancyGuard {
             "coverImage": make_svg_data_uri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" width="780" height="440"><defs><linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0c141e"/><stop offset="100%" stop-color="#13273a"/></linearGradient><linearGradient id="acc4" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient></defs><rect width="780" height="440" fill="url(#bg4)"/><circle cx="620" cy="180" r="130" fill="none" stroke="rgba(245,158,11,0.2)" stroke-width="1.5"/><circle cx="560" cy="150" r="14" fill="#f59e0b"/><circle cx="670" cy="130" r="10" fill="#38bdf8"/><circle cx="640" cy="240" r="12" fill="#10b981"/><line x1="560" y1="150" x2="670" y2="130" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><line x1="670" y1="130" x2="640" y2="240" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><line x1="640" y1="240" x2="560" y2="150" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/><rect x="64" y="64" width="160" height="32" rx="16" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.3)"/><text x="84" y="85" fill="#fbbf24" font-family="Onest, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ОРАКУЛЫ И ДАННЫЕ</text><text x="64" y="160" fill="#ffffff" font-family="Onest, sans-serif" font-size="34" font-weight="800">Поставка внешних данных</text><text x="64" y="202" fill="#94a3b8" font-family="Onest, sans-serif" font-size="34" font-weight="800">для корпоративных реестров</text><line x1="64" y1="236" x2="380" y2="236" stroke="url(#acc4)" stroke-width="3" stroke-linecap="round"/><text x="64" y="274" fill="#cbd5e1" font-family="Onest, sans-serif" font-size="16">BFT-кворум • Агрегация медианы • Защита от сговора</text></svg>')
         },
         "article_html": """<h2>Проблема оракулов в изолированных реестрах</h2>
-<p>Смарт-контракты исполняются в детерминированной виртуальной среде и не имеют прямого сетевого доступа к внешним HTTP/REST API. Для фиксации событий реального мира (котировки драгоценных металлов, статусы доставки грузов, курсы валют) требуются специализированные узлы — децентрализованные оракулы.</p>
+<p>Смарт-контракты исполняются в детерминированной виртуальной среде и не имеют прямого сетевого доступа к внешним HTTP/REST API. Для фиксации событий реального мира (котировки драгоценных металлов, статусы доставки грузов, курсы валют) требуются специализированные узлы - децентрализованные оракулы.</p>
 
 <h2>Архитектура кворума поставщиков данных</h2>
 <p>Одиночный оракул представляет собой критическую единую точку отказа (Single Point of Failure). Для обеспечения надежности проектируется сеть из независимых провайдеров с BFT-консенсусом.</p>
@@ -2187,6 +2199,23 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.startswith("/api/articles/") and path.endswith("/like"):
             art_id = path[len("/api/articles/"): -len("/like")].strip("/")
             self.handle_article_like_toggle(art_id, _body_already_read=False)
+        elif path in ("/api/saves/toggle", "/api/bookmarks/toggle"):
+            p = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+            if p is None:
+                return
+            art_id = p.get("articleId") or p.get("article_id") or ""
+            self.handle_article_save_toggle(art_id, action="toggle", _body_already_read=True)
+        elif path.startswith("/api/articles/") and path.endswith("/save"):
+            art_id = path[len("/api/articles/"): -len("/save")].strip("/")
+            self.handle_article_save_toggle(art_id, action="save", _body_already_read=False)
+        elif path.startswith("/api/articles/") and path.endswith("/unsave"):
+            art_id = path[len("/api/articles/"): -len("/unsave")].strip("/")
+            self.handle_article_save_toggle(art_id, action="unsave", _body_already_read=False)
+        elif path.startswith("/api/articles/") and path.endswith("/bookmark"):
+            art_id = path[len("/api/articles/"): -len("/bookmark")].strip("/")
+            self.handle_article_save_toggle(art_id, action="toggle", _body_already_read=False)
+        elif path in ("/api/articles/sync-saves", "/api/saves/sync"):
+            self.handle_sync_saves()
         elif path.startswith("/api/articles/") and "/comments/" in path and path.endswith("/solution"):
             parts = path.strip("/").split("/")
             art_id = parts[2] if len(parts) >= 6 else ""
@@ -3630,8 +3659,165 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json_response(200, {
             "success": True,
             "hasLiked": has_liked,
+            "isLiked": has_liked,
             "likesCount": likes_count,
             "articleId": real_art_id
+        })
+
+    def handle_article_save_toggle(self, article_id: str = "", action: str = "toggle", _body_already_read: bool = False):
+        """
+        POST /api/articles/<id>/save, POST /api/articles/<id>/unsave, POST /api/articles/<id>/bookmark, POST /api/saves/toggle
+        Saves or unsaves an article for the current authenticated user.
+        action can be 'save', 'unsave', or 'toggle'.
+        Requires authentication (returns 401 with requireAuth: True if not logged in).
+        Returns { success: True, isSaved: bool, hasSaved: bool, savesCount: int, articleId: str }.
+        """
+        if not _body_already_read:
+            payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+            if payload is None:
+                return
+            if not article_id:
+                article_id = payload.get("articleId") or payload.get("article_id") or ""
+            if "action" in payload and payload["action"] in ("save", "unsave", "toggle"):
+                action = payload["action"]
+
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для сохранения публикации необходимо войти",
+                "requireAuth": True,
+                "code": "AUTH_REQUIRED"
+            })
+            return
+
+        if not article_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор статьи",
+                "code": "INVALID_ARTICLE_ID"
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (article_id, article_id))
+            art_row = cur.fetchone()
+            if not art_row:
+                self.send_json_response(404, {
+                    "success": False,
+                    "error": "Статья не найдена",
+                    "code": "ARTICLE_NOT_FOUND"
+                })
+                return
+
+            real_art_id = art_row["id"]
+            user_id = user["id"]
+
+            cur.execute("SELECT id FROM article_saves WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+            existing_save = cur.fetchone()
+
+            if action == "save":
+                if not existing_save:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT OR IGNORE INTO article_saves (article_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_art_id, user_id, now_iso)
+                    )
+                is_saved = True
+            elif action == "unsave":
+                if existing_save:
+                    cur.execute("DELETE FROM article_saves WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+                is_saved = False
+            else:  # toggle
+                if existing_save:
+                    cur.execute("DELETE FROM article_saves WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+                    is_saved = False
+                else:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT OR IGNORE INTO article_saves (article_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_art_id, user_id, now_iso)
+                    )
+                    is_saved = True
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_saves WHERE article_id = ?", (real_art_id,))
+            saves_count = cur.fetchone()["cnt"]
+
+        self.send_json_response(200, {
+            "success": True,
+            "isSaved": is_saved,
+            "hasSaved": is_saved,
+            "savesCount": saves_count,
+            "articleId": real_art_id
+        })
+
+    def handle_sync_saves(self):
+        """
+        POST /api/articles/sync-saves
+        Idempotently migrates client bookmarks (from localStorage sc_bookmarks) to server.
+        Requires authentication.
+        Expects { "articleIds": ["art-1", "art-2", ...] } or list of strings.
+        Returns { "success": True, "syncedCount": int, "totalSaved": int }.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для синхронизации закладок необходимо войти",
+                "requireAuth": True,
+                "code": "AUTH_REQUIRED"
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
+            return
+
+        raw_ids = []
+        if isinstance(payload, list):
+            raw_ids = payload
+        elif isinstance(payload, dict):
+            raw_ids = payload.get("articleIds") or payload.get("ids") or payload.get("bookmarks") or []
+
+        if not isinstance(raw_ids, list):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Неверный формат списка статей",
+                "code": "INVALID_ARTICLE_IDS"
+            })
+            return
+
+        user_id = user["id"]
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        synced = 0
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            for raw_id in raw_ids:
+                if not isinstance(raw_id, str) or not raw_id.strip():
+                    continue
+                aid = raw_id.strip()
+                cur.execute("SELECT id FROM moderation_submissions WHERE id = ? OR draft_id = ? LIMIT 1", (aid, aid))
+                row = cur.fetchone()
+                if row:
+                    real_id = row["id"]
+                    cur.execute(
+                        "INSERT OR IGNORE INTO article_saves (article_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_id, user_id, now_iso)
+                    )
+                    if cur.rowcount > 0:
+                        synced += 1
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_saves WHERE user_id = ?", (user_id,))
+            total_saved = cur.fetchone()["cnt"]
+
+        self.send_json_response(200, {
+            "success": True,
+            "syncedCount": synced,
+            "totalSaved": total_saved
         })
 
     def handle_article_vote(self, raw_id: str):
@@ -5585,11 +5771,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         user = self.get_current_user()
         likes_count = 0
+        saves_count = 0
         comments_count = 0
         answers_count = 0
         discussion_count = 0
         has_solution = False
         has_liked = False
+        has_saved = False
         score = 0
         my_vote = 0
         can_vote = False
@@ -5598,6 +5786,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (row["id"],))
             likes_count = cur.fetchone()["cnt"]
+            cur.execute("SELECT COUNT(*) AS cnt FROM article_saves WHERE article_id = ?", (row["id"],))
+            saves_count = cur.fetchone()["cnt"]
             target_ids = [row["id"]]
             draft_id = row["draft_id"] if ("draft_id" in row.keys() and row["draft_id"]) else None
             if draft_id and draft_id != row["id"]:
@@ -5616,6 +5806,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             if user:
                 cur.execute("SELECT 1 FROM article_likes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
                 has_liked = cur.fetchone() is not None
+                cur.execute("SELECT 1 FROM article_saves WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
+                has_saved = cur.fetchone() is not None
                 cur.execute("SELECT value FROM article_votes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
                 vote_row = cur.fetchone()
                 if vote_row:
@@ -5657,6 +5849,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "readingMinutes": reading_minutes,
             "likesCount": likes_count,
             "hasLiked": has_liked,
+            "savesCount": saves_count,
+            "hasSaved": has_saved,
+            "isSaved": has_saved,
             "score": score,
             "myVote": my_vote,
             "canVote": can_vote,
@@ -5674,6 +5869,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json_response(200, {
             "success": True,
             "article": article_data,
+            "savesCount": saves_count,
+            "hasSaved": has_saved,
+            "isSaved": has_saved,
             "commentsCount": comments_count,
             "answersCount": answers_count,
             "discussionCount": discussion_count,
@@ -5763,6 +5961,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             offset = 0
 
         allowed_ids = set([x.strip() for x in ids_filter.split(",") if x.strip()]) if ids_filter else None
+        if tab == "saved" and allowed_ids is None:
+            active_u = self.get_current_user()
+            if active_u:
+                conn_tmp = self.get_db()
+                with conn_tmp:
+                    cur_tmp = conn_tmp.cursor()
+                    cur_tmp.execute("SELECT article_id FROM article_saves WHERE user_id = ?", (active_u["id"],))
+                    allowed_ids = {r["article_id"] for r in cur_tmp.fetchall()}
+            else:
+                allowed_ids = set()
 
         if topics_filter and topics_filter != "all":
             req_topics = set([t.strip() for t in topics_filter.split(",") if t.strip()])
@@ -5895,9 +6103,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute(query_sql, tuple(query_params))
                 rows = cur.fetchall()
 
-                # Pre-fetch counts for likes and comments
+                # Pre-fetch counts for likes, saves and comments
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
                 likes_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
+
+                cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_saves GROUP BY article_id")
+                saves_counts = {r["article_id"]: r["cnt"] for r in cur.fetchall()}
 
                 cur.execute("SELECT article_id, COALESCE(SUM(value), 0) AS score FROM article_votes GROUP BY article_id")
                 article_scores = {r["article_id"]: r["score"] for r in cur.fetchall()}
@@ -5929,6 +6140,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 current_user = self.get_current_user()
                 user_likes = set()
+                user_saves = set()
                 user_votes = {}
                 exc_authors = set()
                 exc_topics = set()
@@ -5938,6 +6150,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if current_user:
                     cur.execute("SELECT article_id FROM article_likes WHERE user_id = ?", (current_user["id"],))
                     user_likes = {r["article_id"] for r in cur.fetchall()}
+                    cur.execute("SELECT article_id FROM article_saves WHERE user_id = ?", (current_user["id"],))
+                    user_saves = {r["article_id"] for r in cur.fetchall()}
                     cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (current_user["id"],))
                     user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
                     cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (current_user["id"],))
@@ -6202,6 +6416,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "subscriptionReason": subscription_reason,
                 "likesCount": likes_counts.get(art_id, 0),
                 "hasLiked": art_id in user_likes,
+                "savesCount": saves_counts.get(art_id, 0),
+                "hasSaved": art_id in user_saves,
+                "isSaved": art_id in user_saves,
                 "score": article_scores.get(art_id, 0),
                 "myVote": user_votes.get(art_id, 0),
                 "canVote": bool(current_user and row["status"] == "approved" and row["author_id"] != current_user["id"]),

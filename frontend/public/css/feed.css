@@ -2847,7 +2847,6 @@ button.author-name:focus-visible,
 .btn-card-bookmark {
   width: 36px;
   min-width: 36px;
-  max-width: 36px;
   height: 36px;
   min-height: 36px;
   aspect-ratio: 1 / 1;
@@ -2861,13 +2860,29 @@ button.author-name:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast);
+  gap: 5px;
+  transition: color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-card-bookmark:has(.card-save-count),
+.btn-card-bookmark.has-count {
+  width: auto;
+  aspect-ratio: auto;
+  padding: 0 6px;
 }
 
 .btn-card-bookmark:hover {
   color: #f59e0b;
-  background: var(--bg-hover);
+  background: transparent;
   border-color: #f59e0b;
+}
+
+.btn-card-bookmark:hover svg {
+  stroke: #f59e0b;
+}
+
+.btn-card-bookmark:hover .card-save-count {
+  color: #f59e0b;
 }
 
 .btn-card-bookmark.is-bookmarked {
@@ -2882,14 +2897,19 @@ button.author-name:focus-visible,
   background: transparent;
 }
 
-.btn-card-bookmark.is-bookmarked svg {
+.btn-card-bookmark.is-bookmarked svg,
+.btn-card-bookmark.is-saved svg {
   fill: #f59e0b;
   stroke: #f59e0b;
 }
 
-.btn-card-bookmark.is-saved svg {
-  fill: #f59e0b;
-  stroke: #f59e0b;
+.btn-card-bookmark.is-bookmarked .card-save-count,
+.btn-card-bookmark.is-saved .card-save-count {
+  color: #f59e0b;
+}
+
+.btn-card-bookmark:active {
+  transform: scale(0.92);
 }
 
 /* Card Action Buttons: Share & Report */
