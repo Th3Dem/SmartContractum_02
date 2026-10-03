@@ -2791,6 +2791,20 @@ button.author-name:focus-visible,
   transition: color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 
+.btn-card-like:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: transparent;
+}
+
+.btn-card-like:hover svg {
+  stroke: #ef4444;
+}
+
+.btn-card-like:hover .like-count {
+  color: #ef4444;
+}
+
 .btn-card-like.is-liked {
   color: #ef4444;
   border-color: #ef4444;

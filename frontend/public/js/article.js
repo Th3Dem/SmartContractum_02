@@ -951,6 +951,247 @@
     modal.style.display = 'flex';
   }
 
+  // Article Report Logic (Issue #126)
+  function isArticleReported(articleId) {
+    if (!articleId) return false;
+    if (window._reportedArticleIds && window._reportedArticleIds.has(articleId)) return true;
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
+      if (stored.includes(articleId)) {
+        window._reportedArticleIds = window._reportedArticleIds || new Set();
+        window._reportedArticleIds.add(articleId);
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function markArticleAsReported(articleId) {
+    if (!articleId) return;
+    window._reportedArticleIds = window._reportedArticleIds || new Set();
+    window._reportedArticleIds.add(articleId);
+    try {
+      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
+      if (!stored.includes(articleId)) {
+        stored.push(articleId);
+        localStorage.setItem('sc_reported_articles', JSON.stringify(stored));
+      }
+    } catch (e) {}
+    const btns = document.querySelectorAll(
+      '#railBtnReport, #mobileBtnReport, .btn-rail-report, .btn-mobile-report, .btn-card-report[data-id="' + articleId + '"]'
+    );
+    btns.forEach(function (btn) {
+      btn.classList.add('is-reported');
+      btn.setAttribute('title', 'Жалоба уже отправлена');
+      btn.setAttribute('aria-label', 'Жалоба уже отправлена');
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', 'currentColor');
+      }
+    });
+  }
+
+  function syncArticleReportStatus(articleId) {
+    if (!articleId) return;
+    if (isArticleReported(articleId)) {
+      markArticleAsReported(articleId);
+    }
+  }
+
+  function isCurrentArticleAuthor() {
+    if (!currentUser || !currentArticle) return false;
+    return Boolean(
+      (currentArticle.author_id && currentUser.id === currentArticle.author_id) ||
+      (currentArticle.authorId && currentUser.id === currentArticle.authorId) ||
+      (currentArticle.author && currentUser.username === currentArticle.author)
+    );
+  }
+
+  function getOrInitArticleReportModal() {
+    let modal = document.getElementById('articleReportModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'articleReportModal';
+      modal.className = 'feed-modal-overlay';
+      modal.style.display = 'none';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'articleReportModalTitle');
+      modal.innerHTML =
+        '<div class="feed-modal-card comment-report-modal-card">' +
+          '<div class="feed-modal-header">' +
+            '<div class="feed-modal-title-wrap">' +
+              '<h2 id="articleReportModalTitle" class="feed-modal-title">Пожаловаться на материал</h2>' +
+              '<span class="feed-modal-subtitle">Выберите причину жалобы</span>' +
+            '</div>' +
+            '<button type="button" class="feed-modal-close-btn" id="btnCloseArticleReportModal" title="Закрыть" aria-label="Закрыть">' +
+              '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<line x1="18" y1="6" x2="6" y2="18"></line>' +
+                '<line x1="6" y1="6" x2="18" y2="18"></line>' +
+              '</svg>' +
+            '</button>' +
+          '</div>' +
+          '<form id="articleReportForm" class="comment-report-form">' +
+            '<input type="hidden" id="reportArticleId" name="articleId" value="">' +
+            '<div class="comment-report-reasons">' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="articleReportReason" value="spam" checked>' +
+                '<span>Спам</span>' +
+              '</label>' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="articleReportReason" value="insult">' +
+                '<span>Оскорбление</span>' +
+              '</label>' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="articleReportReason" value="malicious">' +
+                '<span>Вредоносный контент или приватные ключи</span>' +
+              '</label>' +
+              '<label class="comment-report-radio">' +
+                '<input type="radio" name="articleReportReason" value="other">' +
+                '<span>Другое</span>' +
+              '</label>' +
+            '</div>' +
+            '<div class="comment-report-details-wrap">' +
+              '<label for="articleReportDetails" class="comment-report-label">Дополнительные сведения (необязательно)</label>' +
+              '<textarea id="articleReportDetails" name="details" class="comment-textarea comment-report-textarea" rows="3" maxlength="1000" placeholder="Опишите подробнее проблему..."></textarea>' +
+            '</div>' +
+            '<div class="comment-report-actions">' +
+              '<button type="button" class="btn btn-secondary btn-sm" id="btnCancelArticleReport">Отмена</button>' +
+              '<button type="submit" class="btn btn-primary btn-sm" id="btnSubmitArticleReport">Отправить жалобу</button>' +
+            '</div>' +
+          '</form>' +
+        '</div>';
+      document.body.appendChild(modal);
+    }
+
+    if (!modal._eventsBound) {
+      modal._eventsBound = true;
+      function closeModal() {
+        modal.style.display = 'none';
+        modal._activeReportBtn = null;
+      }
+
+      const closeBtn = modal.querySelector('#btnCloseArticleReportModal');
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+      const cancelBtn = modal.querySelector('#btnCancelArticleReport');
+      if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeModal();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+          closeModal();
+        }
+      });
+
+      const form = modal.querySelector('#articleReportForm');
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          const targetArticleId = (modal.querySelector('#reportArticleId') || {}).value;
+          const selectedReasonRadio = modal.querySelector('input[name="articleReportReason"]:checked');
+          const reason = selectedReasonRadio ? selectedReasonRadio.value : 'spam';
+          const detailsEl = modal.querySelector('#articleReportDetails');
+          const details = detailsEl ? detailsEl.value.trim() : '';
+
+          if (!targetArticleId) {
+            closeModal();
+            return;
+          }
+
+          const submitBtn = modal.querySelector('#btnSubmitArticleReport');
+          if (submitBtn) submitBtn.disabled = true;
+
+          fetch('/api/articles/' + encodeURIComponent(targetArticleId) + '/report', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              reason: reason,
+              details: details
+            })
+          })
+            .then(function (res) {
+              return res.json().then(function (data) {
+                return { status: res.status, data: data };
+              });
+            })
+            .then(function (result) {
+              if (submitBtn) submitBtn.disabled = false;
+              if (result.status === 200 && result.data && result.data.success) {
+                closeModal();
+                showToast('Жалоба отправлена');
+                markArticleAsReported(targetArticleId);
+              } else if (result.status === 409) {
+                closeModal();
+                showToast('Вы уже отправили жалобу на этот материал');
+                markArticleAsReported(targetArticleId);
+              } else if (result.status === 403) {
+                closeModal();
+                showToast('Нельзя пожаловаться на собственную публикацию');
+              } else if (result.status === 401) {
+                closeModal();
+                openAuthModal();
+                showToast('Войдите, чтобы отправить жалобу');
+              } else {
+                showToast((result.data && result.data.error) || 'Ошибка при отправке жалобы');
+              }
+            })
+            .catch(function () {
+              if (submitBtn) submitBtn.disabled = false;
+              showToast('Ошибка сети при отправке жалобы');
+            });
+        });
+      }
+    }
+
+    return modal;
+  }
+
+  function openArticleReportModal(articleId, triggerBtn) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Войдите, чтобы отправить жалобу');
+      return;
+    }
+    if (isCurrentArticleAuthor()) {
+      showToast('Нельзя пожаловаться на собственную публикацию');
+      return;
+    }
+    if (isArticleReported(articleId)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+    const modal = getOrInitArticleReportModal();
+    if (!modal) return;
+    const idInput = modal.querySelector('#reportArticleId');
+    const detailsInput = modal.querySelector('#articleReportDetails');
+    const radios = modal.querySelectorAll('input[name="articleReportReason"]');
+
+    if (idInput) idInput.value = articleId;
+    if (detailsInput) detailsInput.value = '';
+    if (radios && radios.length > 0) {
+      radios.forEach(function (r, idx) {
+        r.checked = (idx === 0);
+      });
+    }
+
+    modal._activeReportBtn = triggerBtn;
+    modal.style.display = 'flex';
+  }
+
+  function handleArticleReportClick(articleId, triggerBtn) {
+    if (isArticleReported(articleId)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+    openArticleReportModal(articleId, triggerBtn);
+  }
+
   function isCommentEditExpired(createdAt) {
     if (!createdAt) return false;
     const createdTime = new Date(createdAt).getTime();
@@ -4587,6 +4828,25 @@
         openArticleSharePopover(mobileBtnShare);
       });
     }
+
+    // Report buttons (Issue #126)
+    const railBtnReport = document.getElementById('railBtnReport');
+    if (railBtnReport) {
+      railBtnReport.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleArticleReportClick(articleId, railBtnReport);
+      });
+    }
+
+    const mobileBtnReport = document.getElementById('mobileBtnReport');
+    if (mobileBtnReport) {
+      mobileBtnReport.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleArticleReportClick(articleId, mobileBtnReport);
+      });
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -5179,6 +5439,9 @@
 
     // Sync Bookmark State
     syncBookmarkButtons(article.id);
+
+    // Sync Report State (Issue #126)
+    syncArticleReportStatus(article.id);
 
     // Sync Like State
     syncLikeButtons(article.likesCount, Boolean(article.hasLiked || article.isLiked));
@@ -5836,5 +6099,9 @@
     window.ArticleReader.isArticleSharePopoverOpen = isArticleSharePopoverOpen;
     window.ArticleReader.getArticleShareUrl = getArticleShareUrl;
     window.ArticleReader.getArticleShareTitle = getArticleShareTitle;
+    window.ArticleReader.syncArticleReportStatus = syncArticleReportStatus;
+    window.ArticleReader.openArticleReportModal = openArticleReportModal;
+    window.ArticleReader.markArticleAsReported = markArticleAsReported;
+    window.ArticleReader.isArticleReported = isArticleReported;
   }
 })();

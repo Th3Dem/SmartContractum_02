@@ -3333,7 +3333,7 @@ body,
   width: 40px;
   min-height: 40px;
   padding: 4px 0;
-  border: none;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   background: transparent;
   color: var(--text-secondary);
   border-radius: var(--radius-sm, 4px);
@@ -3344,7 +3344,7 @@ body,
 }
 
 .btn-rail-action:hover {
-  background: var(--surface-2, rgba(0, 0, 0, 0.05));
+  background: transparent;
   color: var(--text-primary);
   transform: translateY(-1px);
 }
@@ -3383,11 +3383,30 @@ body,
   flex-shrink: 0;
 }
 
+/* Hover State: Like (#ef4444) */
+.btn-rail-like:hover,
+.btn-mobile-like:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: transparent;
+}
+
+.btn-rail-like:hover svg,
+.btn-mobile-like:hover svg {
+  stroke: #ef4444;
+}
+
+.btn-rail-like:hover .rail-action-count,
+.btn-rail-like:hover .mobile-action-count {
+  color: #ef4444;
+}
+
 /* Active State: Like (#ef4444 from feed.css) */
 .btn-rail-like.is-liked,
 .btn-mobile-like.is-liked {
   color: #ef4444;
   border-color: #ef4444;
+  background: transparent;
 }
 
 .btn-rail-like.is-liked svg,
@@ -3401,6 +3420,24 @@ body,
   color: #ef4444;
 }
 
+/* Hover State: Bookmark / Save (#f59e0b) */
+.btn-rail-bookmark:hover,
+.btn-mobile-bookmark:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: transparent;
+}
+
+.btn-rail-bookmark:hover svg,
+.btn-mobile-bookmark:hover svg {
+  stroke: #f59e0b;
+}
+
+.btn-rail-bookmark:hover .rail-action-count,
+.btn-rail-bookmark:hover .mobile-action-count {
+  color: #f59e0b;
+}
+
 /* Active State: Bookmark / Saved (Unified Amber #f59e0b from feed.css) */
 .btn-rail-bookmark.is-bookmarked,
 .btn-rail-bookmark.is-saved,
@@ -3408,6 +3445,7 @@ body,
 .btn-mobile-bookmark.is-saved {
   color: #f59e0b;
   border-color: #f59e0b;
+  background: transparent;
 }
 
 .btn-rail-bookmark.is-bookmarked svg,
@@ -3425,18 +3463,68 @@ body,
 .btn-mobile-comments:focus-visible {
   color: #38bdf8;
   border-color: #38bdf8;
+  background: transparent;
 }
 
-/* Hover/Focus/Active State: Share (#a855f7 purple from feed.css) */
+.btn-rail-comments:hover svg,
+.btn-mobile-comments:hover svg {
+  stroke: #38bdf8;
+}
+
+.btn-rail-comments:hover .rail-action-count,
+.btn-mobile-comments:hover .mobile-action-count {
+  color: #38bdf8;
+}
+
+/* Hover/Focus State: Share (#a855f7 purple without background fill) */
 .btn-rail-share:hover,
 .btn-rail-share:focus-visible,
-.btn-rail-share.is-active,
 .btn-mobile-share:hover,
-.btn-mobile-share:focus-visible,
+.btn-mobile-share:focus-visible {
+  color: #a855f7;
+  border-color: #a855f7;
+  background: transparent !important;
+}
+
+.btn-rail-share:hover svg,
+.btn-mobile-share:hover svg {
+  stroke: #a855f7;
+}
+
+.btn-rail-share.is-active,
 .btn-mobile-share.is-active {
   color: #a855f7;
   border-color: #a855f7;
   background: rgba(168, 85, 247, 0.08);
+}
+
+/* Report: Hover/Focus/Active State (#f43f5e) */
+.btn-rail-report:hover,
+.btn-rail-report:focus-visible,
+.btn-mobile-report:hover,
+.btn-mobile-report:focus-visible {
+  color: #f43f5e;
+  border-color: #f43f5e;
+  background: transparent;
+}
+
+.btn-rail-report:hover svg,
+.btn-mobile-report:hover svg {
+  stroke: #f43f5e;
+}
+
+.btn-rail-report.is-reported,
+.btn-mobile-report.is-reported {
+  color: #f43f5e;
+  border-color: #f43f5e;
+  background: rgba(244, 63, 94, 0.08);
+  cursor: pointer;
+}
+
+.btn-rail-report.is-reported svg,
+.btn-mobile-report.is-reported svg {
+  fill: #f43f5e;
+  stroke: #f43f5e;
 }
 
 /* Rail Vote Capsule (Vertical layout in Left Sticky Action Rail - Issue #124) */
@@ -3589,7 +3677,7 @@ body,
 
 [data-theme="dark"] .btn-rail-action:hover,
 [data-theme="dark"] .btn-mobile-action:hover {
-  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+  background: transparent;
 }
 
 /* ==========================================================================
