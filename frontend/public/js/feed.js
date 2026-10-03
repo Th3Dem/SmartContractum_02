@@ -1242,6 +1242,18 @@
     if (tabName !== 'clubs') state.activeClubId = null;
     if (tabName !== 'companies') state.activeCompanyId = null;
 
+    const streamToolbar = document.getElementById('feedStreamToolbar');
+    const topicsWidget = document.querySelector('.widget-topics-card');
+    if (tabName === 'directions') {
+      if (streamToolbar) streamToolbar.style.display = 'none';
+      if (topicsWidget) topicsWidget.style.display = 'none';
+      document.body.classList.add('is-directions-tab');
+    } else {
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (topicsWidget) topicsWidget.style.display = '';
+      document.body.classList.remove('is-directions-tab');
+    }
+
     updateSubnavTabsUI();
 
     const manageSubsBtn = document.getElementById('btnManageSubscriptions');
@@ -1417,13 +1429,27 @@
       });
     }
 
+    // Stream toolbar and sidebar widget visibility for Directions tab
+    const isDir = cur === 'directions';
+    const streamToolbar = document.getElementById('feedStreamToolbar');
+    const topicsWidget = document.querySelector('.widget-topics-card');
+    if (isDir) {
+      if (streamToolbar) streamToolbar.style.display = 'none';
+      if (topicsWidget) topicsWidget.style.display = 'none';
+      document.body.classList.add('is-directions-tab');
+    } else {
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (topicsWidget) topicsWidget.style.display = '';
+      document.body.classList.remove('is-directions-tab');
+    }
+
     // View toggling in main column
     const articlesView = document.getElementById('feedArticlesView');
     const clubsView = document.getElementById('clubsView');
     const clubDetailView = document.getElementById('clubDetailView');
     const companiesView = document.getElementById('companiesView');
     const companyDetailView = document.getElementById('companyDetailView');
-    const directionsView = document.getElementById('directionsView');
+    const directionsView = document.getElementById('directionsFeedView') || document.getElementById('directionsView');
 
     if (cur === 'clubs') {
       if (articlesView) articlesView.style.display = 'none';
@@ -5787,19 +5813,31 @@
   }
 
   // --- DIRECTIONS ---
+  let cachedDirectionsList = [];
+
   function loadDirections() {
-    const grid = document.getElementById('directionsGrid');
+    const grid = document.getElementById('directionsCatalogGrid') || document.getElementById('directionsGrid');
     if (!grid) return;
-    grid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
+    grid.innerHTML = '<div class="feed-skeleton-card" style="height: 80px; margin: 8px 0;"></div>';
 
     const searchInput = document.getElementById('directionsSearchInput');
-    const q = searchInput ? searchInput.value.trim() : '';
+    const q = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
-    fetch('/api/directions' + (q ? '?search=' + encodeURIComponent(q) : ''))
+    fetch('/api/directions')
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data && data.success) {
-          renderDirectionsGrid(data.directions || []);
+          cachedDirectionsList = data.directions || [];
+          if (!q) {
+            renderDirectionsCatalog(cachedDirectionsList);
+          } else {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const filtered = cachedDirectionsList.filter(function (d) {
+              const hay = ((d.title || '') + ' ' + (d.description || '')).toLowerCase();
+              return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            });
+            renderDirectionsCatalog(filtered);
+          }
         } else {
           grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить темы.</p></div>';
         }
@@ -5838,8 +5876,8 @@
 
   const DEFAULT_TOPIC_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>';
 
-  function renderDirectionsGrid(directions) {
-    const grid = document.getElementById('directionsGrid');
+  function renderDirectionsCatalog(directions) {
+    const grid = document.getElementById('directionsCatalogGrid') || document.getElementById('directionsGrid');
     if (!grid) return;
     grid.innerHTML = '';
 
@@ -5848,50 +5886,64 @@
       return;
     }
 
-    directions.forEach(function (dir) {
+    const sorted = directions.slice().sort(function (a, b) {
+      const countA = a.articlesCount !== undefined ? a.articlesCount : (a.count || 0);
+      const countB = b.articlesCount !== undefined ? b.articlesCount : (b.count || 0);
+      if (countB !== countA) {
+        return countB - countA;
+      }
+      const titleA = a.title || '';
+      const titleB = b.title || '';
+      return titleA.localeCompare(titleB, 'ru');
+    });
+
+    sorted.forEach(function (dir) {
       const card = document.createElement('div');
-      card.className = 'entity-card direction-card';
+      card.className = 'direction-catalog-card direction-card';
       card.setAttribute('data-direction-id', dir.id);
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', dir.title);
 
       const iconSvg = TOPIC_ICONS[dir.id] || DEFAULT_TOPIC_ICON;
+      const pubCount = dir.articlesCount !== undefined ? dir.articlesCount : (dir.count || 0);
+      const subCount = dir.subscribersCount || 0;
+      const metaText = pluralizePublications(pubCount) + ' · ' + pluralize(subCount, 'подписчик', 'подписчика', 'подписчиков');
 
       card.innerHTML =
-        '<div class="entity-card-header">' +
-          '<div class="entity-avatar direction-avatar">' +
-            iconSvg +
-          '</div>' +
-          '<div class="entity-card-title-wrap">' +
-            '<h3 class="entity-card-title">' + escapeHtml(dir.title) + '</h3>' +
-            '<span class="entity-meta-item">' +
-              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>' +
-              '<span>' + pluralizePublications(dir.articlesCount || dir.count || 0) + '</span>' +
-            '</span>' +
-          '</div>' +
+        '<div class="direction-card-icon" aria-hidden="true">' +
+          iconSvg +
         '</div>' +
-        '<p class="entity-card-desc">' + escapeHtml(dir.description) + '</p>' +
-        '<div class="entity-card-meta">' +
-          '<span class="entity-meta-item">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
-            '<span>' + pluralize(dir.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') + '</span>' +
-          '</span>' +
+        '<div class="direction-card-content">' +
+          '<h3 class="direction-card-title">' + escapeHtml(dir.title) + '</h3>' +
+          '<p class="direction-card-desc">' + escapeHtml(dir.description || '') + '</p>' +
         '</div>' +
-        '<div class="entity-card-actions">' +
-          '<button type="button" class="btn btn-secondary btn-direction-feed">К публикациям</button>' +
-          '<button type="button" class="btn btn-secondary btn-direction-sub ' + (dir.isSubscribed ? 'is-subscribed' : '') + '">' +
+        '<div class="direction-card-right">' +
+          '<span class="direction-card-meta">' + escapeHtml(metaText) + '</span>' +
+          '<button type="button" class="btn btn-secondary btn-direction-sub ' + (dir.isSubscribed ? 'is-subscribed' : '') + '" aria-label="' + (dir.isSubscribed ? 'Отписаться от темы' : 'Подписаться на тему') + '">' +
             (dir.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
           '</button>' +
         '</div>';
 
-      const feedBtn = card.querySelector('.btn-direction-feed');
-      if (feedBtn) {
-        feedBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          state.filters.topics = [dir.id];
-          state.tab = 'all';
-          syncURL(false);
-          switchTab('all');
-        });
+      function navigateToTopicFeed() {
+        state.filters.topics = [dir.id];
+        state.tab = 'all';
+        syncURL(false);
+        switchTab('all');
       }
+
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        navigateToTopicFeed();
+      });
+
+      card.addEventListener('keydown', function (e) {
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigateToTopicFeed();
+        }
+      });
 
       const subBtn = card.querySelector('.btn-direction-sub');
       if (subBtn) {
@@ -5901,16 +5953,12 @@
         });
       }
 
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('button') || e.target.closest('a')) return;
-        state.filters.topics = [dir.id];
-        state.tab = 'all';
-        syncURL(false);
-        switchTab('all');
-      });
-
       grid.appendChild(card);
     });
+  }
+
+  function renderDirectionsGrid(directions) {
+    return renderDirectionsCatalog(directions);
   }
 
   // --- SUBSCRIPTIONS MODAL (5 TABS) ---
@@ -6347,10 +6395,38 @@
     }
 
     const directionsSearchInput = document.getElementById('directionsSearchInput');
+    const directionsSearchClearBtn = document.getElementById('directionsSearchClearBtn');
     if (directionsSearchInput) {
-      directionsSearchInput.addEventListener('input', debounce(function () {
-        loadDirections();
-      }, 300));
+      function handleDirectionsSearch() {
+        const q = directionsSearchInput.value.trim().toLowerCase();
+        if (directionsSearchClearBtn) {
+          directionsSearchClearBtn.style.display = q ? 'inline-flex' : 'none';
+        }
+        if (cachedDirectionsList && cachedDirectionsList.length > 0) {
+          if (!q) {
+            renderDirectionsCatalog(cachedDirectionsList);
+          } else {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const filtered = cachedDirectionsList.filter(function (d) {
+              const hay = ((d.title || '') + ' ' + (d.description || '')).toLowerCase();
+              return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            });
+            renderDirectionsCatalog(filtered);
+          }
+        } else {
+          loadDirections();
+        }
+      }
+
+      directionsSearchInput.addEventListener('input', handleDirectionsSearch);
+
+      if (directionsSearchClearBtn) {
+        directionsSearchClearBtn.addEventListener('click', function () {
+          directionsSearchInput.value = '';
+          handleDirectionsSearch();
+          directionsSearchInput.focus();
+        });
+      }
     }
 
     // Modals: Create Club
