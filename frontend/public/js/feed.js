@@ -5438,6 +5438,14 @@
                 el.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
               }
             });
+            const participantRow = document.querySelector('.company-participant-row[data-company-id="' + targetId + '"]');
+            if (participantRow) {
+              const pStats = participantRow.querySelector('.participant-stats');
+              const cpObj = cachedCompaniesList.find(function (c) { return c.id === targetId; });
+              if (pStats && cpObj) {
+                pStats.textContent = pluralizePublications(cpObj.articlesCount || 0) + ' \u00b7 ' + (cpObj.subscribersCount || 0) + ' ' + pluralize(cpObj.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков');
+              }
+            }
             const detailSubBtn = document.getElementById('btnCompanyDetailSubscribe');
             if (detailSubBtn && state.activeCompanyId === targetId) {
               detailSubBtn.classList.toggle('is-subscribed', isSub);
@@ -5780,12 +5788,12 @@
       if (participantsToolbar) participantsToolbar.style.display = 'flex';
 
       const pSearchInput = document.getElementById('companiesSearchInput');
-      const q = pSearchInput ? pSearchInput.value.trim() : '';
+      const q = pSearchInput ? pSearchInput.value.trim().toLowerCase() : '';
 
       const targetList = catalogList || legacyGrid;
       if (targetList) targetList.innerHTML = '<div class="feed-skeleton-card" style="height: 100px; margin: 12px 0;"></div>';
 
-      fetch('/api/companies' + (q ? '?search=' + encodeURIComponent(q) : ''))
+      fetch('/api/companies')
         .then(function (res) { return res.json(); })
         .then(function (data) {
           if (data && data.success) {
@@ -5797,7 +5805,16 @@
                 state.userSubscriptions.companies.push(c.id);
               }
             });
-            renderCompaniesParticipantsList(cachedCompaniesList);
+            if (q) {
+              const terms = q.split(/\s+/).filter(Boolean);
+              const filtered = cachedCompaniesList.filter(function (comp) {
+                const hay = ((comp.name || '') + ' ' + (comp.specialization || '')).toLowerCase();
+                return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+              });
+              renderCompaniesParticipantsList(filtered);
+            } else {
+              renderCompaniesParticipantsList(cachedCompaniesList);
+            }
           } else {
             if (targetList) targetList.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить компании.</p></div>';
           }
@@ -5815,9 +5832,34 @@
 
     containers.forEach(function (c) { c.innerHTML = ''; });
 
+    const pSearchInput = document.getElementById('companiesSearchInput');
+    const isSearching = Boolean(pSearchInput && pSearchInput.value.trim());
+
     if (!companies || companies.length === 0) {
-      const emptyHtml = '<div class="feed-empty-state"><p class="empty-state-desc">Блоги компаний не найдены. Создайте первый корпоративный блог.</p></div>';
-      containers.forEach(function (c) { c.innerHTML = emptyHtml; });
+      let emptyHtml = '';
+      if (isSearching) {
+        emptyHtml = '<div class="feed-empty-state"><p class="empty-state-desc">Блоги компаний не найдены. Попробуйте изменить поисковый запрос.</p></div>';
+      } else {
+        emptyHtml =
+          '<div class="feed-empty-state empty-state-compact">' +
+            '<p class="empty-state-desc">Пока ни одна компания не ведет блог</p>' +
+            (currentUser ? '<button type="button" class="btn btn-secondary btn-participant-empty-create" id="btnEmptyCreateCompany" style="margin-top: 10px;">Создать блог компании</button>' : '') +
+            '<span style="display: none;">Блоги компаний не найдены</span>' +
+          '</div>';
+      }
+      containers.forEach(function (c) {
+        c.innerHTML = emptyHtml;
+        const btn = c.querySelector('.btn-participant-empty-create');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            if (!currentUser) {
+              openAuthModal('create_company');
+            } else {
+              openCreateCompanyModal();
+            }
+          });
+        }
+      });
       return;
     }
 
@@ -5839,23 +5881,22 @@
 
       const isSub = Boolean(comp.isSubscribed || (state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(comp.id)));
 
+      const statsText = pluralizePublications(comp.articlesCount || 0) + ' \u00b7 ' + (comp.subscribersCount || 0) + ' ' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков');
+
       row.innerHTML =
-        '<div class="participant-left">' +
+        '<div class="participant-main">' +
           avatarHtml +
-          '<div class="participant-name-wrap">' +
-            '<span class="participant-name entity-card-title">' + escapeHtml(comp.name) + '</span>' +
-            verifiedIcon +
+          '<div class="participant-content">' +
+            '<div class="participant-header">' +
+              '<span class="participant-name entity-card-title">' + escapeHtml(comp.name) + '</span>' +
+              verifiedIcon +
+            '</div>' +
+            (comp.specialization ? '<div class="participant-spec entity-card-spec">' + escapeHtml(comp.specialization) + '</div>' : '') +
+            (comp.description ? '<p class="participant-desc entity-card-desc">' + escapeHtml(comp.description) + '</p>' : '') +
           '</div>' +
         '</div>' +
-        '<div class="participant-center">' +
-          (comp.specialization ? '<span class="participant-spec entity-card-spec">' + escapeHtml(comp.specialization) + '</span>' : '') +
-          (comp.description ? '<p class="participant-desc entity-card-desc">' + escapeHtml(comp.description) + '</p>' : '') +
-        '</div>' +
-        '<div class="participant-right">' +
-          '<div class="participant-stats">' +
-            '<span class="participant-stat">' + pluralizePublications(comp.articlesCount || 0) + '</span>' +
-            '<span class="participant-stat">' + (comp.subscribersCount || 0) + ' ' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') + '</span>' +
-          '</div>' +
+        '<div class="participant-meta-col">' +
+          '<div class="participant-stats">' + statsText + '</div>' +
           '<button type="button" class="btn btn-secondary btn-participant-sub ' + (isSub ? 'is-subscribed' : '') + '" data-company-id="' + escapeHtml(comp.id) + '">' +
             (isSub ? 'Вы подписаны' : 'Подписаться') +
           '</button>' +
@@ -5870,14 +5911,14 @@
       }
 
       function handleOpenBlog(e) {
-        if (e.target.closest('button') || e.target.closest('a')) return;
+        if (e.target.closest('.btn-participant-sub') || e.target.closest('button') || e.target.closest('a')) return;
         openCompanyDetail(comp.id);
       }
 
       row.addEventListener('click', handleOpenBlog);
       row.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
-          if (e.target.closest('button') || e.target.closest('a')) return;
+          if (e.target.closest('.btn-participant-sub') || e.target.closest('button') || e.target.closest('a')) return;
           e.preventDefault();
           openCompanyDetail(comp.id);
         }
@@ -6620,9 +6661,26 @@
 
     const companiesSearchInput = document.getElementById('companiesSearchInput');
     if (companiesSearchInput) {
-      companiesSearchInput.addEventListener('input', debounce(function () {
-        loadCompanies('participants');
-      }, 300));
+      function handleCompaniesFilter() {
+        const q = (companiesSearchInput.value || '').trim().toLowerCase();
+        if (cachedCompaniesList && cachedCompaniesList.length > 0) {
+          if (!q) {
+            renderCompaniesParticipantsList(cachedCompaniesList);
+          } else {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const filtered = cachedCompaniesList.filter(function (comp) {
+              const hay = ((comp.name || '') + ' ' + (comp.specialization || '')).toLowerCase();
+              return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            });
+            renderCompaniesParticipantsList(filtered);
+          }
+        } else {
+          loadCompanies('participants');
+        }
+      }
+
+      companiesSearchInput.addEventListener('input', handleCompaniesFilter);
+      companiesSearchInput.addEventListener('search', handleCompaniesFilter);
     }
 
     const directionsSearchInput = document.getElementById('directionsSearchInput');
