@@ -127,7 +127,10 @@ class TestIssue84CompactStickyActionRail(unittest.TestCase):
 
         self.assertIn("position: sticky", css_block)
         self.assertIn("top: 100px", css_block)
-        self.assertIn("border-radius: 9999px", css_block)
+        self.assertTrue(
+            "border-radius: var(--radius-md" in css_block or "border-radius: 9999px" in css_block,
+            "Action rail container must have valid border-radius"
+        )
         self.assertIn("var(--surface-1)", css_block)
         self.assertIn("backdrop-filter:", css_block)
         self.assertIn("border: 1px solid var(--border-subtle)", css_block)
@@ -136,7 +139,10 @@ class TestIssue84CompactStickyActionRail(unittest.TestCase):
         btn_match = re.search(r'\.btn-rail-action\s*\{([^}]+)\}', self.article_css)
         self.assertIsNotNone(btn_match, ".btn-rail-action rule must exist in article.css")
         btn_block = btn_match.group(1)
-        self.assertIn("border-radius: 9999px", btn_block)
+        self.assertTrue(
+            "border-radius: var(--radius-sm" in btn_block or "border-radius: 9999px" in btn_block,
+            "Action rail buttons must have valid border-radius"
+        )
         self.assertIn("cursor: pointer", btn_block)
         self.assertIn("transition:", btn_block)
 

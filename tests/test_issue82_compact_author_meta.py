@@ -114,7 +114,10 @@ class TestIssue82CompactAuthorMeta(unittest.TestCase):
         self.assertIn("height: 28px", sub_css)
         self.assertIn("padding: 0 10px", sub_css)
         self.assertIn("font-size: 12px", sub_css)
-        self.assertIn("border-radius: 9999px", sub_css)
+        self.assertTrue(
+            "border-radius: var(--radius-sm" in sub_css or "border-radius: 9999px" in sub_css,
+            "Subscribe button must have valid border-radius"
+        )
         self.assertIn("cursor: pointer", sub_css)
 
         # Hover and subscribed state

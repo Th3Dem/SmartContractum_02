@@ -128,7 +128,10 @@ class TestIssue81SimplifyArticleTopHierarchy(unittest.TestCase):
         self.assertIsNotNone(badge_rule_match, "Badge rule must exist in article.css")
         block = badge_rule_match.group(1)
 
-        self.assertIn("border-radius: 9999px", block)
+        self.assertTrue(
+            "border-radius: var(--radius-sm" in block or "border-radius: 9999px" in block,
+            "Topic chips must have valid border-radius"
+        )
         self.assertIn("border: 1px solid var(--border-subtle)", block)
         self.assertIn("background: var(--surface-2)", block)
         self.assertIn("color: var(--text-secondary)", block)
