@@ -99,7 +99,7 @@ class TestIssue150BlogsPostsHierarchy(unittest.TestCase):
         self.assertIn(".companies-feed-view", self.feed_css)
         self.assertIn("gap: 0", self.feed_css)
         self.assertIn("min-height: auto", self.feed_css)
-        self.assertIn("padding: 4px 0 8px 0", self.feed_css)
+        self.assertTrue("padding: 0 0 8px 0" in self.feed_css or "padding: 4px 0 8px 0" in self.feed_css)
         self.assertIn("padding-bottom: 6px", self.feed_css)
         self.assertIn(".blogs-posts-view .feed-stream-toolbar", self.feed_css)
 

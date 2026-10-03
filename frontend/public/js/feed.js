@@ -5876,7 +5876,7 @@
         : '<div class="participant-avatar entity-avatar">' + escapeHtml(avatarInitials) + '</div>';
 
       const verifiedIcon = comp.isVerified
-        ? '<span class="verified-icon" title="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+        ? '<span class="verified-icon" title="Верифицированная компания" aria-label="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
         : '';
 
       const isSub = Boolean(comp.isSubscribed || (state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(comp.id)));
@@ -5977,7 +5977,7 @@
       : '<div class="company-profile-avatar entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>';
 
     const verifiedIcon = comp.isVerified
-      ? '<span class="verified-icon" title="Верифицированная компания"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+      ? '<span class="verified-icon" title="Верифицированная компания" aria-label="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
       : '';
 
     const isSub = Boolean(comp.isSubscribed || (state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(comp.id)));
@@ -6906,13 +6906,11 @@
           data.questions.slice(0, 3).forEach(function (q) {
             const item = document.createElement('div');
             item.className = 'unanswered-item';
-            const topicTitle = (window.PublicationConfig && window.PublicationConfig.TOPICS_MAP && window.PublicationConfig.TOPICS_MAP[q.topic]) || q.topic || '';
             const dateStr = q.date || '';
             item.innerHTML =
               '<a href="article.html?id=' + encodeURIComponent(q.id) + '" class="unanswered-item-title">' + escapeHtml(q.title) + '</a>' +
               '<div class="unanswered-item-meta">' +
                 (dateStr ? '<span>' + escapeHtml(dateStr) + '</span>' : '') +
-                (topicTitle ? '<span>' + (dateStr ? ' • ' : '') + escapeHtml(topicTitle) + '</span>' : '') +
               '</div>';
             listEl.appendChild(item);
           });

@@ -3284,7 +3284,10 @@ button.author-name:focus-visible,
   gap: 20px;
 }
 
-.feed-widget-card {
+.feed-widget-card,
+#widgetCommunityCta,
+#widgetUnansweredQuestions,
+.widget-topics-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -4193,37 +4196,6 @@ button.author-name:focus-visible,
   margin: 0;
 }
 
-.companies-subtabs-bar {
-  display: flex;
-  gap: 8px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
-}
-
-.companies-subtab-btn {
-  padding: 6px 16px;
-  font-family: var(--font-sans);
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.companies-subtab-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-.companies-subtab-btn.active {
-  color: var(--accent-color);
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.25);
-}
-
 .entity-toolbar {
   display: flex;
   align-items: center;
@@ -4465,7 +4437,7 @@ button.author-name:focus-visible,
 
 .blogs-view-header {
   min-height: auto;
-  padding: 4px 0 8px 0;
+  padding: 0 0 8px 0;
   margin-bottom: 8px;
   box-sizing: border-box;
   display: flex;
@@ -4495,10 +4467,11 @@ button.author-name:focus-visible,
 }
 
 .btn-blogs-create {
-  height: 36px;
-  padding: 0 14px;
-  font-size: 0.84rem;
-  font-weight: 600;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -4542,6 +4515,15 @@ button.author-name:focus-visible,
   color: var(--accent-color);
   background: rgba(56, 189, 248, 0.12);
   border-color: rgba(56, 189, 248, 0.25);
+}
+
+.blogs-subtab-btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.blogs-subtab-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
 }
 
 .blogs-participants-toolbar {
@@ -4650,6 +4632,24 @@ button.author-name:focus-visible,
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.verified-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-color);
+  flex-shrink: 0;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.verified-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  display: block;
 }
 
 .company-card-name {
