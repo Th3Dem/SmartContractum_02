@@ -3439,7 +3439,7 @@ body,
   background: rgba(168, 85, 247, 0.08);
 }
 
-/* Rail Vote Capsule (Vertical layout) */
+/* Rail Vote Capsule (Vertical layout in Left Sticky Action Rail - Issue #124) */
 .rail-vote-wrapper {
   display: flex;
   justify-content: center;
@@ -3458,8 +3458,11 @@ body,
   min-width: 36px;
   aspect-ratio: auto;
   padding: 2px 0;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm, 4px);
   gap: 1px;
+  position: relative;
+  overflow: visible;
 }
 
 .rail-vote-wrapper .vote-capsule .vote-btn {
@@ -3469,6 +3472,8 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
 }
 
 .rail-vote-wrapper .vote-capsule .vote-score {
@@ -3476,6 +3481,85 @@ body,
   font-weight: 700;
   line-height: 1;
   padding: 1px 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Localized Radial Glow behind active arrow (Issue #124) */
+.rail-vote-wrapper .vote-capsule::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms) ease;
+  z-index: 0;
+}
+
+.rail-vote-wrapper .vote-capsule.has-voted-up::before {
+  opacity: 1;
+  background: radial-gradient(circle 24px at 50% 13px, rgba(16, 185, 129, 0.28) 0%, rgba(16, 185, 129, 0.12) 45%, rgba(16, 185, 129, 0.02) 75%, transparent 100%);
+}
+
+.rail-vote-wrapper .vote-capsule.has-voted-down::before {
+  opacity: 1;
+  background: radial-gradient(circle 24px at 50% calc(100% - 13px), rgba(239, 68, 68, 0.28) 0%, rgba(239, 68, 68, 0.12) 45%, rgba(239, 68, 68, 0.02) 75%, transparent 100%);
+}
+
+/* Localized Active Border around active arrow (Issue #124) */
+.rail-vote-wrapper .vote-capsule::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  width: auto;
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 150ms) ease;
+  z-index: 2;
+}
+
+/* Upvote Active: top + upper-left + upper-right */
+.rail-vote-wrapper .vote-capsule.has-voted-up::after {
+  top: -1px;
+  bottom: auto;
+  height: 25px;
+  opacity: 1;
+  border-top: 1.5px solid var(--vote-up-color, #10b981);
+  border-left: 1.5px solid var(--vote-up-color, #10b981);
+  border-right: 1.5px solid var(--vote-up-color, #10b981);
+  border-bottom: none !important;
+  border-top-left-radius: var(--radius-sm, 4px);
+  border-top-right-radius: var(--radius-sm, 4px);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Downvote Active: bottom + lower-left + lower-right */
+.rail-vote-wrapper .vote-capsule.has-voted-down::after {
+  bottom: -1px;
+  top: auto;
+  height: 25px;
+  opacity: 1;
+  border-bottom: 1.5px solid var(--vote-down-color, #ef4444);
+  border-left: 1.5px solid var(--vote-down-color, #ef4444);
+  border-right: 1.5px solid var(--vote-down-color, #ef4444);
+  border-top: none !important;
+  border-bottom-left-radius: var(--radius-sm, 4px);
+  border-bottom-right-radius: var(--radius-sm, 4px);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Dark Theme Overrides for Rail Vote Glow (Issue #124) */
+[data-theme="dark"] .rail-vote-wrapper .vote-capsule.has-voted-up::before {
+  background: radial-gradient(circle 24px at 50% 13px, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0.15) 45%, rgba(16, 185, 129, 0.02) 75%, transparent 100%);
+}
+
+[data-theme="dark"] .rail-vote-wrapper .vote-capsule.has-voted-down::before {
+  background: radial-gradient(circle 24px at 50% calc(100% - 13px), rgba(239, 68, 68, 0.35) 0%, rgba(239, 68, 68, 0.15) 45%, rgba(239, 68, 68, 0.02) 75%, transparent 100%);
 }
 
 /* Mobile Bottom Action Bar (Default Hidden on Desktop) */

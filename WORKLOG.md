@@ -695,6 +695,11 @@
 [2026-10-03 13:38] | dev_bot | IMPLEMENTATION_COMPLETE | Финальный reader polish и регрессионное тестирование (Task: issue-114-reader-final-polish-regression)
 [2026-10-03 13:38] | git_bot | PR_CREATED | Открыт PR #123 для Issue #114 (Fixes #114), ветка feat/issue-114-reader-final-polish-regression (Task: issue-114-reader-final-polish-regression)
 [2026-10-03 13:41] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #123 готов к слиянию владельцем (Task: issue-114-reader-final-polish-regression)
+[2026-10-03 13:53] | pm_bot | TASK_INIT | Старт задачи Issue #124: Article Rating: локализовать active border и glow вокруг выбранной стрелки в Action Rail (Task: issue-124-article-rail-vote-active-state)
+[2026-10-03 13:53] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #124 (Task: issue-124-article-rail-vote-active-state)
+[2026-10-03 13:55] | dev_bot | IMPLEMENTATION_COMPLETE | Article Rating: локализовать active border и glow вокруг выбранной стрелки в Action Rail (Task: issue-124-article-rail-vote-active-state)
+
+
 
 
 
