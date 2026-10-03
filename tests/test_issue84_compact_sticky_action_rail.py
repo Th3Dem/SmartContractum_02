@@ -126,7 +126,10 @@ class TestIssue84CompactStickyActionRail(unittest.TestCase):
         css_block = rail_match.group(1)
 
         self.assertIn("position: sticky", css_block)
-        self.assertIn("top: 100px", css_block)
+        self.assertTrue(
+            "top: var(--reader-sticky-offset" in css_block or "top: 100px" in css_block,
+            "Action rail must have sticky top offset"
+        )
         self.assertTrue(
             "border-radius: var(--radius-md" in css_block or "border-radius: 9999px" in css_block,
             "Action rail container must have valid border-radius"

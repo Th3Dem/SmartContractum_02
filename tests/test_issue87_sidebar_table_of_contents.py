@@ -86,9 +86,15 @@ class TestIssue87SidebarTableOfContents(unittest.TestCase):
         css_block = sidebar_match.group(1)
 
         self.assertIn("position: sticky", css_block)
-        self.assertIn("top: 80px", css_block)
+        self.assertTrue(
+            "top: var(--reader-sticky-offset" in css_block or "top: 80px" in css_block,
+            "Sidebar TOC must have sticky top offset"
+        )
         self.assertIn("width: 250px", css_block)
-        self.assertIn("max-height: calc(100vh - 120px)", css_block)
+        self.assertTrue(
+            "calc(100vh - var(--reader-sticky-offset" in css_block or "calc(100vh - 120px)" in css_block,
+            "Sidebar TOC must have max-height"
+        )
         self.assertIn("overflow-y: auto", css_block)
         self.assertIn("padding: 16px", css_block)
         self.assertIn("var(--surface-1)", css_block)
