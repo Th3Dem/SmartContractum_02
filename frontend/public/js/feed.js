@@ -311,8 +311,14 @@
     } else if (tabParam === 'all' || tabParam === 'focus') {
       state.tab = 'all';
       state.savedOnly = false;
-    } else if (['top', 'new', 'clubs', 'companies', 'directions'].includes(tabParam)) {
-      state.tab = tabParam;
+    } else if (['top', 'new', 'clubs', 'companies', 'directions', 'topics', 'blogs'].includes(tabParam)) {
+      if (tabParam === 'topics') {
+        state.tab = 'directions';
+      } else if (tabParam === 'blogs') {
+        state.tab = 'companies';
+      } else {
+        state.tab = tabParam;
+      }
       state.savedOnly = false;
     } else {
       state.tab = 'all';
@@ -376,12 +382,43 @@
     if (sortSelect) {
       sortSelect.value = state.sort;
     }
+    updateSortUI(state.sort);
 
     updatePeriodVisibility();
     updateSubnavTabsUI();
     updateQuestionStatusPillsUI();
     renderActiveChips();
     updateFilterBadge();
+  }
+
+  const SORT_LABELS = {
+    newest: 'Сначала новые',
+    rating: 'По рейтингу',
+    popular: 'По популярности',
+    discussed: 'По обсуждаемости'
+  };
+
+  function updateSortUI(sortValue) {
+    const val = sortValue || state.sort || 'newest';
+    const labelEl = document.getElementById('feedSortCurrentLabel');
+    if (labelEl) {
+      labelEl.textContent = SORT_LABELS[val] || SORT_LABELS.newest;
+    }
+    const sortSelect = document.getElementById('feedSortSelect');
+    if (sortSelect && sortSelect.value !== val) {
+      sortSelect.value = val;
+    }
+    const menu = document.getElementById('feedSortCustomMenu');
+    if (menu) {
+      const options = menu.querySelectorAll('.feed-sort-option');
+      options.forEach(function (opt) {
+        const optVal = opt.getAttribute('data-value');
+        const isMatch = optVal === val;
+        opt.classList.toggle('active', isMatch);
+        opt.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+        opt.setAttribute('tabindex', isMatch ? '0' : '-1');
+      });
+    }
   }
 
   function updateQuestionStatusPillsUI() {
@@ -883,9 +920,15 @@
 
     const panel = document.getElementById('feedFiltersPanel');
     const toggleBtn = document.getElementById('btnFeedFiltersToggle');
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
 
     if (panel) {
       panel.style.display = 'block';
+    }
+    if (drawerWrap) {
+      requestAnimationFrame(function () {
+        drawerWrap.classList.add('is-open');
+      });
     }
     if (toggleBtn) {
       toggleBtn.classList.add('active');
@@ -898,19 +941,29 @@
   function closeFeedFiltersPanel() {
     const panel = document.getElementById('feedFiltersPanel');
     const toggleBtn = document.getElementById('btnFeedFiltersToggle');
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
 
-    if (panel) {
-      panel.style.display = 'none';
+    if (drawerWrap) {
+      drawerWrap.classList.remove('is-open');
     }
     if (toggleBtn) {
       toggleBtn.classList.remove('active');
       toggleBtn.setAttribute('aria-expanded', 'false');
     }
+    if (panel) {
+      setTimeout(function () {
+        if (!drawerWrap || !drawerWrap.classList.contains('is-open')) {
+          panel.style.display = 'none';
+        }
+      }, 230);
+    }
   }
 
   function toggleFeedFiltersPanel() {
     const panel = document.getElementById('feedFiltersPanel');
-    if (panel && panel.style.display !== 'none') {
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
+    const isOpen = (panel && panel.style.display !== 'none') || (drawerWrap && drawerWrap.classList.contains('is-open'));
+    if (isOpen) {
       closeFeedFiltersPanel();
     } else {
       openFeedFiltersPanel();
@@ -2068,11 +2121,14 @@
       sortSelect.addEventListener('change', function () {
         state.sort = sortSelect.value;
         state.offset = 0;
+        updateSortUI(sortSelect.value);
         updatePeriodVisibility();
         syncURL(false);
         fetchFeed(true);
       });
     }
+
+    initCustomSortDropdown();
 
     // Reset All Filters button on chips bar
     const resetAllBtn = document.getElementById('feedResetAllBtn');
@@ -2088,6 +2144,99 @@
         fetchFeed(false);
       });
     }
+  }
+
+  function initCustomSortDropdown() {
+    const trigger = document.getElementById('feedSortCustomTrigger');
+    const menu = document.getElementById('feedSortCustomMenu');
+    const select = document.getElementById('feedSortSelect');
+    if (!trigger || !menu) return;
+
+    function openMenu() {
+      menu.style.display = 'flex';
+      trigger.setAttribute('aria-expanded', 'true');
+      const activeOption = menu.querySelector('.feed-sort-option.active') || menu.querySelector('.feed-sort-option');
+      if (activeOption) {
+        activeOption.focus();
+      }
+    }
+
+    function closeMenu(focusTrigger) {
+      menu.style.display = 'none';
+      trigger.setAttribute('aria-expanded', 'false');
+      if (focusTrigger) {
+        trigger.focus();
+      }
+    }
+
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const isOpen = trigger.getAttribute('aria-expanded') === 'true';
+      if (isOpen) {
+        closeMenu(false);
+      } else {
+        openMenu();
+      }
+    });
+
+    trigger.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openMenu();
+      }
+    });
+
+    const options = Array.from(menu.querySelectorAll('.feed-sort-option'));
+
+    options.forEach(function (opt, idx) {
+      opt.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const val = opt.getAttribute('data-value');
+        if (val) {
+          state.sort = val;
+          state.offset = 0;
+          if (select) {
+            select.value = val;
+          }
+          updateSortUI(val);
+          updatePeriodVisibility();
+          closeMenu(true);
+          syncURL(false);
+          fetchFeed(true);
+        }
+      });
+
+      opt.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          opt.click();
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const next = options[(idx + 1) % options.length];
+          if (next) next.focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prev = options[(idx - 1 + options.length) % options.length];
+          if (prev) prev.focus();
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          options[0].focus();
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          options[options.length - 1].focus();
+        } else if (e.key === 'Escape' || e.key === 'Tab') {
+          e.preventDefault();
+          closeMenu(false);
+          trigger.focus();
+        }
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+        closeMenu(false);
+      }
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -2865,6 +3014,17 @@
     // Global escape key handler for panels & dropdowns
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const sortMenu = document.getElementById('feedSortCustomMenu');
+        if (sortMenu && sortMenu.style.display !== 'none') {
+          const sortTrigger = document.getElementById('feedSortCustomTrigger');
+          sortMenu.style.display = 'none';
+          if (sortTrigger) {
+            sortTrigger.setAttribute('aria-expanded', 'false');
+            sortTrigger.focus();
+          }
+          return;
+        }
+
         const openMenu = document.querySelector('.feed-multiselect-dropdown-menu[style*="display: flex"], .feed-topics-dropdown-menu[style*="display: flex"], .feed-date-dropdown-menu[style*="display: flex"], .feed-multiselect-dropdown-menu[style*="display: block"], .feed-topics-dropdown-menu[style*="display: block"], .feed-date-dropdown-menu[style*="display: block"]');
         if (openMenu && openMenu.style.display !== 'none') {
           openMenu.style.display = 'none';
@@ -2884,8 +3044,13 @@
           return;
         }
         const filtersPanel = document.getElementById('feedFiltersPanel');
-        if (filtersPanel && filtersPanel.style.display !== 'none') {
+        const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
+        if ((filtersPanel && filtersPanel.style.display !== 'none') || (drawerWrap && drawerWrap.classList.contains('is-open'))) {
           closeFeedFiltersPanel();
+          const toggleBtn = document.getElementById('btnFeedFiltersToggle');
+          if (toggleBtn) {
+            toggleBtn.focus();
+          }
           return;
         }
         const authModal = document.getElementById('authModal');
@@ -3409,7 +3574,7 @@
       const periodLabels = { week: 'За неделю', month: 'За месяц', year: 'За год' };
       let pLabel = periodLabels[state.filters.period] || state.filters.period;
       if (state.filters.period === 'custom') {
-        pLabel = (state.filters.dateFrom || '...') + ' — ' + (state.filters.dateTo || '...');
+        pLabel = (state.filters.dateFrom || '...') + ' - ' + (state.filters.dateTo || '...');
       }
       chips.push({
         id: 'period',
