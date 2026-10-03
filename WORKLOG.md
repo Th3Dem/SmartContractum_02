@@ -679,4 +679,5 @@
 [2026-10-03 13:05] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #111 (Task: issue-111-comment-composer-click-away)
 [2026-10-03 13:09] | dev_bot | IMPLEMENTATION_COMPLETE | Comment Composer: автоматически схлопывать при click outside и blur (Task: issue-111-comment-composer-click-away)
 [2026-10-03 13:11] | git_bot | PR_CREATED | Открыт PR #120 для Issue #111 (Fixes #111), ветка feat/issue-111-comment-composer-click-away (Task: issue-111-comment-composer-click-away)
+[2026-10-03 13:13] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #120 готов к слиянию владельцем (Task: issue-111-comment-composer-click-away)
 
