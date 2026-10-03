@@ -165,23 +165,81 @@
       ? ('<span class="card-company-badge"' + (isPreview ? ' id="preview-card-company"' : '') + '>' + escapeHtml(item.companyName) + '</span>')
       : (isPreview ? '<span class="card-company-badge" id="preview-card-company" style="display: none;"></span>' : '');
 
-    // 1. Author
+    // 1. Author & Corporate Header
     const authorId = item.authorId || item.author_id || item.userId || '';
-    const authorHtml =
-      '<div class="card-meta">' +
-        '<div class="author-info">' +
-          '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + escapeHtml(authorInitials) + '</div>' +
-          '<div class="author-details">' +
-            '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
-              (isPreview
-                ? ('<span class="author-name" id="preview-card-author">' + escapeHtml(authorName) + '</span>')
-                : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>')
-              ) +
-              companyBadgeHtml +
+    const hasCompany = Boolean(item.companyId);
+    const isCompanyDetail = Boolean(options.isCompanyDetail);
+    let authorHtml = '';
+
+    if (hasCompany && !isCompanyDetail) {
+      const compId = item.companyId;
+      const compName = item.companyName || 'Корпоративный блог';
+      const compInitials = item.companyInitials ||
+        compName.replace(/[«»"']/g, '').trim().split(/\s+/).map(function (p) { return p[0]; }).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'КБ';
+      const compLogo = item.companyLogo || item.logo || '';
+      const compAvatarHtml = compLogo
+        ? '<img src="' + escapeHtml(compLogo) + '" alt="' + escapeHtml(compName) + '" class="company-card-logo company-card-logo-img">'
+        : '<div class="company-card-logo">' + escapeHtml(compInitials) + '</div>';
+
+      const isVerified = Boolean(item.isVerified || item.companyIsVerified || item.isCompanyVerified);
+      const verifiedIcon = isVerified
+        ? '<span class="verified-icon" title="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+        : '';
+
+      const isCompanySubscribed = typeof options.isCompanySubscribed === 'function'
+        ? options.isCompanySubscribed(compId)
+        : Boolean(item.isCompanySubscribed || item.isSubscribed);
+
+      const subBtnHtml = isPreview
+        ? '<button type="button" class="btn btn-secondary btn-card-company-sub" disabled>Подписаться</button>'
+        : '<button type="button" class="btn btn-secondary btn-card-company-sub ' + (isCompanySubscribed ? 'is-subscribed' : '') + '" data-company-id="' + escapeHtml(compId) + '" data-company-name="' + escapeHtml(compName) + '" title="' + (isCompanySubscribed ? 'Отписаться от блога' : 'Подписаться на блог') + '">' +
+            (isCompanySubscribed ? 'Вы подписаны' : 'Подписаться') +
+          '</button>';
+
+      const authorProfileBtn = isPreview
+        ? ('<span class="author-name">' + escapeHtml(authorName) + '</span>')
+        : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>');
+
+      authorHtml =
+        '<div class="card-meta card-corporate-meta">' +
+          '<div class="card-corporate-header">' +
+            '<div class="company-card-info" data-company-id="' + escapeHtml(compId) + '" role="button" tabindex="0" title="Открыть блог компании ' + escapeHtml(compName) + '">' +
+              compAvatarHtml +
+              '<div class="company-card-details">' +
+                '<div class="company-card-title-group">' +
+                  '<span class="company-card-name">' + escapeHtml(compName) + '</span>' +
+                  verifiedIcon +
+                '</div>' +
+                '<div class="company-card-submeta">' +
+                  '<span class="card-corporate-badge card-corporate-marker">Блог компании</span>' +
+                  '<span class="meta-dot">·</span>' +
+                  '<span class="card-secondary-author">' +
+                    '<span class="card-secondary-author-label">Автор:</span> ' +
+                    authorProfileBtn +
+                  '</span>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            subBtnHtml +
+          '</div>' +
+        '</div>';
+    } else {
+      authorHtml =
+        '<div class="card-meta">' +
+          '<div class="author-info">' +
+            '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + escapeHtml(authorInitials) + '</div>' +
+            '<div class="author-details">' +
+              '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
+                (isPreview
+                  ? ('<span class="author-name" id="preview-card-author">' + escapeHtml(authorName) + '</span>')
+                  : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>')
+                ) +
+                (isCompanyDetail ? '' : companyBadgeHtml) +
+              '</div>' +
             '</div>' +
           '</div>' +
-        '</div>' +
-      '</div>';
+        '</div>';
+    }
 
     // 2. Title
     const isQuestion = (item.materialType === 'question' || item.type === 'question');
@@ -574,6 +632,51 @@
           e.stopPropagation();
           if (typeof options.onReportClick === 'function') {
             options.onReportClick(item.id, reportBtn, item);
+          }
+        });
+      }
+
+      // Corporate card company navigation
+      const compInfoEl = card.querySelector('.company-card-info');
+      if (compInfoEl) {
+        compInfoEl.addEventListener('click', function (e) {
+          if (e.target.closest('.btn-author-profile') || e.target.closest('.btn-card-company-sub')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const cid = compInfoEl.getAttribute('data-company-id');
+          if (typeof options.onCompanyClick === 'function') {
+            options.onCompanyClick(cid);
+          } else if (typeof window.openCompanyDetail === 'function') {
+            window.openCompanyDetail(cid);
+          }
+        });
+        compInfoEl.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            if (e.target.closest('.btn-author-profile') || e.target.closest('.btn-card-company-sub')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const cid = compInfoEl.getAttribute('data-company-id');
+            if (typeof options.onCompanyClick === 'function') {
+              options.onCompanyClick(cid);
+            } else if (typeof window.openCompanyDetail === 'function') {
+              window.openCompanyDetail(cid);
+            }
+          }
+        });
+      }
+
+      // Corporate card company subscribe button
+      const compSubBtn = card.querySelector('.btn-card-company-sub');
+      if (compSubBtn) {
+        compSubBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const cid = compSubBtn.getAttribute('data-company-id');
+          const cname = compSubBtn.getAttribute('data-company-name') || '';
+          if (typeof options.onCompanySubscribeToggle === 'function') {
+            options.onCompanySubscribeToggle(cid, compSubBtn, cname);
+          } else if (typeof window.toggleSubscription === 'function') {
+            window.toggleSubscription('company', cid, compSubBtn, cname);
           }
         });
       }
