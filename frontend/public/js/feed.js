@@ -101,11 +101,33 @@
 
   function updateSavedCounter() {
     const counterEl = document.getElementById('feedSavedCount');
-    if (counterEl) {
+    if (!counterEl) return;
+    if (!currentUser || !currentUser.id) {
       const count = getBookmarks().length;
       counterEl.textContent = count;
       counterEl.style.display = 'inline-block';
+      return;
     }
+    fetch('/api/saved/counts')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          counterEl.textContent = data.total;
+          counterEl.style.display = 'inline-block';
+          const pAll = document.getElementById('savedCountAll');
+          const pPub = document.getElementById('savedCountPublications');
+          const pQ = document.getElementById('savedCountQuestions');
+          const pComm = document.getElementById('savedCountComments');
+          if (pAll) pAll.textContent = data.total;
+          if (pPub) pPub.textContent = data.publications;
+          if (pQ) pQ.textContent = data.questions;
+          if (pComm) pComm.textContent = data.comments;
+        }
+      })
+      .catch(function () {
+        const count = getBookmarks().length;
+        counterEl.textContent = count;
+      });
   }
 
   function runLegacyBookmarksMigration() {
@@ -135,6 +157,31 @@
       }
       if (legacy && migrated) {
         localStorage.removeItem('sc_bookmarks');
+      }
+    } catch (e) {}
+  }
+
+  function runLegacyCommentBookmarksMigration() {
+    if (!currentUser || !currentUser.id) return;
+    try {
+      const legacy = localStorage.getItem('sc_comment_bookmarks');
+      if (legacy) {
+        let parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          fetch('/api/comments/sync-saves', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commentIds: parsed })
+          })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && data.success) {
+              localStorage.removeItem('sc_comment_bookmarks');
+              updateSavedCounter();
+            }
+          })
+          .catch(function () {});
+        }
       }
     } catch (e) {}
   }
@@ -228,6 +275,7 @@
     activeCompanyId: null,
     companiesSubtab: 'catalog', // 'catalog' | 'articles'
     savedOnly: false,
+    savedType: 'all', // 'all' | 'publications' | 'questions' | 'comments'
     limit: 10,
     offset: 0,
     total: 0,
@@ -308,11 +356,23 @@
     } else if (tabParam === 'saved' || savedParam === '1' || savedParam === 'true') {
       state.tab = 'saved';
       state.savedOnly = true;
+      const typeParam = (params.get('type') || params.get('savedType') || 'all').toLowerCase();
+      if (['all', 'publications', 'questions', 'comments'].includes(typeParam)) {
+        state.savedType = typeParam;
+      } else {
+        state.savedType = 'all';
+      }
     } else if (tabParam === 'all' || tabParam === 'focus') {
       state.tab = 'all';
       state.savedOnly = false;
-    } else if (['top', 'new', 'clubs', 'companies', 'directions'].includes(tabParam)) {
-      state.tab = tabParam;
+    } else if (['top', 'new', 'clubs', 'companies', 'directions', 'topics', 'blogs'].includes(tabParam)) {
+      if (tabParam === 'topics') {
+        state.tab = 'directions';
+      } else if (tabParam === 'blogs') {
+        state.tab = 'companies';
+      } else {
+        state.tab = tabParam;
+      }
       state.savedOnly = false;
     } else {
       state.tab = 'all';
@@ -376,12 +436,43 @@
     if (sortSelect) {
       sortSelect.value = state.sort;
     }
+    updateSortUI(state.sort);
 
     updatePeriodVisibility();
     updateSubnavTabsUI();
     updateQuestionStatusPillsUI();
     renderActiveChips();
     updateFilterBadge();
+  }
+
+  const SORT_LABELS = {
+    newest: 'Сначала новые',
+    rating: 'По рейтингу',
+    popular: 'По популярности',
+    discussed: 'По обсуждаемости'
+  };
+
+  function updateSortUI(sortValue) {
+    const val = sortValue || state.sort || 'newest';
+    const labelEl = document.getElementById('feedSortCurrentLabel');
+    if (labelEl) {
+      labelEl.textContent = SORT_LABELS[val] || SORT_LABELS.newest;
+    }
+    const sortSelect = document.getElementById('feedSortSelect');
+    if (sortSelect && sortSelect.value !== val) {
+      sortSelect.value = val;
+    }
+    const menu = document.getElementById('feedSortCustomMenu');
+    if (menu) {
+      const options = menu.querySelectorAll('.feed-sort-option');
+      options.forEach(function (opt) {
+        const optVal = opt.getAttribute('data-value');
+        const isMatch = optVal === val;
+        opt.classList.toggle('active', isMatch);
+        opt.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+        opt.setAttribute('tabindex', isMatch ? '0' : '-1');
+      });
+    }
   }
 
   function updateQuestionStatusPillsUI() {
@@ -406,6 +497,9 @@
     const params = new URLSearchParams();
     if (state.tab && state.tab !== 'focus') {
       params.set('tab', state.tab);
+    }
+    if (state.tab === 'saved' && state.savedType && state.savedType !== 'all') {
+      params.set('type', state.savedType);
     }
     if (state.tab === 'questions' && state.questionStatus && state.questionStatus !== 'all') {
       params.set('questionStatus', state.questionStatus);
@@ -513,6 +607,10 @@
     if (user) {
       loadFeedSettings();
       syncLocalBookmarksWithServer();
+      runLegacyCommentBookmarksMigration();
+      updateSavedCounter();
+    } else {
+      updateSavedCounter();
     }
   }
 
@@ -883,9 +981,15 @@
 
     const panel = document.getElementById('feedFiltersPanel');
     const toggleBtn = document.getElementById('btnFeedFiltersToggle');
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
 
     if (panel) {
       panel.style.display = 'block';
+    }
+    if (drawerWrap) {
+      requestAnimationFrame(function () {
+        drawerWrap.classList.add('is-open');
+      });
     }
     if (toggleBtn) {
       toggleBtn.classList.add('active');
@@ -898,19 +1002,29 @@
   function closeFeedFiltersPanel() {
     const panel = document.getElementById('feedFiltersPanel');
     const toggleBtn = document.getElementById('btnFeedFiltersToggle');
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
 
-    if (panel) {
-      panel.style.display = 'none';
+    if (drawerWrap) {
+      drawerWrap.classList.remove('is-open');
     }
     if (toggleBtn) {
       toggleBtn.classList.remove('active');
       toggleBtn.setAttribute('aria-expanded', 'false');
     }
+    if (panel) {
+      setTimeout(function () {
+        if (!drawerWrap || !drawerWrap.classList.contains('is-open')) {
+          panel.style.display = 'none';
+        }
+      }, 230);
+    }
   }
 
   function toggleFeedFiltersPanel() {
     const panel = document.getElementById('feedFiltersPanel');
-    if (panel && panel.style.display !== 'none') {
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
+    const isOpen = (panel && panel.style.display !== 'none') || (drawerWrap && drawerWrap.classList.contains('is-open'));
+    if (isOpen) {
       closeFeedFiltersPanel();
     } else {
       openFeedFiltersPanel();
@@ -1259,6 +1373,40 @@
       const isSaved = cur === 'saved';
       tabSaved.classList.toggle('active', isSaved);
       tabSaved.setAttribute('aria-selected', isSaved ? 'true' : 'false');
+    }
+
+    // Saved Hub & Questions Pills Bar in Stream Toolbar
+    const savedHubPills = document.getElementById('feedSavedHubPills');
+    if (savedHubPills) {
+      savedHubPills.style.display = (cur === 'saved') ? 'inline-flex' : 'none';
+      const pills = savedHubPills.querySelectorAll('.feed-saved-pill');
+      pills.forEach(function (pill) {
+        const pType = pill.getAttribute('data-saved-type') || pill.getAttribute('data-type');
+        const isAct = pType === (state.savedType || 'all');
+        pill.classList.toggle('active', isAct);
+        pill.setAttribute('aria-checked', isAct ? 'true' : 'false');
+      });
+    }
+
+    const qStatusPills = document.getElementById('feedQuestionsStatusPills');
+    if (qStatusPills) {
+      qStatusPills.style.display = (cur === 'questions') ? 'inline-flex' : 'none';
+    }
+
+    const filtersBtn = document.getElementById('btnFeedFiltersToggle');
+    if (filtersBtn) {
+      filtersBtn.style.display = (cur === 'saved') ? 'none' : 'inline-flex';
+    }
+
+    const searchInput = document.getElementById('feedSearchInput');
+    if (searchInput) {
+      if (cur === 'saved') {
+        searchInput.placeholder = 'Поиск в сохраненном...';
+      } else if (cur === 'questions') {
+        searchInput.placeholder = 'Поиск по вопросам...';
+      } else {
+        searchInput.placeholder = 'Поиск публикаций';
+      }
     }
 
     // Top Period Bar
@@ -2068,11 +2216,14 @@
       sortSelect.addEventListener('change', function () {
         state.sort = sortSelect.value;
         state.offset = 0;
+        updateSortUI(sortSelect.value);
         updatePeriodVisibility();
         syncURL(false);
         fetchFeed(true);
       });
     }
+
+    initCustomSortDropdown();
 
     // Reset All Filters button on chips bar
     const resetAllBtn = document.getElementById('feedResetAllBtn');
@@ -2088,6 +2239,99 @@
         fetchFeed(false);
       });
     }
+  }
+
+  function initCustomSortDropdown() {
+    const trigger = document.getElementById('feedSortCustomTrigger');
+    const menu = document.getElementById('feedSortCustomMenu');
+    const select = document.getElementById('feedSortSelect');
+    if (!trigger || !menu) return;
+
+    function openMenu() {
+      menu.style.display = 'flex';
+      trigger.setAttribute('aria-expanded', 'true');
+      const activeOption = menu.querySelector('.feed-sort-option.active') || menu.querySelector('.feed-sort-option');
+      if (activeOption) {
+        activeOption.focus();
+      }
+    }
+
+    function closeMenu(focusTrigger) {
+      menu.style.display = 'none';
+      trigger.setAttribute('aria-expanded', 'false');
+      if (focusTrigger) {
+        trigger.focus();
+      }
+    }
+
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const isOpen = trigger.getAttribute('aria-expanded') === 'true';
+      if (isOpen) {
+        closeMenu(false);
+      } else {
+        openMenu();
+      }
+    });
+
+    trigger.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openMenu();
+      }
+    });
+
+    const options = Array.from(menu.querySelectorAll('.feed-sort-option'));
+
+    options.forEach(function (opt, idx) {
+      opt.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const val = opt.getAttribute('data-value');
+        if (val) {
+          state.sort = val;
+          state.offset = 0;
+          if (select) {
+            select.value = val;
+          }
+          updateSortUI(val);
+          updatePeriodVisibility();
+          closeMenu(true);
+          syncURL(false);
+          fetchFeed(true);
+        }
+      });
+
+      opt.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          opt.click();
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const next = options[(idx + 1) % options.length];
+          if (next) next.focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prev = options[(idx - 1 + options.length) % options.length];
+          if (prev) prev.focus();
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          options[0].focus();
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          options[options.length - 1].focus();
+        } else if (e.key === 'Escape' || e.key === 'Tab') {
+          e.preventDefault();
+          closeMenu(false);
+          trigger.focus();
+        }
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+        closeMenu(false);
+      }
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -2865,6 +3109,17 @@
     // Global escape key handler for panels & dropdowns
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const sortMenu = document.getElementById('feedSortCustomMenu');
+        if (sortMenu && sortMenu.style.display !== 'none') {
+          const sortTrigger = document.getElementById('feedSortCustomTrigger');
+          sortMenu.style.display = 'none';
+          if (sortTrigger) {
+            sortTrigger.setAttribute('aria-expanded', 'false');
+            sortTrigger.focus();
+          }
+          return;
+        }
+
         const openMenu = document.querySelector('.feed-multiselect-dropdown-menu[style*="display: flex"], .feed-topics-dropdown-menu[style*="display: flex"], .feed-date-dropdown-menu[style*="display: flex"], .feed-multiselect-dropdown-menu[style*="display: block"], .feed-topics-dropdown-menu[style*="display: block"], .feed-date-dropdown-menu[style*="display: block"]');
         if (openMenu && openMenu.style.display !== 'none') {
           openMenu.style.display = 'none';
@@ -2884,8 +3139,13 @@
           return;
         }
         const filtersPanel = document.getElementById('feedFiltersPanel');
-        if (filtersPanel && filtersPanel.style.display !== 'none') {
+        const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
+        if ((filtersPanel && filtersPanel.style.display !== 'none') || (drawerWrap && drawerWrap.classList.contains('is-open'))) {
           closeFeedFiltersPanel();
+          const toggleBtn = document.getElementById('btnFeedFiltersToggle');
+          if (toggleBtn) {
+            toggleBtn.focus();
+          }
           return;
         }
         const authModal = document.getElementById('authModal');
@@ -3409,7 +3669,7 @@
       const periodLabels = { week: 'За неделю', month: 'За месяц', year: 'За год' };
       let pLabel = periodLabels[state.filters.period] || state.filters.period;
       if (state.filters.period === 'custom') {
-        pLabel = (state.filters.dateFrom || '...') + ' — ' + (state.filters.dateTo || '...');
+        pLabel = (state.filters.dateFrom || '...') + ' - ' + (state.filters.dateTo || '...');
       }
       chips.push({
         id: 'period',
@@ -3667,6 +3927,84 @@
     params.set('limit', String(state.limit));
     params.set('offset', String(state.offset));
 
+    if (state.tab === 'saved') {
+      if (!currentUser) {
+        state.isLoading = false;
+        openAuthModal('saved');
+        return;
+      }
+      const savedParams = new URLSearchParams();
+      savedParams.set('type', state.savedType || 'all');
+      if (state.search) savedParams.set('search', state.search);
+      savedParams.set('limit', String(state.limit));
+      savedParams.set('offset', String(state.offset));
+
+      fetch('/api/saved?' + savedParams.toString(), { signal: feedAbortController.signal })
+        .then(function (res) {
+          if (currentGeneration !== state.requestGeneration) return;
+          if (res.status === 401) {
+            state.isLoading = false;
+            openAuthModal('saved');
+            throw new Error('AUTH_REQUIRED');
+          }
+          if (!res.ok) {
+            const err = new Error('HTTP error ' + res.status);
+            err.status = res.status;
+            throw err;
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          if (currentGeneration !== state.requestGeneration || !data) return;
+          state.isLoading = false;
+          if (data && data.success) {
+            hideOfflineBadge();
+            const items = data.items || [];
+            if (isInitial) {
+              state.articles = items;
+            } else {
+              const existingIds = new Set(state.articles.map(function (a) { return a.id; }));
+              const incoming = items.filter(function (a) { return !existingIds.has(a.id); });
+              state.articles = state.articles.concat(incoming);
+            }
+            state.total = data.total !== undefined ? data.total : state.articles.length;
+            state.hasMore = Boolean(data.hasMore);
+
+            if (data.counts) {
+              const pAll = document.getElementById('savedCountAll');
+              const pPub = document.getElementById('savedCountPublications');
+              const pQ = document.getElementById('savedCountQuestions');
+              const pComm = document.getElementById('savedCountComments');
+              const sBadge = document.getElementById('feedSavedCount');
+              if (pAll) pAll.textContent = data.counts.total;
+              if (pPub) pPub.textContent = data.counts.publications;
+              if (pQ) pQ.textContent = data.counts.questions;
+              if (pComm) pComm.textContent = data.counts.comments;
+              if (sBadge) sBadge.textContent = data.counts.total;
+            }
+
+            renderFeedCards(isInitial);
+            updateResultsCount();
+          } else {
+            hideOfflineBadge();
+            renderErrorState('Не удалось загрузить сохраненные материалы: ' + (data ? data.error : 'Неизвестная ошибка'));
+          }
+        })
+        .catch(function (err) {
+          if (err.name === 'AbortError' || currentGeneration !== state.requestGeneration) {
+            return;
+          }
+          state.isLoading = false;
+          if (err.message === 'AUTH_REQUIRED') return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            handleOfflineFallback(isInitial);
+          } else {
+            renderErrorState('Ошибка при загрузке сохраненных материалов');
+          }
+        });
+      return;
+    }
+
     if (state.savedOnly) {
       const bookmarks = getBookmarks();
       if (bookmarks.length === 0) {
@@ -3861,6 +4199,90 @@
     el.textContent = pluralizePublications(n);
   }
 
+  function renderSavedCommentCard(comment) {
+    const card = document.createElement('article');
+    card.className = 'feed-card saved-comment-card';
+    card.setAttribute('data-id', comment.id);
+    card.setAttribute('data-comment-id', comment.id);
+
+    const authorInitials = getInitials(comment.authorName || 'Пользователь');
+    const avatarHtml = comment.authorAvatar
+      ? '<img src="' + escapeHtml(comment.authorAvatar) + '" alt="' + escapeHtml(comment.authorName || '') + '" class="author-avatar-img">'
+      : '<span class="author-avatar-initials">' + escapeHtml(authorInitials) + '</span>';
+
+    const dateRu = comment.date || (comment.createdAt ? formatRuDate(comment.createdAt) : 'Недавно');
+    const targetLabel = (comment.commentType === 'answer' || comment.articleType === 'question') ? 'к вопросу:' : 'к публикации:';
+    const permalink = comment.permalink || ('article.html?id=' + encodeURIComponent(comment.articleId) + '#comment-' + encodeURIComponent(comment.id));
+
+    card.innerHTML =
+      '<div class="saved-comment-header">' +
+        '<div class="saved-comment-author-wrap">' +
+          '<div class="author-avatar-circle">' + avatarHtml + '</div>' +
+          '<div class="saved-comment-author-info">' +
+            '<span class="saved-comment-author-name">' + escapeHtml(comment.authorName || 'Пользователь') + '</span>' +
+            '<span class="saved-comment-date">' + escapeHtml(dateRu) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" class="btn-saved-comment-unsave" title="Удалить из сохраненного" aria-label="Удалить из сохраненного">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+        '</button>' +
+      '</div>' +
+      '<div class="saved-comment-target-meta">' +
+        '<span class="saved-comment-target-label">' + escapeHtml(targetLabel) + '</span> ' +
+        '<a href="' + escapeHtml(permalink) + '" class="saved-comment-target-title">' + escapeHtml(comment.articleTitle || 'Материал сообщества') + '</a>' +
+      '</div>' +
+      '<blockquote class="saved-comment-quote">' +
+        escapeHtml(comment.text || '') +
+      '</blockquote>' +
+      '<div class="saved-comment-actions">' +
+        '<a href="' + escapeHtml(permalink) + '" class="saved-comment-permalink-btn">' +
+          '<span>Перейти к комментарию</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>' +
+        '</a>' +
+      '</div>';
+
+    const unsaveBtn = card.querySelector('.btn-saved-comment-unsave');
+    if (unsaveBtn) {
+      unsaveBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        unsaveComment(comment.id, card);
+      });
+    }
+
+    return card;
+  }
+
+  function unsaveComment(commentId, cardEl) {
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unsave' })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.success) {
+          showToast('Комментарий удален из сохраненного');
+          if (cardEl && cardEl.parentNode) {
+            cardEl.remove();
+          }
+          state.articles = state.articles.filter(function (a) { return a.id !== commentId; });
+          updateSavedCounter();
+          const container = document.getElementById('feedCardsContainer');
+          if (container && container.children.length === 0) {
+            renderEmptyState();
+          }
+        } else {
+          showToast('Не удалось удалить из сохраненного', 'error');
+        }
+      })
+      .catch(function () {
+        showToast('Ошибка при удалении из сохраненного', 'error');
+      });
+  }
+
   function renderFeedCards(isInitial) {
     const container = document.getElementById('feedCardsContainer');
     if (!container) return;
@@ -3875,10 +4297,30 @@
       return;
     }
 
+    function renderCardItem(item) {
+      if (item.entityType === 'comment') {
+        return renderSavedCommentCard(item);
+      }
+      return createCardElement(item, {
+        onBookmarkToggle: function (itemId, btn, art) {
+          window.CardComponent.toggleCardBookmark(itemId, btn);
+          if (state.tab === 'saved') {
+            const cardEl = container.querySelector('.feed-card[data-id="' + itemId + '"]');
+            if (cardEl) cardEl.remove();
+            state.articles = state.articles.filter(function (a) { return a.id !== itemId; });
+            updateSavedCounter();
+            if (container.children.length === 0) {
+              renderEmptyState();
+            }
+          }
+        }
+      });
+    }
+
     // Render cards avoiding DOM duplicates
     if (isInitial) {
       state.articles.forEach(function (item) {
-        container.appendChild(createCardElement(item));
+        container.appendChild(renderCardItem(item));
       });
     } else {
       const existingDomIds = new Set(
@@ -3888,7 +4330,7 @@
       );
       state.articles.forEach(function (item) {
         if (!existingDomIds.has(item.id)) {
-          container.appendChild(createCardElement(item));
+          container.appendChild(renderCardItem(item));
         }
       });
     }
@@ -4021,10 +4463,26 @@
     }
 
     const isSaved = state.tab === 'saved';
-    const title = isSaved ? 'Нет сохраненных публикаций' : 'Ничего не найдено';
-    const desc = isSaved
+    let title = isSaved ? 'Нет сохраненных публикаций' : 'Ничего не найдено';
+    let desc = isSaved
       ? 'Вы еще не добавили ни одной статьи в закладки. Нажмите на иконку закладки на любой публикации в ленте, чтобы сохранить ее.'
       : 'По вашему запросу и выбранным фильтрам не найдено публикаций. Попробуйте изменить параметры или сбросить фильтры.';
+
+    if (isSaved) {
+      if (state.savedType === 'comments') {
+        title = 'Нет сохраненных комментариев';
+        desc = 'Вы еще не добавили ни одного комментария в закладки. Сохраняйте полезные комментарии прямо при чтении материалов.';
+      } else if (state.savedType === 'questions') {
+        title = 'Нет сохраненных вопросов';
+        desc = 'Вы еще не сохранили ни одного вопроса сообщества.';
+      } else if (state.savedType === 'publications') {
+        title = 'Нет сохраненных публикаций';
+        desc = 'Вы еще не сохранили ни одной публикации в закладки. Нажмите на иконку закладки на любой публикации, чтобы сохранить ее.';
+      } else {
+        title = 'Нет сохраненных материалов';
+        desc = 'Вы еще не сохранили ни одной публикации, вопроса или комментария.';
+      }
+    }
 
     container.innerHTML =
       '<div class="feed-empty-state">' +
@@ -5943,6 +6401,27 @@
           const s = pill.getAttribute('data-status') || 'all';
           state.questionStatus = s;
           updateQuestionStatusPillsUI();
+          state.offset = 0;
+          syncURL(false);
+          fetchFeed(true);
+        });
+      });
+    }
+
+    // 2b. Saved Hub Category Pills in feed toolbar
+    const savedPillsWrap = document.getElementById('feedSavedHubPills');
+    if (savedPillsWrap) {
+      const pills = savedPillsWrap.querySelectorAll('.feed-saved-pill');
+      pills.forEach(function (pill) {
+        pill.addEventListener('click', function () {
+          const t = pill.getAttribute('data-saved-type') || pill.getAttribute('data-type') || 'all';
+          state.savedType = t;
+          pills.forEach(function (p) {
+            const pType = p.getAttribute('data-saved-type') || p.getAttribute('data-type');
+            const isAct = pType === t;
+            p.classList.toggle('active', isAct);
+            p.setAttribute('aria-checked', isAct ? 'true' : 'false');
+          });
           state.offset = 0;
           syncURL(false);
           fetchFeed(true);

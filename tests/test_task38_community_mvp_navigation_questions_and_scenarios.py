@@ -196,7 +196,7 @@ class TestTask38HeaderAndSubnav(TestTask38Base):
         self.assertLess(idx_subs, idx_saved)
 
     def test_04_obsolete_tabs_removed_from_visible_subnav(self):
-        """Focus, Top, New, Clubs, Companies, Directions must not be visible tabs in #feedSubnavTabs."""
+        """Focus, Top, New, Clubs must not be visible tabs in #feedSubnavTabs. Directions and Companies are restored."""
         subnav_tabs_match = re.search(r'<div[^>]*id=["\']feedSubnavTabs["\'][^>]*>(.*?)</div>', self.feed_html, re.DOTALL)
         self.assertIsNotNone(subnav_tabs_match, "#feedSubnavTabs missing")
         tabs_html = subnav_tabs_match.group(1)
@@ -205,8 +205,8 @@ class TestTask38HeaderAndSubnav(TestTask38Base):
         self.assertNotIn('tabFeedTop', tabs_html)
         self.assertNotIn('tabFeedNew', tabs_html)
         self.assertNotIn('tabFeedClubs', tabs_html)
-        self.assertNotIn('tabFeedCompanies', tabs_html)
-        self.assertNotIn('tabFeedDirections', tabs_html)
+        self.assertIn('tabFeedCompanies', tabs_html)
+        self.assertIn('tabFeedDirections', tabs_html)
 
 
 class TestTask38StreamToolbarAndControls(TestTask38Base):
@@ -214,7 +214,7 @@ class TestTask38StreamToolbarAndControls(TestTask38Base):
 
     def test_01_stream_toolbar_structure(self):
         """#feedStreamToolbar contains search input, sort select, question status pills, and filters button."""
-        toolbar_match = re.search(r'<div[^>]*id=["\']feedStreamToolbar["\'][^>]*>(.*?)</div>\s*<!-- Active Filter Chips Bar -->', self.feed_html, re.DOTALL)
+        toolbar_match = re.search(r'<div[^>]*id=["\']feedStreamToolbar["\'][^>]*>(.*?)</div>\s*(?:<!-- Slide-Down In-Flow Filter Drawer|<!-- In-Flow Drawer|<!-- Active Filter Chips Bar)', self.feed_html, re.DOTALL)
         self.assertIsNotNone(toolbar_match, "#feedStreamToolbar missing in feed.html")
         toolbar_html = toolbar_match.group(1)
 

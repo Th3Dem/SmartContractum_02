@@ -404,8 +404,11 @@
     }
   }
 
-  function isCommentBookmarked(commentId) {
+  function isCommentBookmarked(commentId, commentObj) {
     if (!commentId) return false;
+    if (commentObj && (commentObj.isSaved !== undefined || commentObj.hasSaved !== undefined)) {
+      return Boolean(commentObj.isSaved || commentObj.hasSaved);
+    }
     const list = getCommentBookmarks();
     return list.indexOf(commentId) !== -1;
   }
@@ -427,6 +430,16 @@
     try {
       localStorage.setItem('sc_comment_bookmarks', JSON.stringify(list));
     } catch (e) {}
+
+    if (currentUser) {
+      fetch('/api/comments/' + encodeURIComponent(commentId) + '/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: bookmarked ? 'save' : 'unsave' })
+      })
+      .then(function (res) { return res.json(); })
+      .catch(function () {});
+    }
     return bookmarked;
   }
 
@@ -2402,7 +2415,7 @@
           '</svg>' +
         '</button>';
 
-      const isSaved = isCommentBookmarked(comment.id);
+      const isSaved = isCommentBookmarked(comment.id, comment);
       const saveBtnHtml =
         '<button type="button" class="btn-comment-action btn-save-comment' + (isSaved ? ' is-bookmarked' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(comment.id) + '">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -3303,7 +3316,7 @@
         '</svg>' +
       '</button>';
 
-    const isSaved = isCommentBookmarked(comment.id);
+    const isSaved = isCommentBookmarked(comment.id, comment);
     const saveBtnHtml =
       '<button type="button" class="btn-comment-action btn-save-answer' + (isSaved ? ' is-bookmarked' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(comment.id) + '">' +
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
