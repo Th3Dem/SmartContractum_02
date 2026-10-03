@@ -684,4 +684,5 @@
 [2026-10-03 13:15] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #112 (Task: issue-112-related-articles-redesign)
 [2026-10-03 13:18] | dev_bot | IMPLEMENTATION_COMPLETE | Переделать блок Еще по теме: 2 колонки, человекопонятные названия тем и позиция до комментариев (Task: issue-112-related-articles-redesign)
 [2026-10-03 13:20] | git_bot | PR_CREATED | Открыт PR #121 для Issue #112 (Fixes #112), ветка feat/issue-112-related-articles-redesign (Task: issue-112-related-articles-redesign)
+[2026-10-03 13:22] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #121 готов к слиянию владельцем (Task: issue-112-related-articles-redesign)
 
