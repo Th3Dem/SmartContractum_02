@@ -147,6 +147,10 @@
     const authorName = item.author || 'Автор платформы';
     const authorInitials = item.authorInitials ||
       authorName.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'АП';
+    const authorAvatarUrl = item.authorAvatar || item.avatar || item.authorPhoto || item.photo || '';
+    const authorAvatarInner = authorAvatarUrl
+      ? '<img src="' + escapeHtml(authorAvatarUrl) + '" alt="' + escapeHtml(authorName) + '" class="author-avatar-img">'
+      : escapeHtml(authorInitials);
     const dateText = item.date || (isPreview ? 'Недавно' : 'Недавно');
 
     // 0. Subscription Reason Badge (Feed only)
@@ -190,11 +194,14 @@
         ? options.isCompanySubscribed(compId)
         : Boolean(item.isCompanySubscribed || item.isSubscribed);
 
-      const subBtnHtml = isPreview
-        ? '<button type="button" class="btn btn-secondary btn-card-company-sub" disabled>Подписаться</button>'
-        : '<button type="button" class="btn btn-secondary btn-card-company-sub ' + (isCompanySubscribed ? 'is-subscribed' : '') + '" data-company-id="' + escapeHtml(compId) + '" data-company-name="' + escapeHtml(compName) + '" title="' + (isCompanySubscribed ? 'Отписаться от блога' : 'Подписаться на блог') + '">' +
-            (isCompanySubscribed ? 'Вы подписаны' : 'Подписаться') +
-          '</button>';
+      const showCompanySubscribe = Boolean(options.showCompanySubscribe);
+      const subBtnHtml = showCompanySubscribe
+        ? (isPreview
+            ? '<button type="button" class="btn btn-secondary btn-card-company-sub" disabled>Подписаться</button>'
+            : '<button type="button" class="btn btn-secondary btn-card-company-sub ' + (isCompanySubscribed ? 'is-subscribed' : '') + '" data-company-id="' + escapeHtml(compId) + '" data-company-name="' + escapeHtml(compName) + '" title="' + (isCompanySubscribed ? 'Отписаться от блога' : 'Подписаться на блог') + '">' +
+                (isCompanySubscribed ? 'Вы подписаны' : 'Подписаться') +
+              '</button>')
+        : '';
 
       const authorProfileBtn = isPreview
         ? ('<span class="author-name">' + escapeHtml(authorName) + '</span>')
@@ -232,7 +239,7 @@
       authorHtml =
         '<div class="card-meta">' +
           '<div class="author-info">' +
-            '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + escapeHtml(authorInitials) + '</div>' +
+            '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + authorAvatarInner + '</div>' +
             '<div class="author-details">' +
               '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
                 (isPreview

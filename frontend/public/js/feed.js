@@ -5051,6 +5051,7 @@
       initArticleReportModalEvents();
       return window.SmartContractumCard.createCardElement(item, {
         isCompanyDetail: Boolean(customOptions.isCompanyDetail),
+        showCompanySubscribe: Boolean(customOptions.showCompanySubscribe),
         isCorporate: Boolean(state.tab === 'companies' || item.companyId),
         isCompanySubscribed: function (cid) {
           return Boolean(state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(cid));
