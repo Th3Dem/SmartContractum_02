@@ -950,6 +950,54 @@ ARTICLES_DATA = [
         "badge_text": "РЕШЕННЫЙ ВОПРОС",
         "subtext": "ЦФА • Дивиденды • Лимит газа • Оптимизация"
     },
+    {
+        "id": "art-31",
+        "draft_id": "draft-31",
+        "title": "Как настроить приватный mempool для валидаторов в корпоративной сети Hyperledger Besu?",
+        "author_id": "author_petrov",
+        "author": "Дмитрий Петров",
+        "authorInitials": "ДП",
+        "authorRole": "Ведущий инженер блокчейн-платформ",
+        "targetAudience": "smart-contracts-dev",
+        "topics": ["pksc-architecture", "infrastructure-operations"],
+        "keywords": ["Besu", "Mempool", "Приватные транзакции", "Валидаторы"],
+        "description": "Требуется ограничить распространение невалидированных транзакций только между авторизованными узлами без публичного пиринга. Какие конфигурации наиболее надежны?",
+        "format": "none",
+        "complexity": "hard",
+        "materialType": "question",
+        "clubId": None,
+        "clubTitle": None,
+        "companyId": None,
+        "companyName": None,
+        "created_at": "2024-12-08T09:30:00Z",
+        "likes_count": 6,
+        "badge_text": "ВОПРОС",
+        "subtext": "Besu • Mempool • Валидаторы • Приватность"
+    },
+    {
+        "id": "art-32",
+        "draft_id": "draft-32",
+        "title": "Оптимизация хранения истории состояния в смарт-контрактах на Solidity для снижения размера state trie",
+        "author_id": "author_volkov",
+        "author": "Сергей Волков",
+        "authorInitials": "СВ",
+        "authorRole": "Senior Blockchain Engineer",
+        "targetAudience": "smart-contracts-dev",
+        "topics": ["smart-contracts-development", "pksc-architecture"],
+        "keywords": ["Solidity", "State trie", "Storage", "Оптимизация", "SSTORE"],
+        "description": "Как эффективно очищать устаревшие записи и использовать нулевые значения storage для оптимизации размера дерева состояний в долговременных корпоративных реестрах?",
+        "format": "none",
+        "complexity": "medium",
+        "materialType": "question",
+        "clubId": None,
+        "clubTitle": None,
+        "companyId": None,
+        "companyName": None,
+        "created_at": "2024-12-08T11:45:00Z",
+        "likes_count": 4,
+        "badge_text": "ВОПРОС",
+        "subtext": "Solidity • State trie • SSTORE • Storage"
+    },
 ]
 
 
@@ -1169,6 +1217,8 @@ def seed_article_votes(conn: sqlite3.Connection):
         "art-28": 71,
         "art-29": 5,
         "art-30": 8,
+        "art-31": 6,
+        "art-32": 4,
     }
 
     voters_pool = [

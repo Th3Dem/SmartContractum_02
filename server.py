@@ -549,6 +549,18 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_saves_article_id ON article_saves(article_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_saves_user_id ON article_saves(user_id);")
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS comment_saves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                comment_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(comment_id, user_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_saves_comment_user ON comment_saves(comment_id, user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_saves_comment_id ON comment_saves(comment_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_saves_user_id ON comment_saves(user_id);")
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS article_votes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -2118,6 +2130,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_article_comments(art_id)
         elif path.rstrip("/") == "/api/comments/subscriptions":
             self.handle_get_comment_subscriptions()
+        elif path.rstrip("/") == "/api/comments/saved":
+            self.handle_get_saved_comments()
+        elif path.rstrip("/") in ("/api/saved/counts", "/api/user/saved-stats"):
+            self.handle_get_saved_counts()
+        elif path.rstrip("/") == "/api/saved":
+            self.handle_get_saved(parsed)
         elif path == "/api/comments":
             query = urllib.parse.parse_qs(parsed.query)
             art_id = (query.get("articleId", [""])[0] or query.get("article_id", [""])[0] or query.get("id", [""])[0]).strip()
@@ -2253,6 +2271,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.rstrip("/").startswith("/api/comments/") and path.rstrip("/").endswith("/subscribe"):
             comm_id = path.rstrip("/")[len("/api/comments/"): -len("/subscribe")].strip("/")
             self.handle_comment_subscribe_toggle(comm_id)
+        elif path.rstrip("/").startswith("/api/comments/") and (path.rstrip("/").endswith("/save") or path.rstrip("/").endswith("/bookmark") or path.rstrip("/").endswith("/unsave")):
+            action = "unsave" if path.rstrip("/").endswith("/unsave") else "toggle"
+            suffix = "/unsave" if action == "unsave" else ("/bookmark" if path.rstrip("/").endswith("/bookmark") else "/save")
+            comm_id = path.rstrip("/")[len("/api/comments/"): -len(suffix)].strip("/")
+            self.handle_comment_save_toggle(comm_id, action=action)
+        elif path.startswith("/api/articles/") and "/comments/" in path and (path.rstrip("/").endswith("/save") or path.rstrip("/").endswith("/bookmark") or path.rstrip("/").endswith("/unsave")):
+            parts = path.strip("/").split("/")
+            comm_id = parts[4] if len(parts) >= 6 else ""
+            action = "unsave" if path.rstrip("/").endswith("/unsave") else "toggle"
+            self.handle_comment_save_toggle(comm_id, action=action)
+        elif path.rstrip("/") in ("/api/comments/save", "/api/comments/toggle-save"):
+            self.handle_comment_save_toggle("", action="toggle")
+        elif path.rstrip("/") in ("/api/comments/sync-saves", "/api/comments/sync"):
+            self.handle_comment_saves_sync()
         elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and not "/comments/" in path and path.rstrip("/").endswith("/report"):
             prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
             art_id = path.rstrip("/")[len(prefix): -len("/report")].strip("/")
@@ -3827,6 +3859,438 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "totalSaved": total_saved
         })
 
+    def handle_comment_save_toggle(self, comment_id: str = "", action: str = "toggle", _body_already_read: bool = False):
+        """
+        POST /api/comments/<id>/save, POST /api/comments/<id>/unsave, POST /api/comments/<id>/bookmark
+        Toggles, saves or unsaves a comment for the current authenticated user.
+        """
+        if not _body_already_read:
+            payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+            if payload is None:
+                return
+            if not comment_id:
+                comment_id = payload.get("commentId") or payload.get("comment_id") or ""
+            if "action" in payload and payload["action"] in ("save", "unsave", "toggle"):
+                action = payload["action"]
+
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для сохранения комментария необходимо войти",
+                "requireAuth": True,
+                "code": "AUTH_REQUIRED"
+            })
+            return
+
+        if not comment_id:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Не указан идентификатор комментария",
+                "code": "INVALID_COMMENT_ID"
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, article_id FROM article_comments WHERE id = ? LIMIT 1", (comment_id,))
+            comm_row = cur.fetchone()
+            if not comm_row:
+                self.send_json_response(404, {
+                    "success": False,
+                    "error": "Комментарий не найден",
+                    "code": "COMMENT_NOT_FOUND"
+                })
+                return
+
+            real_comm_id = comm_row["id"]
+            user_id = user["id"]
+
+            cur.execute("SELECT id FROM comment_saves WHERE comment_id = ? AND user_id = ?", (real_comm_id, user_id))
+            existing_save = cur.fetchone()
+
+            if action == "save":
+                if not existing_save:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT OR IGNORE INTO comment_saves (comment_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_comm_id, user_id, now_iso)
+                    )
+                is_saved = True
+            elif action == "unsave":
+                if existing_save:
+                    cur.execute("DELETE FROM comment_saves WHERE comment_id = ? AND user_id = ?", (real_comm_id, user_id))
+                is_saved = False
+            else:
+                if existing_save:
+                    cur.execute("DELETE FROM comment_saves WHERE comment_id = ? AND user_id = ?", (real_comm_id, user_id))
+                    is_saved = False
+                else:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT OR IGNORE INTO comment_saves (comment_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_comm_id, user_id, now_iso)
+                    )
+                    is_saved = True
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM comment_saves WHERE comment_id = ?", (real_comm_id,))
+            saves_count = cur.fetchone()["cnt"]
+
+        self.send_json_response(200, {
+            "success": True,
+            "commentId": real_comm_id,
+            "isSaved": is_saved,
+            "hasSaved": is_saved,
+            "savesCount": saves_count
+        })
+
+    def handle_comment_saves_sync(self):
+        """
+        POST /api/comments/sync-saves
+        Migrates client-side bookmark IDs into server comment_saves table for authenticated user.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для синхронизации закладок необходимо войти",
+                "requireAuth": True
+            })
+            return
+
+        payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if payload is None:
+            return
+
+        comment_ids = payload.get("commentIds") or payload.get("ids") or []
+        if not isinstance(comment_ids, list):
+            self.send_json_response(400, {"success": False, "error": "commentIds must be a list"})
+            return
+
+        user_id = user["id"]
+        synced = 0
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            for cid in comment_ids:
+                if not isinstance(cid, str) or not cid.strip():
+                    continue
+                cid = cid.strip()
+                cur.execute("SELECT id FROM article_comments WHERE id = ? LIMIT 1", (cid,))
+                if cur.fetchone():
+                    cur.execute(
+                        "INSERT OR IGNORE INTO comment_saves (comment_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (cid, user_id, now_iso)
+                    )
+                    if cur.rowcount > 0:
+                        synced += 1
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM comment_saves WHERE user_id = ?", (user_id,))
+            total_saved = cur.fetchone()["cnt"]
+
+        self.send_json_response(200, {
+            "success": True,
+            "syncedCount": synced,
+            "totalSaved": total_saved
+        })
+
+    def handle_get_saved_comments(self):
+        """
+        GET /api/comments/saved
+        Returns list of saved comments for current user.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(200, {"success": True, "items": [], "total": 0})
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT cs.comment_id, cs.created_at AS saved_at,
+                       c.id, c.article_id, c.user_id AS author_id, c.author_name, c.author_avatar,
+                       c.content AS text, c.created_at, c.comment_type,
+                       m.title AS article_title,
+                       (SELECT COUNT(*) FROM comment_saves cs2 WHERE cs2.comment_id = c.id) AS saves_count
+                FROM comment_saves cs
+                JOIN article_comments c ON cs.comment_id = c.id
+                LEFT JOIN moderation_submissions m ON (c.article_id = m.id OR c.article_id = m.draft_id)
+                WHERE cs.user_id = ? AND c.status = 'published'
+                ORDER BY cs.created_at DESC
+            """, (user["id"],))
+            rows = cur.fetchall()
+
+        items = []
+        for r in rows:
+            art_id = r["article_id"] or ""
+            comm_id = r["id"] or ""
+            items.append({
+                "id": comm_id,
+                "articleId": art_id,
+                "articleTitle": r["article_title"] or "Материал сообщества",
+                "permalink": f"article.html?id={art_id}#comment-{comm_id}",
+                "authorId": r["author_id"],
+                "authorName": r["author_name"],
+                "authorAvatar": r["author_avatar"],
+                "text": r["text"],
+                "createdAt": r["created_at"],
+                "commentType": r["comment_type"] or "comment",
+                "isSaved": True,
+                "hasSaved": True,
+                "savesCount": r["saves_count"] or 1
+            })
+
+        self.send_json_response(200, {
+            "success": True,
+            "items": items,
+            "total": len(items)
+        })
+
+    def handle_get_saved_counts(self):
+        """
+        GET /api/saved/counts
+        Returns aggregated counts for Saved Hub without N+1 queries.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(200, {
+                "success": True,
+                "total": 0,
+                "publications": 0,
+                "questions": 0,
+                "comments": 0
+            })
+            return
+
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT
+                  (SELECT COUNT(DISTINCT s.article_id)
+                   FROM article_saves s
+                   JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
+                   WHERE s.user_id = ?
+                     AND (json_extract(m.publication_settings, '$.materialType') != 'question' OR json_extract(m.publication_settings, '$.materialType') IS NULL)
+                  ) as pubs_count,
+                  (SELECT COUNT(DISTINCT s.article_id)
+                   FROM article_saves s
+                   JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
+                   WHERE s.user_id = ?
+                     AND json_extract(m.publication_settings, '$.materialType') = 'question'
+                  ) as questions_count,
+                  (SELECT COUNT(*) FROM comment_saves WHERE user_id = ?) as comments_count
+            """, (user["id"], user["id"], user["id"]))
+            row = cur.fetchone()
+            pubs = row["pubs_count"] or 0
+            questions = row["questions_count"] or 0
+            comments = row["comments_count"] or 0
+            total = pubs + questions + comments
+
+        self.send_json_response(200, {
+            "success": True,
+            "total": total,
+            "publications": pubs,
+            "questions": questions,
+            "comments": comments
+        })
+
+    def handle_get_saved(self, parsed_url):
+        """
+        GET /api/saved
+        Unified Saved Hub endpoint returning saved materials and comments for current user.
+        Query params:
+          type: 'all' (default), 'publications', 'questions', 'comments'
+          search: search string across title, description, content, author
+          limit: int (default 20, max 100)
+          offset: int (default 0)
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Для просмотра сохраненных материалов необходимо войти",
+                "requireAuth": True,
+                "code": "AUTH_REQUIRED"
+            })
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query)
+        stype = (query.get("type", ["all"])[0] or "all").strip().lower()
+        search_q = (query.get("search", [""])[0] or query.get("q", [""])[0] or "").strip().lower()
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        user_id = user["id"]
+        conn = self.get_db()
+        with conn:
+            cur = conn.cursor()
+            # 1. Aggregated counts
+            cur.execute("""
+                SELECT
+                  (SELECT COUNT(DISTINCT s.article_id)
+                   FROM article_saves s
+                   JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
+                   WHERE s.user_id = ?
+                     AND (json_extract(m.publication_settings, '$.materialType') != 'question' OR json_extract(m.publication_settings, '$.materialType') IS NULL)
+                  ) as pubs_count,
+                  (SELECT COUNT(DISTINCT s.article_id)
+                   FROM article_saves s
+                   JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
+                   WHERE s.user_id = ?
+                     AND json_extract(m.publication_settings, '$.materialType') = 'question'
+                  ) as questions_count,
+                  (SELECT COUNT(*) FROM comment_saves WHERE user_id = ?) as comments_count
+            """, (user_id, user_id, user_id))
+            crow = cur.fetchone()
+            pubs_cnt = crow["pubs_count"] or 0
+            questions_cnt = crow["questions_count"] or 0
+            comments_cnt = crow["comments_count"] or 0
+            total_cnt = pubs_cnt + questions_cnt + comments_cnt
+            counts = {
+                "total": total_cnt,
+                "publications": pubs_cnt,
+                "questions": questions_cnt,
+                "comments": comments_cnt
+            }
+
+            items = []
+            # 2. Fetch comments if requested
+            if stype in ("comments", "comment", "all"):
+                cur.execute("""
+                    SELECT cs.comment_id, cs.created_at AS saved_at,
+                           c.id, c.article_id, c.user_id AS author_id, c.author_name, c.author_avatar,
+                           c.content AS text, c.created_at, c.comment_type,
+                           m.title AS article_title,
+                           (SELECT COUNT(*) FROM comment_saves cs2 WHERE cs2.comment_id = c.id) AS saves_count
+                    FROM comment_saves cs
+                    JOIN article_comments c ON cs.comment_id = c.id
+                    LEFT JOIN moderation_submissions m ON (c.article_id = m.id OR c.article_id = m.draft_id)
+                    WHERE cs.user_id = ? AND c.status = 'published'
+                    ORDER BY cs.created_at DESC
+                """, (user_id,))
+                crows = cur.fetchall()
+                for cr in crows:
+                    cid = cr["id"] or ""
+                    aid = cr["article_id"] or ""
+                    art_title = cr["article_title"] or "Материал сообщества"
+                    text = cr["text"] or ""
+                    aname = cr["author_name"] or "Пользователь"
+                    if search_q:
+                        if search_q not in text.lower() and search_q not in art_title.lower() and search_q not in aname.lower():
+                            continue
+                    items.append({
+                        "id": cid,
+                        "entityType": "comment",
+                        "articleId": aid,
+                        "articleTitle": art_title,
+                        "permalink": f"article.html?id={aid}#comment-{cid}",
+                        "authorId": cr["author_id"],
+                        "authorName": aname,
+                        "authorAvatar": cr["author_avatar"],
+                        "text": text,
+                        "createdAt": cr["created_at"],
+                        "date": format_date_ru(cr["created_at"]),
+                        "savedAt": cr["saved_at"],
+                        "commentType": cr["comment_type"] or "comment",
+                        "isSaved": True,
+                        "hasSaved": True,
+                        "savesCount": cr["saves_count"] or 1
+                    })
+
+            # 3. Fetch articles if requested
+            if stype in ("publications", "publication", "questions", "question", "all"):
+                cur.execute("""
+                    SELECT s.article_id, s.created_at AS saved_at,
+                           m.id, m.draft_id, m.title, m.author_id,
+                           m.created_at, m.publication_settings,
+                           (SELECT COUNT(*) FROM article_saves s2 WHERE s2.article_id = m.id OR s2.article_id = m.draft_id) AS saves_count
+                    FROM article_saves s
+                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
+                    WHERE s.user_id = ? AND m.status IN ('approved', 'published')
+                    ORDER BY s.created_at DESC
+                """, (user_id,))
+                arows = cur.fetchall()
+                for ar in arows:
+                    aid = ar["id"] or ""
+                    settings = {}
+                    if ar["publication_settings"]:
+                        try:
+                            settings = json.loads(ar["publication_settings"])
+                        except Exception:
+                            settings = {}
+                    mat_type = settings.get("materialType") or "article"
+                    is_question = (mat_type == "question")
+                    if stype in ("questions", "question") and not is_question:
+                        continue
+                    if stype in ("publications", "publication") and is_question:
+                        continue
+
+                    title = ar["title"] or ""
+                    desc = settings.get("description") or ""
+                    raw_author = settings.get("author") or settings.get("authorName")
+                    if isinstance(raw_author, dict):
+                        author_name = raw_author.get("name") or "Пользователь"
+                        author_avatar = raw_author.get("avatar") or settings.get("authorAvatar")
+                    else:
+                        author_name = raw_author or "Пользователь"
+                        author_avatar = settings.get("authorAvatar")
+                    cover_image = settings.get("coverImage")
+                    if search_q:
+                        if search_q not in title.lower() and search_q not in desc.lower() and search_q not in author_name.lower():
+                            continue
+
+                    topics = settings.get("topics") or ([settings["topic"]] if settings.get("topic") else [])
+                    tags = settings.get("keywords") or settings.get("tags") or []
+                    items.append({
+                        "id": aid,
+                        "entityType": "question" if is_question else "publication",
+                        "title": title,
+                        "description": desc,
+                        "author": author_name,
+                        "authorId": ar["author_id"],
+                        "authorAvatar": author_avatar,
+                        "cover": cover_image,
+                        "date": format_date_ru(ar["created_at"]),
+                        "createdAt": ar["created_at"],
+                        "savedAt": ar["saved_at"],
+                        "topics": topics,
+                        "keywords": tags,
+                        "tags": tags,
+                        "format": settings.get("format") or ("question" if is_question else "article"),
+                        "type": "question" if is_question else "article",
+                        "materialType": "question" if is_question else "publication",
+                        "complexity": settings.get("complexity") or "none",
+                        "isSaved": True,
+                        "hasSaved": True,
+                        "savesCount": ar["saves_count"] or 1
+                    })
+
+            # Sort items by savedAt DESC
+            items.sort(key=lambda x: x.get("savedAt") or "", reverse=True)
+            total_items = len(items)
+            paged_items = items[offset: offset + limit]
+
+        self.send_json_response(200, {
+            "success": True,
+            "items": paged_items,
+            "total": total_items,
+            "counts": counts,
+            "limit": limit,
+            "offset": offset,
+            "hasMore": (offset + limit) < total_items
+        })
+
     def handle_article_vote(self, raw_id: str):
         """
         POST /api/articles/<id>/vote
@@ -4457,6 +4921,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             comment_scores = {}
             user_comment_votes = {}
             user_comment_reports = set()
+            user_comment_saves = set()
+            comment_save_counts = {}
             if all_comm_ids:
                 for i in range(0, len(all_comm_ids), 500):
                     chunk = all_comm_ids[i:i+500]
@@ -4467,6 +4933,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     )
                     for cr in cur.fetchall():
                         comment_scores[cr["comment_id"]] = cr["score"]
+
+                    cur.execute(
+                        f"SELECT comment_id, COUNT(*) AS cnt FROM comment_saves WHERE comment_id IN ({placeholders}) GROUP BY comment_id",
+                        tuple(chunk)
+                    )
+                    for cr in cur.fetchall():
+                        comment_save_counts[cr["comment_id"]] = cr["cnt"]
 
                     if curr_user_id:
                         cur.execute(
@@ -4482,6 +4955,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         )
                         for cr in cur.fetchall():
                             user_comment_reports.add(cr["comment_id"])
+
+                        cur.execute(
+                            f"SELECT comment_id FROM comment_saves WHERE user_id = ? AND comment_id IN ({placeholders})",
+                            (curr_user_id, *chunk)
+                        )
+                        for cr in cur.fetchall():
+                            user_comment_saves.add(cr["comment_id"])
 
         row_map = {r["id"]: r for r in rows}
         published_rows = [r for r in rows if r["status"] == "published"]
@@ -4553,7 +5033,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "canVote": False,
                     "isAuthor": False,
                     "hasReported": (r["id"] in user_comment_reports),
-                    "isReported": (r["id"] in user_comment_reports)
+                    "isReported": (r["id"] in user_comment_reports),
+                    "isSaved": (r["id"] in user_comment_saves),
+                    "hasSaved": (r["id"] in user_comment_saves),
+                    "savesCount": comment_save_counts.get(r["id"], 0)
                 }
             else:
                 dto = {
@@ -4577,7 +5060,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "canVote": comm_can_vote,
                     "isAuthor": comm_is_author,
                     "hasReported": (r["id"] in user_comment_reports),
-                    "isReported": (r["id"] in user_comment_reports)
+                    "isReported": (r["id"] in user_comment_reports),
+                    "isSaved": (r["id"] in user_comment_saves),
+                    "hasSaved": (r["id"] in user_comment_saves),
+                    "savesCount": comment_save_counts.get(r["id"], 0)
                 }
 
             if ctype == "answer":
@@ -6324,8 +6810,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 norm_allowed = []
                 for at in allowed_types:
                     at_norm = at.strip().lower()
-                    if at_norm in ("article", "post", "news"):
+                    if at_norm in ("article", "post", "news", "publication", "publications", "pubs"):
                         at_norm = "publication"
+                    elif at_norm in ("question", "questions"):
+                        at_norm = "question"
                     norm_allowed.append(at_norm)
                 if art_type not in norm_allowed:
                     continue
@@ -6931,7 +7419,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             self.send_json_response(200, {
                 "success": True,
-                "questions": questions
+                "questions": questions,
+                "items": questions
             })
         finally:
             conn.close()

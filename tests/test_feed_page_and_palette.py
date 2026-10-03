@@ -4379,7 +4379,7 @@ class TestTask36FeedHeaderSimplificationAndLayoutElevation(unittest.TestCase):
     def test_05_feed_elevation_layout_and_css(self):
         """5. Verify feed articles list starts immediately under sticky subnav and container has elevated padding."""
         # Main column directly contains chips bar and feed cards container
-        main_col_match = re.search(r'<section[^>]*class=["\'][^"\']*feed-main-column[^"\']*["\'][^>]*>(.*?)</section>', self.feed_html, re.DOTALL)
+        main_col_match = re.search(r'<section[^>]*class=["\'][^"\']*feed-main-column[^"\']*["\'][^>]*>(.*?)</section>\s*<!-- Right', self.feed_html, re.DOTALL)
         self.assertIsNotNone(main_col_match, "feed-main-column not found in feed.html")
         main_col_html = main_col_match.group(1).strip()
 
