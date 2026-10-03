@@ -669,4 +669,5 @@
 [2026-10-03 12:49] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #109 (Task: issue-109-unify-action-rail-with-feed)
 [2026-10-03 12:52] | dev_bot | IMPLEMENTATION_COMPLETE | Полностью унифицировать левый Action Rail с controls карточки публикации в ленте (Task: issue-109-unify-action-rail-with-feed)
 [2026-10-03 12:54] | git_bot | PR_CREATED | Открыт PR #118 для Issue #109 (Fixes #109), ветка feat/issue-109-unify-action-rail-with-feed (Task: issue-109-unify-action-rail-with-feed)
+[2026-10-03 12:56] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #118 готов к слиянию владельцем (Task: issue-109-unify-action-rail-with-feed)
 
