@@ -155,75 +155,105 @@
     ================================================================= -->
     <nav class="feed-subnav-bar" id="feedSubnavBar" aria-label="Управление лентой публикаций">
       <div class="feed-subnav-container">
-        <!-- 1. «Создать +» Dropdown (#btnCreateDropdown) -->
-        <div class="feed-create-dropdown-wrap" id="feedCreateDropdownWrap">
-          <button
-            type="button"
-            class="btn btn-primary feed-create-btn"
-            id="btnCreateDropdown"
-            aria-haspopup="true"
-            aria-expanded="false"
-            title="Создать материал"
-          >
-            <span>Создать +</span>
-          </button>
-          <div class="feed-create-menu" id="feedCreateMenu" style="display: none;" role="menu">
-            <a href="question-editor.html" data-legacy-href="editor.html?type=question" class="feed-create-menu-item" role="menuitem" id="btnCreateQuestion">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-              <span>Задать вопрос</span>
-            </a>
-            <a href="editor.html" class="feed-create-menu-item" role="menuitem" id="btnCreatePublication">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-              </svg>
-              <span>Написать публикацию</span>
-            </a>
+        <!-- Main navigation group (Left) -->
+        <div class="feed-subnav-main">
+          <!-- 1. «Создать +» Dropdown (#btnCreateDropdown) -->
+          <div class="feed-create-dropdown-wrap" id="feedCreateDropdownWrap">
+            <button
+              type="button"
+              class="btn btn-primary feed-create-btn"
+              id="btnCreateDropdown"
+              aria-haspopup="true"
+              aria-expanded="false"
+              title="Создать материал"
+            >
+              <span>Создать +</span>
+            </button>
+            <div class="feed-create-menu" id="feedCreateMenu" style="display: none;" role="menu">
+              <a href="question-editor.html" data-legacy-href="editor.html?type=question" class="feed-create-menu-item" role="menuitem" id="btnCreateQuestion">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span>Задать вопрос</span>
+              </a>
+              <a href="editor.html" class="feed-create-menu-item" role="menuitem" id="btnCreatePublication">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                <span>Написать публикацию</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- 2. Subnav Tabs: Публикации · Вопросы · Подписки · Темы · Блоги -->
+          <div class="feed-subnav-tabs" id="feedSubnavTabs" role="tablist">
+            <button
+              type="button"
+              class="feed-subnav-tab active"
+              id="tabFeedAll"
+              data-tab="all"
+              role="tab"
+              aria-selected="true"
+              title="Публикации сообщества"
+            >
+              Публикации
+            </button>
+
+            <button
+              type="button"
+              class="feed-subnav-tab"
+              id="tabFeedQuestions"
+              data-tab="questions"
+              role="tab"
+              aria-selected="false"
+              title="Вопросы и ответы сообщества"
+            >
+              Вопросы
+            </button>
+
+            <button
+              type="button"
+              class="feed-subnav-tab personal-tab"
+              id="tabFeedSubscriptions"
+              data-tab="subscriptions"
+              role="tab"
+              aria-selected="false"
+              title="Персональная лента по вашим подпискам"
+            >
+              Подписки
+            </button>
+
+            <button
+              type="button"
+              class="feed-subnav-tab"
+              id="tabFeedDirections"
+              data-tab="directions"
+              role="tab"
+              aria-selected="false"
+              title="Каталог тем и специализаций"
+            >
+              Темы
+            </button>
+
+            <button
+              type="button"
+              class="feed-subnav-tab"
+              id="tabFeedCompanies"
+              data-tab="companies"
+              role="tab"
+              aria-selected="false"
+              title="Корпоративные блоги"
+            >
+              Блоги
+            </button>
           </div>
         </div>
 
-        <!-- 2. Subnav Tabs: Все публикации · Вопросы · Подписки · Сохраненные -->
-        <div class="feed-subnav-tabs" id="feedSubnavTabs" role="tablist">
-          <button
-            type="button"
-            class="feed-subnav-tab active"
-            id="tabFeedAll"
-            data-tab="all"
-            role="tab"
-            aria-selected="true"
-            title="Публикации сообщества"
-          >
-            Публикации
-          </button>
-
-          <button
-            type="button"
-            class="feed-subnav-tab"
-            id="tabFeedQuestions"
-            data-tab="questions"
-            role="tab"
-            aria-selected="false"
-            title="Вопросы и ответы сообщества"
-          >
-            Вопросы
-          </button>
-
-          <button
-            type="button"
-            class="feed-subnav-tab personal-tab"
-            id="tabFeedSubscriptions"
-            data-tab="subscriptions"
-            role="tab"
-            aria-selected="false"
-            title="Персональная лента по вашим подпискам"
-          >
-            Подписки
-          </button>
-
+        <!-- Personal group (Right) -->
+        <div class="feed-subnav-personal">
           <button
             type="button"
             class="feed-subnav-tab feed-saved-tab feed-saved-btn personal-tab"
@@ -231,7 +261,7 @@
             data-tab="saved"
             role="tab"
             aria-selected="false"
-            title="Сохраненные публикации"
+            title="Сохраненные публикации, вопросы и комментарии"
           >
             <span>Сохраненные</span>
             <span id="feedSavedCount" class="feed-saved-count">0</span>
@@ -245,8 +275,6 @@
           <button type="button" id="tabFeedNew" data-tab="new"></button>
           <button type="button" id="tabFeedMy" data-tab="my"></button>
           <button type="button" id="tabFeedClubs" data-tab="clubs"></button>
-          <button type="button" id="tabFeedCompanies" data-tab="companies"></button>
-          <button type="button" id="tabFeedDirections" data-tab="directions"></button>
           <a href="editor.html" id="btnHeroWrite" class="feed-subnav-write-btn"><svg width="16" height="16" viewBox="0 0 24 24"></svg>>Написать<</a>
           <button type="button" id="btnFeedSearchSubmit"></button>
           <div id="feedSearchGroup"></div>
@@ -340,212 +368,7 @@
       </div>
     </section>
 
-    <!-- ================================================================
-         SLIDE-OUT FEED FILTERS PANEL (#feedFiltersPanel)
-    ================================================================= -->
-    <section id="feedFiltersPanel" class="feed-slide-panel feed-filters-panel" aria-label="Фильтры публикаций" style="display: none;">
-      <div class="feed-slide-panel-container">
-        <!-- Panel Header -->
-        <div class="feed-slide-panel-header">
-          <div class="feed-slide-panel-title-wrap">
-            <h2 class="feed-slide-panel-title">Фильтры публикаций</h2>
-            <span class="feed-slide-panel-subtitle">Уточните текущую выдачу. Подписки и настройки сохранятся</span>
-          </div>
-          <button type="button" class="feed-slide-panel-close-btn" id="btnCloseFeedFilters" title="Закрыть фильтры" aria-label="Закрыть фильтры">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Panel Body -->
-        <div class="feed-slide-panel-body">
-
-
-          <!-- 4 Constantly Visible Filter Fields: 2x2 Grid (Desktop) / 1 Column (Mobile) -->
-          <div class="feed-filters-primary-grid feed-filters-fields-grid">
-            <!-- Строка 1, Колонка 1: Темы публикаций -->
-            <div class="feed-filter-group feed-topics-filter-group" id="feedFilterGroupTopics">
-              <label class="feed-filter-label" id="feedTopicsFilterLabel">Темы публикаций</label>
-              <select id="feedFilterTopics" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true"></select>
-              <div class="feed-topics-dropdown-wrap feed-multiselect-dropdown-wrap" id="feedTopicsDropdownWrap">
-                <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedTopicsDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedTopicsFilterLabel">
-                  <span class="dropdown-trigger-text" id="feedTopicsDropdownTriggerText">Все темы</span>
-                  <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-
-                <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu" id="feedTopicsDropdownMenu" style="display: none;">
-                  <div class="feed-topic-search-wrap">
-                    <input type="search" id="filterTopicSearchInput" class="filter-topic-search-input" placeholder="Поиск по темам..." autocomplete="off">
-                  </div>
-                  <div class="feed-dropdown-actions-bar" id="feedTopicsActionsBar" style="display: none;">
-                    <button type="button" class="feed-dropdown-clear-btn" id="btnTopicsClearSelection">Очистить выбор</button>
-                  </div>
-                  <div class="feed-topics-checkbox-list feed-multiselect-checkbox-list" id="modalTopicsFilterBar" role="group" aria-labelledby="feedTopicsFilterLabel">
-                    <!-- Dynamically populated from PublicationConfig.TOPICS -->
-                  </div>
-                </div>
-              </div>
-
-              <!-- Selected topics chips -->
-              <div class="filter-selected-chips-bar" id="filterSelectedTopicsChips" style="display: none;"></div>
-            </div>
-
-            <!-- Строка 1, Колонка 2: Дата публикации -->
-            <div class="feed-filter-group feed-date-filter-group" id="feedFilterGroupDate">
-              <label for="feedFilterPeriodSelect" class="feed-filter-label" id="feedDateFilterLabel">Дата публикации</label>
-              
-              <!-- Hidden select for backwards compatibility -->
-              <select id="feedFilterPeriodSelect" class="feed-select filter-control feed-period-select" aria-label="Период публикации" style="display: none;" tabindex="-1" aria-hidden="true">
-                <option value="all">За всё время</option>
-                <option value="week">За неделю</option>
-                <option value="month">За месяц</option>
-                <option value="year">За год</option>
-                <option value="custom">Указать период</option>
-              </select>
-              <select id="feedDateFilterSelect" class="feed-select filter-control feed-period-select" style="display: none;" aria-hidden="true"></select>
-
-              <div class="feed-date-dropdown-wrap feed-multiselect-dropdown-wrap" id="feedDateDropdownWrap">
-                <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger feed-date-dropdown-trigger" id="feedDateDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedDateFilterLabel">
-                  <span class="dropdown-trigger-text" id="feedDateDropdownTriggerText">За всё время</span>
-                  <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-
-                <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu feed-date-dropdown-menu" id="feedDateDropdownMenu" role="listbox" style="display: none;">
-                  <div class="feed-date-options-list" id="feedDateOptionsList">
-                    <button type="button" class="feed-date-option-item is-selected" data-value="all" role="option" aria-selected="true">
-                      <span class="feed-date-option-text">За всё время</span>
-                      <span class="feed-date-option-check" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                      </span>
-                    </button>
-                    <button type="button" class="feed-date-option-item" data-value="week" role="option" aria-selected="false">
-                      <span class="feed-date-option-text">За неделю</span>
-                      <span class="feed-date-option-check" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                      </span>
-                    </button>
-                    <button type="button" class="feed-date-option-item" data-value="month" role="option" aria-selected="false">
-                      <span class="feed-date-option-text">За месяц</span>
-                      <span class="feed-date-option-check" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                      </span>
-                    </button>
-                    <button type="button" class="feed-date-option-item" data-value="year" role="option" aria-selected="false">
-                      <span class="feed-date-option-text">За год</span>
-                      <span class="feed-date-option-check" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                      </span>
-                    </button>
-                    <button type="button" class="feed-date-option-item" data-value="custom" role="option" aria-selected="false">
-                      <span class="feed-date-option-text">Указать период</span>
-                      <span class="feed-date-option-check" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="feed-custom-date-row" id="feedFilterCustomDates" style="display: none;">
-                <div class="feed-date-field">
-                  <span class="feed-date-caption">С</span>
-                  <input type="date" id="filterDateFrom" class="feed-date-input" aria-label="Начальная дата">
-                </div>
-                <div class="feed-date-field">
-                  <span class="feed-date-caption">По</span>
-                  <input type="date" id="filterDateTo" class="feed-date-input" aria-label="Конечная дата">
-                </div>
-              </div>
-            </div>
-
-            <!-- Строка 2, Колонка 1: Формат публикации -->
-            <div class="feed-filter-group feed-multiselect-group" id="feedFormatFilterGroup">
-              <label class="feed-filter-label" id="feedFormatFilterLabel">Формат публикации</label>
-              <select id="feedFormatSelect" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true">
-                <option value="all">Все форматы</option>
-              </select>
-              <div class="feed-multiselect-dropdown-wrap" id="feedFormatsDropdownWrap">
-                <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedFormatsDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedFormatFilterLabel">
-                  <span class="dropdown-trigger-text" id="feedFormatsDropdownTriggerText">Все форматы</span>
-                  <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu" id="feedFormatsDropdownMenu" style="display: none;">
-                  <div class="feed-topic-search-wrap">
-                    <input type="search" id="filterFormatSearchInput" class="filter-topic-search-input" placeholder="Поиск по форматам..." autocomplete="off">
-                  </div>
-                  <div class="feed-dropdown-actions-bar" id="feedFormatsActionsBar" style="display: none;">
-                    <button type="button" class="feed-dropdown-clear-btn" id="btnFormatsClearSelection">Очистить выбор</button>
-                  </div>
-                  <div class="feed-topics-checkbox-list feed-multiselect-checkbox-list" id="modalFormatsFilterBar" role="group" aria-labelledby="feedFormatFilterLabel">
-                    <!-- Dynamically populated from PublicationConfig.FORMATS -->
-                  </div>
-                </div>
-              </div>
-              <!-- Selected format chips -->
-              <div class="filter-selected-chips-bar" id="filterSelectedFormatsChips" style="display: none;"></div>
-            </div>
-
-            <!-- Строка 2, Колонка 2: Целевая аудитория -->
-            <div class="feed-filter-group feed-multiselect-group" id="feedAudienceFilterGroup">
-              <label class="feed-filter-label" id="feedAudienceFilterLabel">Целевая аудитория</label>
-              <select id="feedAudienceSelect" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true">
-                <option value="all">Все аудитории</option>
-              </select>
-              <div class="feed-multiselect-dropdown-wrap" id="feedAudiencesDropdownWrap">
-                <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedAudiencesDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedAudienceFilterLabel">
-                  <span class="dropdown-trigger-text" id="feedAudiencesDropdownTriggerText">Все аудитории</span>
-                  <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu" id="feedAudiencesDropdownMenu" style="display: none;">
-                  <div class="feed-topic-search-wrap">
-                    <input type="search" id="filterAudienceSearchInput" class="filter-topic-search-input" placeholder="Поиск по аудиториям..." autocomplete="off">
-                  </div>
-                  <div class="feed-dropdown-actions-bar" id="feedAudiencesActionsBar" style="display: none;">
-                    <button type="button" class="feed-dropdown-clear-btn" id="btnAudiencesClearSelection">Очистить выбор</button>
-                  </div>
-                  <div class="feed-topics-checkbox-list feed-multiselect-checkbox-list" id="modalAudiencesFilterBar" role="group" aria-labelledby="feedAudienceFilterLabel">
-                    <!-- Dynamically populated from PublicationConfig.AUDIENCES -->
-                  </div>
-                </div>
-              </div>
-              <!-- Selected audience chips -->
-              <div class="filter-selected-chips-bar" id="filterSelectedAudiencesChips" style="display: none;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Panel Footer -->
-        <div class="feed-slide-panel-footer">
-          <div class="feed-footer-status">
-            <span id="feedFiltersUnappliedIndicator" class="feed-filters-unapplied-indicator" style="display: none;">
-              <span class="feed-unsaved-dot" aria-hidden="true"></span>
-              <span>Изменения не применены</span>
-            </span>
-          </div>
-          <div class="feed-footer-actions">
-            <button type="button" class="btn btn-secondary" id="btnCancelFeedFilters">
-              <span>Отмена</span>
-            </button>
-            <button type="button" id="feedResetFiltersBtn" class="btn btn-secondary">
-              <span>Сбросить</span>
-            </button>
-            <button type="button" id="btnApplyFilters" class="btn btn-primary">
-              <span>Применить фильтры</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- Filters Drawer relocated below #feedStreamToolbar in document flow per Issue #136 -->
 
     <!-- ================================================================
          MAIN FEED WORKSPACE (Centered 2-Column Grid)
@@ -599,12 +422,60 @@
             </div>
 
             <div class="feed-toolbar-sort-wrap" id="feedToolbarSortWrap">
-              <select id="feedSortSelect" class="feed-toolbar-sort-select" title="Сортировка публикаций" aria-label="Сортировка публикаций">
+              <select id="feedSortSelect" class="feed-toolbar-sort-select visually-hidden-select" title="Сортировка публикаций" aria-label="Сортировка публикаций" tabindex="-1" aria-hidden="true">
                 <option value="newest" selected>Сначала новые</option>
                 <option value="rating">По рейтингу</option>
                 <option value="popular">По популярности</option>
                 <option value="discussed">По обсуждаемости</option>
               </select>
+
+              <button
+                type="button"
+                class="feed-sort-custom-trigger"
+                id="feedSortCustomTrigger"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="feedSortCustomMenu"
+                title="Сортировка публикаций"
+              >
+                <span class="feed-sort-current-label" id="feedSortCurrentLabel">Сначала новые</span>
+                <svg class="feed-sort-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+
+              <div
+                class="feed-sort-custom-menu"
+                id="feedSortCustomMenu"
+                role="listbox"
+                aria-label="Сортировка публикаций"
+                style="display: none;"
+              >
+                <div class="feed-sort-option active" role="option" data-value="newest" aria-selected="true" tabindex="0">
+                  <span class="feed-sort-option-text">Сначала новые</span>
+                  <svg class="feed-sort-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <div class="feed-sort-option" role="option" data-value="rating" aria-selected="false" tabindex="-1">
+                  <span class="feed-sort-option-text">По рейтингу</span>
+                  <svg class="feed-sort-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <div class="feed-sort-option" role="option" data-value="popular" aria-selected="false" tabindex="-1">
+                  <span class="feed-sort-option-text">По популярности</span>
+                  <svg class="feed-sort-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <div class="feed-sort-option" role="option" data-value="discussed" aria-selected="false" tabindex="-1">
+                  <span class="feed-sort-option-text">По обсуждаемости</span>
+                  <svg class="feed-sort-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+              </div>
             </div>
 
             <!-- Questions status pills (visible only in questions tab) -->
@@ -612,6 +483,26 @@
               <button type="button" class="feed-status-pill active" data-status="all">Все</button>
               <button type="button" class="feed-status-pill" data-status="unanswered">Без ответа</button>
               <button type="button" class="feed-status-pill" data-status="solved">Решенные</button>
+            </div>
+
+            <!-- Saved Hub material type pills (visible only in saved tab) -->
+            <div class="feed-saved-hub-pills" id="feedSavedHubPills" style="display: none;" role="radiogroup" aria-label="Тип сохраненных материалов">
+              <button type="button" class="feed-saved-pill active" data-saved-type="all" aria-checked="true">
+                <span>Все</span>
+                <span class="feed-saved-pill-count" id="savedCountAll">0</span>
+              </button>
+              <button type="button" class="feed-saved-pill" data-saved-type="publications" aria-checked="false">
+                <span>Публикации</span>
+                <span class="feed-saved-pill-count" id="savedCountPublications">0</span>
+              </button>
+              <button type="button" class="feed-saved-pill" data-saved-type="questions" aria-checked="false">
+                <span>Вопросы</span>
+                <span class="feed-saved-pill-count" id="savedCountQuestions">0</span>
+              </button>
+              <button type="button" class="feed-saved-pill" data-saved-type="comments" aria-checked="false">
+                <span>Комментарии</span>
+                <span class="feed-saved-pill-count" id="savedCountComments">0</span>
+              </button>
             </div>
 
             <!-- Filters Toggle button -->
@@ -629,6 +520,211 @@
               <span>Фильтры</span>
               <span id="feedFiltersCountBadge" class="filter-count-badge" style="display: none;">0</span>
             </button>
+          </div>
+
+          <!-- Slide-Down In-Flow Filter Drawer (#feedFiltersPanel) -->
+          <div class="feed-filters-drawer-wrap" id="feedFiltersDrawerWrap">
+            <section id="feedFiltersPanel" class="feed-slide-panel feed-filters-panel" aria-label="Фильтры публикаций" style="display: none;">
+              <div class="feed-slide-panel-container">
+                <!-- Panel Header -->
+                <div class="feed-slide-panel-header">
+                  <div class="feed-slide-panel-title-wrap">
+                    <h2 class="feed-slide-panel-title">Фильтры публикаций</h2>
+                    <span class="feed-slide-panel-subtitle">Уточните текущую выдачу. Подписки и настройки сохранятся</span>
+                  </div>
+                  <button type="button" class="feed-slide-panel-close-btn" id="btnCloseFeedFilters" title="Закрыть фильтры" aria-label="Закрыть фильтры">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Panel Body -->
+                <div class="feed-slide-panel-body">
+                  <!-- 4 Constantly Visible Filter Fields: 2x2 Grid (Desktop) / 1 Column (Mobile) -->
+                  <div class="feed-filters-primary-grid feed-filters-fields-grid">
+                    <!-- Строка 1, Колонка 1: Темы публикаций -->
+                    <div class="feed-filter-group feed-topics-filter-group" id="feedFilterGroupTopics">
+                      <label class="feed-filter-label" id="feedTopicsFilterLabel">Темы публикаций</label>
+                      <select id="feedFilterTopics" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true"></select>
+                      <div class="feed-topics-dropdown-wrap feed-multiselect-dropdown-wrap" id="feedTopicsDropdownWrap">
+                        <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedTopicsDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedTopicsFilterLabel">
+                          <span class="dropdown-trigger-text" id="feedTopicsDropdownTriggerText">Все темы</span>
+                          <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        </button>
+
+                        <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu" id="feedTopicsDropdownMenu" style="display: none;">
+                          <div class="feed-topic-search-wrap">
+                            <input type="search" id="filterTopicSearchInput" class="filter-topic-search-input" placeholder="Поиск по темам..." autocomplete="off">
+                          </div>
+                          <div class="feed-dropdown-actions-bar" id="feedTopicsActionsBar" style="display: none;">
+                            <button type="button" class="feed-dropdown-clear-btn" id="btnTopicsClearSelection">Очистить выбор</button>
+                          </div>
+                          <div class="feed-topics-checkbox-list feed-multiselect-checkbox-list" id="modalTopicsFilterBar" role="group" aria-labelledby="feedTopicsFilterLabel">
+                            <!-- Dynamically populated from PublicationConfig.TOPICS -->
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Selected topics chips -->
+                      <div class="filter-selected-chips-bar" id="filterSelectedTopicsChips" style="display: none;"></div>
+                    </div>
+
+                    <!-- Строка 1, Колонка 2: Дата публикации -->
+                    <div class="feed-filter-group feed-date-filter-group" id="feedFilterGroupDate">
+                      <label for="feedFilterPeriodSelect" class="feed-filter-label" id="feedDateFilterLabel">Дата публикации</label>
+                      
+                      <!-- Hidden select for backwards compatibility -->
+                      <select id="feedFilterPeriodSelect" class="feed-select filter-control feed-period-select" aria-label="Период публикации" style="display: none;" tabindex="-1" aria-hidden="true">
+                        <option value="all">За всё время</option>
+                        <option value="week">За неделю</option>
+                        <option value="month">За месяц</option>
+                        <option value="year">За год</option>
+                        <option value="custom">Указать период</option>
+                      </select>
+                      <select id="feedDateFilterSelect" class="feed-select filter-control feed-period-select" style="display: none;" aria-hidden="true"></select>
+
+                      <div class="feed-date-dropdown-wrap feed-multiselect-dropdown-wrap" id="feedDateDropdownWrap">
+                        <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger feed-date-dropdown-trigger" id="feedDateDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedDateFilterLabel">
+                          <span class="dropdown-trigger-text" id="feedDateDropdownTriggerText">За всё время</span>
+                          <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        </button>
+
+                        <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu feed-date-dropdown-menu" id="feedDateDropdownMenu" role="listbox" style="display: none;">
+                          <div class="feed-date-options-list" id="feedDateOptionsList">
+                            <button type="button" class="feed-date-option-item is-selected" data-value="all" role="option" aria-selected="true">
+                              <span class="feed-date-option-text">За всё время</span>
+                              <span class="feed-date-option-check" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                              </span>
+                            </button>
+                            <button type="button" class="feed-date-option-item" data-value="week" role="option" aria-selected="false">
+                              <span class="feed-date-option-text">За неделю</span>
+                              <span class="feed-date-option-check" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                              </span>
+                            </button>
+                            <button type="button" class="feed-date-option-item" data-value="month" role="option" aria-selected="false">
+                              <span class="feed-date-option-text">За месяц</span>
+                              <span class="feed-date-option-check" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                              </span>
+                            </button>
+                            <button type="button" class="feed-date-option-item" data-value="year" role="option" aria-selected="false">
+                              <span class="feed-date-option-text">За год</span>
+                              <span class="feed-date-option-check" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                              </span>
+                            </button>
+                            <button type="button" class="feed-date-option-item" data-value="custom" role="option" aria-selected="false">
+                              <span class="feed-date-option-text">Указать период</span>
+                              <span class="feed-date-option-check" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="feed-custom-date-row" id="feedFilterCustomDates" style="display: none;">
+                        <div class="feed-date-field">
+                          <span class="feed-date-caption">С</span>
+                          <input type="date" id="filterDateFrom" class="feed-date-input" aria-label="Начальная дата">
+                        </div>
+                        <div class="feed-date-field">
+                          <span class="feed-date-caption">По</span>
+                          <input type="date" id="filterDateTo" class="feed-date-input" aria-label="Конечная дата">
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Строка 2, Колонка 1: Формат публикации -->
+                    <div class="feed-filter-group feed-multiselect-group" id="feedFormatFilterGroup">
+                      <label class="feed-filter-label" id="feedFormatFilterLabel">Формат публикации</label>
+                      <select id="feedFormatSelect" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true">
+                        <option value="all">Все форматы</option>
+                      </select>
+                      <div class="feed-multiselect-dropdown-wrap" id="feedFormatsDropdownWrap">
+                        <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedFormatsDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedFormatFilterLabel">
+                          <span class="dropdown-trigger-text" id="feedFormatsDropdownTriggerText">Все форматы</span>
+                          <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        </button>
+                        <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu" id="feedFormatsDropdownMenu" style="display: none;">
+                          <div class="feed-topic-search-wrap">
+                            <input type="search" id="filterFormatSearchInput" class="filter-topic-search-input" placeholder="Поиск по форматам..." autocomplete="off">
+                          </div>
+                          <div class="feed-dropdown-actions-bar" id="feedFormatsActionsBar" style="display: none;">
+                            <button type="button" class="feed-dropdown-clear-btn" id="btnFormatsClearSelection">Очистить выбор</button>
+                          </div>
+                          <div class="feed-topics-checkbox-list feed-multiselect-checkbox-list" id="modalFormatsFilterBar" role="group" aria-labelledby="feedFormatFilterLabel">
+                            <!-- Dynamically populated from PublicationConfig.FORMATS -->
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Selected format chips -->
+                      <div class="filter-selected-chips-bar" id="filterSelectedFormatsChips" style="display: none;"></div>
+                    </div>
+
+                    <!-- Строка 2, Колонка 2: Целевая аудитория -->
+                    <div class="feed-filter-group feed-multiselect-group" id="feedAudienceFilterGroup">
+                      <label class="feed-filter-label" id="feedAudienceFilterLabel">Целевая аудитория</label>
+                      <select id="feedAudienceSelect" class="feed-select filter-control" style="display: none;" multiple aria-hidden="true">
+                        <option value="all">Все аудитории</option>
+                      </select>
+                      <div class="feed-multiselect-dropdown-wrap" id="feedAudiencesDropdownWrap">
+                        <button type="button" class="feed-topics-dropdown-trigger feed-multiselect-dropdown-trigger" id="feedAudiencesDropdownTrigger" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="feedAudienceFilterLabel">
+                          <span class="dropdown-trigger-text" id="feedAudiencesDropdownTriggerText">Все аудитории</span>
+                          <svg class="dropdown-trigger-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        </button>
+                        <div class="feed-topics-dropdown-menu feed-multiselect-dropdown-menu" id="feedAudiencesDropdownMenu" style="display: none;">
+                          <div class="feed-topic-search-wrap">
+                            <input type="search" id="filterAudienceSearchInput" class="filter-topic-search-input" placeholder="Поиск по аудиториям..." autocomplete="off">
+                          </div>
+                          <div class="feed-dropdown-actions-bar" id="feedAudiencesActionsBar" style="display: none;">
+                            <button type="button" class="feed-dropdown-clear-btn" id="btnAudiencesClearSelection">Очистить выбор</button>
+                          </div>
+                          <div class="feed-topics-checkbox-list feed-multiselect-checkbox-list" id="modalAudiencesFilterBar" role="group" aria-labelledby="feedAudienceFilterLabel">
+                            <!-- Dynamically populated from PublicationConfig.AUDIENCES -->
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Selected audience chips -->
+                      <div class="filter-selected-chips-bar" id="filterSelectedAudiencesChips" style="display: none;"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Panel Footer -->
+                <div class="feed-slide-panel-footer">
+                  <div class="feed-footer-status">
+                    <span id="feedFiltersUnappliedIndicator" class="feed-filters-unapplied-indicator" style="display: none;">
+                      <span class="feed-unsaved-dot" aria-hidden="true"></span>
+                      <span>Изменения не применены</span>
+                    </span>
+                  </div>
+                  <div class="feed-footer-actions">
+                    <button type="button" class="btn btn-secondary" id="btnCancelFeedFilters">
+                      <span>Отмена</span>
+                    </button>
+                    <button type="button" id="feedResetFiltersBtn" class="btn btn-secondary">
+                      <span>Сбросить</span>
+                    </button>
+                    <button type="button" id="btnApplyFilters" class="btn btn-primary">
+                      <span>Применить фильтры</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
           <!-- Active Filter Chips Bar -->
@@ -760,22 +856,48 @@
             </div>
           </div>
 
-          <!-- Directions Catalog View -->
-          <div id="directionsView" class="entity-catalog-view" style="display: none;">
-            <div class="entity-view-header">
-              <div class="entity-view-title-wrap">
-                <h2 class="entity-view-title">Направления</h2>
-                <p class="entity-view-desc">13 инженерных специализаций платформы SmartContractum</p>
+          <!-- Directions / Topics Catalog View -->
+          <div id="directionsFeedView" class="entity-catalog-view directions-feed-view" style="display: none;">
+            <div id="directionsView" style="display: none;" aria-hidden="true"></div>
+            <div class="directions-view-header entity-view-header">
+              <div class="directions-title-wrap entity-view-title-wrap">
+                <h2 class="directions-title entity-view-title">Темы</h2>
+                <p class="directions-subtitle entity-view-desc">Каталог тем и специализаций SmartContractum</p>
               </div>
             </div>
-            <div class="entity-toolbar">
-              <div class="entity-search-box">
-                <input type="search" id="directionsSearchInput" class="feed-subnav-search-input" placeholder="Поиск направления по названию или описанию...">
+            <div class="directions-toolbar">
+              <div class="directions-search-box">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="search"
+                  id="directionsSearchInput"
+                  class="directions-search-input"
+                  placeholder="Поиск по темам"
+                  aria-label="Поиск по темам"
+                  autocomplete="off"
+                >
+                <button
+                  type="button"
+                  id="directionsSearchClearBtn"
+                  class="directions-search-clear"
+                  title="Очистить поиск"
+                  aria-label="Очистить поиск"
+                  style="display: none;"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
               </div>
             </div>
-            <div class="entity-catalog-grid directions-catalog-grid" id="directionsGrid">
+            <div class="directions-catalog-grid" id="directionsCatalogGrid">
               <!-- Populated by feed.js -->
             </div>
+            <div id="directionsGrid" style="display: none;" aria-hidden="true"></div>
           </div>
         </section>
 
@@ -863,7 +985,7 @@
               <span>О платформе</span>
             </div>
             <div class="widget-body">
-              <p>SmartContractum — независимая инженерная экосистема для проектирования, верификации и аудита смарт-контрактов в распределенных реестрах РФ.</p>
+              <p>SmartContractum - независимая инженерная экосистема для проектирования, верификации и аудита смарт-контрактов в распределенных реестрах РФ.</p>
               <a href="index.html" class="widget-about-link">Подробнее о платформе →</a>
             </div>
           </div>
