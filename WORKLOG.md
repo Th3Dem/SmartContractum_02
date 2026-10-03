@@ -685,4 +685,9 @@
 [2026-10-03 13:18] | dev_bot | IMPLEMENTATION_COMPLETE | Переделать блок Еще по теме: 2 колонки, человекопонятные названия тем и позиция до комментариев (Task: issue-112-related-articles-redesign)
 [2026-10-03 13:20] | git_bot | PR_CREATED | Открыт PR #121 для Issue #112 (Fixes #112), ветка feat/issue-112-related-articles-redesign (Task: issue-112-related-articles-redesign)
 [2026-10-03 13:22] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #121 готов к слиянию владельцем (Task: issue-112-related-articles-redesign)
+[2026-10-03 13:27] | pm_bot | TASK_INIT | Старт задачи Issue #113: Проверить реальное сохранение crop и focal point обложки публикации (Task: issue-113-cover-crop-focal-point)
+[2026-10-03 13:27] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #113 (Task: issue-113-cover-crop-focal-point)
+[2026-10-03 13:30] | dev_bot | IMPLEMENTATION_COMPLETE | Проверить реальное сохранение crop и focal point обложки публикации (Task: issue-113-cover-crop-focal-point)
+
+
 

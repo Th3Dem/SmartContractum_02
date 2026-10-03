@@ -208,9 +208,19 @@
     // 4. Cover Image: Questions do NOT have covers. Articles have 100% full width cover if available.
     let coverHtml = '';
     if (!isQuestion && item.material_type !== 'question' && item.coverImage) {
+      let objPos = '';
+      if (item.coverPosition || item.objectPosition) {
+        objPos = item.coverPosition || item.objectPosition;
+      } else if (typeof item.focalPoint === 'string' && item.focalPoint) {
+        objPos = item.focalPoint;
+      } else if (item.focalPoint && item.focalPoint.x != null && item.focalPoint.y != null) {
+        objPos = item.focalPoint.x + '% ' + item.focalPoint.y + '%';
+      }
+      const posAttr = objPos ? (' style="object-position: ' + escapeHtml(objPos) + ';"') : '';
+
       coverHtml =
         '<div class="card-cover-container is-loading' + (isPreview ? ' pub-feed-card-cover is-loaded' : '') + '"' + (isPreview ? ' id="preview-card-cover"' : '') + '>' +
-          '<img class="card-cover-img pub-preview-img" src="' + escapeHtml(item.coverImage) + '" alt="' + escapeHtml(cleanTitle) + '" loading="lazy" ' +
+          '<img class="card-cover-img pub-preview-img" src="' + escapeHtml(item.coverImage) + '" alt="' + escapeHtml(cleanTitle) + '"' + posAttr + ' loading="lazy" ' +
             'onload="this.parentElement.classList.remove(\'is-loading\'); this.parentElement.classList.add(\'is-loaded\');" ' +
             'onerror="var c=this.closest(\'.card-cover-container\'); if(c) { c.style.display=\'none\'; c.remove(); }">' +
         '</div>';

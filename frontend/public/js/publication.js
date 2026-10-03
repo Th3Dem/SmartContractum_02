@@ -44,6 +44,9 @@
       this.coverDataUrl = null; // cropped 780x350 data URL
       this.rawCoverImageSource = null; // original Data URL string
       this.cropParams = { zoom: 1, panX: 0, panY: 0 };
+      this.coverPosition = null; // CSS object-position e.g. '50% 30%'
+      this.focalPoint = null; // focal point e.g. '50% 30%'
+      this.objectPosition = null; // alias for coverPosition
       this.previousCoverState = null; // backup for cancel/replace error recovery
       this.coverMeta = null; // metadata { originalName, originalWidth, originalHeight, isGif }
       this.status = 'draft'; // 'draft' | 'in_moderation'
@@ -1226,6 +1229,9 @@
         rawCoverImage: this.rawCoverImage,
         rawCoverImageSource: this.rawCoverImageSource,
         cropParams: this.cropParams ? { ...this.cropParams } : { zoom: 1, panX: 0, panY: 0 },
+        coverPosition: this.coverPosition,
+        focalPoint: this.focalPoint,
+        objectPosition: this.objectPosition,
         coverMeta: this.coverMeta ? { ...this.coverMeta } : null
       };
     }
@@ -1236,6 +1242,9 @@
         this.rawCoverImage = this.previousCoverState.rawCoverImage;
         this.rawCoverImageSource = this.previousCoverState.rawCoverImageSource;
         this.cropParams = this.previousCoverState.cropParams ? { ...this.previousCoverState.cropParams } : { zoom: 1, panX: 0, panY: 0 };
+        this.coverPosition = this.previousCoverState.coverPosition || null;
+        this.focalPoint = this.previousCoverState.focalPoint || null;
+        this.objectPosition = this.previousCoverState.objectPosition || null;
         this.coverMeta = this.previousCoverState.coverMeta ? { ...this.previousCoverState.coverMeta } : null;
         this.cropZoom = this.cropParams.zoom || 1;
         this.cropPanX = this.cropParams.panX || 0;
@@ -1478,6 +1487,14 @@
         panX: this.cropPanX,
         panY: this.cropPanY
       };
+
+      // Compute and persist focal point / cover position
+      const focalX = Math.round(Math.max(0, Math.min(100, ((targetW / 2 - drawX) / drawW) * 100)));
+      const focalY = Math.round(Math.max(0, Math.min(100, ((targetH / 2 - drawY) / drawH) * 100)));
+      this.coverPosition = `${focalX}% ${focalY}%`;
+      this.focalPoint = `${focalX}% ${focalY}%`;
+      this.objectPosition = `${focalX}% ${focalY}%`;
+
       this.saveCoverBackup();
 
       this.closeCropper(false);
@@ -1493,6 +1510,9 @@
       this.cropZoom = 1;
       this.cropPanX = 0;
       this.cropPanY = 0;
+      this.coverPosition = null;
+      this.focalPoint = null;
+      this.objectPosition = null;
       this.coverMeta = null;
       this.previousCoverState = null;
       if (this.coverFileInput) this.coverFileInput.value = '';
@@ -1510,11 +1530,21 @@
       if (this.coverDataUrl) {
         this.coverDropzone.style.display = 'none';
         this.coverPreviewWrapper.style.display = 'block';
-        if (this.coverImg) this.coverImg.src = this.coverDataUrl;
+        if (this.coverImg) {
+          this.coverImg.src = this.coverDataUrl;
+          if (this.coverPosition) {
+            this.coverImg.style.objectPosition = this.coverPosition;
+          } else {
+            this.coverImg.style.objectPosition = '';
+          }
+        }
       } else {
         this.coverDropzone.style.display = 'flex';
         this.coverPreviewWrapper.style.display = 'none';
-        if (this.coverImg) this.coverImg.src = '';
+        if (this.coverImg) {
+          this.coverImg.src = '';
+          this.coverImg.style.objectPosition = '';
+        }
       }
     }
 
@@ -1602,6 +1632,9 @@
           materialType: (this.materialType === 'question') ? 'question' : 'publication',
           type: (this.materialType === 'question') ? 'question' : 'publication',
           coverImage: this.coverDataUrl || null,
+          coverPosition: this.coverPosition || null,
+          focalPoint: this.focalPoint || null,
+          objectPosition: this.objectPosition || this.coverPosition || null,
           description: rawDesc || 'Краткое описание публикации появится здесь...',
           readingTime: `~${minutes} мин чтения`,
           likesCount: 0,
@@ -1781,6 +1814,9 @@
         description: this.description,
         isDescriptionCustom: this.isDescriptionCustom,
         coverDataUrl: this.coverDataUrl,
+        coverPosition: this.coverPosition || null,
+        focalPoint: this.focalPoint || null,
+        objectPosition: this.objectPosition || this.coverPosition || null,
         rawCoverImageSource: this.rawCoverImageSource,
         cropParams: this.cropParams ? { ...this.cropParams } : { zoom: 1, panX: 0, panY: 0 },
         coverMeta: this.coverMeta,
@@ -1810,6 +1846,9 @@
       this.description = typeof settings.description === 'string' ? settings.description : '';
       this.isDescriptionCustom = Boolean(settings.isDescriptionCustom || (settings.description && settings.description.length > 0));
       this.coverDataUrl = settings.coverDataUrl || null;
+      this.coverPosition = settings.coverPosition || settings.objectPosition || null;
+      this.focalPoint = settings.focalPoint || null;
+      this.objectPosition = settings.objectPosition || settings.coverPosition || null;
       this.rawCoverImageSource = settings.rawCoverImageSource || null;
       this.cropParams = settings.cropParams || { zoom: 1, panX: 0, panY: 0 };
       this.coverMeta = settings.coverMeta || null;
@@ -1864,6 +1903,9 @@
       this.description = '';
       this.isDescriptionCustom = false;
       this.coverDataUrl = null;
+      this.coverPosition = null;
+      this.focalPoint = null;
+      this.objectPosition = null;
       this.rawCoverImageSource = null;
       this.cropParams = { zoom: 1, panX: 0, panY: 0 };
       this.coverMeta = null;

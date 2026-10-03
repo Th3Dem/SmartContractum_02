@@ -5096,17 +5096,31 @@
       badgesWrap.style.display = 'none';
     }
 
-    // Cover Image (Issue #88)
+    // Cover Image (Issue #88 & Issue #113)
     const coverContainer = document.getElementById('articleCoverContainer');
     const coverImg = document.getElementById('articleCoverImg');
     if (coverContainer && coverImg) {
       if (article.coverImage) {
         coverImg.src = article.coverImage;
         coverImg.alt = article.title || 'Обложка публикации';
+        let objPos = '';
+        if (article.coverPosition || article.objectPosition) {
+          objPos = article.coverPosition || article.objectPosition;
+        } else if (typeof article.focalPoint === 'string' && article.focalPoint) {
+          objPos = article.focalPoint;
+        } else if (article.focalPoint && article.focalPoint.x != null && article.focalPoint.y != null) {
+          objPos = article.focalPoint.x + '% ' + article.focalPoint.y + '%';
+        }
+        if (objPos) {
+          coverImg.style.objectPosition = objPos;
+        } else {
+          coverImg.style.objectPosition = '';
+        }
         coverContainer.style.display = 'block';
       } else {
         coverContainer.style.display = 'none';
         coverImg.removeAttribute('src');
+        coverImg.style.objectPosition = '';
       }
     }
 

@@ -1579,6 +1579,34 @@ def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = Non
     return CoverValidationResult(False, "Обложка должна быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ.")
 
 
+def resolve_cover_position(settings: Any) -> Optional[str]:
+    """
+    Extracts or computes CSS object-position for article/card cover image.
+    Supports coverPosition, objectPosition, or focalPoint (dict or string).
+    """
+    if not isinstance(settings, dict):
+        return None
+    cov_pos = settings.get("coverPosition") or settings.get("objectPosition")
+    if cov_pos and isinstance(cov_pos, str) and cov_pos.strip():
+        return cov_pos.strip()
+    focal = settings.get("focalPoint")
+    if isinstance(focal, str) and focal.strip():
+        return focal.strip()
+    if isinstance(focal, dict):
+        x = focal.get("x")
+        y = focal.get("y")
+        if x is not None and y is not None:
+            try:
+                xf = float(x)
+                yf = float(y)
+                if 0 <= xf <= 1 and 0 <= yf <= 1 and (xf < 1 or yf < 1):
+                    return f"{round(xf * 100, 2)}% {round(yf * 100, 2)}%"
+                return f"{round(xf, 2)}% {round(yf, 2)}%"
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
 def validate_submission_payload(payload: Any) -> Tuple[bool, Optional[str], Dict[str, str]]:
     """
     Validates submission payload according to product requirements:
@@ -5615,6 +5643,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "updatedAt": row["updated_at"],
             "description": settings.get("description") or "",
             "coverImage": settings.get("coverImage") or None,
+            "coverPosition": resolve_cover_position(settings),
+            "focalPoint": resolve_cover_position(settings),
+            "objectPosition": resolve_cover_position(settings),
             "isDemo": bool(settings.get("isDemo") or row["id"].startswith("art-0")),
             "topics": topics,
             "topic": topics[0] if topics else "",
@@ -6156,6 +6187,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "createdAt": row["created_at"],
                 "description": desc,
                 "coverImage": settings.get("coverImage") or None,
+                "coverPosition": resolve_cover_position(settings),
+                "focalPoint": resolve_cover_position(settings),
+                "objectPosition": resolve_cover_position(settings),
                 "isDemo": bool(settings.get("isDemo") or row["id"].startswith("art-0")),
                 "topics": topics,
                 "topic": topics[0] if topics else "",
