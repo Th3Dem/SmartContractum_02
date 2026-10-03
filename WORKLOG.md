@@ -1,4 +1,4 @@
-# WORKLOG.md — Журнал состояний проекта
+# WORKLOG.md: Журнал состояний проекта
 
 [2026-09-25 00:44] | pm_bot | TASK_INIT | Инициализация базовой переработки инструкций мультиагентной системы (Task: task-01-refine-agent-instructions)
 [2026-09-25 00:46] | qa_bot | QA_APPROVED | Первичный независимый аудит базовой документации (Task: task-01-refine-agent-instructions)
@@ -710,6 +710,9 @@
 [2026-10-03 14:44] | dev_bot | IMPLEMENTATION_COMPLETE | Добавить публичную метрику количества сохранений публикации (Save Count) (Task: issue-127-publication-save-count-metric)
 [2026-10-03 14:45] | git_bot | PR_CREATED | Открыт PR #129 для Issue #127 (Fixes #127), ветка feat/issue-127-publication-save-count-metric (Task: issue-127-publication-save-count-metric)
 [2026-10-03 14:47] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #129 готов к слиянию владельцем (Task: issue-127-publication-save-count-metric)
+[2026-10-03 15:33] | pm_bot | TASK_INIT | Старт задачи Issue #132: Save: user-scoped состояние и persistent accumulated Save Count (Task: issue-132-user-scoped-save-and-accumulated-count)
+[2026-10-03 15:33] | pm_bot | DEV_ASSIGN | Назначение реализации fullstack на py_bot и dev_bot для Issue #132 (Task: issue-132-user-scoped-save-and-accumulated-count)
+[2026-10-03 15:43] | dev_bot | IMPLEMENTATION_COMPLETE | Save: user-scoped состояние и persistent accumulated Save Count (Task: issue-132-user-scoped-save-and-accumulated-count)
 
 
 

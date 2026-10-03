@@ -474,8 +474,12 @@
     options = options || {};
     const isPreview = Boolean(options.isPreview);
     const isBookmarked = typeof options.isBookmarked === 'function'
-      ? options.isBookmarked(item.id)
-      : (options.isBookmarked !== undefined ? Boolean(options.isBookmarked) : isCardBookmarked(item.id));
+      ? options.isBookmarked(item.id, item)
+      : (options.isBookmarked !== undefined
+          ? Boolean(options.isBookmarked)
+          : ((item && (item.hasSaved !== undefined || item.isSaved !== undefined))
+              ? Boolean(item.hasSaved || item.isSaved)
+              : isCardBookmarked(item.id)));
 
     const card = document.createElement('article');
     card.className = 'feed-card' + (isPreview ? ' pub-feed-card is-preview-card' : '');
@@ -574,11 +578,16 @@
   }
 
   // --------------------------------------------------------------------------
-  // Bookmarks Management & Helpers (sc_bookmarks)
+  // Bookmarks Management & Helpers (user-scoped)
   // --------------------------------------------------------------------------
   function getStoredBookmarks() {
     try {
-      const data = localStorage.getItem('sc_bookmarks');
+      const user = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
+      const key = (user && user.id) ? ('sc_bookmarks_' + user.id) : 'sc_bookmarks_guest';
+      let data = localStorage.getItem(key);
+      if (!data && !user) {
+        data = localStorage.getItem('sc_bookmarks');
+      }
       if (data) {
         const parsed = JSON.parse(data);
         if (Array.isArray(parsed)) return parsed;
@@ -629,47 +638,102 @@
 
   function toggleCardBookmark(id, btn) {
     if (!id) return false;
-    const bookmarks = getStoredBookmarks();
-    const idx = bookmarks.indexOf(id);
-    let bookmarked = false;
-    if (idx !== -1) {
-      bookmarks.splice(idx, 1);
-      bookmarked = false;
-      showCardToast('Публикация удалена из сохраненного');
-    } else {
-      bookmarks.push(id);
-      bookmarked = true;
-      showCardToast('Публикация сохранена');
+    const user = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
+    if (!user) {
+      showCardToast('Для сохранения публикации необходимо войти');
+      if (typeof window !== 'undefined' && typeof window.openAuthModal === 'function') {
+        window.openAuthModal();
+      }
+      return false;
     }
-    try {
-      localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
-    } catch (e) {}
 
+    const countEl = btn ? btn.querySelector('.card-save-count') : null;
+    const prevCount = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
+    const wasBookmarked = btn ? btn.classList.contains('is-bookmarked') : false;
+    const nextBookmarked = !wasBookmarked;
+
+    // Optimistic UI update
     if (btn) {
-      updateBookmarkButtonState(btn, bookmarked);
-      const countEl = btn.querySelector('.card-save-count');
+      updateBookmarkButtonState(btn, nextBookmarked);
       if (countEl) {
-        const curCount = parseInt(countEl.textContent, 10) || 0;
-        countEl.textContent = bookmarked ? (curCount + 1) : Math.max(0, curCount - 1);
+        countEl.textContent = nextBookmarked ? (prevCount + 1) : Math.max(0, prevCount - 1);
       }
     }
 
-    if (typeof window !== 'undefined' && window.currentUser) {
-      fetch('/api/articles/' + encodeURIComponent(id) + (bookmarked ? '/save' : '/unsave'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data && data.success && typeof data.savesCount === 'number' && btn) {
-          const countEl = btn.querySelector('.card-save-count');
-          if (countEl) countEl.textContent = data.savesCount;
-        }
-      })
-      .catch(function () {});
+    const userKey = 'sc_bookmarks_' + user.id;
+    const bookmarks = getStoredBookmarks();
+    const idx = bookmarks.indexOf(id);
+    if (nextBookmarked && idx === -1) {
+      bookmarks.push(id);
+    } else if (!nextBookmarked && idx !== -1) {
+      bookmarks.splice(idx, 1);
     }
+    try {
+      localStorage.setItem(userKey, JSON.stringify(bookmarks));
+      if (!user) {
+        localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
+      }
+    } catch (e) {}
 
-    return bookmarked;
+    fetch('/api/articles/' + encodeURIComponent(id) + (nextBookmarked ? '/save' : '/unsave'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function (res) {
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && data.success) {
+        if (btn) {
+          updateBookmarkButtonState(btn, Boolean(data.isSaved));
+          if (countEl && typeof data.savesCount === 'number') {
+            countEl.textContent = data.savesCount;
+          }
+        }
+        if (data.isSaved) {
+          showCardToast('Публикация сохранена');
+        } else {
+          showCardToast('Публикация удалена из сохраненного');
+        }
+      } else {
+        // Rollback on logical error
+        if (btn) {
+          updateBookmarkButtonState(btn, wasBookmarked);
+          if (countEl) countEl.textContent = prevCount;
+        }
+        const rbBms = getStoredBookmarks();
+        const rbIdx = rbBms.indexOf(id);
+        if (wasBookmarked && rbIdx === -1) rbBms.push(id);
+        else if (!wasBookmarked && rbIdx !== -1) rbBms.splice(rbIdx, 1);
+        try { localStorage.setItem(userKey, JSON.stringify(rbBms)); } catch (e) {}
+        showCardToast((data && data.error) || 'Ошибка сохранения публикации');
+      }
+    })
+    .catch(function (err) {
+      // Rollback on network or HTTP error
+      if (btn) {
+        updateBookmarkButtonState(btn, wasBookmarked);
+        if (countEl) countEl.textContent = prevCount;
+      }
+      const rbBms = getStoredBookmarks();
+      const rbIdx = rbBms.indexOf(id);
+      if (wasBookmarked && rbIdx === -1) rbBms.push(id);
+      else if (!wasBookmarked && rbIdx !== -1) rbBms.splice(rbIdx, 1);
+      try { localStorage.setItem(userKey, JSON.stringify(rbBms)); } catch (e) {}
+      if (err && String(err.message).indexOf('401') !== -1) {
+        showCardToast('Для сохранения публикации необходимо войти');
+        if (typeof window !== 'undefined' && typeof window.openAuthModal === 'function') {
+          window.openAuthModal();
+        }
+      } else {
+        showCardToast('Не удалось связаться с сервером');
+      }
+    });
+
+    return nextBookmarked;
   }
 
   function createAvatarEl(authorData, options) {

@@ -2112,8 +2112,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_moderation_status(parsed)
         elif path == "/api/moderation/list":
             self.handle_moderation_list()
-        elif path.startswith("/api/articles/") and path.endswith("/comments"):
-            art_id = path[len("/api/articles/"): -len("/comments")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/comments"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path[len(prefix): -len("/comments")].strip("/")
             self.handle_get_article_comments(art_id)
         elif path.rstrip("/") == "/api/comments/subscriptions":
             self.handle_get_comment_subscriptions()
@@ -2121,7 +2122,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             query = urllib.parse.parse_qs(parsed.query)
             art_id = (query.get("articleId", [""])[0] or query.get("article_id", [""])[0] or query.get("id", [""])[0]).strip()
             self.handle_get_article_comments(art_id)
-        elif path == "/api/articles" or path.startswith("/api/articles/"):
+        elif path == "/api/questions/unanswered":
+            self.handle_get_unanswered_questions()
+        elif path in ("/api/articles", "/api/questions") or path.startswith("/api/articles/") or path.startswith("/api/questions/"):
             self.handle_articles_api(parsed)
         elif path.startswith("/media/"):
             self.handle_serve_media(parsed)
@@ -2141,8 +2144,6 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_directions(parsed)
         elif path == "/api/notifications":
             self.handle_get_notifications()
-        elif path == "/api/questions/unanswered":
-            self.handle_get_unanswered_questions()
         elif path.startswith("/api/users/"):
             user_id = path[len("/api/users/"):].strip("/")
             if user_id.endswith("/profile"):
@@ -2205,14 +2206,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return
             art_id = p.get("articleId") or p.get("article_id") or ""
             self.handle_article_save_toggle(art_id, action="toggle", _body_already_read=True)
-        elif path.startswith("/api/articles/") and path.endswith("/save"):
-            art_id = path[len("/api/articles/"): -len("/save")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/save"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path[len(prefix): -len("/save")].strip("/")
             self.handle_article_save_toggle(art_id, action="save", _body_already_read=False)
-        elif path.startswith("/api/articles/") and path.endswith("/unsave"):
-            art_id = path[len("/api/articles/"): -len("/unsave")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/unsave"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path[len(prefix): -len("/unsave")].strip("/")
             self.handle_article_save_toggle(art_id, action="unsave", _body_already_read=False)
-        elif path.startswith("/api/articles/") and path.endswith("/bookmark"):
-            art_id = path[len("/api/articles/"): -len("/bookmark")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/bookmark"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path[len(prefix): -len("/bookmark")].strip("/")
             self.handle_article_save_toggle(art_id, action="toggle", _body_already_read=False)
         elif path in ("/api/articles/sync-saves", "/api/saves/sync"):
             self.handle_sync_saves()
@@ -5705,11 +5709,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_articles_api(self, parsed_url):
         """
-        Dispatches GET /api/articles requests to single article view or feed list view.
+        Dispatches GET /api/articles or /api/questions requests to single article view or feed list view.
         """
         path = parsed_url.path
-        if path.startswith("/api/articles/"):
-            article_id = path[len("/api/articles/"):].strip()
+        prefix = "/api/articles/" if path.startswith("/api/articles/") else ("/api/questions/" if path.startswith("/api/questions/") else None)
+        if prefix:
+            article_id = path[len(prefix):].strip()
             if article_id.endswith("/comments"):
                 self.handle_get_article_comments(article_id[:-len("/comments")].strip("/"))
                 return

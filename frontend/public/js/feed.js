@@ -50,11 +50,12 @@
   }
 
   // --------------------------------------------------------------------------
-  // 2. Bookmarks Management (localStorage sc_bookmarks)
+  // 2. Bookmarks Management (user-scoped with legacy migration)
   // --------------------------------------------------------------------------
   function getBookmarks() {
     try {
-      const data = localStorage.getItem('sc_bookmarks');
+      const key = (currentUser && currentUser.id) ? ('sc_bookmarks_' + currentUser.id) : 'sc_bookmarks_guest';
+      const data = localStorage.getItem(key);
       if (data) {
         const parsed = JSON.parse(data);
         if (Array.isArray(parsed)) return parsed;
@@ -65,13 +66,17 @@
 
   function saveBookmarks(bookmarks) {
     try {
-      localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
+      const key = (currentUser && currentUser.id) ? ('sc_bookmarks_' + currentUser.id) : 'sc_bookmarks_guest';
+      localStorage.setItem(key, JSON.stringify(bookmarks));
     } catch (e) {}
     updateSavedCounter();
   }
 
-  function isBookmarked(id) {
+  function isBookmarked(id, item) {
     if (!id) return false;
+    if (currentUser && item && (item.hasSaved !== undefined || item.isSaved !== undefined)) {
+      return Boolean(item.hasSaved || item.isSaved);
+    }
     const bookmarks = getBookmarks();
     return bookmarks.indexOf(id) !== -1;
   }
@@ -84,11 +89,11 @@
     if (idx !== -1) {
       bookmarks.splice(idx, 1);
       bookmarked = false;
-      showToast('Статья удалена из закладок');
+      showToast('Публикация удалена из закладок');
     } else {
       bookmarks.push(id);
       bookmarked = true;
-      showToast('Статья сохранена в закладки');
+      showToast('Публикация сохранена');
     }
     saveBookmarks(bookmarks);
     return bookmarked;
@@ -103,18 +108,39 @@
     }
   }
 
+  function runLegacyBookmarksMigration() {
+    if (!currentUser || !currentUser.id) return;
+    try {
+      const migrated = localStorage.getItem('sc_bookmarks_migrated');
+      const legacy = localStorage.getItem('sc_bookmarks');
+      if (legacy && !migrated) {
+        let parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          fetch('/api/articles/sync-saves', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ articleIds: parsed })
+          })
+          .then(function (res) { return res.json(); })
+          .then(function () {
+            const userKey = 'sc_bookmarks_' + currentUser.id;
+            localStorage.setItem(userKey, JSON.stringify(parsed));
+            localStorage.setItem('sc_bookmarks_migrated', 'true');
+            localStorage.removeItem('sc_bookmarks');
+            updateSavedCounter();
+          })
+          .catch(function () {});
+          return;
+        }
+      }
+      if (legacy && migrated) {
+        localStorage.removeItem('sc_bookmarks');
+      }
+    } catch (e) {}
+  }
+
   function syncLocalBookmarksWithServer() {
-    if (!currentUser) return;
-    const bookmarks = getBookmarks();
-    if (!bookmarks || bookmarks.length === 0) return;
-    fetch('/api/articles/sync-saves', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ articleIds: bookmarks })
-    })
-    .then(function (res) { return res.json(); })
-    .then(function () {})
-    .catch(function () {});
+    runLegacyBookmarksMigration();
   }
 
   function showToast(message, actionText, onAction) {
@@ -515,6 +541,8 @@
                 setAuthState(null);
                 if (state.tab === 'my' || state.tab === 'saved') {
                   switchTab('all');
+                } else {
+                  fetchFeed(true);
                 }
                 showToast('Вы вышли из системы');
               });
@@ -4425,49 +4453,113 @@
     if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
       initArticleReportModalEvents();
       return window.SmartContractumCard.createCardElement(item, {
-        isBookmarked: isBookmarked,
+        isBookmarked: function (artId, artItem) {
+          return isBookmarked(artId, artItem || item);
+        },
         isReported: isArticleReported,
         currentUserId: currentUser ? currentUser.id : '',
         onLikeToggle: toggleArticleLike,
         onShareClick: openArticleSharePopover,
         onReportClick: openArticleReportModal,
         onBookmarkToggle: function (id, btn) {
-          const active = toggleBookmark(id);
-          btn.classList.toggle('is-bookmarked', active);
-          btn.classList.toggle('is-saved', active);
+          if (!currentUser) {
+            showToast('Для сохранения публикации необходимо войти');
+            openAuthModal();
+            return;
+          }
+          const wasActive = btn.classList.contains('is-bookmarked');
+          const nextActive = !wasActive;
+          btn.classList.toggle('is-bookmarked', nextActive);
+          btn.classList.toggle('is-saved', nextActive);
           const svg = btn.querySelector('svg');
-          if (svg) svg.setAttribute('fill', active ? 'currentColor' : 'none');
-          const newTooltip = active ? 'Убрать из сохраненного' : 'Сохранить статью';
+          if (svg) svg.setAttribute('fill', nextActive ? 'currentColor' : 'none');
+          const newTooltip = nextActive ? 'Убрать из сохраненного' : 'Сохранить статью';
           btn.title = newTooltip;
           btn.setAttribute('aria-label', newTooltip);
           const countEl = btn.querySelector('.card-save-count');
+          const prevCount = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
           if (countEl) {
-            const curCount = parseInt(countEl.textContent, 10) || 0;
-            countEl.textContent = active ? (curCount + 1) : Math.max(0, curCount - 1);
+            countEl.textContent = nextActive ? (prevCount + 1) : Math.max(0, prevCount - 1);
           }
-          if (currentUser) {
-            fetch('/api/articles/' + encodeURIComponent(id) + (active ? '/save' : '/unsave'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-              if (data && data.success && typeof data.savesCount === 'number' && countEl) {
+
+          // Optimistic local cache update
+          const bms = getBookmarks();
+          const idx = bms.indexOf(id);
+          if (nextActive && idx === -1) { bms.push(id); saveBookmarks(bms); }
+          else if (!nextActive && idx !== -1) { bms.splice(idx, 1); saveBookmarks(bms); }
+
+          fetch('/api/articles/' + encodeURIComponent(id) + (nextActive ? '/save' : '/unsave'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          })
+          .then(function (res) {
+            if (!res.ok) {
+              throw new Error('HTTP ' + res.status);
+            }
+            return res.json();
+          })
+          .then(function (data) {
+            if (data && data.success) {
+              const finalSaved = Boolean(data.isSaved);
+              btn.classList.toggle('is-bookmarked', finalSaved);
+              btn.classList.toggle('is-saved', finalSaved);
+              if (svg) svg.setAttribute('fill', finalSaved ? 'currentColor' : 'none');
+              const tip = finalSaved ? 'Убрать из сохраненного' : 'Сохранить статью';
+              btn.title = tip;
+              btn.setAttribute('aria-label', tip);
+              if (typeof data.savesCount === 'number' && countEl) {
                 countEl.textContent = data.savesCount;
               }
-            })
-            .catch(function () {});
-          }
-          if (state.savedOnly && !active) {
-            const cardEl = btn.closest('.feed-card');
-            if (cardEl) cardEl.remove();
-            state.articles = state.articles.filter(function (a) { return a.id !== id; });
-            state.total = Math.max(0, state.total - 1);
-            updateResultsCount();
-            if (state.articles.length === 0) {
-              renderEmptyState();
+              if (item) {
+                item.savesCount = data.savesCount;
+                item.hasSaved = finalSaved;
+                item.isSaved = finalSaved;
+              }
+              showToast(finalSaved ? 'Публикация сохранена' : 'Публикация удалена из сохраненного');
+              if (state.savedOnly && !finalSaved) {
+                const cardEl = btn.closest('.feed-card');
+                if (cardEl) cardEl.remove();
+                state.articles = state.articles.filter(function (a) { return a.id !== id; });
+                state.total = Math.max(0, state.total - 1);
+                updateResultsCount();
+                if (state.articles.length === 0) {
+                  renderEmptyState();
+                }
+              }
+            } else {
+              // Rollback on logical error
+              btn.classList.toggle('is-bookmarked', wasActive);
+              btn.classList.toggle('is-saved', wasActive);
+              if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+              btn.title = wasActive ? 'Убрать из сохраненного' : 'Сохранить статью';
+              btn.setAttribute('aria-label', btn.title);
+              if (countEl) countEl.textContent = prevCount;
+              const curBms = getBookmarks();
+              const curIdx = curBms.indexOf(id);
+              if (wasActive && curIdx === -1) { curBms.push(id); saveBookmarks(curBms); }
+              else if (!wasActive && curIdx !== -1) { curBms.splice(curIdx, 1); saveBookmarks(curBms); }
+              showToast((data && data.error) || 'Ошибка сохранения публикации');
             }
-          }
+          })
+          .catch(function (err) {
+            // Rollback on network or HTTP error
+            btn.classList.toggle('is-bookmarked', wasActive);
+            btn.classList.toggle('is-saved', wasActive);
+            if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+            btn.title = wasActive ? 'Убрать из сохраненного' : 'Сохранить статью';
+            btn.setAttribute('aria-label', btn.title);
+            if (countEl) countEl.textContent = prevCount;
+            const curBms = getBookmarks();
+            const curIdx = curBms.indexOf(id);
+            if (wasActive && curIdx === -1) { curBms.push(id); saveBookmarks(curBms); }
+            else if (!wasActive && curIdx !== -1) { curBms.splice(curIdx, 1); saveBookmarks(curBms); }
+            if (err && String(err.message).indexOf('401') !== -1) {
+              showToast('Для сохранения публикации необходимо войти');
+              openAuthModal();
+            } else {
+              showToast('Не удалось связаться с сервером');
+            }
+          });
         }
       });
     }

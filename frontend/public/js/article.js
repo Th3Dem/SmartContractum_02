@@ -179,11 +179,12 @@
   }
 
   // --------------------------------------------------------------------------
-  // 2. Bookmarks Management (localStorage sc_bookmarks)
+  // 2. Bookmarks Management (user-scoped with legacy migration)
   // --------------------------------------------------------------------------
   function getBookmarks() {
     try {
-      const data = localStorage.getItem('sc_bookmarks');
+      const key = (currentUser && currentUser.id) ? ('sc_bookmarks_' + currentUser.id) : 'sc_bookmarks_guest';
+      const data = localStorage.getItem(key);
       if (data) {
         const parsed = JSON.parse(data);
         if (Array.isArray(parsed)) return parsed;
@@ -192,77 +193,156 @@
     return [];
   }
 
+  function saveBookmarks(bookmarks) {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_bookmarks_' + currentUser.id) : 'sc_bookmarks_guest';
+      localStorage.setItem(key, JSON.stringify(bookmarks));
+      if (!currentUser) {
+        localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
+      }
+    } catch (e) {}
+  }
+
   function isBookmarked(id) {
     if (!id) return false;
-    return getBookmarks().indexOf(id) !== -1;
+    if (currentUser && currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
+      if (currentArticle.hasSaved !== undefined || currentArticle.isSaved !== undefined) {
+        return Boolean(currentArticle.hasSaved || currentArticle.isSaved);
+      }
+    }
+    const bookmarks = getBookmarks();
+    return bookmarks.indexOf(id) !== -1;
+  }
+
+  function runLegacyBookmarksMigration() {
+    if (!currentUser || !currentUser.id) return;
+    try {
+      const migrated = localStorage.getItem('sc_bookmarks_migrated');
+      const legacy = localStorage.getItem('sc_bookmarks');
+      if (legacy && !migrated) {
+        let parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          fetch('/api/articles/sync-saves', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ articleIds: parsed })
+          })
+          .then(function (res) { return res.json(); })
+          .then(function () {
+            const userKey = 'sc_bookmarks_' + currentUser.id;
+            localStorage.setItem(userKey, JSON.stringify(parsed));
+            localStorage.setItem('sc_bookmarks_migrated', 'true');
+            localStorage.removeItem('sc_bookmarks');
+          })
+          .catch(function () {});
+          return;
+        }
+      }
+      if (legacy && migrated) {
+        localStorage.removeItem('sc_bookmarks');
+      }
+    } catch (e) {}
   }
 
   function syncLocalBookmarksWithServer() {
-    if (!currentUser) return;
-    const bookmarks = getBookmarks();
-    if (!bookmarks || bookmarks.length === 0) return;
-    fetch('/api/articles/sync-saves', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ articleIds: bookmarks })
-    })
-    .then(function (res) { return res.json(); })
-    .then(function () {})
-    .catch(function () {});
+    runLegacyBookmarksMigration();
   }
 
   function toggleBookmark(id) {
     if (!id) return false;
-    const bookmarks = getBookmarks();
-    const idx = bookmarks.indexOf(id);
-    let bookmarked = false;
-    if (idx !== -1) {
-      bookmarks.splice(idx, 1);
-      bookmarked = false;
-      showToast('Публикация удалена из сохраненного');
-    } else {
-      bookmarks.push(id);
-      bookmarked = true;
-      showToast('Публикация сохранена');
+    if (!currentUser) {
+      showToast('Для сохранения публикации необходимо войти');
+      if (typeof openAuthModal === 'function') {
+        openAuthModal();
+      }
+      return false;
     }
-    try {
-      localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
-    } catch (e) {}
 
-    // Optimistic update of saves count
+    const wasBookmarked = isBookmarked(id);
+    const nextBookmarked = !wasBookmarked;
+
+    const prevCount = (currentArticle && typeof currentArticle.savesCount === 'number')
+      ? currentArticle.savesCount
+      : ((currentArticle && typeof currentArticle.saves_count === 'number') ? currentArticle.saves_count : 0);
+    const nextCount = nextBookmarked ? (prevCount + 1) : Math.max(0, prevCount - 1);
+
+    // Optimistic update of currentArticle
     if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
-      const prevCount = typeof currentArticle.savesCount === 'number'
-        ? currentArticle.savesCount
-        : (typeof currentArticle.saves_count === 'number' ? currentArticle.saves_count : 0);
-      currentArticle.savesCount = bookmarked ? (prevCount + 1) : Math.max(0, prevCount - 1);
-      currentArticle.saves_count = currentArticle.savesCount;
-      currentArticle.hasSaved = bookmarked;
-      currentArticle.isSaved = bookmarked;
+      currentArticle.savesCount = nextCount;
+      currentArticle.saves_count = nextCount;
+      currentArticle.hasSaved = nextBookmarked;
+      currentArticle.isSaved = nextBookmarked;
     }
     syncBookmarkButtons(id);
 
-    // Sync with backend if user is authenticated
-    if (currentUser) {
-      fetch('/api/articles/' + encodeURIComponent(id) + (bookmarked ? '/save' : '/unsave'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data && data.success && typeof data.savesCount === 'number') {
-          if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
-            currentArticle.savesCount = data.savesCount;
-            currentArticle.saves_count = data.savesCount;
-            currentArticle.hasSaved = Boolean(data.hasSaved);
-            currentArticle.isSaved = Boolean(data.hasSaved);
-          }
-          syncBookmarkButtons(id);
-        }
-      })
-      .catch(function () {});
-    }
+    // Optimistic local cache update
+    const bms = getBookmarks();
+    const idx = bms.indexOf(id);
+    if (nextBookmarked && idx === -1) { bms.push(id); saveBookmarks(bms); }
+    else if (!nextBookmarked && idx !== -1) { bms.splice(idx, 1); saveBookmarks(bms); }
 
-    return bookmarked;
+    fetch('/api/articles/' + encodeURIComponent(id) + (nextBookmarked ? '/save' : '/unsave'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function (res) {
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && data.success) {
+        if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
+          currentArticle.savesCount = typeof data.savesCount === 'number' ? data.savesCount : nextCount;
+          currentArticle.saves_count = currentArticle.savesCount;
+          currentArticle.hasSaved = Boolean(data.hasSaved);
+          currentArticle.isSaved = Boolean(data.hasSaved);
+        }
+        syncBookmarkButtons(id);
+        if (data.isSaved) {
+          showToast('Публикация сохранена');
+        } else {
+          showToast('Публикация удалена из сохраненного');
+        }
+      } else {
+        // Rollback
+        if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
+          currentArticle.savesCount = prevCount;
+          currentArticle.saves_count = prevCount;
+          currentArticle.hasSaved = wasBookmarked;
+          currentArticle.isSaved = wasBookmarked;
+        }
+        syncBookmarkButtons(id);
+        const rbBms = getBookmarks();
+        const rbIdx = rbBms.indexOf(id);
+        if (wasBookmarked && rbIdx === -1) { rbBms.push(id); saveBookmarks(rbBms); }
+        else if (!wasBookmarked && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        showToast((data && data.error) || 'Ошибка сохранения публикации');
+      }
+    })
+    .catch(function (err) {
+      // Rollback on network or HTTP error
+      if (currentArticle && (currentArticle.id === id || currentArticle.draftId === id)) {
+        currentArticle.savesCount = prevCount;
+        currentArticle.saves_count = prevCount;
+        currentArticle.hasSaved = wasBookmarked;
+        currentArticle.isSaved = wasBookmarked;
+      }
+      syncBookmarkButtons(id);
+      const rbBms = getBookmarks();
+      const rbIdx = rbBms.indexOf(id);
+      if (wasBookmarked && rbIdx === -1) { rbBms.push(id); saveBookmarks(rbBms); }
+      else if (!wasBookmarked && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+      if (err && String(err.message).indexOf('401') !== -1) {
+        showToast('Для сохранения публикации необходимо войти');
+        if (typeof openAuthModal === 'function') openAuthModal();
+      } else {
+        showToast('Не удалось связаться с сервером');
+      }
+    });
+
+    return nextBookmarked;
   }
 
   function syncBookmarkButtons(id) {
@@ -1486,16 +1566,22 @@
     if (!currentArticle) return;
     const artId = currentArticle.id;
 
-    // Immediately clear personalized vote state in currentArticle so old vote does not flash
+    // Immediately clear personalized vote and bookmark state in currentArticle so old state does not flash
     if (!currentUser) {
       currentArticle.myVote = 0;
       currentArticle.canVote = false;
       currentArticle.isAuthor = false;
+      currentArticle.hasSaved = false;
+      currentArticle.isSaved = false;
       syncArticleVoteCapsules(currentArticle);
+      syncBookmarkButtons(artId);
     } else {
       currentArticle.myVote = 0;
       currentArticle.isAuthor = Boolean(currentUser.id === (currentArticle.authorId || currentArticle.author_id));
+      currentArticle.hasSaved = false;
+      currentArticle.isSaved = false;
       syncArticleVoteCapsules(currentArticle);
+      syncBookmarkButtons(artId);
     }
 
     // Re-fetch personalized article state
@@ -5515,10 +5601,12 @@
       const serverSaved = Boolean(article.hasSaved || article.isSaved);
       currentArticle.hasSaved = serverSaved;
       currentArticle.isSaved = serverSaved;
-      if (serverSaved && !isBookmarked(article.id)) {
+      if (currentUser && serverSaved) {
         const bms = getBookmarks();
-        bms.push(article.id);
-        try { localStorage.setItem('sc_bookmarks', JSON.stringify(bms)); } catch (e) {}
+        if (bms.indexOf(article.id) === -1) {
+          bms.push(article.id);
+          saveBookmarks(bms);
+        }
       }
     }
     syncBookmarkButtons(article.id);
