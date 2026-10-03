@@ -454,6 +454,7 @@
     updateQuestionStatusPillsUI();
     renderActiveChips();
     updateFilterBadge();
+    ensureToolbarPlacement();
   }
 
   const SORT_LABELS = {
@@ -1224,6 +1225,61 @@
     }
   }
 
+  function ensureToolbarPlacement() {
+    const toolbar = document.getElementById('feedStreamToolbar');
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
+    const chipsBar = document.getElementById('feedActiveChipsBar') || document.getElementById('filterSelectedChipsBar');
+    const searchInput = document.getElementById('feedSearchInput');
+
+    const isBlogsPosts = (state.tab === 'companies' && (!state.companiesSubtab || state.companiesSubtab === 'posts') && !state.activeCompanyId);
+
+    if (isBlogsPosts) {
+      const slot = document.getElementById('blogsPostsToolbarSlot');
+      const postsView = document.getElementById('blogsPostsView');
+      const compGrid = document.getElementById('companiesArticlesGrid');
+
+      if (slot) {
+        if (toolbar && toolbar.parentElement !== slot) slot.appendChild(toolbar);
+        if (drawerWrap && drawerWrap.parentElement !== slot) slot.appendChild(drawerWrap);
+        if (chipsBar && chipsBar.parentElement !== slot) slot.appendChild(chipsBar);
+      } else if (postsView && compGrid) {
+        if (toolbar && toolbar.parentElement !== postsView) postsView.insertBefore(toolbar, compGrid);
+        if (drawerWrap && drawerWrap.parentElement !== postsView) postsView.insertBefore(drawerWrap, compGrid);
+        if (chipsBar && chipsBar.parentElement !== postsView) postsView.insertBefore(chipsBar, compGrid);
+      }
+
+      if (toolbar) toolbar.style.display = '';
+      if (searchInput) searchInput.placeholder = 'Поиск публикаций компаний...';
+    } else {
+      const mainCol = document.getElementById('feedMainColumn');
+      const articlesView = document.getElementById('feedArticlesView');
+
+      if (mainCol && articlesView) {
+        if (toolbar && toolbar.parentElement !== mainCol) mainCol.insertBefore(toolbar, articlesView);
+        if (drawerWrap && drawerWrap.parentElement !== mainCol) mainCol.insertBefore(drawerWrap, articlesView);
+        if (chipsBar && chipsBar.parentElement !== mainCol) mainCol.insertBefore(chipsBar, articlesView);
+      }
+
+      if (state.tab === 'companies' && (state.companiesSubtab === 'participants' || state.activeCompanyId)) {
+        if (toolbar) toolbar.style.display = 'none';
+      } else if (state.tab === 'directions') {
+        if (toolbar) toolbar.style.display = 'none';
+      }
+
+      if (searchInput && searchInput.placeholder === 'Поиск публикаций компаний...') {
+        if (state.tab === 'questions') {
+          searchInput.placeholder = 'Поиск по вопросам и ответам...';
+        } else {
+          searchInput.placeholder = 'Поиск по ленте...';
+        }
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.ensureToolbarPlacement = ensureToolbarPlacement;
+  }
+
   function switchTab(tabName) {
     if (tabName === 'my') tabName = 'subscriptions';
     if (tabName === 'focus') tabName = 'all';
@@ -1276,17 +1332,14 @@
       document.body.classList.add('is-directions-tab');
     } else if (tabName === 'companies') {
       document.body.classList.remove('is-directions-tab');
-      if (state.activeCompanyId || state.companiesSubtab === 'participants') {
-        if (streamToolbar) streamToolbar.style.display = 'none';
-      } else {
-        if (streamToolbar) streamToolbar.style.display = '';
-        if (searchInput) searchInput.placeholder = 'Поиск публикаций компаний...';
-      }
+      if (topicsWidget) topicsWidget.style.display = '';
     } else {
       if (streamToolbar) streamToolbar.style.display = '';
       if (topicsWidget) topicsWidget.style.display = '';
       document.body.classList.remove('is-directions-tab');
     }
+
+    ensureToolbarPlacement();
 
     updateSubnavTabsUI();
 
@@ -5643,6 +5696,7 @@
     if (subtab === 'catalog') subtab = 'participants';
     state.companiesSubtab = subtab || 'posts';
     state.previousBlogsSubtab = state.companiesSubtab;
+    ensureToolbarPlacement();
 
     const btnPosts = document.getElementById('btnCompaniesTabPosts');
     const btnParticipants = document.getElementById('btnCompaniesTabParticipants');
@@ -5843,6 +5897,7 @@
   function openCompanyDetail(companyId) {
     state.activeCompanyId = companyId;
     state.tab = 'companies';
+    ensureToolbarPlacement();
     syncURL(false);
     updateSubnavTabsUI();
 

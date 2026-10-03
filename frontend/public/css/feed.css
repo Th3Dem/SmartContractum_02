@@ -4458,17 +4458,21 @@ button.author-name:focus-visible,
   border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
-/* Corporate Blogs (Issues #147 & #148) */
+/* Corporate Blogs (Issues #147 & #148 & #150) */
+.companies-feed-view {
+  gap: 0;
+}
+
 .blogs-view-header {
-  min-height: 80px;
-  max-height: 120px;
+  min-height: auto;
+  padding: 4px 0 8px 0;
+  margin-bottom: 8px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
 }
 
 .blogs-title-wrap {
@@ -4504,8 +4508,16 @@ button.author-name:focus-visible,
   display: flex;
   gap: 8px;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
-  margin-bottom: 16px;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+.blogs-posts-toolbar-slot {
+  width: 100%;
+}
+
+.blogs-posts-view .feed-stream-toolbar {
+  margin-bottom: 12px;
 }
 
 .blogs-subtab-btn {
@@ -4575,8 +4587,8 @@ button.author-name:focus-visible,
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   margin-bottom: 6px;
+  text-align: left;
 }
 
 .card-corporate-header {
@@ -4584,7 +4596,7 @@ button.author-name:focus-visible,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .company-card-info {
@@ -4594,6 +4606,8 @@ button.author-name:focus-visible,
   cursor: pointer;
   text-decoration: none;
   user-select: none;
+  min-width: 0;
+  text-align: left;
 }
 
 .company-card-info:hover .company-card-name {
@@ -4619,6 +4633,14 @@ button.author-name:focus-visible,
   display: block;
 }
 
+.company-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
 .company-card-title-group {
   display: inline-flex;
   align-items: center;
@@ -4633,6 +4655,16 @@ button.author-name:focus-visible,
   transition: color var(--transition-fast);
 }
 
+.company-card-submeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
 .card-corporate-badge {
   font-size: 0.72rem;
   font-weight: 500;
@@ -4643,10 +4675,50 @@ button.author-name:focus-visible,
   letter-spacing: 0.02em;
 }
 
-.btn-card-company-sub {
-  height: 30px;
-  padding: 0 12px;
+.card-corporate-marker {
+  background: none;
+  padding: 0;
+  color: var(--text-muted);
   font-size: 0.8rem;
+  font-weight: 400;
+  border: none;
+}
+
+.card-secondary-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.card-secondary-author-label {
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.card-secondary-author .author-name {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.card-secondary-author .author-name:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
+
+.btn-card-company-sub {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.78rem;
   font-weight: 600;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -4654,6 +4726,8 @@ button.author-name:focus-visible,
   color: var(--text-primary);
   cursor: pointer;
   transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-card-company-sub:hover {
@@ -4665,16 +4739,6 @@ button.author-name:focus-visible,
   background: rgba(56, 189, 248, 0.15);
   border-color: var(--accent-color);
   color: var(--accent-color);
-}
-
-.card-secondary-author {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.card-secondary-author-label {
-  color: var(--text-muted);
-  margin-right: 2px;
 }
 
 /* Participants View: Single-column vertical list */

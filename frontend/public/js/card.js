@@ -196,25 +196,31 @@
             (isCompanySubscribed ? 'Вы подписаны' : 'Подписаться') +
           '</button>';
 
+      const authorProfileBtn = isPreview
+        ? ('<span class="author-name">' + escapeHtml(authorName) + '</span>')
+        : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>');
+
       authorHtml =
         '<div class="card-meta card-corporate-meta">' +
           '<div class="card-corporate-header">' +
             '<div class="company-card-info" data-company-id="' + escapeHtml(compId) + '" role="button" tabindex="0" title="Открыть блог компании ' + escapeHtml(compName) + '">' +
               compAvatarHtml +
-              '<div class="company-card-title-group">' +
-                '<span class="company-card-name">' + escapeHtml(compName) + '</span>' +
-                verifiedIcon +
-                '<span class="card-corporate-badge">Блог компании</span>' +
+              '<div class="company-card-details">' +
+                '<div class="company-card-title-group">' +
+                  '<span class="company-card-name">' + escapeHtml(compName) + '</span>' +
+                  verifiedIcon +
+                '</div>' +
+                '<div class="company-card-submeta">' +
+                  '<span class="card-corporate-badge card-corporate-marker">Блог компании</span>' +
+                  '<span class="meta-dot">·</span>' +
+                  '<span class="card-secondary-author">' +
+                    '<span class="card-secondary-author-label">Автор:</span> ' +
+                    authorProfileBtn +
+                  '</span>' +
+                '</div>' +
               '</div>' +
             '</div>' +
             subBtnHtml +
-          '</div>' +
-          '<div class="card-secondary-author">' +
-            '<span class="card-secondary-author-label">Автор:</span> ' +
-            (isPreview
-              ? ('<span class="author-name">' + escapeHtml(authorName) + '</span>')
-              : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>')
-            ) +
           '</div>' +
         '</div>';
     } else {
@@ -634,6 +640,7 @@
       const compInfoEl = card.querySelector('.company-card-info');
       if (compInfoEl) {
         compInfoEl.addEventListener('click', function (e) {
+          if (e.target.closest('.btn-author-profile') || e.target.closest('.btn-card-company-sub')) return;
           e.preventDefault();
           e.stopPropagation();
           const cid = compInfoEl.getAttribute('data-company-id');
@@ -645,6 +652,7 @@
         });
         compInfoEl.addEventListener('keydown', function (e) {
           if (e.key === 'Enter' || e.key === ' ') {
+            if (e.target.closest('.btn-author-profile') || e.target.closest('.btn-card-company-sub')) return;
             e.preventDefault();
             e.stopPropagation();
             const cid = compInfoEl.getAttribute('data-company-id');
