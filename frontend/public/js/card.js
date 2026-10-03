@@ -371,7 +371,13 @@
         '</button>';
     }
 
-    const isReported = typeof options.isReported === 'function' ? options.isReported(item.id) : Boolean(options.isReported);
+    const isReported = typeof options.isReported === 'function'
+      ? options.isReported(item.id, item)
+      : (options.isReported !== undefined
+          ? Boolean(options.isReported)
+          : (item && (item.hasReported !== undefined || item.isReported !== undefined)
+              ? Boolean(item.hasReported || item.isReported)
+              : false));
     let reportHtml = '';
     if (!isAuthor) {
       const reportTooltip = isReported ? 'Жалоба уже отправлена' : 'Пожаловаться';
@@ -772,6 +778,19 @@
     return avatarDiv;
   }
 
+  function updateReportButtonState(btn, isReported) {
+    if (!btn) return;
+    const reported = Boolean(isReported);
+    btn.classList.toggle('is-reported', reported);
+    const title = reported ? 'Жалоба уже отправлена' : 'Пожаловаться';
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    const svg = btn.querySelector('svg');
+    if (svg) {
+      svg.setAttribute('fill', reported ? 'currentColor' : 'none');
+    }
+  }
+
   window.SmartContractumCard = {
     escapeHtml: escapeHtml,
     cleanString: cleanString,
@@ -785,6 +804,7 @@
     getStoredBookmarks: getStoredBookmarks,
     isCardBookmarked: isCardBookmarked,
     updateBookmarkButtonState: updateBookmarkButtonState,
+    updateReportButtonState: updateReportButtonState,
     toggleCardBookmark: toggleCardBookmark,
     showCardToast: showCardToast
   };

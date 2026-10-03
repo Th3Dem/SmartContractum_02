@@ -877,13 +877,16 @@
     if (!commentId) return;
     window._reportedCommentIds = window._reportedCommentIds || new Set();
     window._reportedCommentIds.add(commentId);
-    try {
-      const stored = JSON.parse(localStorage.getItem('sc_comment_reports') || '[]');
-      if (!stored.includes(commentId)) {
-        stored.push(commentId);
-        localStorage.setItem('sc_comment_reports', JSON.stringify(stored));
-      }
-    } catch (e) {}
+    if (currentUser) {
+      try {
+        const userKey = 'sc_comment_reports_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (!stored.includes(commentId)) {
+          stored.push(commentId);
+          localStorage.setItem(userKey, JSON.stringify(stored));
+        }
+      } catch (e) {}
+    }
     const btns = document.querySelectorAll(
       '.btn-report-comment[data-comment-id="' + commentId + '"], ' +
       '.btn-report-answer[data-comment-id="' + commentId + '"]'
@@ -899,11 +902,16 @@
     });
   }
 
-  function isCommentReported(commentId) {
+  function isCommentReported(commentId, commentObj) {
     if (!commentId) return false;
+    if (!currentUser) return false;
+    if (commentObj && (commentObj.hasReported !== undefined || commentObj.isReported !== undefined)) {
+      return Boolean(commentObj.hasReported || commentObj.isReported);
+    }
     if (window._reportedCommentIds && window._reportedCommentIds.has(commentId)) return true;
     try {
-      const stored = JSON.parse(localStorage.getItem('sc_comment_reports') || '[]');
+      const userKey = 'sc_comment_reports_' + currentUser.id;
+      const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
       if (stored.includes(commentId)) {
         window._reportedCommentIds = window._reportedCommentIds || new Set();
         window._reportedCommentIds.add(commentId);
@@ -1087,12 +1095,17 @@
     modal.style.display = 'flex';
   }
 
-  // Article Report Logic (Issue #126)
+  // Article Report Logic (Issue #126, #133)
   function isArticleReported(articleId) {
     if (!articleId) return false;
+    if (!currentUser) return false;
+    if (currentArticle && (currentArticle.id === articleId || currentArticle.draftId === articleId) && (currentArticle.hasReported !== undefined || currentArticle.isReported !== undefined)) {
+      return Boolean(currentArticle.hasReported || currentArticle.isReported);
+    }
     if (window._reportedArticleIds && window._reportedArticleIds.has(articleId)) return true;
     try {
-      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
+      const userKey = 'sc_reported_articles_' + currentUser.id;
+      const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
       if (stored.includes(articleId)) {
         window._reportedArticleIds = window._reportedArticleIds || new Set();
         window._reportedArticleIds.add(articleId);
@@ -1106,13 +1119,20 @@
     if (!articleId) return;
     window._reportedArticleIds = window._reportedArticleIds || new Set();
     window._reportedArticleIds.add(articleId);
-    try {
-      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
-      if (!stored.includes(articleId)) {
-        stored.push(articleId);
-        localStorage.setItem('sc_reported_articles', JSON.stringify(stored));
-      }
-    } catch (e) {}
+    if (currentArticle && (currentArticle.id === articleId || currentArticle.draftId === articleId)) {
+      currentArticle.hasReported = true;
+      currentArticle.isReported = true;
+    }
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_articles_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (!stored.includes(articleId)) {
+          stored.push(articleId);
+          localStorage.setItem(userKey, JSON.stringify(stored));
+        }
+      } catch (e) {}
+    }
     const btns = document.querySelectorAll(
       '#railBtnReport, #mobileBtnReport, .btn-rail-report, .btn-mobile-report, .btn-card-report[data-id="' + articleId + '"]'
     );
@@ -1129,9 +1149,19 @@
 
   function syncArticleReportStatus(articleId) {
     if (!articleId) return;
-    if (isArticleReported(articleId)) {
-      markArticleAsReported(articleId);
-    }
+    const reported = isArticleReported(articleId);
+    const btns = document.querySelectorAll(
+      '#railBtnReport, #mobileBtnReport, .btn-rail-report, .btn-mobile-report, .btn-card-report[data-id="' + articleId + '"]'
+    );
+    btns.forEach(function (btn) {
+      btn.classList.toggle('is-reported', reported);
+      btn.setAttribute('title', reported ? 'Жалоба уже отправлена' : 'Пожаловаться');
+      btn.setAttribute('aria-label', reported ? 'Жалоба уже отправлена' : 'Пожаловаться');
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', reported ? 'currentColor' : 'none');
+      }
+    });
   }
 
   function isCurrentArticleAuthor() {
@@ -1566,7 +1596,12 @@
     if (!currentArticle) return;
     const artId = currentArticle.id;
 
-    // Immediately clear personalized vote and bookmark state in currentArticle so old state does not flash
+    // Immediately clear personalized vote, bookmark, and report state in currentArticle so old state does not flash
+    window._reportedArticleIds = new Set();
+    window._reportedCommentIds = new Set();
+    currentArticle.hasReported = false;
+    currentArticle.isReported = false;
+    syncArticleReportStatus(artId);
     if (!currentUser) {
       currentArticle.myVote = 0;
       currentArticle.canVote = false;
@@ -1605,6 +1640,15 @@
             currentArticle.isSaved = currentArticle.hasSaved;
           }
           syncBookmarkButtons(artId);
+          if (fresh.hasReported !== undefined || fresh.isReported !== undefined) {
+            currentArticle.hasReported = Boolean(fresh.hasReported || fresh.isReported);
+            currentArticle.isReported = currentArticle.hasReported;
+            if (currentArticle.hasReported) {
+              window._reportedArticleIds = window._reportedArticleIds || new Set();
+              window._reportedArticleIds.add(artId);
+            }
+          }
+          syncArticleReportStatus(artId);
           if (currentUser) {
             syncLocalBookmarksWithServer();
           }
@@ -2388,7 +2432,7 @@
 
       let reportBtnHtml = '';
       if (!isMyComment) {
-        const isReported = isCommentReported(comment.id);
+        const isReported = isCommentReported(comment.id, comment);
         reportBtnHtml =
           '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -3289,7 +3333,7 @@
 
     let reportBtnHtml = '';
     if (!isMyAnswer) {
-      const isReported = isCommentReported(comment.id);
+      const isReported = isCommentReported(comment.id, comment);
       reportBtnHtml =
         '<button type="button" class="btn-comment-action btn-report-answer' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="Пожаловаться" data-comment-id="' + escapeHtml(comment.id) + '">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +

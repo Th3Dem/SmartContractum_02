@@ -2253,14 +2253,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.rstrip("/").startswith("/api/comments/") and path.rstrip("/").endswith("/subscribe"):
             comm_id = path.rstrip("/")[len("/api/comments/"): -len("/subscribe")].strip("/")
             self.handle_comment_subscribe_toggle(comm_id)
-        elif path.startswith("/api/articles/") and not "/comments/" in path and path.rstrip("/").endswith("/report"):
-            art_id = path.rstrip("/")[len("/api/articles/"): -len("/report")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and not "/comments/" in path and path.rstrip("/").endswith("/report"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path.rstrip("/")[len(prefix): -len("/report")].strip("/")
             self.handle_article_report(art_id)
-        elif path.startswith("/api/articles/") and path.endswith("/vote"):
-            art_id = path[len("/api/articles/"): -len("/vote")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/vote"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path[len(prefix): -len("/vote")].strip("/")
             self.handle_article_vote(art_id)
-        elif path.startswith("/api/articles/") and path.endswith("/comments"):
-            art_id = path[len("/api/articles/"): -len("/comments")].strip("/")
+        elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/comments"):
+            prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
+            art_id = path[len(prefix): -len("/comments")].strip("/")
             self.handle_post_article_comment(art_id)
         elif path == "/api/comments":
             self.handle_post_article_comment("")
@@ -4172,7 +4175,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         self.send_json_response(200, {
             "success": True,
-            "message": "Жалоба отправлена"
+            "message": "Жалоба отправлена",
+            "hasReported": True,
+            "isReported": True
         })
 
     def handle_article_report(self, article_id: str):
@@ -4291,7 +4296,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         self.send_json_response(200, {
             "success": True,
-            "message": "Жалоба отправлена"
+            "message": "Жалоба отправлена",
+            "hasReported": True,
+            "isReported": True
         })
 
     def handle_comment_subscribe_toggle(self, comment_id: str):
@@ -4449,6 +4456,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             all_comm_ids = [r["id"] for r in rows]
             comment_scores = {}
             user_comment_votes = {}
+            user_comment_reports = set()
             if all_comm_ids:
                 for i in range(0, len(all_comm_ids), 500):
                     chunk = all_comm_ids[i:i+500]
@@ -4467,6 +4475,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         )
                         for cr in cur.fetchall():
                             user_comment_votes[cr["comment_id"]] = cr["value"]
+
+                        cur.execute(
+                            f"SELECT comment_id FROM comment_reports WHERE user_id = ? AND comment_id IN ({placeholders})",
+                            (curr_user_id, *chunk)
+                        )
+                        for cr in cur.fetchall():
+                            user_comment_reports.add(cr["comment_id"])
 
         row_map = {r["id"]: r for r in rows}
         published_rows = [r for r in rows if r["status"] == "published"]
@@ -4536,7 +4551,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "score": comm_score,
                     "myVote": comm_my_vote,
                     "canVote": False,
-                    "isAuthor": False
+                    "isAuthor": False,
+                    "hasReported": (r["id"] in user_comment_reports),
+                    "isReported": (r["id"] in user_comment_reports)
                 }
             else:
                 dto = {
@@ -4558,7 +4575,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "score": comm_score,
                     "myVote": comm_my_vote,
                     "canVote": comm_can_vote,
-                    "isAuthor": comm_is_author
+                    "isAuthor": comm_is_author,
+                    "hasReported": (r["id"] in user_comment_reports),
+                    "isReported": (r["id"] in user_comment_reports)
                 }
 
             if ctype == "answer":
@@ -5783,6 +5802,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         has_solution = False
         has_liked = False
         has_saved = False
+        has_reported = False
         score = 0
         my_vote = 0
         can_vote = False
@@ -5813,6 +5833,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 has_liked = cur.fetchone() is not None
                 cur.execute("SELECT 1 FROM article_saves WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
                 has_saved = cur.fetchone() is not None
+                cur.execute(f"SELECT 1 FROM article_reports WHERE article_id IN ({placeholders}) AND user_id = ? LIMIT 1", (*target_ids, user["id"]))
+                has_reported = cur.fetchone() is not None
                 cur.execute("SELECT value FROM article_votes WHERE article_id = ? AND user_id = ?", (row["id"], user["id"]))
                 vote_row = cur.fetchone()
                 if vote_row:
@@ -5857,6 +5879,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "savesCount": saves_count,
             "hasSaved": has_saved,
             "isSaved": has_saved,
+            "hasReported": has_reported,
+            "isReported": has_reported,
             "score": score,
             "myVote": my_vote,
             "canVote": can_vote,
@@ -5877,6 +5901,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "savesCount": saves_count,
             "hasSaved": has_saved,
             "isSaved": has_saved,
+            "hasReported": has_reported,
+            "isReported": has_reported,
             "commentsCount": comments_count,
             "answersCount": answers_count,
             "discussionCount": discussion_count,
@@ -6146,6 +6172,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 current_user = self.get_current_user()
                 user_likes = set()
                 user_saves = set()
+                user_reports = set()
                 user_votes = {}
                 exc_authors = set()
                 exc_topics = set()
@@ -6157,6 +6184,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     user_likes = {r["article_id"] for r in cur.fetchall()}
                     cur.execute("SELECT article_id FROM article_saves WHERE user_id = ?", (current_user["id"],))
                     user_saves = {r["article_id"] for r in cur.fetchall()}
+                    cur.execute("SELECT article_id FROM article_reports WHERE user_id = ?", (current_user["id"],))
+                    user_reports = {r["article_id"] for r in cur.fetchall()}
                     cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (current_user["id"],))
                     user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
                     cur.execute("SELECT target_type, target_id FROM user_feed_exceptions WHERE user_id = ?", (current_user["id"],))
@@ -6424,6 +6453,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "savesCount": saves_counts.get(art_id, 0),
                 "hasSaved": art_id in user_saves,
                 "isSaved": art_id in user_saves,
+                "hasReported": (art_id in user_reports or (draft_id and draft_id in user_reports)),
+                "isReported": (art_id in user_reports or (draft_id and draft_id in user_reports)),
                 "score": article_scores.get(art_id, 0),
                 "myVote": user_votes.get(art_id, 0),
                 "canVote": bool(current_user and row["status"] == "approved" and row["author_id"] != current_user["id"]),

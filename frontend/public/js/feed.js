@@ -488,6 +488,7 @@
   function setAuthState(user) {
     currentUser = user;
     window.currentUser = user;
+    window._reportedArticleIds = new Set();
     const personalElements = document.querySelectorAll('.personal-tab');
     personalElements.forEach(function (el) {
       el.style.display = user ? 'inline-flex' : 'none';
@@ -4172,11 +4173,16 @@
   // --------------------------------------------------------------------------
   // Article Share Popover & Article Report Modal Logic
   // --------------------------------------------------------------------------
-  function isArticleReported(articleId) {
+  function isArticleReported(articleId, item) {
     if (!articleId) return false;
+    if (!currentUser) return false;
+    if (item && (item.hasReported !== undefined || item.isReported !== undefined)) {
+      return Boolean(item.hasReported || item.isReported);
+    }
     if (window._reportedArticleIds && window._reportedArticleIds.has(articleId)) return true;
     try {
-      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
+      const userKey = 'sc_reported_articles_' + currentUser.id;
+      const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
       if (stored.includes(articleId)) {
         window._reportedArticleIds = window._reportedArticleIds || new Set();
         window._reportedArticleIds.add(articleId);
@@ -4190,20 +4196,36 @@
     if (!articleId) return;
     window._reportedArticleIds = window._reportedArticleIds || new Set();
     window._reportedArticleIds.add(articleId);
-    try {
-      const stored = JSON.parse(localStorage.getItem('sc_reported_articles') || '[]');
-      if (!stored.includes(articleId)) {
-        stored.push(articleId);
-        localStorage.setItem('sc_reported_articles', JSON.stringify(stored));
-      }
-    } catch (e) {}
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_articles_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (!stored.includes(articleId)) {
+          stored.push(articleId);
+          localStorage.setItem(userKey, JSON.stringify(stored));
+        }
+      } catch (e) {}
+    }
+    if (Array.isArray(state.articles)) {
+      state.articles.forEach(function (a) {
+        if (a && (a.id === articleId || a.draftId === articleId)) {
+          a.hasReported = true;
+          a.isReported = true;
+        }
+      });
+    }
     const btns = document.querySelectorAll('.btn-card-report[data-id="' + articleId + '"]');
     btns.forEach(function (btn) {
-      btn.classList.add('is-reported');
-      btn.setAttribute('title', 'Жалоба уже отправлена');
-      const svg = btn.querySelector('svg');
-      if (svg) {
-        svg.setAttribute('fill', 'currentColor');
+      if (window.SmartContractumCard && typeof window.SmartContractumCard.updateReportButtonState === 'function') {
+        window.SmartContractumCard.updateReportButtonState(btn, true);
+      } else {
+        btn.classList.add('is-reported');
+        btn.setAttribute('title', 'Жалоба уже отправлена');
+        btn.setAttribute('aria-label', 'Жалоба уже отправлена');
+        const svg = btn.querySelector('svg');
+        if (svg) {
+          svg.setAttribute('fill', 'currentColor');
+        }
       }
     });
   }
