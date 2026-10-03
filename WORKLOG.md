@@ -689,6 +689,8 @@
 [2026-10-03 13:27] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #113 (Task: issue-113-cover-crop-focal-point)
 [2026-10-03 13:30] | dev_bot | IMPLEMENTATION_COMPLETE | Проверить реальное сохранение crop и focal point обложки публикации (Task: issue-113-cover-crop-focal-point)
 [2026-10-03 13:31] | git_bot | PR_CREATED | Открыт PR #122 для Issue #113 (Fixes #113), ветка feat/issue-113-cover-crop-focal-point (Task: issue-113-cover-crop-focal-point)
+[2026-10-03 13:33] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #122 готов к слиянию владельцем (Task: issue-113-cover-crop-focal-point)
+
 
 
 
