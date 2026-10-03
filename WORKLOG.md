@@ -703,6 +703,8 @@
 [2026-10-03 14:11] | pm_bot | TASK_INIT | Старт задачи Issue #126: Унифицировать hover/active states action-кнопок публикации и добавить Report в Article Rail (Task: issue-126-unify-action-hovers-and-article-report)
 [2026-10-03 14:11] | pm_bot | DEV_ASSIGN | Назначение реализации frontend на dev_bot для Issue #126 (Task: issue-126-unify-action-hovers-and-article-report)
 [2026-10-03 14:22] | dev_bot | IMPLEMENTATION_COMPLETE | Унифицировать hover/active states action-кнопок публикации и добавить Report в Article Rail (Task: issue-126-unify-action-hovers-and-article-report)
+[2026-10-03 14:23] | git_bot | PR_CREATED | Открыт PR #128 для Issue #126 (Fixes #126), ветка feat/issue-126-unify-action-hovers-and-article-report (Task: issue-126-unify-action-hovers-and-article-report)
+[2026-10-03 14:25] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #128 готов к слиянию владельцем (Task: issue-126-unify-action-hovers-and-article-report)
 
 
 
