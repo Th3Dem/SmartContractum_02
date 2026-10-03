@@ -4573,7 +4573,9 @@ button.author-name:focus-visible,
   width: 100%;
   display: flex;
   flex-direction: column;
-  margin-bottom: 6px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
   text-align: left;
 }
 
@@ -4720,14 +4722,14 @@ button.author-name:focus-visible,
 }
 
 .btn-card-company-sub {
-  height: 28px;
-  padding: 0 10px;
-  font-size: 0.78rem;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 0.8rem;
   font-weight: 600;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--accent-color);
   background: var(--bg-surface);
-  color: var(--text-primary);
+  color: var(--accent-color);
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
@@ -4735,14 +4737,42 @@ button.author-name:focus-visible,
 }
 
 .btn-card-company-sub:hover {
-  background: var(--bg-hover);
+  background: rgba(56, 189, 248, 0.1);
   border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+[data-theme="light"] .btn-card-company-sub:hover {
+  background: rgba(2, 132, 199, 0.08);
 }
 
 .btn-card-company-sub.is-subscribed {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(56, 189, 248, 0.16);
   border-color: var(--accent-color);
   color: var(--accent-color);
+}
+
+[data-theme="light"] .btn-card-company-sub.is-subscribed {
+  background: rgba(2, 132, 199, 0.12);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.btn-card-company-sub.is-subscribed:hover {
+  background: rgba(56, 189, 248, 0.22);
+}
+
+[data-theme="light"] .btn-card-company-sub.is-subscribed:hover {
+  background: rgba(2, 132, 199, 0.18);
+}
+
+.btn-card-company-sub:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.btn-card-company-sub:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
 }
 
 /* Participants View: Unified scan-friendly list surface */

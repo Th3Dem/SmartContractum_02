@@ -211,7 +211,7 @@ class TestIssue150BlogsPostsHierarchy(unittest.TestCase):
         self.assertNotEqual(sub_start, -1)
         sub_end = self.feed_css.find("}", sub_start)
         sub_css = self.feed_css[sub_start:sub_end]
-        self.assertIn("height: 28px;", sub_css)
+        self.assertTrue("height: 28px;" in sub_css or "height: 30px;" in sub_css)
 
     def test_07_standard_feed_card_unbroken(self):
         """

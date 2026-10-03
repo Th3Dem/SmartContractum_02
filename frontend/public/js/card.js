@@ -200,6 +200,15 @@
         ? ('<span class="author-name">' + escapeHtml(authorName) + '</span>')
         : ('<button type="button" class="author-name btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" data-user-name="' + escapeHtml(authorName) + '" title="Открыть профиль">' + escapeHtml(authorName) + '</button>');
 
+      const showSecondaryAuthor = Boolean(options.showSecondaryAuthor);
+      const secondaryAuthorHtml = showSecondaryAuthor
+        ? '<span class="meta-dot">·</span>' +
+          '<span class="card-secondary-author">' +
+            '<span class="card-secondary-author-label">Автор:</span> ' +
+            authorProfileBtn +
+          '</span>'
+        : '';
+
       authorHtml =
         '<div class="card-meta card-corporate-meta">' +
           '<div class="card-corporate-header">' +
@@ -212,11 +221,7 @@
                 '</div>' +
                 '<div class="company-card-submeta">' +
                   '<span class="card-corporate-badge card-corporate-marker">Блог компании</span>' +
-                  '<span class="meta-dot">·</span>' +
-                  '<span class="card-secondary-author">' +
-                    '<span class="card-secondary-author-label">Автор:</span> ' +
-                    authorProfileBtn +
-                  '</span>' +
+                  secondaryAuthorHtml +
                 '</div>' +
               '</div>' +
             '</div>' +
