@@ -2287,5 +2287,172 @@
   width: 100%;
 }
 
+/* Pinned Material Card (Issue #190) */
+.profile-pinned-section {
+  margin-bottom: 24px;
+}
+
+.profile-pinned-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.profile-pinned-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-color, #38bdf8);
+}
+
+.btn-profile-unpin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.76rem;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.btn-profile-unpin:hover,
+.btn-profile-unpin:focus-visible {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.profile-pinned-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 20px;
+  transition: border-color var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease);
+}
+
+.profile-pinned-card:hover {
+  border-color: var(--accent-color, #38bdf8);
+}
+
+.profile-pinned-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.profile-pinned-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-color, #38bdf8);
+}
+
+.profile-pinned-type-tag.solution {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.profile-pinned-rating {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--accent-color, #38bdf8);
+}
+
+.profile-pinned-title {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-primary);
+  text-decoration: none;
+  margin-bottom: 8px;
+  transition: color var(--transition-fast, 150ms ease);
+}
+
+.profile-pinned-title:hover,
+.profile-pinned-title:focus-visible {
+  color: var(--accent-color, #38bdf8);
+}
+
+.profile-pinned-snippet {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.profile-pinned-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.profile-pinned-unavailable-card {
+  padding: 16px 20px;
+  border: 1px dashed #f59e0b;
+  border-radius: var(--radius-lg, 12px);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.profile-pinned-unavailable-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f59e0b;
+  margin-bottom: 6px;
+}
+
+.profile-pinned-unavailable-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.btn-card-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.btn-card-pin:hover,
+.btn-card-pin:focus-visible {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.btn-card-pin.is-pinned {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+  font-weight: 600;
+}
+
+
 
 

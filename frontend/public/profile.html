@@ -339,6 +339,23 @@
                 <div class="profile-tab-panels" id="profileTabPanels">
                   <!-- 1. Overview Tab Panel -->
                   <div class="profile-tab-panel is-active" id="profileTabOverview" role="tabpanel" aria-labelledby="tabBtnOverview">
+                    <!-- Pinned Material Section («Закрепленный материал») -->
+                    <div class="profile-pinned-section" id="profilePinnedSection" style="display: none;">
+                      <div class="profile-pinned-header">
+                        <span class="profile-pinned-badge">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="17" x2="12" y2="22"></line>
+                            <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+                          </svg>
+                          <span>Закреплено автором</span>
+                        </span>
+                        <button type="button" class="btn-profile-unpin" id="btnProfileUnpin" style="display: none;" title="Открепить материал" aria-label="Открепить материал">
+                          Открепить
+                        </button>
+                      </div>
+                      <div class="profile-pinned-card" id="profilePinnedCard"></div>
+                    </div>
+
                     <!-- Top Contributions Section («Лучший вклад») -->
                     <div class="profile-top-contributions-section" id="profileTopContributionsSection" style="display: none;">
                       <h3 class="profile-subheading">
