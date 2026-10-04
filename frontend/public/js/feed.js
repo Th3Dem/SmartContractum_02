@@ -7096,13 +7096,8 @@
         allUnansweredLink._boundClick = true;
         allUnansweredLink.addEventListener('click', function (e) {
           e.preventDefault();
-          state.tab = 'questions';
           state.questionStatus = 'unanswered';
-          state.offset = 0;
-          updateSubnavTabsUI();
-          updateQuestionStatusPillsUI();
-          syncURL(false);
-          fetchFeed(true);
+          switchTab('questions');
         });
       }
     }

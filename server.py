@@ -7520,7 +7520,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             self.send_json_response(200, {
                 "success": True,
-                "questions": questions
+                "questions": questions,
+                "items": questions
             })
         finally:
             conn.close()
