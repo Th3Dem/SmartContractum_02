@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -19,13 +20,19 @@ FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 
 class TestIssue138TopicsCatalog(unittest.TestCase):
     """
-    Targeted tests for Issue #138:
+    Targeted tests for Issue #138 and Issue #149:
     - Topics catalog view based on existing directions infrastructure
     - All 13 topics returned by /api/directions with Russian titles and descriptions
     - 13 distinct thematic SVG icons without emojis or external CDN links
-    - 'К публикациям' button switching to feed with topic filter active
+    - Single-column list layout (no repeat(2, 1fr))
+    - Compact topic rows with icon, title, description, metadata, and subscribe button
+    - No separate 'К публикациям' button
+    - Row click navigation to filtered feed with topic filter active
     - Sidebar 'Все темы' button navigating directly to directions tab
+    - Dedicated search input with placeholder 'Поиск по темам'
+    - Duplicate sidebar widget and feed stream toolbar hidden when directions tab is active
     - Zero technical slugs displayed in topic card titles
+    - Zero emojis and zero em dashes
     """
 
     @classmethod
@@ -99,20 +106,24 @@ class TestIssue138TopicsCatalog(unittest.TestCase):
         self.assertTrue(any("рубль" in d["title"].lower() or "рубл" in d["description"].lower() for d in directions))
 
     def test_03_html_topics_view_structure(self):
-        """Verify HTML elements for Topics catalog view."""
+        """Verify HTML elements for Topics catalog view per Issue #149."""
         feed_html_path = os.path.join(FRONTEND_DIR, "feed.html")
         with open(feed_html_path, "r", encoding="utf-8") as f:
             html = f.read()
 
+        # Both new and backward-compatible IDs are supported
+        self.assertIn('id="directionsFeedView"', html)
         self.assertIn('id="directionsView"', html)
         self.assertIn("Темы", html)
-        self.assertIn("Каталог тем и специализаций платформы SmartContractum", html)
+        self.assertIn("Каталог тем и специализаций SmartContractum", html)
         self.assertIn('id="directionsSearchInput"', html)
+        self.assertIn('placeholder="Поиск по темам"', html)
+        self.assertIn('id="directionsCatalogGrid"', html)
         self.assertIn('id="directionsGrid"', html)
         self.assertIn('id="btnShowAllTopics"', html)
 
     def test_04_js_svg_icons_and_navigation(self):
-        """Verify 13 SVG icons, 'К публикациям' button, and sidebar navigation."""
+        """Verify 13 SVG icons, compact row click navigation, and absence of legacy button."""
         feed_js_path = os.path.join(FRONTEND_DIR, "js", "feed.js")
         with open(feed_js_path, "r", encoding="utf-8") as f:
             js = f.read()
@@ -124,16 +135,102 @@ class TestIssue138TopicsCatalog(unittest.TestCase):
         self.assertIn("information-security", js)
         self.assertIn("digital-ruble-payments", js)
 
-        # Check button label
-        self.assertIn("К публикациям", js)
+        # Legacy button removed completely per Issue #149
+        self.assertNotIn("К публикациям", js)
 
-        # Check sidebar button navigation to directions tab
+        # Row click navigation to filtered feed with topic filter active
+        self.assertIn("state.filters.topics = [dir.id]", js)
+        self.assertIn("switchTab('all')", js)
+
+        # Sidebar button navigation to directions tab
         self.assertIn("switchTab('directions')", js)
 
-        # Ensure no emojis in SVG icons or topic descriptions
-        import re
+        # Sorting: articlesCount descending, then alphabetical by title in Russian
+        self.assertIn("localeCompare", js)
+
+        # Real-time search input binding
+        self.assertIn("directionsSearchInput", js)
+
+        # Ensure no emojis in JS
         emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
         self.assertEqual(len(emoji_pattern.findall(js)), 0)
+
+    def test_05_css_single_column_layout_and_compact_rows(self):
+        """Verify single-column flex list layout and compact row dimensions."""
+        feed_css_path = os.path.join(FRONTEND_DIR, "css", "feed.css")
+        with open(feed_css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+
+        # Single-column vertical list: no repeat(2, 1fr) for directions
+        self.assertNotIn("repeat(2, 1fr)", css)
+        self.assertIn(".directions-catalog-grid", css)
+        self.assertIn("flex-direction: column", css)
+        self.assertIn("gap: 8px", css)
+
+        # Compact row styling with 72-100px desktop height target
+        self.assertIn(".direction-catalog-card", css)
+        self.assertIn("min-height: 72px", css)
+        self.assertIn("max-height: 100px", css)
+        self.assertIn("padding: 12px 16px", css)
+
+        # Legacy separate button styles removed
+        self.assertNotIn(".btn-direction-feed", css)
+
+    def test_06_sidebar_and_toolbar_hidden_on_directions_tab(self):
+        """Verify feedStreamToolbar and duplicate widget-topics-card are hidden on directions tab."""
+        feed_js_path = os.path.join(FRONTEND_DIR, "js", "feed.js")
+        with open(feed_js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+
+        feed_css_path = os.path.join(FRONTEND_DIR, "css", "feed.css")
+        with open(feed_css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+
+        # In JS: streamToolbar and widget-topics-card hidden when tabName === 'directions'
+        self.assertIn("feedStreamToolbar", js)
+        self.assertIn("widget-topics-card", js)
+        self.assertIn("is-directions-tab", js)
+
+        # In CSS: deduplication rules
+        self.assertIn("body.is-directions-tab #feedStreamToolbar", css)
+        self.assertIn("body.is-directions-tab .widget-topics-card", css)
+
+    def test_07_zero_emojis_and_zero_em_dashes(self):
+        """Verify strict adherence to zero emojis and zero em dashes invariants."""
+        test_file_path = __file__
+        with open(test_file_path, "r", encoding="utf-8") as f:
+            test_content = f.read()
+
+        feed_css_path = os.path.join(FRONTEND_DIR, "css", "feed.css")
+        with open(feed_css_path, "r", encoding="utf-8") as f:
+            css_content = f.read()
+
+        feed_html_path = os.path.join(FRONTEND_DIR, "feed.html")
+        with open(feed_html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
+
+        # Zero emojis
+        self.assertEqual(len(emoji_pattern.findall(test_content)), 0)
+        self.assertEqual(len(emoji_pattern.findall(css_content)), 0)
+
+        # Zero em dashes (code point 8212)
+        em_dash = chr(8212)
+
+        # Verify no em dash in test file itself
+        self.assertNotIn(em_dash, test_content)
+
+        # Verify no em dash in newly added directions CSS section
+        directions_css_marker = "Topics / Directions Compact Catalog View (Issue #149)"
+        self.assertIn(directions_css_marker, css_content)
+        directions_css_part = css_content[css_content.index(directions_css_marker):]
+        self.assertNotIn(em_dash, directions_css_part)
+
+        # Verify no em dash in directions HTML section
+        dir_start = html_content.index('id="directionsFeedView"')
+        dir_end = html_content.index('</section>', dir_start)
+        self.assertNotIn(em_dash, html_content[dir_start:dir_end])
 
 
 if __name__ == "__main__":

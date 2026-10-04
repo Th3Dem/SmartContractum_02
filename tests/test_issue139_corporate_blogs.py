@@ -111,18 +111,19 @@ class TestIssue139CorporateBlogs(unittest.TestCase):
         self.assertEqual(comp.get("ownerId"), self.user["id"])
 
     def test_03_html_companies_view_blogs_branding(self):
-        """Verify HTML elements for Corporate Blogs section."""
+        """Verify HTML elements for Corporate Blogs section (Issues #147 & #148)."""
         feed_html_path = os.path.join(FRONTEND_DIR, "feed.html")
         with open(feed_html_path, "r", encoding="utf-8") as f:
             html = f.read()
 
         self.assertIn('id="companiesView"', html)
         self.assertIn("Блоги компаний", html)
-        self.assertIn("Публикации компаний, команд и технологических организаций сообщества", html)
+        self.assertIn("Публикации компаний, команд и технологических организаций SmartContractum.", html)
         self.assertIn("Создать блог компании", html)
-        self.assertIn('id="btnCompaniesTabCatalog"', html)
-        self.assertIn('id="btnCompaniesTabArticles"', html)
-        self.assertIn("Назад ко всем блогам", html)
+        self.assertIn('id="btnCompaniesTabPosts"', html)
+        self.assertIn('id="btnCompaniesTabParticipants"', html)
+        self.assertIn("Назад к блогам", html)
+        self.assertIn("Поиск участников по названию или специализации", html)
 
     def test_04_js_url_routing_and_titles(self):
         """Verify feed.js maps tab=blogs to companies view and updates document title."""
@@ -134,11 +135,82 @@ class TestIssue139CorporateBlogs(unittest.TestCase):
         self.assertIn("tabParam === 'blogs'", js)
         self.assertIn("state.tab = 'companies'", js)
 
+        # Check view=posts / view=participants subtab parsing
+        self.assertIn("state.companiesSubtab = 'posts'", js)
+        self.assertIn("state.companiesSubtab = 'participants'", js)
+
         # Check title mapping
         self.assertIn("companies: 'Блоги", js)
 
-        # Check cards empty state
+        # Check empty states
         self.assertIn("Блоги компаний не найдены", js)
+        self.assertIn("Пока нет публикаций от технологических компаний.", js)
+
+    def test_05_corporate_card_identity_and_delegation(self):
+        """Verify card.js renders corporate posts with company as primary identity and secondary author."""
+        card_js_path = os.path.join(FRONTEND_DIR, "js", "card.js")
+        with open(card_js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+
+        # Primary identity elements
+        self.assertIn("card-corporate-meta", js)
+        self.assertIn("card-corporate-header", js)
+        self.assertIn("company-card-info", js)
+        self.assertIn("company-card-logo", js)
+        self.assertIn("card-corporate-badge", js)
+        self.assertIn("Блог компании", js)
+        self.assertIn("btn-card-company-sub", js)
+
+        # Secondary author
+        self.assertIn("card-secondary-author", js)
+        self.assertIn("Автор:", js)
+
+        # Interaction handlers
+        self.assertIn("options.onCompanyClick", js)
+        self.assertIn("options.onCompanySubscribeToggle", js)
+
+    def test_06_company_detail_page_and_empty_state(self):
+        """Verify feed.js implements company blog detail header, articles feed, and CTA."""
+        feed_js_path = os.path.join(FRONTEND_DIR, "js", "feed.js")
+        with open(feed_js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+
+        self.assertIn("renderCompanyDetailCard", js)
+        self.assertIn("company-profile-header", js)
+        self.assertIn("btnCompanyDetailSubscribe", js)
+        self.assertIn("Написать публикацию", js)
+        self.assertIn("loadCompanyArticles", js)
+        self.assertIn("У этого блога пока нет публикаций", js)
+
+    def test_07_invariants_no_emojis_no_em_dashes(self):
+        """Invariant: Zero emojis and zero em dashes in corporate blogs modified files."""
+        import re
+        em_dash = chr(8212)
+        emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
+
+        # Check feed.html corporate blogs section
+        feed_html_path = os.path.join(FRONTEND_DIR, "feed.html")
+        with open(feed_html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        start = html.index('id="companiesView"')
+        end = html.index('id="directionsFeedView"')
+        blogs_slice = html[start:end]
+        self.assertNotIn(em_dash, blogs_slice, "Corporate blogs HTML must not contain em dashes")
+        self.assertEqual(len(emoji_pattern.findall(blogs_slice)), 0, "Corporate blogs HTML must not contain emojis")
+
+        # Check card.js
+        card_js_path = os.path.join(FRONTEND_DIR, "js", "card.js")
+        with open(card_js_path, "r", encoding="utf-8") as f:
+            card_js = f.read()
+        self.assertNotIn(em_dash, card_js, "card.js must not contain em dashes")
+        self.assertEqual(len(emoji_pattern.findall(card_js)), 0, "card.js must not contain emojis")
+
+        # Check feed.css
+        feed_css_path = os.path.join(FRONTEND_DIR, "css", "feed.css")
+        with open(feed_css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+        self.assertNotIn(em_dash, css, "feed.css must not contain em dashes")
+        self.assertEqual(len(emoji_pattern.findall(css)), 0, "feed.css must not contain emojis")
 
 
 if __name__ == "__main__":

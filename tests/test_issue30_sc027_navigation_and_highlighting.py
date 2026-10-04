@@ -397,8 +397,8 @@ class TestIssue30NavigationAndHighlightingBackend(unittest.TestCase):
         self.assertEqual(res_get_art.get("answersCount"), 2)
         self.assertEqual(res_get_art.get("discussionCount"), 6)
 
-        # 10. Check GET /api/articles
-        st_list, res_list = self._get_json("/api/articles?tab=all")
+        # 10. Check GET /api/articles (isolated tab=questions per Issue #162)
+        st_list, res_list = self._get_json("/api/articles?tab=questions")
         self.assertEqual(st_list, 200)
         articles = res_list.get("articles", [])
         matched = next((a for a in articles if a["id"] == art_id), None)
@@ -484,8 +484,8 @@ class TestIssue30NavigationAndHighlightingBackend(unittest.TestCase):
         self.assertEqual(art_dto.get("answersCount"), 1)
         self.assertEqual(art_dto.get("discussionCount"), 2)
 
-        # Verify GET /api/articles
-        st_list, res_list = self._get_json("/api/articles?tab=all")
+        # Verify GET /api/articles (isolated tab=questions per Issue #162)
+        st_list, res_list = self._get_json("/api/articles?tab=questions")
         self.assertEqual(st_list, 200)
         matched = next(
             (a for a in res_list.get("articles", []) if a["id"] == art_id), None
@@ -539,33 +539,32 @@ class TestIssue30NavigationAndHighlightingBackend(unittest.TestCase):
         )
         self.assertEqual(st2, 201)
 
-        # Check list sorted by discussed
-        st_sort, res_sort = self._get_json("/api/articles?sort=discussed")
-        self.assertEqual(st_sort, 200)
-        items = res_sort.get("articles", [])
-        ids = [it["id"] for it in items]
+        # Check list sorted by discussed within questions entity (Issue #162)
+        st_sort_q, res_sort_q = self._get_json("/api/articles?tab=questions&sort=discussed")
+        self.assertEqual(st_sort_q, 200)
+        items_q = res_sort_q.get("articles", [])
+        ids_q = [it["id"] for it in items_q]
 
         # quest_mixed_01 has discussionCount = 6
         # quest_del_01 has discussionCount = 3
-        # art_sort_01 has discussionCount = 2
-        self.assertIn("quest_mixed_01", ids)
-        self.assertIn("quest_del_01", ids)
-        self.assertIn("art_sort_01", ids)
+        self.assertIn("quest_mixed_01", ids_q)
+        self.assertIn("quest_del_01", ids_q)
 
-        idx_mix = ids.index("quest_mixed_01")
-        idx_del = ids.index("quest_del_01")
-        idx_sort = ids.index("art_sort_01")
+        idx_mix = ids_q.index("quest_mixed_01")
+        idx_del = ids_q.index("quest_del_01")
 
         self.assertLess(
             idx_mix,
             idx_del,
             "quest_mixed_01 (discussionCount=6) must precede quest_del_01 (discussionCount=3)",
         )
-        self.assertLess(
-            idx_del,
-            idx_sort,
-            "quest_del_01 (discussionCount=3) must precede art_sort_01 (discussionCount=2)",
-        )
+
+        # Check list sorted by discussed within publications entity (Issue #162)
+        st_sort_pub, res_sort_pub = self._get_json("/api/articles?tab=all&sort=discussed")
+        self.assertEqual(st_sort_pub, 200)
+        items_pub = res_sort_pub.get("articles", [])
+        ids_pub = [it["id"] for it in items_pub]
+        self.assertIn("art_sort_01", ids_pub)
 
 
 class TestIssue30NavigationAndHighlightingFrontend(unittest.TestCase):

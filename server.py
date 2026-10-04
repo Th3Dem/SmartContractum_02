@@ -3076,6 +3076,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed_url.query)
         search_query = (query.get("search", [""])[0] or "").strip().lower()
         direction_filter = (query.get("direction", [""])[0] or query.get("topic", [""])[0] or "").strip()
+        topics_filter_raw = (query.get("topics", [""])[0] or "").strip()
+        topics_list = [t.strip() for t in topics_filter_raw.split(",") if t.strip()] if topics_filter_raw else []
+        if direction_filter and direction_filter != "all" and direction_filter not in topics_list:
+            topics_list.append(direction_filter)
+
+        sort_param = (query.get("sort", ["popular"])[0] or "popular").strip().lower()
         manageable_param = (query.get("manageable", ["0"])[0] or "").strip().lower()
         mine_param = (query.get("mine", ["0"])[0] or "").strip().lower()
         only_manageable = manageable_param in ("1", "true", "yes") or mine_param in ("1", "true", "yes")
@@ -3096,7 +3102,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur.execute("SELECT * FROM companies ORDER BY created_at ASC")
             comp_rows = cur.fetchall()
 
-            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            cur.execute("SELECT id, draft_id, publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            comp_canonical_articles = {}
             article_counts = {}
             for r in cur.fetchall():
                 try:
@@ -3104,8 +3111,21 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     cid = s.get("companyId")
                     if cid:
                         article_counts[cid] = article_counts.get(cid, 0) + 1
+                        if cid not in comp_canonical_articles:
+                            comp_canonical_articles[cid] = []
+                        canonical_id = r["id"]
+                        aliases = {canonical_id}
+                        if r["draft_id"]:
+                            aliases.add(r["draft_id"])
+                        comp_canonical_articles[cid].append(aliases)
                 except Exception:
                     pass
+
+            cur.execute("SELECT article_id, COALESCE(SUM(value), 0) AS vote_sum FROM article_votes GROUP BY article_id")
+            vote_map = {r["article_id"]: r["vote_sum"] for r in cur.fetchall()}
+
+            cur.execute("SELECT article_id, COUNT(*) AS comment_cnt FROM article_comments WHERE status != 'deleted' GROUP BY article_id")
+            comment_map = {r["article_id"]: r["comment_cnt"] for r in cur.fetchall()}
 
             cur.execute("SELECT target_id, COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'company' GROUP BY target_id")
             sub_counts = {r["target_id"]: r["cnt"] for r in cur.fetchall()}
@@ -3127,14 +3147,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if only_manageable and not can_publish:
                     continue
 
-                if direction_filter and direction_filter != "all":
-                    if direction_filter not in directions:
+                if topics_list:
+                    if not any(t in directions for t in topics_list):
                         continue
 
                 if search_query:
                     haystack = f"{name} {desc} {spec} {website or ''}".lower()
                     if not all(w in haystack for w in search_query.split()):
                         continue
+
+                c_rating = 0
+                c_comments = 0
+                for aliases in comp_canonical_articles.get(cid, []):
+                    c_rating += sum(vote_map.get(aid, 0) for aid in aliases)
+                    c_comments += sum(comment_map.get(aid, 0) for aid in aliases)
 
                 comps_list.append({
                     "id": cid,
@@ -3148,12 +3174,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "isVerified": bool(r["is_verified"]),
                     "articlesCount": article_counts.get(cid, 0),
                     "subscribersCount": sub_counts.get(cid, 0),
+                    "rating": c_rating,
+                    "commentsCount": c_comments,
                     "isSubscribed": ("company", cid) in user_subs,
                     "isExcluded": ("company", cid) in user_exceptions,
                     "canPublish": can_publish,
                     "createdAt": r["created_at"],
                     "updatedAt": r["updated_at"]
                 })
+
+        if sort_param == "newest":
+            comps_list.sort(key=lambda c: c["createdAt"], reverse=True)
+        elif sort_param == "oldest":
+            comps_list.sort(key=lambda c: c["createdAt"])
+        elif sort_param == "rating":
+            comps_list.sort(key=lambda c: (c["rating"], c["subscribersCount"], c["articlesCount"], c["createdAt"]), reverse=True)
+        elif sort_param == "discussed":
+            comps_list.sort(key=lambda c: (c["commentsCount"], c["subscribersCount"], c["articlesCount"], c["createdAt"]), reverse=True)
+        else: # "popular" or default
+            comps_list.sort(key=lambda c: (c["subscribersCount"], c["rating"], c["articlesCount"], c["createdAt"]), reverse=True)
 
         self.send_json_response(200, {
             "success": True,
@@ -3184,15 +3223,32 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur.execute("SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'company' AND target_id = ?", (company_id,))
             sub_count = cur.fetchone()["cnt"]
 
-            cur.execute("SELECT publication_settings FROM moderation_submissions WHERE status = 'approved'")
+            cur.execute("SELECT id, draft_id, publication_settings FROM moderation_submissions WHERE status = 'approved'")
             art_cnt = 0
+            company_arts = set()
             for r in cur.fetchall():
                 try:
                     s = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
                     if s.get("companyId") == company_id:
                         art_cnt += 1
+                        company_arts.add(r["id"])
+                        if r["draft_id"]:
+                            company_arts.add(r["draft_id"])
                 except Exception:
                     pass
+
+            c_rating = 0
+            c_comments = 0
+            if company_arts:
+                placeholders = ",".join(["?"] * len(company_arts))
+                cur.execute(f"SELECT COALESCE(SUM(value), 0) AS vote_sum FROM article_votes WHERE article_id IN ({placeholders})", list(company_arts))
+                vrow = cur.fetchone()
+                if vrow and vrow["vote_sum"] is not None:
+                    c_rating = vrow["vote_sum"]
+                cur.execute(f"SELECT COUNT(*) AS comment_cnt FROM article_comments WHERE status != 'deleted' AND article_id IN ({placeholders})", list(company_arts))
+                crow = cur.fetchone()
+                if crow and crow["comment_cnt"] is not None:
+                    c_comments = crow["comment_cnt"]
 
             can_publish = False
             if user:
@@ -3214,6 +3270,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "isVerified": bool(row["is_verified"]),
             "articlesCount": art_cnt,
             "subscribersCount": sub_count,
+            "rating": c_rating,
+            "commentsCount": c_comments,
             "isSubscribed": ("company", company_id) in user_subs,
             "isExcluded": ("company", company_id) in user_exceptions,
             "canPublish": can_publish,
@@ -4075,13 +4133,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND (json_extract(m.publication_settings, '$.materialType') != 'question' OR json_extract(m.publication_settings, '$.materialType') IS NULL)
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') != 'question'
                   ) as pubs_count,
                   (SELECT COUNT(DISTINCT s.article_id)
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND json_extract(m.publication_settings, '$.materialType') = 'question'
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') = 'question'
                   ) as questions_count,
                   (SELECT COUNT(*) FROM comment_saves WHERE user_id = ?) as comments_count
             """, (user["id"], user["id"], user["id"]))
@@ -4142,13 +4200,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND (json_extract(m.publication_settings, '$.materialType') != 'question' OR json_extract(m.publication_settings, '$.materialType') IS NULL)
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') != 'question'
                   ) as pubs_count,
                   (SELECT COUNT(DISTINCT s.article_id)
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND json_extract(m.publication_settings, '$.materialType') = 'question'
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') = 'question'
                   ) as questions_count,
                   (SELECT COUNT(*) FROM comment_saves WHERE user_id = ?) as comments_count
             """, (user_id, user_id, user_id))
@@ -4229,7 +4287,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             settings = json.loads(ar["publication_settings"])
                         except Exception:
                             settings = {}
-                    mat_type = settings.get("materialType") or "article"
+                    raw_mat_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
+                    if raw_mat_type in ("article", "post", "news", "pubs"):
+                        mat_type = "publication"
+                    else:
+                        mat_type = raw_mat_type
                     is_question = (mat_type == "question")
                     if stype in ("questions", "question") and not is_question:
                         continue
@@ -6421,7 +6483,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Returns approved articles matching criteria.
         """
         query = urllib.parse.parse_qs(parsed_url.query)
-        tab_raw = (query.get("tab", ["all"])[0] or "all").strip().lower()
+        tab_param = query.get("tab", [None])[0]
+        types_raw = (query.get("types", [""])[0] or query.get("type", [""])[0] or query.get("materialType", [""])[0] or "").strip().lower()
+        if tab_param is None and types_raw in ("question", "questions"):
+            tab_raw = "questions"
+        else:
+            tab_raw = (tab_param or "all").strip().lower()
         tab = "subscriptions" if tab_raw == "my" else tab_raw
         search_query = (query.get("search", [""])[0] or query.get("q", [""])[0] or "").strip().lower()
         question_status = (query.get("questionStatus", ["all"])[0] or query.get("question_status", ["all"])[0] or query.get("status", ["all"])[0]).strip().lower()
@@ -6456,7 +6523,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             allowed_formats = None
 
         complexity_filter = (query.get("complexities", [""])[0] or query.get("complexity", [""])[0] or "").strip()
-        types_filter = (query.get("types", [""])[0] or query.get("type", [""])[0] or "").strip()
+        types_filter = types_raw
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         has_explicit_sort = "sort" in query
 
@@ -6577,9 +6644,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     sub_companies.add(sid)
                     sub_companies_titles[sid] = stitle
 
+        is_publications_tab = tab in ("all", "publications", "pubs", "articles", "focus", "top", "new")
+        is_questions_tab = (tab == "questions")
+
         # Determine effective types filter
-        if tab == "questions":
+        if is_questions_tab:
             allowed_types = {"question"}
+        elif is_publications_tab:
+            if types_filter and types_filter != "all":
+                requested = set([t.strip().lower() for t in types_filter.split(",") if t.strip()])
+                allowed_types = {t for t in requested if t not in ("question", "questions")}
+                if not allowed_types:
+                    allowed_types = {"__none__"}
+            else:
+                allowed_types = {"publication", "article", "post", "news"}
         elif types_filter and types_filter != "all":
             allowed_types = set([t.strip().lower() for t in types_filter.split(",") if t.strip()])
         elif tab in ("subscriptions", "my") and user_types:
@@ -6587,7 +6665,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             allowed_types = None
 
-        if allowed_types and "all" in allowed_types:
+        if allowed_types and "all" in allowed_types and not is_publications_tab and not is_questions_tab:
             allowed_types = None
 
         # Determine effective complexity filter
@@ -6706,16 +6784,33 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 settings = {}
 
             draft_id = row["draft_id"]
+            raw_art_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
+            if raw_art_type in ("article", "post", "news", "pubs"):
+                art_type = "publication"
+            else:
+                art_type = raw_art_type
+
+            if is_questions_tab and art_type != "question":
+                continue
+            if is_publications_tab and art_type == "question":
+                continue
+
             topics = settings.get("topics") or []
             for t in topics:
                 topic_counts[t] = topic_counts.get(t, 0) + 1
 
             # Author metadata
-            author_name = settings.get("author") or (
-                "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
-            )
+            raw_author = settings.get("author")
+            if isinstance(raw_author, dict):
+                author_name = raw_author.get("name") or (
+                    "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
+                )
+            else:
+                author_name = raw_author or (
+                    "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
+                )
             author_initials = settings.get("authorInitials") or (
-                "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
+                "".join([part[0].upper() for part in str(author_name).split()[:2]]) if author_name else "SC"
             )
             author_role = settings.get("authorRole") or ""
             keywords = settings.get("keywords") or []
@@ -6790,14 +6885,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if art_id not in allowed_ids and draft_id not in allowed_ids:
                     continue
 
-            # Material type filtering (Issue #61: publication or question)
-            raw_art_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
-            if raw_art_type in ("article", "post", "news"):
-                art_type = "publication"
-            else:
-                art_type = raw_art_type
-
-            if tab == "questions":
+            # Material type filtering (Issue #61, #162: publication or question)
+            if is_questions_tab:
                 if art_type != "question":
                     continue
                 a_cnt = answers_counts.get(art_id, 0)
@@ -6806,6 +6895,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     continue
                 if question_status == "solved" and not is_sol:
                     continue
+            elif is_publications_tab:
+                if art_type == "question":
+                    continue
+                if allowed_types is not None:
+                    norm_allowed = []
+                    for at in allowed_types:
+                        at_norm = at.strip().lower()
+                        if at_norm in ("article", "post", "news", "publication", "publications", "pubs"):
+                            at_norm = "publication"
+                        norm_allowed.append(at_norm)
+                    if art_type not in norm_allowed:
+                        continue
             elif allowed_types is not None:
                 norm_allowed = []
                 for at in allowed_types:
@@ -6860,7 +6961,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 matches_main = all(w in search_haystack for w in words)
                 matches_comment = False
 
-                if not matches_main and tab in ("questions", "all"):
+                if not matches_main and is_questions_tab:
                     # Check comments/answers
                     for c_text in comment_search_map.get(art_id, []):
                         c_lower = c_text.lower()

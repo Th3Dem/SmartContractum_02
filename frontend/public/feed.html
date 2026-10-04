@@ -805,48 +805,71 @@
           </div>
 
           <!-- Companies Catalog View -->
-          <!-- Companies / Blogs Catalog View -->
-          <div id="companiesView" class="entity-catalog-view" style="display: none;">
-            <div class="entity-view-header">
-              <div class="entity-view-title-wrap">
-                <h2 class="entity-view-title">Блоги компаний</h2>
-                <p class="entity-view-desc">Публикации компаний, команд и технологических организаций сообщества</p>
+          <!-- Companies / Corporate Blogs View -->
+          <div id="companiesView" class="entity-catalog-view companies-feed-view" style="display: none;">
+            <div class="entity-view-header blogs-view-header">
+              <div class="entity-view-title-wrap blogs-title-wrap">
+                <h2 class="entity-view-title blogs-title">Блоги компаний</h2>
+                <p class="entity-view-desc blogs-desc">Публикации компаний, команд и технологических организаций SmartContractum.</p>
               </div>
-              <button type="button" class="btn btn-primary" id="btnOpenCreateCompany">
+              <button type="button" class="btn btn-secondary btn-blogs-create" id="btnBlogsCreateBlog">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
                 <span>Создать блог компании</span>
               </button>
+              <button type="button" id="btnSubnavCreateBlog" style="display: none;" aria-hidden="true"></button>
+              <button type="button" id="btnOpenCreateCompany" style="display: none;" aria-hidden="true"></button>
             </div>
-            <div class="companies-subtabs-bar">
-              <button type="button" class="companies-subtab-btn active" id="btnCompaniesTabCatalog">Блоги компаний</button>
-              <button type="button" class="companies-subtab-btn" id="btnCompaniesTabArticles">Публикации компаний</button>
+            <div class="companies-subtabs-bar blogs-subtabs-bar">
+              <button type="button" class="companies-subtab-btn blogs-subtab-btn active" id="btnCompaniesTabPosts" data-subtab="posts">Посты</button>
+              <button type="button" class="companies-subtab-btn blogs-subtab-btn" id="btnCompaniesTabParticipants" data-subtab="participants">Участники</button>
+              <button type="button" id="btnCompaniesTabCatalog" style="display: none;" aria-hidden="true"></button>
+              <button type="button" id="btnCompaniesTabArticles" style="display: none;" aria-hidden="true"></button>
             </div>
-            <div class="entity-toolbar" id="companiesToolbar">
-              <div class="entity-search-box">
-                <input type="search" id="companiesSearchInput" class="feed-subnav-search-input" placeholder="Поиск по названию или отрасли компании...">
+
+            <!-- Container for Posts (Corporate Articles) -->
+            <div id="blogsPostsView" class="blogs-posts-view">
+              <div id="blogsPostsToolbarSlot" class="blogs-posts-toolbar-slot"></div>
+              <div class="feed-cards-container" id="companiesArticlesGrid">
+                <!-- Populated by feed.js -->
               </div>
+              <div id="companiesArticlesView" style="display: none;" aria-hidden="true"></div>
             </div>
-            <div class="entity-catalog-grid" id="companiesGrid">
-              <!-- Populated by feed.js -->
-            </div>
-            <div class="feed-cards-container" id="companiesArticlesGrid" style="display: none;">
-              <!-- Populated by feed.js -->
+
+            <!-- Container for Participants (Company List) -->
+            <div id="blogsParticipantsView" class="blogs-participants-view" style="display: none;">
+              <div id="blogsParticipantsToolbarSlot" class="blogs-participants-toolbar-slot"></div>
+              <div class="entity-toolbar blogs-participants-toolbar" id="companiesToolbar" style="display: none;">
+                <div class="entity-search-box blogs-search-box">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input type="search" id="companiesSearchInput" class="feed-subnav-search-input blogs-search-input" placeholder="Поиск участников по названию или специализации" aria-label="Поиск участников по названию или специализации">
+                </div>
+              </div>
+              <div class="companies-catalog-list" id="companiesCatalogList">
+                <!-- Populated by feed.js -->
+              </div>
+              <div id="companiesCatalogView" style="display: none;" aria-hidden="true"></div>
+              <div id="companiesCatalogGrid" style="display: none;" aria-hidden="true"></div>
+              <div id="companiesGrid" style="display: none;" aria-hidden="true"></div>
             </div>
           </div>
 
-          <!-- Company Detail View -->
-          <div id="companyDetailView" class="entity-detail-view" style="display: none;">
-            <button type="button" class="btn-entity-back" id="btnBackToCompanies">
+          <!-- Company Detail View (Company Blog Page) -->
+          <div id="companyDetailView" class="entity-detail-view company-blog-view" style="display: none;">
+            <button type="button" class="btn-entity-back btn-back-to-blogs" id="btnBackToBlogs">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12"></line>
                 <polyline points="12 19 5 12 12 5"></polyline>
               </svg>
-              <span>Назад ко всем блогам</span>
+              <span>Назад к блогам</span>
             </button>
-            <div class="entity-card-detail" id="companyDetailCard">
+            <button type="button" id="btnBackToCompanies" style="display: none;" aria-hidden="true">Назад к блогам</button>
+            <div class="entity-card-detail company-profile-header" id="companyDetailCard">
               <!-- Populated by feed.js -->
             </div>
             <div class="entity-detail-feed-header">
@@ -855,24 +878,51 @@
             <div class="feed-cards-container" id="companyArticlesContainer">
               <!-- Populated by feed.js -->
             </div>
+            <div id="companyDetailArticlesList" style="display: none;" aria-hidden="true"></div>
           </div>
 
           <!-- Directions / Topics Catalog View -->
-          <div id="directionsView" class="entity-catalog-view" style="display: none;">
-            <div class="entity-view-header">
-              <div class="entity-view-title-wrap">
-                <h2 class="entity-view-title">Темы</h2>
-                <p class="entity-view-desc">Каталог тем и специализаций платформы SmartContractum</p>
+          <div id="directionsFeedView" class="entity-catalog-view directions-feed-view" style="display: none;">
+            <div id="directionsView" style="display: none;" aria-hidden="true"></div>
+            <div class="directions-view-header entity-view-header">
+              <div class="directions-title-wrap entity-view-title-wrap">
+                <h2 class="directions-title entity-view-title">Темы</h2>
+                <p class="directions-subtitle entity-view-desc">Каталог тем и специализаций SmartContractum</p>
               </div>
             </div>
-            <div class="entity-toolbar">
-              <div class="entity-search-box">
-                <input type="search" id="directionsSearchInput" class="feed-subnav-search-input" placeholder="Поиск темы по названию или описанию...">
+            <div class="directions-toolbar">
+              <div class="directions-search-box">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="search"
+                  id="directionsSearchInput"
+                  class="directions-search-input"
+                  placeholder="Поиск по темам"
+                  aria-label="Поиск по темам"
+                  autocomplete="off"
+                >
+                <button
+                  type="button"
+                  id="directionsSearchClearBtn"
+                  class="directions-search-clear"
+                  title="Очистить поиск"
+                  aria-label="Очистить поиск"
+                  style="display: none;"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
               </div>
             </div>
-            <div class="entity-catalog-grid directions-catalog-grid" id="directionsGrid">
+            <div class="directions-catalog-grid" id="directionsCatalogGrid">
               <!-- Populated by feed.js -->
             </div>
+            <div id="directionsGrid" style="display: none;" aria-hidden="true"></div>
           </div>
         </section>
 

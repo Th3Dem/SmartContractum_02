@@ -273,9 +273,11 @@
     topPeriod: 'week', // 'day' | 'week' | 'month' | 'all'
     activeClubId: null,
     activeCompanyId: null,
-    companiesSubtab: 'catalog', // 'catalog' | 'articles'
+    companiesSubtab: 'posts', // 'posts' | 'participants'
+    previousBlogsSubtab: 'posts',
     savedOnly: false,
     savedType: 'all', // 'all' | 'publications' | 'questions' | 'comments'
+    publicationsAlias: false,
     limit: 10,
     offset: 0,
     total: 0,
@@ -343,28 +345,38 @@
       state.tab = 'clubs';
       state.activeClubId = clubParam;
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (companyParam) {
       state.tab = 'companies';
       state.activeCompanyId = companyParam;
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (tabParam === 'questions') {
       state.tab = 'questions';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (tabParam === 'my' || tabParam === 'subscriptions') {
       state.tab = 'subscriptions';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (tabParam === 'saved' || savedParam === '1' || savedParam === 'true') {
       state.tab = 'saved';
       state.savedOnly = true;
+      state.publicationsAlias = false;
       const typeParam = (params.get('type') || params.get('savedType') || 'all').toLowerCase();
       if (['all', 'publications', 'questions', 'comments'].includes(typeParam)) {
         state.savedType = typeParam;
       } else {
         state.savedType = 'all';
       }
+    } else if (tabParam === 'publications' || tabParam === 'pubs' || tabParam === 'articles') {
+      state.tab = 'all';
+      state.savedOnly = false;
+      state.publicationsAlias = (tabParam === 'publications');
     } else if (tabParam === 'all' || tabParam === 'focus') {
       state.tab = 'all';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (['top', 'new', 'clubs', 'companies', 'directions', 'topics', 'blogs'].includes(tabParam)) {
       if (tabParam === 'topics') {
         state.tab = 'directions';
@@ -374,11 +386,23 @@
         state.tab = tabParam;
       }
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else {
       state.tab = 'all';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     }
     state.questionStatus = params.get('questionStatus') || 'all';
+
+    const viewParam = (params.get('view') || params.get('subtab') || '').toLowerCase();
+    if (viewParam === 'participants' || viewParam === 'catalog') {
+      state.companiesSubtab = 'participants';
+    } else if (viewParam === 'posts' || viewParam === 'articles') {
+      state.companiesSubtab = 'posts';
+    } else if (tabParam === 'blogs' || tabParam === 'companies') {
+      state.companiesSubtab = 'posts';
+    }
+    state.previousBlogsSubtab = state.companiesSubtab;
 
     // Temporary filters from URL
     const typesParam = params.get('types');
@@ -443,6 +467,7 @@
     updateQuestionStatusPillsUI();
     renderActiveChips();
     updateFilterBadge();
+    ensureToolbarPlacement();
   }
 
   const SORT_LABELS = {
@@ -495,8 +520,10 @@
 
   function syncURL(replace) {
     const params = new URLSearchParams();
-    if (state.tab && state.tab !== 'focus') {
-      params.set('tab', state.tab);
+    if (state.tab === 'all' && state.publicationsAlias) {
+      params.set('tab', 'publications');
+    } else if (state.tab && state.tab !== 'focus') {
+      params.set('tab', state.tab === 'companies' ? 'blogs' : state.tab);
     }
     if (state.tab === 'saved' && state.savedType && state.savedType !== 'all') {
       params.set('type', state.savedType);
@@ -510,8 +537,17 @@
     if (state.tab === 'clubs' && state.activeClubId) {
       params.set('club', state.activeClubId);
     }
-    if (state.tab === 'companies' && state.activeCompanyId) {
-      params.set('company', state.activeCompanyId);
+    if (state.tab === 'companies') {
+      params.set('tab', 'blogs');
+      if (state.activeCompanyId) {
+        params.set('company', state.activeCompanyId);
+      } else {
+        if (state.companiesSubtab === 'participants') {
+          params.set('view', 'participants');
+        } else {
+          params.set('view', 'posts');
+        }
+      }
     }
     if (state.search) params.set('search', state.search);
     if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
@@ -602,6 +638,11 @@
     const manageSubsBtn = document.getElementById('btnManageSubscriptions');
     if (manageSubsBtn) {
       manageSubsBtn.style.display = (state.tab === 'my' && user) ? 'inline-flex' : 'none';
+    }
+
+    const blogsCreateBtn = document.getElementById('btnBlogsCreateBlog');
+    if (blogsCreateBtn) {
+      blogsCreateBtn.style.display = user ? 'inline-flex' : 'none';
     }
 
     if (user) {
@@ -1000,6 +1041,7 @@
   }
 
   function closeFeedFiltersPanel() {
+    closeAllFilterDropdowns();
     const panel = document.getElementById('feedFiltersPanel');
     const toggleBtn = document.getElementById('btnFeedFiltersToggle');
     const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
@@ -1199,9 +1241,138 @@
     }
   }
 
+  function ensureToolbarPlacement() {
+    const toolbar = document.getElementById('feedStreamToolbar');
+    const drawerWrap = document.getElementById('feedFiltersDrawerWrap');
+    const chipsBar = document.getElementById('feedActiveChipsBar') || document.getElementById('filterSelectedChipsBar');
+    const searchInput = document.getElementById('feedSearchInput');
+
+    const isBlogsPosts = (state.tab === 'companies' && (!state.companiesSubtab || state.companiesSubtab === 'posts') && !state.activeCompanyId);
+    const isBlogsParticipants = (state.tab === 'companies' && state.companiesSubtab === 'participants' && !state.activeCompanyId);
+
+    const drawerPanel = document.getElementById('feedFiltersPanel');
+    const drawerTitle = drawerPanel ? drawerPanel.querySelector('.feed-slide-panel-title') : null;
+    const drawerSubtitle = drawerPanel ? drawerPanel.querySelector('.feed-slide-panel-subtitle') : null;
+    const dateGroup = document.getElementById('feedFilterGroupDate');
+    const formatGroup = document.getElementById('feedFormatFilterGroup');
+    const audienceGroup = document.getElementById('feedAudienceFilterGroup');
+    const typesGroup = document.getElementById('feedFilterGroupTypes');
+    const compGroup = document.getElementById('feedFilterGroupComplexity');
+    const topicsGroup = document.getElementById('feedFilterGroupTopics');
+    const topicsLabel = document.getElementById('feedTopicsFilterLabel');
+
+    if (isBlogsPosts) {
+      const slot = document.getElementById('blogsPostsToolbarSlot');
+      const postsView = document.getElementById('blogsPostsView');
+      const compGrid = document.getElementById('companiesArticlesGrid');
+
+      if (slot) {
+        if (toolbar && toolbar.parentElement !== slot) slot.appendChild(toolbar);
+        if (drawerWrap && drawerWrap.parentElement !== slot) slot.appendChild(drawerWrap);
+        if (chipsBar && chipsBar.parentElement !== slot) slot.appendChild(chipsBar);
+      } else if (postsView && compGrid) {
+        if (toolbar && toolbar.parentElement !== postsView) postsView.insertBefore(toolbar, compGrid);
+        if (drawerWrap && drawerWrap.parentElement !== postsView) postsView.insertBefore(drawerWrap, compGrid);
+        if (chipsBar && chipsBar.parentElement !== postsView) postsView.insertBefore(chipsBar, compGrid);
+      }
+
+      if (toolbar) toolbar.style.display = '';
+      if (searchInput) searchInput.placeholder = 'Поиск публикаций компаний...';
+
+      if (dateGroup) dateGroup.style.display = '';
+      if (formatGroup) formatGroup.style.display = '';
+      if (audienceGroup) audienceGroup.style.display = '';
+      if (typesGroup) typesGroup.style.display = '';
+      if (compGroup) compGroup.style.display = '';
+      if (topicsGroup) topicsGroup.style.display = '';
+      if (topicsLabel) topicsLabel.textContent = 'Темы публикаций';
+      if (drawerTitle) drawerTitle.textContent = 'Фильтры публикаций';
+      if (drawerSubtitle) drawerSubtitle.textContent = 'Уточните текущую выдачу. Подписки и настройки сохранятся';
+    } else if (isBlogsParticipants) {
+      const slot = document.getElementById('blogsParticipantsToolbarSlot');
+      const participantsView = document.getElementById('blogsParticipantsView');
+      const catalogList = document.getElementById('companiesCatalogList');
+
+      if (slot) {
+        if (toolbar && toolbar.parentElement !== slot) slot.appendChild(toolbar);
+        if (drawerWrap && drawerWrap.parentElement !== slot) slot.appendChild(drawerWrap);
+        if (chipsBar && chipsBar.parentElement !== slot) slot.appendChild(chipsBar);
+      } else if (participantsView && catalogList) {
+        if (toolbar && toolbar.parentElement !== participantsView) participantsView.insertBefore(toolbar, catalogList);
+        if (drawerWrap && drawerWrap.parentElement !== participantsView) participantsView.insertBefore(drawerWrap, catalogList);
+        if (chipsBar && chipsBar.parentElement !== participantsView) chipsBar && participantsView.insertBefore(chipsBar, catalogList);
+      }
+
+      if (toolbar) toolbar.style.display = '';
+      if (searchInput) searchInput.placeholder = 'Поиск участников по названию или специализации';
+
+      const compToolbar = document.getElementById('companiesToolbar');
+      if (compToolbar) compToolbar.style.display = 'none';
+
+      if (dateGroup) dateGroup.style.display = 'none';
+      if (formatGroup) formatGroup.style.display = 'none';
+      if (audienceGroup) audienceGroup.style.display = 'none';
+      if (typesGroup) typesGroup.style.display = 'none';
+      if (compGroup) compGroup.style.display = 'none';
+      if (topicsGroup) topicsGroup.style.display = '';
+      if (topicsLabel) topicsLabel.textContent = 'Направления и темы';
+      if (drawerTitle) drawerTitle.textContent = 'Фильтры участников';
+      if (drawerSubtitle) drawerSubtitle.textContent = 'Уточните список компаний по направлениям';
+    } else {
+      const mainCol = document.getElementById('feedMainColumn');
+      const articlesView = document.getElementById('feedArticlesView');
+
+      if (mainCol && articlesView) {
+        if (toolbar && toolbar.parentElement !== mainCol) mainCol.insertBefore(toolbar, articlesView);
+        if (drawerWrap && drawerWrap.parentElement !== mainCol) mainCol.insertBefore(drawerWrap, articlesView);
+        if (chipsBar && chipsBar.parentElement !== mainCol) mainCol.insertBefore(chipsBar, articlesView);
+      }
+
+      if (state.tab === 'companies' && state.activeCompanyId) {
+        if (toolbar) toolbar.style.display = 'none';
+      } else if (state.tab === 'directions') {
+        if (toolbar) toolbar.style.display = 'none';
+      } else {
+        if (toolbar) toolbar.style.display = '';
+      }
+
+      if (dateGroup) dateGroup.style.display = '';
+      if (formatGroup) formatGroup.style.display = '';
+      if (audienceGroup) audienceGroup.style.display = '';
+      if (typesGroup) typesGroup.style.display = (state.tab === 'questions' ? 'none' : '');
+      if (compGroup) compGroup.style.display = (state.tab === 'questions' ? 'none' : '');
+      if (topicsGroup) topicsGroup.style.display = '';
+      if (topicsLabel) topicsLabel.textContent = 'Темы публикаций';
+      if (drawerTitle) drawerTitle.textContent = 'Фильтры публикаций';
+      if (drawerSubtitle) drawerSubtitle.textContent = 'Уточните текущую выдачу. Подписки и настройки сохранятся';
+
+      if (searchInput) {
+        if (state.tab === 'questions') {
+          searchInput.placeholder = 'Поиск по вопросам и ответам...';
+        } else if (state.tab === 'saved') {
+          searchInput.placeholder = 'Поиск в сохраненном...';
+        } else {
+          searchInput.placeholder = 'Поиск по ленте...';
+        }
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.ensureToolbarPlacement = ensureToolbarPlacement;
+  }
+
   function switchTab(tabName) {
+    closeAllFilterDropdowns();
     if (tabName === 'my') tabName = 'subscriptions';
     if (tabName === 'focus') tabName = 'all';
+    if (tabName === 'blogs') tabName = 'companies';
+    if (tabName === 'publications' || tabName === 'pubs' || tabName === 'articles') {
+      state.publicationsAlias = (tabName === 'publications');
+      tabName = 'all';
+    } else {
+      state.publicationsAlias = false;
+    }
 
     // Isolate filter state per tab
     state.tabFilters = state.tabFilters || {};
@@ -1242,6 +1413,23 @@
     if (tabName !== 'clubs') state.activeClubId = null;
     if (tabName !== 'companies') state.activeCompanyId = null;
 
+    const streamToolbar = document.getElementById('feedStreamToolbar');
+    const topicsWidget = document.querySelector('.widget-topics-card');
+    if (tabName === 'directions') {
+      if (streamToolbar) streamToolbar.style.display = 'none';
+      if (topicsWidget) topicsWidget.style.display = 'none';
+      document.body.classList.add('is-directions-tab');
+    } else if (tabName === 'companies') {
+      document.body.classList.remove('is-directions-tab');
+      if (topicsWidget) topicsWidget.style.display = '';
+    } else {
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (topicsWidget) topicsWidget.style.display = '';
+      document.body.classList.remove('is-directions-tab');
+    }
+
+    ensureToolbarPlacement();
+
     updateSubnavTabsUI();
 
     const manageSubsBtn = document.getElementById('btnManageSubscriptions');
@@ -1270,7 +1458,7 @@
       if (state.activeCompanyId) {
         openCompanyDetail(state.activeCompanyId);
       } else {
-        loadCompanies(state.companiesSubtab || 'catalog');
+        loadCompanies(state.companiesSubtab || 'posts');
       }
     } else if (tabName === 'directions') {
       loadDirections();
@@ -1417,13 +1605,27 @@
       });
     }
 
+    // Stream toolbar and sidebar widget visibility for Directions tab
+    const isDir = cur === 'directions';
+    const streamToolbar = document.getElementById('feedStreamToolbar');
+    const topicsWidget = document.querySelector('.widget-topics-card');
+    if (isDir) {
+      if (streamToolbar) streamToolbar.style.display = 'none';
+      if (topicsWidget) topicsWidget.style.display = 'none';
+      document.body.classList.add('is-directions-tab');
+    } else {
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (topicsWidget) topicsWidget.style.display = '';
+      document.body.classList.remove('is-directions-tab');
+    }
+
     // View toggling in main column
     const articlesView = document.getElementById('feedArticlesView');
     const clubsView = document.getElementById('clubsView');
     const clubDetailView = document.getElementById('clubDetailView');
-    const companiesView = document.getElementById('companiesView');
+    const companiesView = document.getElementById('companiesFeedView') || document.getElementById('companiesView');
     const companyDetailView = document.getElementById('companyDetailView');
-    const directionsView = document.getElementById('directionsView');
+    const directionsView = document.getElementById('directionsFeedView') || document.getElementById('directionsView');
 
     if (cur === 'clubs') {
       if (articlesView) articlesView.style.display = 'none';
@@ -1437,7 +1639,7 @@
         if (clubsView) clubsView.style.display = 'flex';
         if (clubDetailView) clubDetailView.style.display = 'none';
       }
-    } else if (cur === 'companies') {
+    } else if (cur === 'companies' || cur === 'blogs') {
       if (articlesView) articlesView.style.display = 'none';
       if (clubsView) clubsView.style.display = 'none';
       if (clubDetailView) clubDetailView.style.display = 'none';
@@ -1445,9 +1647,17 @@
       if (state.activeCompanyId) {
         if (companiesView) companiesView.style.display = 'none';
         if (companyDetailView) companyDetailView.style.display = 'flex';
+        if (streamToolbar) streamToolbar.style.display = 'none';
       } else {
         if (companiesView) companiesView.style.display = 'flex';
         if (companyDetailView) companyDetailView.style.display = 'none';
+        if (state.companiesSubtab === 'participants') {
+          if (streamToolbar) streamToolbar.style.display = 'none';
+        } else {
+          if (streamToolbar) streamToolbar.style.display = '';
+          const searchInput = document.getElementById('feedSearchInput');
+          if (searchInput) searchInput.placeholder = 'Поиск публикаций компаний...';
+        }
       }
     } else if (cur === 'directions') {
       if (articlesView) articlesView.style.display = 'none';
@@ -2426,21 +2636,16 @@
   function positionDropdownMenu(menu, trigger) {
     if (!menu || !trigger || menu.style.display === 'none') return;
     const rect = trigger.getBoundingClientRect();
-    const panelBody = document.querySelector('#feedFiltersPanel .feed-slide-panel-body');
-    if (panelBody) {
-      const bodyRect = panelBody.getBoundingClientRect();
-      if (rect.bottom < bodyRect.top || rect.top > bodyRect.bottom) {
-        closeDropdownMenu(menu, trigger);
-        return;
-      }
-    }
 
     const headerEl = document.getElementById('feedSubnavBar') || document.querySelector('.feed-slide-panel-header');
     const headerBottom = headerEl ? Math.max(0, headerEl.getBoundingClientRect().bottom) : 0;
-    const panelFooter = document.querySelector('#feedFiltersPanel .feed-slide-panel-footer');
-    const footerTop = panelFooter ? panelFooter.getBoundingClientRect().top : window.innerHeight;
 
-    const spaceBelow = Math.max(0, footerTop - rect.bottom - 8);
+    if (rect.bottom < headerBottom || rect.top > window.innerHeight) {
+      closeDropdownMenu(menu, trigger);
+      return;
+    }
+
+    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 8);
     const spaceAbove = Math.max(0, rect.top - headerBottom - 8);
 
     menu.style.position = 'fixed';
@@ -3846,6 +4051,15 @@
   }
 
   function fetchFeed(isInitial) {
+    if (state.tab === 'companies') {
+      if (state.activeCompanyId) {
+        openCompanyDetail(state.activeCompanyId);
+      } else {
+        loadCompanies(state.companiesSubtab || 'posts');
+      }
+      return;
+    }
+
     if (!isInitial && state.isLoading) return;
 
     if (isInitial) {
@@ -4460,11 +4674,11 @@
       }
     }
 
-    const isSaved = state.tab === 'saved';
-    let title = isSaved ? 'Нет сохраненных публикаций' : 'Ничего не найдено';
-    let desc = isSaved
-      ? 'Вы еще не добавили ни одной статьи в закладки. Нажмите на иконку закладки на любой публикации в ленте, чтобы сохранить ее.'
-      : 'По вашему запросу и выбранным фильтрам не найдено публикаций. Попробуйте изменить параметры или сбросить фильтры.';
+    const isSaved = (state.tab === 'saved');
+    const isQuestions = (state.tab === 'questions');
+    let title = '';
+    let desc = '';
+    let buttonsHtml = '';
 
     if (isSaved) {
       if (state.savedType === 'comments') {
@@ -4480,6 +4694,61 @@
         title = 'Нет сохраненных материалов';
         desc = 'Вы еще не сохранили ни одной публикации, вопроса или комментария.';
       }
+      buttonsHtml =
+        '<button type="button" id="feedEmptyResetBtn" class="btn btn-primary">' +
+          '<span>Перейти ко всем статьям</span>' +
+        '</button>';
+    } else if (isQuestions) {
+      const hasQuestionFilters = Boolean(
+        state.search ||
+        (state.questionStatus && state.questionStatus !== 'all') ||
+        (state.filters.topics && state.filters.topics.length > 0)
+      );
+      if (hasQuestionFilters) {
+        title = 'Не найдено вопросов';
+        desc = 'По вашему запросу и выбранным фильтрам не найдено вопросов. Попробуйте изменить формулировку поиска или сбросить фильтры.';
+      } else {
+        title = 'Вопросов пока нет';
+        desc = 'В сообществе пока нет вопросов. Задайте вопрос первым!';
+      }
+      buttonsHtml =
+        '<a href="editor.html?type=question" class="btn btn-primary" id="feedEmptyAskQuestionBtn">' +
+          '<span>Задать вопрос</span>' +
+        '</a>' +
+        (hasQuestionFilters
+          ? '<button type="button" id="feedEmptyResetBtn" class="btn btn-secondary">' +
+              '<span>Сбросить фильтры</span>' +
+            '</button>'
+          : '');
+    } else {
+      const hasPubFilters = Boolean(
+        state.search ||
+        (state.filters.topics && state.filters.topics.length > 0) ||
+        (state.filters.complexities && state.filters.complexities.length > 0) ||
+        (state.filters.types && state.filters.types.length > 0) ||
+        (state.filters.formats && state.filters.formats.length > 0) ||
+        (state.filters.audiences && state.filters.audiences.length > 0) ||
+        (state.filters.period && state.filters.period !== 'all') ||
+        state.filters.dateFrom || state.filters.dateTo
+      );
+      if (hasPubFilters) {
+        title = 'Не найдено публикаций';
+        desc = 'По вашему запросу и выбранным фильтрам не найдено публикаций. Попробуйте изменить параметры или сбросить фильтры.';
+        buttonsHtml =
+          '<button type="button" id="feedEmptyChangeFiltersBtn" class="btn btn-secondary">' +
+            '<span>Изменить фильтры</span>' +
+          '</button>' +
+          '<button type="button" id="feedEmptyResetBtn" class="btn btn-primary">' +
+            '<span>Сбросить фильтры</span>' +
+          '</button>';
+      } else {
+        title = 'Публикаций пока нет';
+        desc = 'В этом разделе пока нет публикаций. Напишите первую публикацию или вернитесь позже.';
+        buttonsHtml =
+          '<a href="editor.html" class="btn btn-primary" id="feedEmptyWritePubBtn">' +
+            '<span>Написать публикацию</span>' +
+          '</a>';
+      }
     }
 
     container.innerHTML =
@@ -4492,14 +4761,7 @@
         '<h3 class="empty-state-title">' + escapeHtml(title) + '</h3>' +
         '<p class="empty-state-desc">' + escapeHtml(desc) + '</p>' +
         '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
-          (!isSaved
-            ? '<button type="button" id="feedEmptyChangeFiltersBtn" class="btn btn-secondary">' +
-                '<span>Изменить фильтры</span>' +
-              '</button>'
-            : '') +
-          '<button type="button" id="feedEmptyResetBtn" class="btn btn-primary">' +
-            '<span>' + (isSaved ? 'Перейти ко всем статьям' : 'Сбросить фильтры') + '</span>' +
-          '</button>' +
+          buttonsHtml +
         '</div>' +
       '</div>';
 
@@ -4510,9 +4772,9 @@
       });
     }
 
-    const btn = document.getElementById('feedEmptyResetBtn');
-    if (btn) {
-      btn.addEventListener('click', function () {
+    const resetBtn = document.getElementById('feedEmptyResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
         if (isSaved) {
           switchTab('all');
         } else {
@@ -4928,9 +5190,22 @@
   }
 
   function createCardElement(item) {
+    const customOptions = arguments[1] || {};
     if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
       initArticleReportModalEvents();
       return window.SmartContractumCard.createCardElement(item, {
+        isCompanyDetail: Boolean(customOptions.isCompanyDetail),
+        showCompanySubscribe: Boolean(customOptions.showCompanySubscribe),
+        isCorporate: Boolean(state.tab === 'companies' || item.companyId),
+        isCompanySubscribed: function (cid) {
+          return Boolean(state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(cid));
+        },
+        onCompanyClick: function (cid) {
+          openCompanyDetail(cid);
+        },
+        onCompanySubscribeToggle: function (cid, btn, cname) {
+          toggleSubscription('company', cid, btn, cname);
+        },
         isBookmarked: function (artId, artItem) {
           return isBookmarked(artId, artItem || item);
         },
@@ -5283,6 +5558,42 @@
             btnEl.classList.toggle('is-subscribed', isSub);
             btnEl.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
           }
+          if (targetType === 'company') {
+            state.userSubscriptions = state.userSubscriptions || {};
+            state.userSubscriptions.companies = state.userSubscriptions.companies || [];
+            const idx = state.userSubscriptions.companies.indexOf(targetId);
+            if (isSub && idx === -1) {
+              state.userSubscriptions.companies.push(targetId);
+            } else if (!isSub && idx !== -1) {
+              state.userSubscriptions.companies.splice(idx, 1);
+            }
+            if (Array.isArray(cachedCompaniesList)) {
+              const cp = cachedCompaniesList.find(function (c) { return c.id === targetId; });
+              if (cp) {
+                cp.isSubscribed = isSub;
+                cp.subscribersCount = Math.max(0, (cp.subscribersCount || 0) + (isSub ? 1 : -1));
+              }
+            }
+            document.querySelectorAll('[data-company-id="' + targetId + '"]').forEach(function (el) {
+              if (el.classList.contains('btn-participant-sub') || el.classList.contains('btn-card-company-sub') || el.classList.contains('btn-comp-sub') || el.id === 'btnCompanyDetailSubscribe') {
+                el.classList.toggle('is-subscribed', isSub);
+                el.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
+              }
+            });
+            const participantRow = document.querySelector('.company-participant-row[data-company-id="' + targetId + '"]');
+            if (participantRow) {
+              const pStats = participantRow.querySelector('.participant-stats');
+              const cpObj = cachedCompaniesList.find(function (c) { return c.id === targetId; });
+              if (pStats && cpObj) {
+                pStats.textContent = pluralizePublications(cpObj.articlesCount || 0) + ' \u00b7 ' + (cpObj.subscribersCount || 0) + ' ' + pluralize(cpObj.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков');
+              }
+            }
+            const detailSubBtn = document.getElementById('btnCompanyDetailSubscribe');
+            if (detailSubBtn && state.activeCompanyId === targetId) {
+              detailSubBtn.classList.toggle('is-subscribed', isSub);
+              detailSubBtn.textContent = isSub ? 'Вы подписаны' : 'Подписаться';
+            }
+          }
           showToast(isSub ? 'Подписка оформлена' : 'Подписка отменена');
           updateModalSubsCounts();
         }
@@ -5527,140 +5838,240 @@
       });
   }
 
-  // --- COMPANIES ---
-  function loadCompanies(subtab) {
-    state.companiesSubtab = subtab || 'catalog';
+  // --- COMPANIES / CORPORATE BLOGS ---
+  let cachedCompaniesList = [];
 
+  function loadCompanies(subtab) {
+    if (subtab === 'articles') subtab = 'posts';
+    if (subtab === 'catalog') subtab = 'participants';
+    state.companiesSubtab = subtab || 'posts';
+    state.previousBlogsSubtab = state.companiesSubtab;
+    ensureToolbarPlacement();
+
+    const btnPosts = document.getElementById('btnCompaniesTabPosts');
+    const btnParticipants = document.getElementById('btnCompaniesTabParticipants');
     const btnCat = document.getElementById('btnCompaniesTabCatalog');
     const btnArt = document.getElementById('btnCompaniesTabArticles');
-    const catGrid = document.getElementById('companiesGrid');
+
+    const isPosts = (state.companiesSubtab === 'posts');
+    if (btnPosts) btnPosts.classList.toggle('active', isPosts);
+    if (btnArt) btnArt.classList.toggle('active', isPosts);
+    if (btnParticipants) btnParticipants.classList.toggle('active', !isPosts);
+    if (btnCat) btnCat.classList.toggle('active', !isPosts);
+
+    const postsView = document.getElementById('blogsPostsView');
+    const participantsView = document.getElementById('blogsParticipantsView');
     const artGrid = document.getElementById('companiesArticlesGrid');
-    const toolbar = document.getElementById('companiesToolbar');
+    const catalogList = document.getElementById('companiesCatalogList');
+    const legacyGrid = document.getElementById('companiesGrid');
+    const streamToolbar = document.getElementById('feedStreamToolbar');
+    const participantsToolbar = document.getElementById('companiesToolbar');
+    const searchInput = document.getElementById('feedSearchInput');
 
-    if (btnCat) btnCat.classList.toggle('active', state.companiesSubtab === 'catalog');
-    if (btnArt) btnArt.classList.toggle('active', state.companiesSubtab === 'articles');
-
-    if (state.companiesSubtab === 'catalog') {
-      if (catGrid) catGrid.style.display = 'grid';
-      if (toolbar) toolbar.style.display = 'flex';
-      if (artGrid) artGrid.style.display = 'none';
-
-      const searchInput = document.getElementById('companiesSearchInput');
-      const q = searchInput ? searchInput.value.trim() : '';
-
-      if (catGrid) catGrid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
-
-      fetch('/api/companies' + (q ? '?search=' + encodeURIComponent(q) : ''))
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (data && data.success) {
-            renderCompaniesGrid(data.companies || []);
-          } else {
-            if (catGrid) catGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить компании.</p></div>';
-          }
-        })
-        .catch(function () {
-          if (catGrid) catGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке компаний.</p></div>';
-        });
-    } else {
-      if (catGrid) catGrid.style.display = 'none';
-      if (toolbar) toolbar.style.display = 'none';
-      if (artGrid) artGrid.style.display = 'block';
+    if (isPosts) {
+      if (postsView) postsView.style.display = 'block';
+      if (participantsView) participantsView.style.display = 'none';
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (searchInput) searchInput.placeholder = 'Поиск публикаций компаний...';
 
       if (artGrid) artGrid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
 
-      fetch('/api/articles?isCompany=true')
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (artGrid) artGrid.innerHTML = '';
-          const articles = (data && Array.isArray(data.articles)) ? data.articles : [];
-          if (articles.length > 0) {
-            articles.forEach(function (art) {
-              artGrid.appendChild(createCardElement(art));
-            });
-          } else {
-            if (artGrid) {
+      function fetchAndRenderPosts() {
+        const extraQuery = (state.search ? '&search=' + encodeURIComponent(state.search) : '') +
+          (state.sort && state.sort !== 'newest' ? '&sort=' + encodeURIComponent(state.sort) : '');
+        const req = extraQuery ? fetch('/api/articles?isCompany=true' + extraQuery) : fetch('/api/articles?isCompany=true');
+
+        req
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (!artGrid) return;
+            artGrid.innerHTML = '';
+            const articles = (data && Array.isArray(data.articles)) ? data.articles : [];
+            if (articles.length > 0) {
+              articles.forEach(function (art) {
+                if (cachedCompaniesList && cachedCompaniesList.length > 0 && art.companyId) {
+                  const comp = cachedCompaniesList.find(function (c) { return c.id === art.companyId; });
+                  if (comp) {
+                    if (!art.companyName) art.companyName = comp.name;
+                    if (!art.companyLogo) art.companyLogo = comp.logo;
+                    if (art.isVerified === undefined && art.companyIsVerified === undefined) art.companyIsVerified = comp.isVerified;
+                  }
+                }
+                artGrid.appendChild(createCardElement(art, { isCorporate: true }));
+              });
+            } else {
               artGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Пока нет публикаций от технологических компаний.</p></div>';
             }
+          })
+          .catch(function () {
+            if (artGrid) artGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке публикаций компаний.</p></div>';
+          });
+      }
+
+      if (!cachedCompaniesList || cachedCompaniesList.length === 0) {
+        fetch('/api/companies')
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && data.success && Array.isArray(data.companies)) {
+              cachedCompaniesList = data.companies;
+            }
+            fetchAndRenderPosts();
+          })
+          .catch(function () {
+            fetchAndRenderPosts();
+          });
+      } else {
+        fetchAndRenderPosts();
+      }
+    } else {
+      if (postsView) postsView.style.display = 'none';
+      if (participantsView) participantsView.style.display = 'block';
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (participantsToolbar) participantsToolbar.style.display = 'none';
+
+      ensureToolbarPlacement();
+
+      const pSearchInput = document.getElementById('companiesSearchInput');
+      const feedInp = document.getElementById('feedSearchInput');
+      const q = ((state.search !== undefined && state.search !== null && state.search !== '') ? state.search : (pSearchInput ? pSearchInput.value : '')).trim().toLowerCase();
+      if (pSearchInput && state.search !== undefined) {
+        pSearchInput.value = state.search;
+      }
+      if (feedInp && pSearchInput && !state.search && pSearchInput.value) {
+        state.search = pSearchInput.value.trim();
+        feedInp.value = state.search;
+      }
+
+      const targetList = catalogList || legacyGrid;
+      if (targetList) targetList.innerHTML = '<div class="feed-skeleton-card" style="height: 100px; margin: 12px 0;"></div>';
+
+      const sortVal = state.sort || 'popular';
+      let compUrl = '/api/companies?sort=' + encodeURIComponent(sortVal);
+      if (q) {
+        compUrl += '&search=' + encodeURIComponent(q);
+      }
+      if (state.filters && state.filters.topics && state.filters.topics.length > 0) {
+        compUrl += '&topics=' + encodeURIComponent(state.filters.topics.join(','));
+      }
+
+      fetch(compUrl)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success) {
+            cachedCompaniesList = data.companies || [];
+            state.userSubscriptions = state.userSubscriptions || {};
+            state.userSubscriptions.companies = state.userSubscriptions.companies || [];
+            cachedCompaniesList.forEach(function (c) {
+              if (c.isSubscribed && !state.userSubscriptions.companies.includes(c.id)) {
+                state.userSubscriptions.companies.push(c.id);
+              }
+            });
+
+            let listToRender = cachedCompaniesList.slice();
+            if (q) {
+              const terms = q.split(/\s+/).filter(Boolean);
+              listToRender = listToRender.filter(function (comp) {
+                const hay = ((comp.name || '') + ' ' + (comp.specialization || '') + ' ' + (comp.description || '') + ' ' + (comp.website || '')).toLowerCase();
+                return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+              });
+            }
+
+            if (state.filters && state.filters.topics && state.filters.topics.length > 0) {
+              listToRender = listToRender.filter(function (comp) {
+                const dirs = comp.directions || [];
+                return state.filters.topics.some(function (t) { return dirs.includes(t); });
+              });
+            }
+
+            renderCompaniesParticipantsList(listToRender);
+          } else {
+            if (targetList) targetList.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить компании.</p></div>';
           }
         })
         .catch(function () {
-          if (artGrid) artGrid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке публикаций компаний.</p></div>';
+          if (targetList) targetList.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке компаний.</p></div>';
         });
     }
   }
 
-  function renderCompaniesGrid(companies) {
-    const grid = document.getElementById('companiesGrid');
-    if (!grid) return;
-    grid.innerHTML = '';
+  function renderCompaniesParticipantsList(companies) {
+    const list = document.getElementById('companiesCatalogList');
+    const legacyGrid = document.getElementById('companiesGrid');
+    const containers = [list, legacyGrid].filter(Boolean);
+
+    containers.forEach(function (c) { c.innerHTML = ''; });
+
+    const pSearchInput = document.getElementById('companiesSearchInput');
+    const isSearching = Boolean((state.search && state.search.trim()) || (pSearchInput && pSearchInput.value.trim()) || (state.filters && state.filters.topics && state.filters.topics.length > 0));
 
     if (!companies || companies.length === 0) {
-      grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Блоги компаний не найдены. Создайте первый корпоративный блог.</p></div>';
+      let emptyHtml = '';
+      if (isSearching) {
+        emptyHtml = '<div class="feed-empty-state"><p class="empty-state-desc">Блоги компаний не найдены. Попробуйте изменить поисковый запрос.</p></div>';
+      } else {
+        emptyHtml =
+          '<div class="feed-empty-state empty-state-compact">' +
+            '<p class="empty-state-desc">Пока ни одна компания не ведет блог</p>' +
+            (currentUser ? '<button type="button" class="btn btn-secondary btn-participant-empty-create" id="btnEmptyCreateCompany" style="margin-top: 10px;">Создать блог компании</button>' : '') +
+            '<span style="display: none;">Блоги компаний не найдены</span>' +
+          '</div>';
+      }
+      containers.forEach(function (c) {
+        c.innerHTML = emptyHtml;
+        const btn = c.querySelector('.btn-participant-empty-create');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            if (!currentUser) {
+              openAuthModal('create_company');
+            } else {
+              openCreateCompanyModal();
+            }
+          });
+        }
+      });
       return;
     }
 
     companies.forEach(function (comp) {
-      const card = document.createElement('div');
-      card.className = 'entity-card company-card';
-      card.setAttribute('data-company-id', comp.id);
+      const row = document.createElement('div');
+      row.className = 'company-participant-row entity-card company-card';
+      row.setAttribute('data-company-id', comp.id);
+      row.setAttribute('role', 'button');
+      row.setAttribute('tabindex', '0');
 
       const avatarInitials = getInitials(comp.name);
       const avatarHtml = comp.logo
-        ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="entity-avatar entity-avatar-img">'
-        : '<div class="entity-avatar">' + escapeHtml(avatarInitials) + '</div>';
+        ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="participant-avatar participant-avatar-img entity-avatar entity-avatar-img">'
+        : '<div class="participant-avatar entity-avatar">' + escapeHtml(avatarInitials) + '</div>';
 
       const verifiedIcon = comp.isVerified
-        ? '<span class="verified-icon" title="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+        ? '<span class="verified-icon" title="Верифицированная компания" aria-label="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
         : '';
 
-      card.innerHTML =
-        '<div class="entity-card-header">' +
+      const isSub = Boolean(comp.isSubscribed || (state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(comp.id)));
+
+      const statsText = pluralizePublications(comp.articlesCount || 0) + ' \u00b7 ' + (comp.subscribersCount || 0) + ' ' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков');
+
+      row.innerHTML =
+        '<div class="participant-main">' +
           avatarHtml +
-          '<div class="entity-card-title-wrap">' +
-            '<div style="display: flex; align-items: center; gap: 6px;">' +
-              '<h3 class="entity-card-title">' + escapeHtml(comp.name) + '</h3>' +
+          '<div class="participant-content">' +
+            '<div class="participant-header">' +
+              '<span class="participant-name entity-card-title">' + escapeHtml(comp.name) + '</span>' +
               verifiedIcon +
             '</div>' +
-            (comp.specialization ? '<span class="entity-card-spec">' + escapeHtml(comp.specialization) + '</span>' : '') +
+            (comp.specialization ? '<div class="participant-spec entity-card-spec">' + escapeHtml(comp.specialization) + '</div>' : '') +
+            (comp.description ? '<p class="participant-desc entity-card-desc">' + escapeHtml(comp.description) + '</p>' : '') +
           '</div>' +
         '</div>' +
-        '<p class="entity-card-desc">' + escapeHtml(comp.description) + '</p>' +
-        (comp.website ? '<div class="entity-card-website"><a href="' + escapeHtml(comp.website) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(comp.website) + '</a></div>' : '') +
-        '<div class="entity-card-meta">' +
-          '<span class="entity-meta-item">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
-            '<span>' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') + '</span>' +
-          '</span>' +
-          '<span class="entity-meta-item">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>' +
-            '<span>' + pluralizePublications(comp.articlesCount || 0) + '</span>' +
-          '</span>' +
-        '</div>' +
-        '<div class="entity-card-actions">' +
-          '<button type="button" class="btn btn-secondary btn-entity-open">О блоге</button>' +
-          '<button type="button" class="btn btn-secondary btn-entity-sub ' + (comp.isSubscribed ? 'is-subscribed' : '') + '">' +
-            (comp.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
+        '<div class="participant-meta-col">' +
+          '<div class="participant-stats">' + statsText + '</div>' +
+          '<button type="button" class="btn btn-secondary btn-participant-sub ' + (isSub ? 'is-subscribed' : '') + '" data-company-id="' + escapeHtml(comp.id) + '">' +
+            (isSub ? 'Вы подписаны' : 'Подписаться') +
           '</button>' +
         '</div>';
 
-      const openBtn = card.querySelector('.btn-entity-open');
-      if (openBtn) {
-        openBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          openCompanyDetail(comp.id);
-        });
-      }
-      const titleEl = card.querySelector('.entity-card-title');
-      if (titleEl) {
-        titleEl.style.cursor = 'pointer';
-        titleEl.addEventListener('click', function (e) {
-          e.stopPropagation();
-          openCompanyDetail(comp.id);
-        });
-      }
-
-      const subBtn = card.querySelector('.btn-entity-sub');
+      const subBtn = row.querySelector('.btn-participant-sub');
       if (subBtn) {
         subBtn.addEventListener('click', function (e) {
           e.stopPropagation();
@@ -5668,23 +6079,40 @@
         });
       }
 
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('button') || e.target.closest('a')) return;
+      function handleOpenBlog(e) {
+        if (e.target.closest('.btn-participant-sub') || e.target.closest('button') || e.target.closest('a')) return;
         openCompanyDetail(comp.id);
+      }
+
+      row.addEventListener('click', handleOpenBlog);
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target.closest('.btn-participant-sub') || e.target.closest('button') || e.target.closest('a')) return;
+          e.preventDefault();
+          openCompanyDetail(comp.id);
+        }
       });
 
-      grid.appendChild(card);
+      if (list) list.appendChild(row);
+      if (legacyGrid && legacyGrid !== list) {
+        legacyGrid.appendChild(row.cloneNode(true));
+      }
     });
+  }
+
+  function renderCompaniesGrid(companies) {
+    renderCompaniesParticipantsList(companies);
   }
 
   function openCompanyDetail(companyId) {
     state.activeCompanyId = companyId;
     state.tab = 'companies';
+    ensureToolbarPlacement();
     syncURL(false);
     updateSubnavTabsUI();
 
     const detailCard = document.getElementById('companyDetailCard');
-    const articlesContainer = document.getElementById('companyArticlesContainer');
+    const articlesContainer = document.getElementById('companyArticlesContainer') || document.getElementById('companyDetailArticlesList');
     if (detailCard) detailCard.innerHTML = '<div class="feed-skeleton-card" style="height: 160px;"></div>';
     if (articlesContainer) articlesContainer.innerHTML = '';
 
@@ -5693,13 +6121,13 @@
       .then(function (data) {
         if (data && data.success && data.company) {
           renderCompanyDetailCard(data.company);
-          loadCompanyArticles(companyId);
+          loadCompanyArticles(companyId, data.company);
         } else {
           showToast('Компания не найдена', 'error');
           state.activeCompanyId = null;
           syncURL(false);
           updateSubnavTabsUI();
-          loadCompanies('catalog');
+          loadCompanies(state.previousBlogsSubtab || 'posts');
         }
       })
       .catch(function () {
@@ -5710,50 +6138,60 @@
   function renderCompanyDetailCard(comp) {
     const detailCard = document.getElementById('companyDetailCard');
     if (!detailCard) return;
+    detailCard.className = 'entity-card-detail company-profile-header';
 
     const avatarInitials = getInitials(comp.name);
     const avatarHtml = comp.logo
-      ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="entity-avatar entity-avatar-large entity-avatar-img">'
-      : '<div class="entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>';
+      ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="company-profile-avatar company-profile-avatar-img entity-avatar entity-avatar-large entity-avatar-img">'
+      : '<div class="company-profile-avatar entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>';
+
     const verifiedIcon = comp.isVerified
-      ? '<span class="verified-icon" title="Верифицированная компания"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
+      ? '<span class="verified-icon" title="Верифицированная компания" aria-label="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
       : '';
 
+    const isSub = Boolean(comp.isSubscribed || (state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(comp.id)));
+
+    let statsParts = [
+      pluralizePublications(comp.articlesCount || 0),
+      (comp.subscribersCount || 0) + ' ' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков')
+    ];
+    let websiteHtml = '';
+    if (comp.website) {
+      let displayWeb = comp.website.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+      websiteHtml = '<span class="meta-dot">·</span><a href="' + escapeHtml(comp.website) + '" target="_blank" rel="noopener noreferrer" class="company-profile-website">' + escapeHtml(displayWeb) + '</a>';
+    }
+
     const writeBtnHtml = comp.canPublish
-      ? '<a href="editor.html?companyId=' + encodeURIComponent(comp.id) + '" class="btn btn-primary btn-comp-write" style="margin-left: 8px;">Написать от компании</a>'
+      ? '<a href="editor.html?companyId=' + encodeURIComponent(comp.id) + '" class="btn btn-secondary btn-comp-write">Написать публикацию</a>'
       : '';
 
     detailCard.innerHTML =
-      '<div class="entity-detail-top">' +
-        avatarHtml +
-        '<div class="entity-detail-info">' +
-          '<div style="display: flex; align-items: center; gap: 8px;">' +
-            '<h2 class="entity-detail-title">' + escapeHtml(comp.name) + '</h2>' +
-            verifiedIcon +
+      '<div class="company-profile-top">' +
+        '<div class="company-profile-main">' +
+          avatarHtml +
+          '<div class="company-profile-content">' +
+            '<div class="company-profile-title-row">' +
+              '<h2 class="company-profile-title entity-detail-title">' + escapeHtml(comp.name) + '</h2>' +
+              verifiedIcon +
+              '<span class="card-corporate-badge">Блог компании</span>' +
+            '</div>' +
+            (comp.specialization ? '<div class="company-profile-spec entity-detail-spec">' + escapeHtml(comp.specialization) + '</div>' : '') +
+            (comp.description ? '<p class="company-profile-desc entity-detail-desc">' + escapeHtml(comp.description) + '</p>' : '') +
+            '<div class="company-profile-meta">' +
+              '<span>' + statsParts.join(' <span class="meta-dot">·</span> ') + '</span>' +
+              websiteHtml +
+            '</div>' +
           '</div>' +
-          (comp.specialization ? '<div class="entity-detail-spec">' + escapeHtml(comp.specialization) + '</div>' : '') +
-          '<p class="entity-detail-desc">' + escapeHtml(comp.description) + '</p>' +
-          (comp.website ? '<div class="entity-detail-website"><a href="' + escapeHtml(comp.website) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(comp.website) + '</a></div>' : '') +
-          '<div class="entity-detail-stats">' +
-            '<span class="entity-meta-item">' +
-              '<strong>' + (comp.subscribersCount || 0) + '</strong> ' +
-              pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') +
-            '</span>' +
-            '<span class="entity-meta-item">' +
-              '<strong>' + (comp.articlesCount || 0) + '</strong> ' +
-              pluralize(comp.articlesCount || 0, 'статья', 'статьи', 'статей') +
-            '</span>' +
-          '</div>' +
-          '<div class="entity-detail-actions" style="margin-top: 14px;">' +
-            '<button type="button" class="btn btn-secondary btn-comp-sub ' + (comp.isSubscribed ? 'is-subscribed' : '') + '">' +
-              (comp.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
-            '</button>' +
-            writeBtnHtml +
-          '</div>' +
+        '</div>' +
+        '<div class="company-profile-actions">' +
+          '<button type="button" class="btn btn-secondary btn-comp-sub ' + (isSub ? 'is-subscribed' : '') + '" id="btnCompanyDetailSubscribe" data-company-id="' + escapeHtml(comp.id) + '">' +
+            (isSub ? 'Вы подписаны' : 'Подписаться') +
+          '</button>' +
+          writeBtnHtml +
         '</div>' +
       '</div>';
 
-    const subBtn = detailCard.querySelector('.btn-comp-sub');
+    const subBtn = detailCard.querySelector('#btnCompanyDetailSubscribe');
     if (subBtn) {
       subBtn.addEventListener('click', function () {
         toggleSubscription('company', comp.id, subBtn, comp.name);
@@ -5761,23 +6199,29 @@
     }
   }
 
-  function loadCompanyArticles(companyId) {
-    const container = document.getElementById('companyArticlesContainer');
+  function loadCompanyArticles(companyId, companyObj) {
+    const container = document.getElementById('companyArticlesContainer') || document.getElementById('companyDetailArticlesList');
     if (!container) return;
     container.innerHTML = '<div class="feed-skeleton-card" style="height: 120px;"></div>';
 
-    fetch('/api/articles?company=' + encodeURIComponent(companyId))
+    fetch('/api/articles?companyId=' + encodeURIComponent(companyId))
       .then(function (res) { return res.json(); })
       .then(function (data) {
         container.innerHTML = '';
-        if (data && data.success && data.articles && data.articles.length > 0) {
-          data.articles.forEach(function (art) {
-            container.appendChild(createCardElement(art));
+        const articles = (data && Array.isArray(data.articles)) ? data.articles : [];
+        if (articles.length > 0) {
+          articles.forEach(function (art) {
+            container.appendChild(createCardElement(art, { isCompanyDetail: true }));
           });
         } else {
+          const canPublish = companyObj && companyObj.canPublish;
+          const writeCTA = canPublish
+            ? '<a href="editor.html?companyId=' + encodeURIComponent(companyId) + '" class="btn btn-secondary" style="margin-top: 12px;">Написать публикацию</a>'
+            : '';
           container.innerHTML =
             '<div class="feed-empty-state">' +
-              '<p class="empty-state-desc">У этой компании пока нет опубликованных материалов.</p>' +
+              '<p class="empty-state-desc">У этого блога пока нет публикаций</p>' +
+              writeCTA +
             '</div>';
         }
       })
@@ -5787,19 +6231,31 @@
   }
 
   // --- DIRECTIONS ---
+  let cachedDirectionsList = [];
+
   function loadDirections() {
-    const grid = document.getElementById('directionsGrid');
+    const grid = document.getElementById('directionsCatalogGrid') || document.getElementById('directionsGrid');
     if (!grid) return;
-    grid.innerHTML = '<div class="feed-skeleton-card" style="height: 140px; margin: 12px 0;"></div>';
+    grid.innerHTML = '<div class="feed-skeleton-card" style="height: 80px; margin: 8px 0;"></div>';
 
     const searchInput = document.getElementById('directionsSearchInput');
-    const q = searchInput ? searchInput.value.trim() : '';
+    const q = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
-    fetch('/api/directions' + (q ? '?search=' + encodeURIComponent(q) : ''))
+    fetch('/api/directions')
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data && data.success) {
-          renderDirectionsGrid(data.directions || []);
+          cachedDirectionsList = data.directions || [];
+          if (!q) {
+            renderDirectionsCatalog(cachedDirectionsList);
+          } else {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const filtered = cachedDirectionsList.filter(function (d) {
+              const hay = ((d.title || '') + ' ' + (d.description || '')).toLowerCase();
+              return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            });
+            renderDirectionsCatalog(filtered);
+          }
         } else {
           grid.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить темы.</p></div>';
         }
@@ -5838,8 +6294,8 @@
 
   const DEFAULT_TOPIC_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>';
 
-  function renderDirectionsGrid(directions) {
-    const grid = document.getElementById('directionsGrid');
+  function renderDirectionsCatalog(directions) {
+    const grid = document.getElementById('directionsCatalogGrid') || document.getElementById('directionsGrid');
     if (!grid) return;
     grid.innerHTML = '';
 
@@ -5848,50 +6304,64 @@
       return;
     }
 
-    directions.forEach(function (dir) {
+    const sorted = directions.slice().sort(function (a, b) {
+      const countA = a.articlesCount !== undefined ? a.articlesCount : (a.count || 0);
+      const countB = b.articlesCount !== undefined ? b.articlesCount : (b.count || 0);
+      if (countB !== countA) {
+        return countB - countA;
+      }
+      const titleA = a.title || '';
+      const titleB = b.title || '';
+      return titleA.localeCompare(titleB, 'ru');
+    });
+
+    sorted.forEach(function (dir) {
       const card = document.createElement('div');
-      card.className = 'entity-card direction-card';
+      card.className = 'direction-catalog-card direction-card';
       card.setAttribute('data-direction-id', dir.id);
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', dir.title);
 
       const iconSvg = TOPIC_ICONS[dir.id] || DEFAULT_TOPIC_ICON;
+      const pubCount = dir.articlesCount !== undefined ? dir.articlesCount : (dir.count || 0);
+      const subCount = dir.subscribersCount || 0;
+      const metaText = pluralizePublications(pubCount) + ' · ' + pluralize(subCount, 'подписчик', 'подписчика', 'подписчиков');
 
       card.innerHTML =
-        '<div class="entity-card-header">' +
-          '<div class="entity-avatar direction-avatar">' +
-            iconSvg +
-          '</div>' +
-          '<div class="entity-card-title-wrap">' +
-            '<h3 class="entity-card-title">' + escapeHtml(dir.title) + '</h3>' +
-            '<span class="entity-meta-item">' +
-              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>' +
-              '<span>' + pluralizePublications(dir.articlesCount || dir.count || 0) + '</span>' +
-            '</span>' +
-          '</div>' +
+        '<div class="direction-card-icon" aria-hidden="true">' +
+          iconSvg +
         '</div>' +
-        '<p class="entity-card-desc">' + escapeHtml(dir.description) + '</p>' +
-        '<div class="entity-card-meta">' +
-          '<span class="entity-meta-item">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
-            '<span>' + pluralize(dir.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков') + '</span>' +
-          '</span>' +
+        '<div class="direction-card-content">' +
+          '<h3 class="direction-card-title">' + escapeHtml(dir.title) + '</h3>' +
+          '<p class="direction-card-desc">' + escapeHtml(dir.description || '') + '</p>' +
         '</div>' +
-        '<div class="entity-card-actions">' +
-          '<button type="button" class="btn btn-secondary btn-direction-feed">К публикациям</button>' +
-          '<button type="button" class="btn btn-secondary btn-direction-sub ' + (dir.isSubscribed ? 'is-subscribed' : '') + '">' +
+        '<div class="direction-card-right">' +
+          '<span class="direction-card-meta">' + escapeHtml(metaText) + '</span>' +
+          '<button type="button" class="btn btn-secondary btn-direction-sub ' + (dir.isSubscribed ? 'is-subscribed' : '') + '" aria-label="' + (dir.isSubscribed ? 'Отписаться от темы' : 'Подписаться на тему') + '">' +
             (dir.isSubscribed ? 'Вы подписаны' : 'Подписаться') +
           '</button>' +
         '</div>';
 
-      const feedBtn = card.querySelector('.btn-direction-feed');
-      if (feedBtn) {
-        feedBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          state.filters.topics = [dir.id];
-          state.tab = 'all';
-          syncURL(false);
-          switchTab('all');
-        });
+      function navigateToTopicFeed() {
+        state.filters.topics = [dir.id];
+        state.tab = 'all';
+        syncURL(false);
+        switchTab('all');
       }
+
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        navigateToTopicFeed();
+      });
+
+      card.addEventListener('keydown', function (e) {
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigateToTopicFeed();
+        }
+      });
 
       const subBtn = card.querySelector('.btn-direction-sub');
       if (subBtn) {
@@ -5901,16 +6371,12 @@
         });
       }
 
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('button') || e.target.closest('a')) return;
-        state.filters.topics = [dir.id];
-        state.tab = 'all';
-        syncURL(false);
-        switchTab('all');
-      });
-
       grid.appendChild(card);
     });
+  }
+
+  function renderDirectionsGrid(directions) {
+    return renderDirectionsCatalog(directions);
   }
 
   // --- SUBSCRIPTIONS MODAL (5 TABS) ---
@@ -6288,26 +6754,49 @@
       });
     }
 
+    function handleBackToBlogs() {
+      state.activeCompanyId = null;
+      syncURL(false);
+      loadCompanies(state.previousBlogsSubtab || 'posts');
+      updateSubnavTabsUI();
+    }
+    const btnBackToBlogs = document.getElementById('btnBackToBlogs');
+    if (btnBackToBlogs) {
+      btnBackToBlogs.addEventListener('click', handleBackToBlogs);
+    }
     const btnBackToCompanies = document.getElementById('btnBackToCompanies');
     if (btnBackToCompanies) {
-      btnBackToCompanies.addEventListener('click', function () {
-        state.activeCompanyId = null;
-        syncURL(false);
-        switchTab('companies');
-      });
+      btnBackToCompanies.addEventListener('click', handleBackToBlogs);
     }
 
-    // Companies Subtabs
+    // Corporate Blogs Subtabs
+    function onSelectPostsSubtab() {
+      loadCompanies('posts');
+      syncURL(false);
+    }
+    function onSelectParticipantsSubtab() {
+      loadCompanies('participants');
+      syncURL(false);
+    }
+
+    const btnCompaniesTabPosts = document.getElementById('btnCompaniesTabPosts');
+    const btnCompaniesTabParticipants = document.getElementById('btnCompaniesTabParticipants');
     const btnCompaniesTabCatalog = document.getElementById('btnCompaniesTabCatalog');
     const btnCompaniesTabArticles = document.getElementById('btnCompaniesTabArticles');
-    if (btnCompaniesTabCatalog) {
-      btnCompaniesTabCatalog.addEventListener('click', function () {
-        loadCompanies('catalog');
-      });
-    }
-    if (btnCompaniesTabArticles) {
-      btnCompaniesTabArticles.addEventListener('click', function () {
-        loadCompanies('articles');
+
+    if (btnCompaniesTabPosts) btnCompaniesTabPosts.addEventListener('click', onSelectPostsSubtab);
+    if (btnCompaniesTabArticles) btnCompaniesTabArticles.addEventListener('click', onSelectPostsSubtab);
+    if (btnCompaniesTabParticipants) btnCompaniesTabParticipants.addEventListener('click', onSelectParticipantsSubtab);
+    if (btnCompaniesTabCatalog) btnCompaniesTabCatalog.addEventListener('click', onSelectParticipantsSubtab);
+
+    const btnBlogsCreate = document.getElementById('btnBlogsCreateBlog');
+    if (btnBlogsCreate) {
+      btnBlogsCreate.addEventListener('click', function () {
+        if (!currentUser) {
+          openAuthModal('create_company');
+        } else {
+          openCreateCompanyModal();
+        }
       });
     }
 
@@ -6341,16 +6830,64 @@
 
     const companiesSearchInput = document.getElementById('companiesSearchInput');
     if (companiesSearchInput) {
-      companiesSearchInput.addEventListener('input', debounce(function () {
-        loadCompanies('catalog');
-      }, 300));
+      function handleCompaniesFilter() {
+        const q = (companiesSearchInput.value || '').trim().toLowerCase();
+        state.search = q;
+        const feedInp = document.getElementById('feedSearchInput');
+        if (feedInp) feedInp.value = q;
+        if (cachedCompaniesList && cachedCompaniesList.length > 0) {
+          if (!q) {
+            renderCompaniesParticipantsList(cachedCompaniesList);
+          } else {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const filtered = cachedCompaniesList.filter(function (comp) {
+              const hay = ((comp.name || '') + ' ' + (comp.specialization || '') + ' ' + (comp.description || '')).toLowerCase();
+              return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            });
+            renderCompaniesParticipantsList(filtered);
+          }
+        } else {
+          loadCompanies('participants');
+        }
+      }
+
+      companiesSearchInput.addEventListener('input', handleCompaniesFilter);
+      companiesSearchInput.addEventListener('search', handleCompaniesFilter);
     }
 
     const directionsSearchInput = document.getElementById('directionsSearchInput');
+    const directionsSearchClearBtn = document.getElementById('directionsSearchClearBtn');
     if (directionsSearchInput) {
-      directionsSearchInput.addEventListener('input', debounce(function () {
-        loadDirections();
-      }, 300));
+      function handleDirectionsSearch() {
+        const q = directionsSearchInput.value.trim().toLowerCase();
+        if (directionsSearchClearBtn) {
+          directionsSearchClearBtn.style.display = q ? 'inline-flex' : 'none';
+        }
+        if (cachedDirectionsList && cachedDirectionsList.length > 0) {
+          if (!q) {
+            renderDirectionsCatalog(cachedDirectionsList);
+          } else {
+            const terms = q.split(/\s+/).filter(Boolean);
+            const filtered = cachedDirectionsList.filter(function (d) {
+              const hay = ((d.title || '') + ' ' + (d.description || '')).toLowerCase();
+              return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            });
+            renderDirectionsCatalog(filtered);
+          }
+        } else {
+          loadDirections();
+        }
+      }
+
+      directionsSearchInput.addEventListener('input', handleDirectionsSearch);
+
+      if (directionsSearchClearBtn) {
+        directionsSearchClearBtn.addEventListener('click', function () {
+          directionsSearchInput.value = '';
+          handleDirectionsSearch();
+          directionsSearchInput.focus();
+        });
+      }
     }
 
     // Modals: Create Club
@@ -6866,7 +7403,7 @@
         else loadClubs();
       } else if (state.tab === 'companies') {
         if (state.activeCompanyId) openCompanyDetail(state.activeCompanyId);
-        else loadCompanies(state.companiesSubtab || 'catalog');
+        else loadCompanies(state.companiesSubtab || 'posts');
       } else if (state.tab === 'directions') {
         loadDirections();
       } else {
@@ -6876,12 +7413,14 @@
 
     window.addEventListener('popstate', function () {
       parseURLParams();
+      updateSubnavTabsUI();
+      ensureToolbarPlacement();
       if (state.tab === 'clubs') {
         if (state.activeClubId) openClubDetail(state.activeClubId);
         else loadClubs();
       } else if (state.tab === 'companies') {
         if (state.activeCompanyId) openCompanyDetail(state.activeCompanyId);
-        else loadCompanies(state.companiesSubtab || 'catalog');
+        else loadCompanies(state.companiesSubtab || 'posts');
       } else if (state.tab === 'directions') {
         loadDirections();
       } else {
@@ -6909,6 +7448,9 @@
     window.__updateQuestionStatusPillsUI = updateQuestionStatusPillsUI;
     window.__parseURLParams = parseURLParams;
     window.__syncURL = syncURL;
+    window.__switchTab = switchTab;
+    window.__renderEmptyState = renderEmptyState;
+    window.__updateSubnavTabsUI = updateSubnavTabsUI;
     window.loadArticles = loadArticles;
     window.fetchFeed = fetchFeed;
     window.showOfflineBadge = showOfflineBadge;
