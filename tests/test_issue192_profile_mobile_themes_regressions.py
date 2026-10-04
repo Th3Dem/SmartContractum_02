@@ -557,13 +557,16 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
         ]
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+            )
             for vp in viewports:
                 context = browser.new_context(viewport=vp)
                 page = context.new_page()
 
                 # Open profile page
-                page.goto(f"{self.base_url}/profile.html?id=author_192")
+                page.goto(f"{self.base_url}/profile.html?id=author_192", wait_until="domcontentloaded")
                 page.wait_for_function(
                     "() => { const el = document.getElementById('profileName'); return el && el.textContent.trim() !== 'Загрузка...' && el.textContent.trim() !== ''; }",
                     timeout=10000
