@@ -45,6 +45,18 @@
   let isLoadingAns = false;
   let ansReqSeq = 0;
   let ansAbortCtrl = null;
+
+  let commSort = 'new';
+  let commOffset = 0;
+  const commLimit = 10;
+  let commItems = [];
+  let commHasMore = false;
+  let isLoadingComm = false;
+  let commReqSeq = 0;
+  let commAbortCtrl = null;
+
+  let currentSearchQuery = '';
+  let searchDebounceTimer = null;
   let lastEditTriggerEl = null;
 
   function escapeHtml(str) {
@@ -222,6 +234,7 @@
             questionsCount: s.questionsCount !== undefined ? s.questionsCount : (profile.questionsCount || 0),
             answersCount: s.answersCount !== undefined ? s.answersCount : (profile.answersCount || 0),
             solutionsCount: s.solutionsCount !== undefined ? s.solutionsCount : (profile.solutionsCount || 0),
+            commentsCount: s.commentsCount !== undefined ? s.commentsCount : (s.comments_count !== undefined ? s.comments_count : (profile.commentsCount !== undefined ? profile.commentsCount : (profile.comments_count || 0))),
             followersCount: s.followersCount !== undefined ? s.followersCount : (profile.followersCount || 0),
             followingCount: s.followingCount !== undefined ? s.followingCount : (profile.followingCount || 0)
           });
@@ -260,6 +273,13 @@
       if (stats.solutionsCount !== undefined) {
         currentProfile.stats.solutionsCount = stats.solutionsCount;
         currentProfile.solutionsCount = stats.solutionsCount;
+      }
+      if (stats.commentsCount !== undefined || stats.comments_count !== undefined) {
+        const commCnt = stats.commentsCount !== undefined ? stats.commentsCount : stats.comments_count;
+        currentProfile.stats.commentsCount = commCnt;
+        currentProfile.stats.comments_count = commCnt;
+        currentProfile.commentsCount = commCnt;
+        currentProfile.comments_count = commCnt;
       }
       if (stats.followersCount !== undefined) {
         currentProfile.stats.followersCount = stats.followersCount;
@@ -304,6 +324,11 @@
       if (sEl) sEl.textContent = stats.solutionsCount;
       const ssEl = document.getElementById('sidebarReputationSolutions');
       if (ssEl) ssEl.textContent = stats.solutionsCount;
+    }
+    if (stats.commentsCount !== undefined || stats.comments_count !== undefined) {
+      const commCnt = stats.commentsCount !== undefined ? stats.commentsCount : stats.comments_count;
+      const cComm = document.getElementById('profileTabCountComments') || document.getElementById('tabCountComments');
+      if (cComm) cComm.textContent = commCnt;
     }
     if (stats.followersCount !== undefined) {
       const fEl = document.getElementById('profileStatFollowers');
@@ -402,6 +427,10 @@
       questionsCount: stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0),
       answersCount: stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0),
       solutionsCount: stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0),
+      commentsCount: stats.commentsCount !== undefined ? stats.commentsCount :
+        (stats.comments_count !== undefined ? stats.comments_count :
+        (p.commentsCount !== undefined ? p.commentsCount :
+        (p.comments_count !== undefined ? p.comments_count : 0))),
       followersCount: stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0),
       followingCount: stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0)
     });
@@ -432,6 +461,7 @@
     pubOffset = 0; pubItems = [];
     questOffset = 0; questItems = [];
     ansOffset = 0; ansItems = [];
+    commOffset = 0; commItems = [];
 
     // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
@@ -451,7 +481,7 @@
 
   function setActiveTab(tabName, updateUrl) {
     if (updateUrl === undefined) updateUrl = true;
-    const validTabs = ['overview', 'publications', 'questions', 'answers'];
+    const validTabs = ['overview', 'publications', 'questions', 'answers', 'comments'];
     if (validTabs.indexOf(tabName) === -1) {
       tabName = 'overview';
     }
@@ -461,14 +491,16 @@
       overview: document.getElementById('tabBtnOverview'),
       publications: document.getElementById('tabBtnPublications'),
       questions: document.getElementById('tabBtnQuestions'),
-      answers: document.getElementById('tabBtnAnswers')
+      answers: document.getElementById('tabBtnAnswers'),
+      comments: document.getElementById('tabProfileComments') || document.getElementById('tabBtnComments')
     };
 
     const tabPanels = {
       overview: document.getElementById('profileTabOverview'),
       publications: document.getElementById('profileTabPublications'),
       questions: document.getElementById('profileTabQuestions'),
-      answers: document.getElementById('profileTabAnswers')
+      answers: document.getElementById('profileTabAnswers'),
+      comments: document.getElementById('profileTabComments')
     };
 
     Object.keys(tabButtons).forEach(function (key) {
@@ -499,7 +531,7 @@
         } else {
           url.searchParams.set('tab', tabName);
         }
-        const stateObj = { tab: tabName };
+        const stateObj = { tab: tabName, q: currentSearchQuery };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
             window.history.pushState(stateObj, '', url.toString());
@@ -528,6 +560,10 @@
         if (ansItems.length === 0) {
           loadAnswers(uid, false);
         }
+      } else if (tabName === 'comments') {
+        if (commItems.length === 0) {
+          loadComments(uid, false);
+        }
       }
     }
   }
@@ -538,6 +574,10 @@
     const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
     const questVal = stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0);
     const ansVal = stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0);
+    const commVal = stats.commentsCount !== undefined ? stats.commentsCount :
+      (stats.comments_count !== undefined ? stats.comments_count :
+      (p.commentsCount !== undefined ? p.commentsCount :
+      (p.comments_count !== undefined ? p.comments_count : 0)));
 
     const cPub = document.getElementById('tabCountPublications');
     if (cPub) cPub.textContent = pubVal;
@@ -547,6 +587,9 @@
 
     const cAns = document.getElementById('tabCountAnswers');
     if (cAns) cAns.textContent = ansVal;
+
+    const cComm = document.getElementById('profileTabCountComments') || document.getElementById('tabCountComments');
+    if (cComm) cComm.textContent = commVal;
   }
 
   function renderTopContributions(topList, fallbackPubs) {
@@ -867,6 +910,13 @@
           '<span class="activity-context-label">К вопросу:</span>' +
           '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
         '</div>';
+      } else if (item.type === 'comment') {
+        badgeHtml = '<span class="activity-type-badge activity-badge-comment">Комментарий</span>';
+        const parentTitle = item.parentTitle || item.title || 'Материал';
+        titleWrapHtml = '<div class="activity-card-title-wrap">' +
+          '<span class="activity-context-label">К материалу:</span>' +
+          '<a href="' + url + '" class="activity-card-title">' + escapeHtml(parentTitle) + '</a>' +
+        '</div>';
       } else if (item.type === 'question') {
         badgeHtml = '<span class="activity-type-badge activity-badge-question">Вопрос</span>';
         titleWrapHtml = '<div class="activity-card-title-wrap">' +
@@ -896,6 +946,14 @@
         '</span>';
       }
 
+      let commentLinkHtml = '';
+      if (item.type === 'comment' && url) {
+        commentLinkHtml = '<a href="' + url + '" class="activity-comment-permalink" title="Перейти к комментарию" style="margin-left: auto; font-size: 0.76rem; color: var(--text-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' +
+          ' <span>Перейти</span>' +
+        '</a>';
+      }
+
       return '<div class="activity-card">' +
         '<div class="activity-card-header">' +
           badgeHtml +
@@ -909,6 +967,7 @@
             ' <span>' + ratingDisplay + '</span>' +
           '</span>' +
           extraMeta +
+          commentLinkHtml +
         '</div>' +
       '</div>';
     }).join('');
@@ -943,7 +1002,10 @@
     pubAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const currentReqSeq = ++pubReqSeq;
     isLoadingPub = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
     const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
     fetch(url, fetchOpts)
@@ -1344,7 +1406,10 @@
     if (!list) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не публиковал материалы.</div>';
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не публиковал материалы.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
       if (actions) actions.style.display = 'none';
       return;
     }
@@ -1405,7 +1470,10 @@
     questAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const currentReqSeq = ++questReqSeq;
     isLoadingQuest = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
     const fetchOpts = questAbortCtrl ? { signal: questAbortCtrl.signal } : {};
 
     fetch(url, fetchOpts)
@@ -1456,7 +1524,10 @@
     if (!list) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не задавал вопросы.</div>';
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не задавал вопросы.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
       if (actions) actions.style.display = 'none';
       return;
     }
@@ -1521,7 +1592,10 @@
     ansAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const currentReqSeq = ++ansReqSeq;
     isLoadingAns = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
     const fetchOpts = ansAbortCtrl ? { signal: ansAbortCtrl.signal } : {};
 
     fetch(url, fetchOpts)
@@ -1572,7 +1646,10 @@
     if (!list) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не публиковал ответы на вопросы.</div>';
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не публиковал ответы на вопросы.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
       if (actions) actions.style.display = 'none';
       return;
     }
@@ -1624,6 +1701,204 @@
 
     if (actions) {
       actions.style.display = hasMore ? 'block' : 'none';
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Comments Tab: Loader & Renderer
+  // --------------------------------------------------------------------------
+  function loadComments(userId, append) {
+    if (!userId) return;
+    if (append && isLoadingComm) return;
+
+    const list = document.getElementById('profileCommentsList');
+    const actions = document.getElementById('profileCommentsActions');
+
+    if (!append) {
+      if (commAbortCtrl) {
+        try { commAbortCtrl.abort(); } catch (e) {}
+      }
+      commOffset = 0;
+      commItems = [];
+      if (list) {
+        list.innerHTML = '<div class="profile-empty-state">Загрузка комментариев...</div>';
+      }
+      if (actions) actions.style.display = 'none';
+    }
+
+    commAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++commReqSeq;
+    isLoadingComm = true;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/comments?sort=' + encodeURIComponent(commSort) + '&limit=' + commLimit + '&offset=' + commOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    const fetchOpts = commAbortCtrl ? { signal: commAbortCtrl.signal } : {};
+
+    fetch(url, fetchOpts)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (currentReqSeq !== commReqSeq) return;
+        isLoadingComm = false;
+        if (!data || !data.success) {
+          throw new Error((data && data.error) || 'Failed to load comments');
+        }
+        const incoming = Array.isArray(data.items) ? data.items : (Array.isArray(data.comments) ? data.comments : []);
+        commItems = append ? commItems.concat(incoming) : incoming;
+        commOffset += incoming.length;
+        commHasMore = Boolean(data.hasMore);
+        renderCommentsTab(commItems, append, commHasMore, incoming);
+      })
+      .catch(function (err) {
+        if (currentReqSeq !== commReqSeq) return;
+        if (err && err.name === 'AbortError') return;
+        isLoadingComm = false;
+        if (!append) {
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки комментариев</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryComments">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryComments');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadComments(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить комментарии. Попробуйте еще раз.');
+        }
+      });
+  }
+
+  function renderCommentsTab(items, append, hasMore, newItems) {
+    const list = document.getElementById('profileCommentsList');
+    const actions = document.getElementById('profileCommentsActions');
+    if (!list) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не оставлял комментарии.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+
+    if (!append) {
+      list.innerHTML = '';
+    }
+
+    const toRender = append ? (newItems || []) : items;
+    toRender.forEach(function (item) {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'profile-comment-item profile-comment-card';
+
+      const ratingVal = item.rating !== undefined ? item.rating : (item.score || 0);
+      const ratingDisplay = ratingVal >= 0 ? '+' + ratingVal : ratingVal;
+      const dateDisplay = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const parentTitle = item.parentTitle || item.title || 'Материал';
+      const articleId = item.articleId || item.materialId;
+      const commentId = item.id || item.commentId;
+      const permalink = item.permalink || item.url || ('article.html?id=' + encodeURIComponent(articleId) + '#comment-' + encodeURIComponent(commentId));
+      const parentUrl = 'article.html?id=' + encodeURIComponent(articleId);
+
+      const snippet = item.contentSnippet || item.snippet || item.content || '';
+      const snippetHtml = snippet
+        ? '<div class="profile-comment-snippet">' + escapeHtml(snippet) + '</div>'
+        : '';
+
+      cardEl.innerHTML =
+        '<div class="profile-comment-header">' +
+          '<span class="profile-comment-badge">Комментарий</span>' +
+          '<div class="profile-comment-context">' +
+            '<span class="profile-comment-context-label">К материалу:</span>' +
+            '<a href="' + parentUrl + '" class="profile-comment-parent-title">' + escapeHtml(parentTitle) + '</a>' +
+          '</div>' +
+        '</div>' +
+        snippetHtml +
+        '<div class="profile-comment-footer">' +
+          '<span class="profile-comment-date">' + escapeHtml(dateDisplay) + '</span>' +
+          '<span class="profile-comment-rating" title="Рейтинг комментария">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>' +
+            ' <span>' + ratingDisplay + '</span>' +
+          '</span>' +
+          '<a href="' + permalink + '" class="profile-comment-link" title="Перейти к комментарию">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' +
+            ' <span>Перейти</span>' +
+          '</a>' +
+        '</div>';
+
+      list.appendChild(cardEl);
+    });
+
+    if (actions) {
+      actions.style.display = hasMore ? 'block' : 'none';
+    }
+  }
+
+  function triggerSearch(newQuery) {
+    const q = (newQuery !== undefined && newQuery !== null) ? String(newQuery).trim() : '';
+    if (q === currentSearchQuery && q !== '') return;
+    currentSearchQuery = q;
+
+    const searchInput = document.getElementById('profileSearchInput');
+    if (searchInput && searchInput.value !== currentSearchQuery) {
+      searchInput.value = currentSearchQuery;
+    }
+
+    const clearBtn = document.getElementById('btnProfileSearchClear');
+    if (clearBtn) {
+      clearBtn.style.display = currentSearchQuery ? 'flex' : 'none';
+    }
+
+    if (window.history && (window.history.pushState || window.history.replaceState)) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        if (window.history.replaceState) {
+          window.history.replaceState({ tab: activeTab, q: currentSearchQuery }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (!currentProfile) return;
+    const uid = currentProfile.id || currentProfile.userId;
+
+    if (activeTab === 'overview' && currentSearchQuery) {
+      setActiveTab('publications', true);
+      pubOffset = 0;
+      pubItems = [];
+      loadPublications(uid, false);
+      return;
+    }
+
+    if (activeTab === 'publications') {
+      pubOffset = 0;
+      pubItems = [];
+      loadPublications(uid, false);
+    } else if (activeTab === 'questions') {
+      questOffset = 0;
+      questItems = [];
+      loadQuestions(uid, false);
+    } else if (activeTab === 'answers') {
+      ansOffset = 0;
+      ansItems = [];
+      loadAnswers(uid, false);
+    } else if (activeTab === 'comments') {
+      commOffset = 0;
+      commItems = [];
+      loadComments(uid, false);
     }
   }
 
@@ -2217,9 +2492,20 @@
     function handlePopState(e) {
       try {
         let tab = (e && e.state && e.state.tab) || null;
+        let q = (e && e.state && e.state.q !== undefined) ? e.state.q : null;
+        const params = new URLSearchParams(window.location.search);
         if (!tab) {
-          const params = new URLSearchParams(window.location.search);
           tab = params.get('tab') || 'overview';
+        }
+        if (q === null) {
+          q = params.get('q') || '';
+        }
+        if (q !== currentSearchQuery) {
+          currentSearchQuery = q;
+          const sInp = document.getElementById('profileSearchInput');
+          if (sInp) sInp.value = q;
+          const sClr = document.getElementById('btnProfileSearchClear');
+          if (sClr) sClr.style.display = q ? 'flex' : 'none';
         }
         setActiveTab(tab, false);
       } catch (err) {
@@ -2329,11 +2615,94 @@
         }
       });
     }
+
+    // 17. Comments toolbar sorting
+    const commSortBtns = document.querySelectorAll('[data-comm-sort]');
+    for (let i = 0; i < commSortBtns.length; i++) {
+      commSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-comm-sort');
+        if (sort === commSort) return;
+        commSort = sort;
+        for (let j = 0; j < commSortBtns.length; j++) {
+          commSortBtns[j].classList.toggle('is-active', commSortBtns[j] === this);
+        }
+        commOffset = 0;
+        commItems = [];
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadComments(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
+    // 18. Comments Load More
+    const btnLoadMoreComm = document.getElementById('btnProfileLoadMoreComments');
+    if (btnLoadMoreComm) {
+      btnLoadMoreComm.addEventListener('click', function () {
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && commHasMore && !isLoadingComm) {
+          loadComments(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
+
+    // 19. Profile tabs toolbar search input
+    const searchInput = document.getElementById('profileSearchInput');
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        const val = this.value;
+        if (searchClearBtn) {
+          searchClearBtn.style.display = val ? 'flex' : 'none';
+        }
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(function () {
+          triggerSearch(val);
+        }, 300);
+      });
+
+      searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          clearTimeout(searchDebounceTimer);
+          triggerSearch(this.value);
+        } else if (e.key === 'Escape') {
+          if (this.value) {
+            e.preventDefault();
+            this.value = '';
+            if (searchClearBtn) searchClearBtn.style.display = 'none';
+            clearTimeout(searchDebounceTimer);
+            triggerSearch('');
+          }
+        }
+      });
+    }
+
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function () {
+        if (searchInput) {
+          searchInput.value = '';
+          searchInput.focus();
+        }
+        searchClearBtn.style.display = 'none';
+        clearTimeout(searchDebounceTimer);
+        triggerSearch('');
+      });
+    }
   }
 
   function init() {
     initTheme();
     initEventListeners();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialQ = urlParams.get('q') || '';
+    if (initialQ) {
+      currentSearchQuery = initialQ;
+      const sInput = document.getElementById('profileSearchInput');
+      if (sInput) sInput.value = initialQ;
+      const sClear = document.getElementById('btnProfileSearchClear');
+      if (sClear) sClear.style.display = 'flex';
+    }
 
     checkAuthStatus(function (user) {
       let targetUserId = getUserIdFromUrl();
@@ -2366,6 +2735,11 @@
     renderQuestionsTab: renderQuestionsTab,
     loadAnswers: loadAnswers,
     renderAnswersTab: renderAnswersTab,
+    loadComments: loadComments,
+    renderCommentsTab: renderCommentsTab,
+    triggerSearch: triggerSearch,
+    setSearchQuery: function (q) { triggerSearch(q); },
+    getSearchQuery: function () { return currentSearchQuery; },
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
     openEditModal: openEditModal,
@@ -2387,7 +2761,8 @@
         activity: activityOffset,
         publications: pubOffset,
         questions: questOffset,
-        answers: ansOffset
+        answers: ansOffset,
+        comments: commOffset
       };
     },
     getSeqTokens: function () {
@@ -2395,7 +2770,8 @@
         activity: actReqSeq,
         publications: pubReqSeq,
         questions: questReqSeq,
-        answers: ansReqSeq
+        answers: ansReqSeq,
+        comments: commReqSeq
       };
     },
     getActiveTab: function () {
