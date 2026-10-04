@@ -15,6 +15,8 @@
   const activityLimit = 15;
   let activityHasMore = false;
   let isLoadingActivity = false;
+  let actReqSeq = 0;
+  let actAbortCtrl = null;
 
   let pubSort = 'newest';
   let pubOffset = 0;
@@ -22,6 +24,8 @@
   let pubItems = [];
   let pubHasMore = false;
   let isLoadingPub = false;
+  let pubReqSeq = 0;
+  let pubAbortCtrl = null;
 
   let questSort = 'newest';
   let questStatus = 'all';
@@ -30,6 +34,8 @@
   let questItems = [];
   let questHasMore = false;
   let isLoadingQuest = false;
+  let questReqSeq = 0;
+  let questAbortCtrl = null;
 
   let ansFilter = 'all';
   let ansOffset = 0;
@@ -37,6 +43,8 @@
   let ansItems = [];
   let ansHasMore = false;
   let isLoadingAns = false;
+  let ansReqSeq = 0;
+  let ansAbortCtrl = null;
   let lastEditTriggerEl = null;
 
   function escapeHtml(str) {
@@ -205,13 +213,106 @@
         if (!data || !data.success) {
           throw new Error('PROFILE_LOAD_FAILED');
         }
-        currentProfile = (data.profile || data.user || data);
+        const profile = (data.profile || data.user || data);
+        if (isSilentRefresh && currentProfile) {
+          const s = profile.stats || {};
+          updateProfileStats({
+            rating: s.rating !== undefined ? s.rating : (profile.rating !== undefined ? profile.rating : 0),
+            publicationsCount: s.publicationsCount !== undefined ? s.publicationsCount : (profile.publicationsCount || 0),
+            questionsCount: s.questionsCount !== undefined ? s.questionsCount : (profile.questionsCount || 0),
+            answersCount: s.answersCount !== undefined ? s.answersCount : (profile.answersCount || 0),
+            solutionsCount: s.solutionsCount !== undefined ? s.solutionsCount : (profile.solutionsCount || 0),
+            followersCount: s.followersCount !== undefined ? s.followersCount : (profile.followersCount || 0),
+            followingCount: s.followingCount !== undefined ? s.followingCount : (profile.followingCount || 0)
+          });
+          return;
+        }
+        currentProfile = profile;
         renderProfile(currentProfile);
       })
       .catch(function (err) {
         if (err && err.name === 'AbortError') return;
         renderError(err && err.message === 'USER_NOT_FOUND' ? 'Пользователь не найден' : 'Ошибка загрузки профиля');
       });
+  }
+
+  function updateProfileStats(stats) {
+    if (!stats) return;
+
+    if (currentProfile) {
+      currentProfile.stats = currentProfile.stats || {};
+      if (stats.rating !== undefined) {
+        currentProfile.stats.rating = stats.rating;
+        currentProfile.rating = stats.rating;
+      }
+      if (stats.publicationsCount !== undefined) {
+        currentProfile.stats.publicationsCount = stats.publicationsCount;
+        currentProfile.publicationsCount = stats.publicationsCount;
+      }
+      if (stats.questionsCount !== undefined) {
+        currentProfile.stats.questionsCount = stats.questionsCount;
+        currentProfile.questionsCount = stats.questionsCount;
+      }
+      if (stats.answersCount !== undefined) {
+        currentProfile.stats.answersCount = stats.answersCount;
+        currentProfile.answersCount = stats.answersCount;
+      }
+      if (stats.solutionsCount !== undefined) {
+        currentProfile.stats.solutionsCount = stats.solutionsCount;
+        currentProfile.solutionsCount = stats.solutionsCount;
+      }
+      if (stats.followersCount !== undefined) {
+        currentProfile.stats.followersCount = stats.followersCount;
+        currentProfile.followersCount = stats.followersCount;
+      }
+      if (stats.followingCount !== undefined) {
+        currentProfile.stats.followingCount = stats.followingCount;
+        currentProfile.followingCount = stats.followingCount;
+      }
+    }
+
+    if (stats.rating !== undefined) {
+      const rEl = document.getElementById('profileStatRating');
+      if (rEl) rEl.textContent = stats.rating;
+      const srEl = document.getElementById('sidebarReputationRating');
+      if (srEl) srEl.textContent = stats.rating;
+    }
+    if (stats.publicationsCount !== undefined) {
+      const pEl = document.getElementById('profileStatPublications');
+      if (pEl) pEl.textContent = stats.publicationsCount;
+      const cPub = document.getElementById('tabCountPublications');
+      if (cPub) cPub.textContent = stats.publicationsCount;
+      const spEl = document.getElementById('sidebarReputationPubs');
+      if (spEl) spEl.textContent = stats.publicationsCount;
+    }
+    if (stats.questionsCount !== undefined) {
+      const qEl = document.getElementById('profileStatQuestions');
+      if (qEl) qEl.textContent = stats.questionsCount;
+      const cQuest = document.getElementById('tabCountQuestions');
+      if (cQuest) cQuest.textContent = stats.questionsCount;
+      const sqEl = document.getElementById('sidebarReputationQuestions');
+      if (sqEl) sqEl.textContent = stats.questionsCount;
+    }
+    if (stats.answersCount !== undefined) {
+      const aEl = document.getElementById('profileStatAnswers');
+      if (aEl) aEl.textContent = stats.answersCount;
+      const cAns = document.getElementById('tabCountAnswers');
+      if (cAns) cAns.textContent = stats.answersCount;
+    }
+    if (stats.solutionsCount !== undefined) {
+      const sEl = document.getElementById('profileStatSolutions');
+      if (sEl) sEl.textContent = stats.solutionsCount;
+      const ssEl = document.getElementById('sidebarReputationSolutions');
+      if (ssEl) ssEl.textContent = stats.solutionsCount;
+    }
+    if (stats.followersCount !== undefined) {
+      const fEl = document.getElementById('profileStatFollowers');
+      if (fEl) fEl.textContent = stats.followersCount;
+    }
+    if (stats.followingCount !== undefined) {
+      const fwEl = document.getElementById('profileStatFollowing');
+      if (fwEl) fwEl.textContent = stats.followingCount;
+    }
   }
 
   function renderProfile(p) {
@@ -293,36 +394,17 @@
       }
     }
 
-    // 3. Stats & Reputation
+    // 3. Stats & Reputation via unified updater
     const stats = p.stats || {};
-    const ratingVal = stats.rating !== undefined ? stats.rating : (p.rating !== undefined ? p.rating : 0);
-    const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
-    const questVal = stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0);
-    const ansVal = stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0);
-    const solVal = stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0);
-    const followVal = stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0);
-    const followingVal = stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0);
-
-    const rEl = document.getElementById('profileStatRating');
-    if (rEl) rEl.textContent = ratingVal;
-
-    const pEl = document.getElementById('profileStatPublications');
-    if (pEl) pEl.textContent = pubVal;
-
-    const qEl = document.getElementById('profileStatQuestions');
-    if (qEl) qEl.textContent = questVal;
-
-    const aEl = document.getElementById('profileStatAnswers');
-    if (aEl) aEl.textContent = ansVal;
-
-    const sEl = document.getElementById('profileStatSolutions');
-    if (sEl) sEl.textContent = solVal;
-
-    const fEl = document.getElementById('profileStatFollowers');
-    if (fEl) fEl.textContent = followVal;
-
-    const fwEl = document.getElementById('profileStatFollowing');
-    if (fwEl) fwEl.textContent = followingVal;
+    updateProfileStats({
+      rating: stats.rating !== undefined ? stats.rating : (p.rating !== undefined ? p.rating : 0),
+      publicationsCount: stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0),
+      questionsCount: stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0),
+      answersCount: stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0),
+      solutionsCount: stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0),
+      followersCount: stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0),
+      followingCount: stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0)
+    });
 
     const ageEl = document.getElementById('profileAccountAge');
     if (ageEl) {
@@ -340,8 +422,8 @@
     // 5. Tab counts
     renderTabCounts(p);
 
-    // 6. Top contributions
-    renderTopContributions(p.topContributions || []);
+    // 6. Top contributions with fallback
+    renderTopContributions(p.topContributions || [], p.publications || p.articles || []);
 
     // 7. Desktop sidebar
     renderSidebar(p);
@@ -409,7 +491,7 @@
       }
     });
 
-    if (updateUrl && window.history && window.history.replaceState) {
+    if (updateUrl && window.history) {
       try {
         const url = new URL(window.location.href);
         if (tabName === 'overview') {
@@ -417,7 +499,18 @@
         } else {
           url.searchParams.set('tab', tabName);
         }
-        window.history.replaceState({}, '', url.toString());
+        const stateObj = { tab: tabName };
+        if (updateUrl === true || updateUrl === 'push') {
+          if (window.history.pushState) {
+            window.history.pushState(stateObj, '', url.toString());
+          } else if (window.history.replaceState) {
+            window.history.replaceState(stateObj, '', url.toString());
+          }
+        } else if (updateUrl === 'replace') {
+          if (window.history.replaceState) {
+            window.history.replaceState(stateObj, '', url.toString());
+          }
+        }
       } catch (e) {}
     }
 
@@ -456,19 +549,46 @@
     if (cAns) cAns.textContent = ansVal;
   }
 
-  function renderTopContributions(topList) {
+  function renderTopContributions(topList, fallbackPubs) {
     const sec = document.getElementById('profileTopContributionsSection');
     const grid = document.getElementById('profileTopContributionsGrid');
     if (!sec || !grid) return;
 
-    if (!Array.isArray(topList) || topList.length === 0) {
+    let items = Array.isArray(topList) ? topList.slice() : [];
+    if (items.length === 0) {
+      const pubs = Array.isArray(fallbackPubs) ? fallbackPubs : (currentProfile && (currentProfile.publications || currentProfile.articles));
+      if (Array.isArray(pubs) && pubs.length > 0) {
+        const candidates = pubs.slice();
+        candidates.sort(function (a, b) {
+          const rA = a.rating !== undefined ? a.rating : 0;
+          const rB = b.rating !== undefined ? b.rating : 0;
+          if (rB !== rA) return rB - rA;
+          const dA = new Date(a.date || a.createdAt || 0).getTime();
+          const dB = new Date(b.date || b.createdAt || 0).getTime();
+          return dB - dA;
+        });
+        items = candidates.slice(0, 3).map(function (item) {
+          return {
+            id: item.id,
+            title: item.title,
+            rating: item.rating !== undefined ? item.rating : 0,
+            type: item.materialType || item.type || 'publication',
+            url: item.url || ('article.html?id=' + encodeURIComponent(item.id)),
+            contentSnippet: item.contentSnippet || '',
+            date: item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '')
+          };
+        });
+      }
+    }
+
+    if (items.length === 0) {
       sec.style.display = 'none';
       grid.innerHTML = '';
       return;
     }
 
     sec.style.display = 'block';
-    grid.innerHTML = topList.map(function (item) {
+    grid.innerHTML = items.map(function (item) {
       const isSolution = item.isSolution || item.type === 'solution';
       const isQuestion = item.type === 'question' || item.materialType === 'question';
       let badgeClass = 'publication';
@@ -640,38 +760,50 @@
   }
 
   function loadActivity(userId, append) {
-    if (!userId || isLoadingActivity) return;
+    if (!userId) return;
+    if (append && isLoadingActivity) return;
 
     const feedContainer = document.getElementById('profileActivityFeed');
     const actionsContainer = document.getElementById('profileActivityActions');
 
     if (!append) {
+      if (actAbortCtrl) {
+        try { actAbortCtrl.abort(); } catch (e) {}
+      }
       activityOffset = 0;
       activityItems = [];
       if (feedContainer) {
         feedContainer.innerHTML = '<div class="profile-empty-state">Загрузка активности...</div>';
       }
+      if (actionsContainer) {
+        actionsContainer.style.display = 'none';
+      }
     }
 
+    actAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++actReqSeq;
     isLoadingActivity = true;
     const url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    const fetchOpts = actAbortCtrl ? { signal: actAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('ACTIVITY_LOAD_FAILED');
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== actReqSeq) return;
         isLoadingActivity = false;
         if (!data || !data.success) {
           throw new Error('ACTIVITY_INVALID_DATA');
         }
-        const newItems = data.activity || [];
+        const newItems = Array.isArray(data.activity) ? data.activity : [];
         if (append) {
           activityItems = activityItems.concat(newItems);
         } else {
           activityItems = newItems;
         }
+        activityOffset += newItems.length;
         activityHasMore = Boolean(data.hasMore);
         renderActivityFeed(activityItems, activityHasMore);
 
@@ -679,13 +811,29 @@
           renderAnswersTab();
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== actReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingActivity = false;
-        if (!append && feedContainer) {
-          feedContainer.innerHTML = '<div class="profile-empty-state">Ошибка загрузки ленты активности</div>';
-        }
-        if (actionsContainer) {
-          actionsContainer.style.display = 'none';
+        if (!append) {
+          if (feedContainer) {
+            feedContainer.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки ленты активности</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryActivity">Повторить попытку</button>' +
+              '</div>';
+            const btn = feedContainer.querySelector('#btnRetryActivity');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadActivity(userId, false);
+              });
+            }
+          }
+          if (actionsContainer) {
+            actionsContainer.style.display = 'none';
+          }
+        } else {
+          showToast('Не удалось загрузить активность. Попробуйте еще раз.');
         }
       });
   }
@@ -774,12 +922,16 @@
   // Publications Tab: Loader & Renderer
   // --------------------------------------------------------------------------
   function loadPublications(userId, append) {
-    if (!userId || isLoadingPub) return;
+    if (!userId) return;
+    if (append && isLoadingPub) return;
 
     const list = document.getElementById('profilePublicationsList');
     const actions = document.getElementById('profilePublicationsActions');
 
     if (!append) {
+      if (pubAbortCtrl) {
+        try { pubAbortCtrl.abort(); } catch (e) {}
+      }
       pubOffset = 0;
       pubItems = [];
       if (list) {
@@ -788,30 +940,51 @@
       if (actions) actions.style.display = 'none';
     }
 
+    pubAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++pubReqSeq;
     isLoadingPub = true;
     const url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
+    const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== pubReqSeq) return;
+        isLoadingPub = false;
         if (!data || !data.success) {
           throw new Error((data && data.error) || 'Failed to load publications');
         }
         const incoming = Array.isArray(data.items) ? data.items : [];
         pubItems = append ? pubItems.concat(incoming) : incoming;
+        pubOffset += incoming.length;
         pubHasMore = Boolean(data.hasMore);
         renderPublicationsTab(pubItems, append, pubHasMore, incoming);
       })
-      .catch(function () {
-        if (!append && list) {
-          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки публикаций</div>';
-        }
-      })
-      .finally(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== pubReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingPub = false;
+        if (!append) {
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки публикаций</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryPublications">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryPublications');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadPublications(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить публикации. Попробуйте еще раз.');
+        }
       });
   }
 
@@ -1211,12 +1384,16 @@
   // Questions Tab: Loader & Renderer
   // --------------------------------------------------------------------------
   function loadQuestions(userId, append) {
-    if (!userId || isLoadingQuest) return;
+    if (!userId) return;
+    if (append && isLoadingQuest) return;
 
     const list = document.getElementById('profileQuestionsList');
     const actions = document.getElementById('profileQuestionsActions');
 
     if (!append) {
+      if (questAbortCtrl) {
+        try { questAbortCtrl.abort(); } catch (e) {}
+      }
       questOffset = 0;
       questItems = [];
       if (list) {
@@ -1225,30 +1402,51 @@
       if (actions) actions.style.display = 'none';
     }
 
+    questAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++questReqSeq;
     isLoadingQuest = true;
     const url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
+    const fetchOpts = questAbortCtrl ? { signal: questAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== questReqSeq) return;
+        isLoadingQuest = false;
         if (!data || !data.success) {
           throw new Error((data && data.error) || 'Failed to load questions');
         }
         const incoming = Array.isArray(data.items) ? data.items : [];
         questItems = append ? questItems.concat(incoming) : incoming;
+        questOffset += incoming.length;
         questHasMore = Boolean(data.hasMore);
         renderQuestionsTab(questItems, append, questHasMore, incoming);
       })
-      .catch(function () {
-        if (!append && list) {
-          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки вопросов</div>';
-        }
-      })
-      .finally(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== questReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingQuest = false;
+        if (!append) {
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки вопросов</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryQuestions">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryQuestions');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadQuestions(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить вопросы. Попробуйте еще раз.');
+        }
       });
   }
 
@@ -1302,12 +1500,16 @@
   // Answers Tab: Loader & Renderer
   // --------------------------------------------------------------------------
   function loadAnswers(userId, append) {
-    if (!userId || isLoadingAns) return;
+    if (!userId) return;
+    if (append && isLoadingAns) return;
 
     const list = document.getElementById('profileAnswersList');
     const actions = document.getElementById('profileAnswersActions');
 
     if (!append) {
+      if (ansAbortCtrl) {
+        try { ansAbortCtrl.abort(); } catch (e) {}
+      }
       ansOffset = 0;
       ansItems = [];
       if (list) {
@@ -1316,30 +1518,51 @@
       if (actions) actions.style.display = 'none';
     }
 
+    ansAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++ansReqSeq;
     isLoadingAns = true;
     const url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    const fetchOpts = ansAbortCtrl ? { signal: ansAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== ansReqSeq) return;
+        isLoadingAns = false;
         if (!data || !data.success) {
           throw new Error((data && data.error) || 'Failed to load answers');
         }
         const incoming = Array.isArray(data.items) ? data.items : [];
         ansItems = append ? ansItems.concat(incoming) : incoming;
+        ansOffset += incoming.length;
         ansHasMore = Boolean(data.hasMore);
         renderAnswersTab(ansItems, append, ansHasMore, incoming);
       })
-      .catch(function () {
-        if (!append && list) {
-          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки ответов</div>';
-        }
-      })
-      .finally(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== ansReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingAns = false;
+        if (!append) {
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки ответов</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryAnswers">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryAnswers');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadAnswers(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить ответы. Попробуйте еще раз.');
+        }
       });
   }
 
@@ -1521,12 +1744,11 @@
           updateSubscribeButtonState(btn, isSub);
 
           // Update follower counter in UI
-          const fEl = document.getElementById('profileStatFollowers');
-          if (fEl) {
-            let count = parseInt(fEl.textContent, 10) || 0;
-            count = isSub ? (count + 1) : Math.max(0, count - 1);
-            fEl.textContent = count;
-          }
+          let prevFollowers = (currentProfile.stats && currentProfile.stats.followersCount !== undefined)
+            ? currentProfile.stats.followersCount
+            : (parseInt((document.getElementById('profileStatFollowers') || {}).textContent, 10) || 0);
+          const newFollowers = isSub ? (prevFollowers + 1) : Math.max(0, prevFollowers - 1);
+          updateProfileStats({ followersCount: newFollowers });
 
           showToast(isSub ? 'Вы подписались на автора' : 'Вы отписались от автора');
         } else if (data && data.error) {
@@ -1985,21 +2207,27 @@
     const btnLoadMore = document.getElementById('btnProfileLoadMore');
     if (btnLoadMore) {
       btnLoadMore.addEventListener('click', function () {
-        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-          activityOffset += activityLimit;
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && activityHasMore && !isLoadingActivity) {
           loadActivity(currentProfile.id || currentProfile.userId, true);
         }
       });
     }
 
     // 10. History popstate navigation
-    window.addEventListener('popstate', function () {
+    function handlePopState(e) {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const tab = params.get('tab') || 'overview';
+        let tab = (e && e.state && e.state.tab) || null;
+        if (!tab) {
+          const params = new URLSearchParams(window.location.search);
+          tab = params.get('tab') || 'overview';
+        }
         setActiveTab(tab, false);
-      } catch (e) {}
-    });
+      } catch (err) {
+        setActiveTab('overview', false);
+      }
+    }
+    window.addEventListener('popstate', handlePopState);
+    window.onpopstate = handlePopState;
 
     // 11. Publications toolbar sorting
     const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
@@ -2024,7 +2252,6 @@
     if (btnLoadMorePub) {
       btnLoadMorePub.addEventListener('click', function () {
         if (currentProfile && (currentProfile.id || currentProfile.userId) && pubHasMore && !isLoadingPub) {
-          pubOffset += pubLimit;
           loadPublications(currentProfile.id || currentProfile.userId, true);
         }
       });
@@ -2070,7 +2297,6 @@
     if (btnLoadMoreQuest) {
       btnLoadMoreQuest.addEventListener('click', function () {
         if (currentProfile && (currentProfile.id || currentProfile.userId) && questHasMore && !isLoadingQuest) {
-          questOffset += questLimit;
           loadQuestions(currentProfile.id || currentProfile.userId, true);
         }
       });
@@ -2099,7 +2325,6 @@
     if (btnLoadMoreAns) {
       btnLoadMoreAns.addEventListener('click', function () {
         if (currentProfile && (currentProfile.id || currentProfile.userId) && ansHasMore && !isLoadingAns) {
-          ansOffset += ansLimit;
           loadAnswers(currentProfile.id || currentProfile.userId, true);
         }
       });
@@ -2128,7 +2353,9 @@
     init: init,
     loadProfile: loadProfile,
     renderProfile: renderProfile,
+    updateProfileStats: updateProfileStats,
     setActiveTab: setActiveTab,
+    handlePopState: handlePopState,
     loadActivity: loadActivity,
     renderTopContributions: renderTopContributions,
     renderActivityFeed: renderActivityFeed,
@@ -2154,7 +2381,29 @@
     isItemReported: isItemReported,
     openAuthModal: openAuthModal,
     closeAuthModal: closeAuthModal,
-    setAuthState: setAuthState
+    setAuthState: setAuthState,
+    getOffsets: function () {
+      return {
+        activity: activityOffset,
+        publications: pubOffset,
+        questions: questOffset,
+        answers: ansOffset
+      };
+    },
+    getSeqTokens: function () {
+      return {
+        activity: actReqSeq,
+        publications: pubReqSeq,
+        questions: questReqSeq,
+        answers: ansReqSeq
+      };
+    },
+    getActiveTab: function () {
+      return activeTab;
+    },
+    getCurrentProfile: function () {
+      return currentProfile;
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);
