@@ -37,6 +37,7 @@
   let ansItems = [];
   let ansHasMore = false;
   let isLoadingAns = false;
+  let lastEditTriggerEl = null;
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -366,6 +367,11 @@
       if (btn) {
         btn.classList.toggle('is-active', isCurrent);
         btn.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        if (isCurrent) {
+          btn.setAttribute('aria-current', 'page');
+        } else {
+          btn.removeAttribute('aria-current');
+        }
       }
       if (panel) {
         panel.classList.toggle('is-active', isCurrent);
@@ -1136,6 +1142,7 @@
   }
 
   function openEditModal() {
+    lastEditTriggerEl = document.activeElement;
     const modal = document.getElementById('editProfileModal');
     if (!modal || !currentProfile) return;
 
@@ -1160,6 +1167,9 @@
   function closeEditModal() {
     const modal = document.getElementById('editProfileModal');
     if (modal) modal.style.display = 'none';
+    if (lastEditTriggerEl && typeof lastEditTriggerEl.focus === 'function') {
+      try { lastEditTriggerEl.focus(); } catch (e) {}
+    }
   }
 
   function saveProfileEdit() {
@@ -1261,6 +1271,16 @@
         if (e.target === editModal) closeEditModal();
       });
     }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('editProfileModal');
+        if (modal && modal.style.display !== 'none') {
+          e.preventDefault();
+          closeEditModal();
+        }
+      }
+    });
 
     // 5. Auth modal controls
     const btnLogin = document.getElementById('headerLoginBtn');
