@@ -2197,6 +2197,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             elif rest.endswith("/comments"):
                 user_id = rest[:-len("/comments")].strip("/")
                 self.handle_get_user_comments(user_id, parsed)
+            elif rest.endswith("/subscribers"):
+                user_id = rest[:-len("/subscribers")].strip("/")
+                self.handle_get_user_subscribers(user_id, parsed)
+            elif rest.endswith("/subscriptions"):
+                user_id = rest[:-len("/subscriptions")].strip("/")
+                self.handle_get_user_profile_subscriptions(user_id, parsed)
             else:
                 user_id = rest
                 if user_id.endswith("/profile"):
@@ -2652,7 +2658,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 """, (user["id"], target_type, normalized_id))
                 subscribed = True
 
-        self.send_json_response(200, {
+        followers_count = None
+        if target_type == "author":
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE target_type = 'author' AND target_id = ?", (normalized_id,))
+                followers_count = cur.fetchone()["cnt"] or 0
+
+        resp = {
             "success": True,
             "subscribed": subscribed,
             "isSubscribed": subscribed,
@@ -2660,7 +2673,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             "targetType": target_type,
             "targetId": normalized_id,
             "targetTitle": title
-        })
+        }
+        if followers_count is not None:
+            resp["followersCount"] = followers_count
+
+        self.send_json_response(200, resp)
 
     def handle_exceptions_toggle(self):
         """POST /api/exceptions/toggle toggles exception state."""
@@ -7892,8 +7909,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         t_clean = t.strip()
                         if t_clean:
                             topic_counts[t_clean] = topic_counts.get(t_clean, 0) + 1
-            topics_list = [{"id": tid, "title": tid, "count": cnt} for tid, cnt in sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:8]]
+            topics_list = [{"id": tid, "title": TOPICS_TITLE_MAP.get(tid, tid), "count": cnt} for tid, cnt in sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:8]]
 
+            rating_formula_text = "Рейтинг складывается из голосов за материалы и обсуждения. Лайки не учитываются"
             profile_data = {
                 "id": user_id,
                 "userId": user_id,
@@ -7911,6 +7929,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "score": total_rating,
                 "totalRating": total_rating,
                 "karma": total_rating,
+                "materialsRating": int(pub_score),
+                "discussionsRating": int(comm_score),
+                "ratingFormula": rating_formula_text,
                 "publicationsCount": publications_count,
                 "questionsCount": questions_count,
                 "commentsCount": comments_count,
@@ -7923,6 +7944,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "score": total_rating,
                     "totalRating": total_rating,
                     "karma": total_rating,
+                    "materialsRating": int(pub_score),
+                    "discussionsRating": int(comm_score),
+                    "ratingFormula": rating_formula_text,
                     "publicationsCount": publications_count,
                     "articlesCount": publications_count,
                     "questionsCount": questions_count,
@@ -8157,6 +8181,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
+        topic_filter = (query.get("topic", [""])[0] or "").strip().lower()
         try:
             limit = max(1, min(100, int(query.get("limit", [20])[0])))
         except ValueError:
@@ -8242,6 +8267,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
                 except Exception:
                     pst = {}
+                topics = pst.get("topics") or []
+                if isinstance(topics, str):
+                    topics = [topics]
+                if topic_filter:
+                    matched = False
+                    for t in topics:
+                        t_str = str(t).strip().lower()
+                        t_title = (TOPICS_TITLE_MAP.get(t_str, "") or "").strip().lower()
+                        if topic_filter == t_str or topic_filter == t_title:
+                            matched = True
+                            break
+                    if not matched:
+                        single_top = (pst.get("topic") or "").strip().lower()
+                        single_top_title = (TOPICS_TITLE_MAP.get(single_top, "") or "").strip().lower()
+                        if topic_filter != single_top and topic_filter != single_top_title:
+                            continue
                 focal_pos = resolve_cover_position(pst)
                 topics = pst.get("topics") or []
                 cover_image = pst.get("coverImage") or None
@@ -8339,6 +8380,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         status_filter = (query.get("status", ["all"])[0] or "all").strip().lower()
         search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
+        topic_filter = (query.get("topic", [""])[0] or "").strip().lower()
         try:
             limit = max(1, min(100, int(query.get("limit", [20])[0])))
         except ValueError:
@@ -8433,6 +8475,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
                 except Exception:
                     pst = {}
+                topics = pst.get("topics") or []
+                if isinstance(topics, str):
+                    topics = [topics]
+                if topic_filter:
+                    matched = False
+                    for t in topics:
+                        t_str = str(t).strip().lower()
+                        t_title = (TOPICS_TITLE_MAP.get(t_str, "") or "").strip().lower()
+                        if topic_filter == t_str or topic_filter == t_title:
+                            matched = True
+                            break
+                    if not matched:
+                        single_top = (pst.get("topic") or "").strip().lower()
+                        single_top_title = (TOPICS_TITLE_MAP.get(single_top, "") or "").strip().lower()
+                        if topic_filter != single_top and topic_filter != single_top_title:
+                            continue
                 focal_pos = resolve_cover_position(pst)
                 topics = pst.get("topics") or []
                 cover_image = pst.get("coverImage") or None
@@ -8757,6 +8815,208 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "offset": offset,
                 "hasMore": has_more
             })
+        finally:
+            conn.close()
+
+    def handle_get_user_subscribers(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/subscribers
+        Returns paginated list of subscribers (followers) for the specified author.
+        Query params: limit (default 20, max 100), offset (default 0).
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+                user_exists = (cur.fetchone() is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
+                cur.execute("""
+                    SELECT COUNT(*) AS total
+                    FROM user_subscriptions
+                    WHERE target_type = 'author' AND target_id = ?
+                """, (user_id,))
+                total = cur.fetchone()["total"] or 0
+
+                cur.execute("""
+                    SELECT us.user_id, us.created_at, up.name, up.avatar, up.specialization, up.company
+                    FROM user_subscriptions us
+                    LEFT JOIN user_profiles up ON us.user_id = up.user_id
+                    WHERE us.target_type = 'author' AND us.target_id = ?
+                    ORDER BY us.created_at DESC, us.id DESC
+                    LIMIT ? OFFSET ?
+                """, (user_id, limit, offset))
+                rows = cur.fetchall()
+
+                curr_user = self.get_current_user()
+
+                items = []
+                for r in rows:
+                    sub_uid = r["user_id"]
+                    sub_name = (r["name"] or "").strip()
+                    if not sub_name:
+                        cur.execute("SELECT name FROM sessions WHERE user_id = ? LIMIT 1", (sub_uid,))
+                        s_row = cur.fetchone()
+                        if s_row and s_row["name"]:
+                            sub_name = s_row["name"].strip()
+                    if not sub_name:
+                        sub_name = f"Пользователь {sub_uid[:8]}" if len(sub_uid) >= 8 else sub_uid
+
+                    avatar = r["avatar"] or None
+                    initials = "".join([part[0].upper() for part in sub_name.split()[:2]]) if sub_name else "SC"
+                    spec = r["specialization"] or "Участник сообщества"
+
+                    is_following = False
+                    if curr_user:
+                        cur.execute(
+                            "SELECT 1 FROM user_subscriptions WHERE user_id = ? AND target_type = 'author' AND target_id = ? LIMIT 1",
+                            (curr_user["id"], sub_uid)
+                        )
+                        is_following = bool(cur.fetchone())
+
+                    items.append({
+                        "id": sub_uid,
+                        "userId": sub_uid,
+                        "name": sub_name,
+                        "avatar": avatar,
+                        "initials": initials,
+                        "specialization": spec,
+                        "company": r["company"] or "",
+                        "isFollowing": is_following,
+                        "isOwn": bool(curr_user and curr_user["id"] == sub_uid),
+                        "url": f"profile.html?id={urllib.parse.quote(sub_uid)}"
+                    })
+
+                has_more = (offset + limit) < total
+                self.send_json_response(200, {
+                    "success": True,
+                    "items": items,
+                    "subscribers": items,
+                    "total": total,
+                    "totalCount": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "hasMore": has_more
+                })
+        finally:
+            conn.close()
+
+    def handle_get_user_profile_subscriptions(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/subscriptions
+        Returns subscriptions of author.
+        For own profile: returns authors and blogs (clubs) with separation.
+        For other users: respects privacy (returns isPrivate: true, items: []).
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        curr_user = self.get_current_user()
+        is_own = bool(curr_user and curr_user["id"] == user_id)
+
+        if not is_own:
+            self.send_json_response(200, {
+                "success": True,
+                "isPrivate": True,
+                "authors": [],
+                "blogs": [],
+                "items": [],
+                "total": 0,
+                "message": "Подписки пользователя скрыты настройками приватности"
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT us.target_type, us.target_id, us.target_title, us.created_at,
+                           up.name AS author_name, up.avatar AS author_avatar, up.specialization AS author_spec,
+                           c.title AS club_title, c.avatar AS club_avatar, c.description AS club_desc
+                    FROM user_subscriptions us
+                    LEFT JOIN user_profiles up ON (us.target_type = 'author' AND us.target_id = up.user_id)
+                    LEFT JOIN clubs c ON (us.target_type IN ('club', 'company') AND us.target_id = c.id)
+                    WHERE us.user_id = ?
+                    ORDER BY us.id DESC
+                """, (user_id,))
+                rows = cur.fetchall()
+
+                authors = []
+                blogs = []
+                for r in rows:
+                    tt = r["target_type"]
+                    tid = r["target_id"]
+                    t_title = r["target_title"] or ""
+                    if tt == "author":
+                        name = r["author_name"] or t_title or tid
+                        authors.append({
+                            "id": tid,
+                            "userId": tid,
+                            "type": "author",
+                            "name": name,
+                            "title": name,
+                            "avatar": r["author_avatar"] or None,
+                            "specialization": r["author_spec"] or "Автор",
+                            "url": f"profile.html?id={urllib.parse.quote(tid)}"
+                        })
+                    elif tt in ("club", "company"):
+                        c_title = r["club_title"] or t_title or tid
+                        blogs.append({
+                            "id": tid,
+                            "type": "blog",
+                            "title": c_title,
+                            "name": c_title,
+                            "avatar": r["club_avatar"] or None,
+                            "description": r["club_desc"] or "",
+                            "url": f"feed.html?tab={urllib.parse.quote(tid)}"
+                        })
+
+                total = len(authors) + len(blogs)
+                self.send_json_response(200, {
+                    "success": True,
+                    "isPrivate": False,
+                    "authors": authors,
+                    "blogs": blogs,
+                    "clubs": blogs,
+                    "items": authors + blogs,
+                    "total": total
+                })
         finally:
             conn.close()
 

@@ -2104,4 +2104,188 @@
   transform: translateX(2px);
 }
 
+/* ==========================================================================
+   Issue #189: Clickable Stats, Active Topic Filter, and Social Modal
+   ========================================================================== */
+
+.profile-stat-clickable {
+  cursor: pointer;
+  transition: transform var(--transition-fast, 150ms ease), background var(--transition-fast, 150ms ease);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 8px;
+  margin: -4px -8px;
+}
+
+.profile-stat-clickable:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.profile-stat-clickable:focus-visible {
+  outline: 2px solid var(--accent-color, #38bdf8);
+  outline-offset: 2px;
+}
+
+/* Active Topic Chip in Toolbar */
+.profile-active-topic-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.active-topic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-color, #38bdf8);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 9999px;
+  padding: 3px 10px 3px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.btn-clear-topic {
+  background: transparent;
+  border: none;
+  color: currentColor;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 50%;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast, 150ms ease);
+}
+
+.btn-clear-topic:hover {
+  opacity: 1;
+}
+
+/* Interactive Sidebar Topic Pills */
+.profile-sidebar-topic-pill {
+  cursor: pointer;
+  transition: background var(--transition-fast, 150ms ease), border-color var(--transition-fast, 150ms ease), color var(--transition-fast, 150ms ease);
+  user-select: none;
+}
+
+.profile-sidebar-topic-pill:hover,
+.profile-sidebar-topic-pill:focus-visible {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  border-color: var(--accent-color, #38bdf8);
+  outline: none;
+}
+
+.profile-sidebar-topic-pill.is-active {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+}
+
+/* Social Modal Styles (Subscribers & Subscriptions) */
+.profile-social-modal-card {
+  max-width: 520px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.social-modal-subnav {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.profile-social-modal-body {
+  overflow-y: auto;
+  max-height: calc(85vh - 120px);
+  padding: 16px 20px;
+}
+
+.profile-social-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-social-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-surface, var(--bg-card));
+  border: 1px solid var(--border-color);
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: background var(--transition-fast, 150ms ease), border-color var(--transition-fast, 150ms ease);
+}
+
+.profile-social-item:hover,
+.profile-social-item:focus-visible {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  border-color: var(--accent-color, #38bdf8);
+}
+
+.profile-social-avatar-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.profile-social-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-social-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-social-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-social-spec {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-social-actions {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.btn-social-load-more {
+  width: 100%;
+}
+
+
 

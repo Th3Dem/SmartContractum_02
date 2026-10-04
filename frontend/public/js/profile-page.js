@@ -62,6 +62,16 @@
   let uploadedAvatarUrl = null;
   let isAvatarRemoved = false;
 
+  let currentTopicFilter = null;
+  let socialModalMode = null;
+  let socialSubTab = 'authors';
+  let subscribersOffset = 0;
+  const subscribersLimit = 15;
+  let subscribersHasMore = false;
+  let isLoadingSubscribers = false;
+  let currentSubscriptionsData = null;
+  let lastSocialTriggerEl = null;
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -446,6 +456,35 @@
       followingCount: stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0)
     });
 
+    const rWrap = document.getElementById('profileStatRatingWrap');
+    if (rWrap) {
+      const matRating = p.materialsRating !== undefined ? p.materialsRating : (stats.materialsRating !== undefined ? stats.materialsRating : null);
+      const discRating = p.discussionsRating !== undefined ? p.discussionsRating : (stats.discussionsRating !== undefined ? stats.discussionsRating : null);
+      const totalRating = stats.rating !== undefined ? stats.rating : (p.rating !== undefined ? p.rating : 0);
+      let titleStr = p.ratingFormula || 'Рейтинг складывается из оценок публикаций, ответов и комментариев. Лайки не учитываются';
+      if (matRating !== null && discRating !== null) {
+        titleStr = 'Рейтинг: ' + totalRating + ' (Публикации: ' + (matRating >= 0 ? '+' : '') + matRating + ', Обсуждения: ' + (discRating >= 0 ? '+' : '') + discRating + '). ' + titleStr;
+      }
+      rWrap.setAttribute('title', titleStr);
+      rWrap.setAttribute('aria-label', titleStr);
+    }
+
+    const solWrap = document.getElementById('profileStatSolutionsWrap');
+    if (solWrap) {
+      const solVal = stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0);
+      solWrap.setAttribute('aria-label', 'Решений: ' + solVal);
+    }
+    const follWrap = document.getElementById('profileStatFollowersWrap');
+    if (follWrap) {
+      const fVal = stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0);
+      follWrap.setAttribute('aria-label', 'Подписчиков: ' + fVal);
+    }
+    const follgWrap = document.getElementById('profileStatFollowingWrap');
+    if (follgWrap) {
+      const fwVal = stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0);
+      follgWrap.setAttribute('aria-label', 'Подписок: ' + fwVal);
+    }
+
     const ageEl = document.getElementById('profileAccountAge');
     if (ageEl) {
       const regFormatted = p.createdAt ? formatRegistrationDateRu(p.createdAt) : '';
@@ -779,11 +818,31 @@
           }
           const cnt = item.count !== undefined ? item.count : '';
           const countBadge = cnt ? (' <span class="profile-topic-count">' + cnt + '</span>') : '';
-          return '<span class="profile-sidebar-topic-pill" data-topic-id="' + escapeHtml(item.id || item.title) + '">' +
+          const topicId = item.id || item.title;
+          const isActive = (currentTopicFilter === topicId);
+          return '<span class="profile-sidebar-topic-pill' + (isActive ? ' is-active' : '') + '" data-topic-id="' + escapeHtml(topicId) + '" role="button" tabindex="0" title="Фильтровать публикации по теме ' + escapeHtml(title) + '">' +
             '<span class="profile-topic-name">' + escapeHtml(title) + '</span>' +
             countBadge +
           '</span>';
         }).join('');
+
+        const topicPills = topicsContainer.querySelectorAll('.profile-sidebar-topic-pill');
+        for (let i = 0; i < topicPills.length; i++) {
+          const pill = topicPills[i];
+          const tId = pill.getAttribute('data-topic-id');
+          const nameEl = pill.querySelector('.profile-topic-name');
+          const tTitle = nameEl ? nameEl.textContent : tId;
+          const handler = function () {
+            applyTopicFilter(tId, tTitle);
+          };
+          pill.addEventListener('click', handler);
+          pill.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handler();
+            }
+          });
+        }
       } else {
         if (isOwn) {
           if (widgetTopics) widgetTopics.style.display = 'flex';
@@ -1022,6 +1081,9 @@
     let url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    if (currentTopicFilter) {
+      url += '&topic=' + encodeURIComponent(currentTopicFilter);
     }
     const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
@@ -2035,11 +2097,16 @@
           currentProfile.isSubscribed = isSub;
           updateSubscribeButtonState(btn, isSub);
 
-          // Update follower counter in UI
-          let prevFollowers = (currentProfile.stats && currentProfile.stats.followersCount !== undefined)
-            ? currentProfile.stats.followersCount
-            : (parseInt((document.getElementById('profileStatFollowers') || {}).textContent, 10) || 0);
-          const newFollowers = isSub ? (prevFollowers + 1) : Math.max(0, prevFollowers - 1);
+          // Update follower counter in UI from real server count
+          let newFollowers;
+          if (data.followersCount !== undefined) {
+            newFollowers = data.followersCount;
+          } else {
+            let prevFollowers = (currentProfile.stats && currentProfile.stats.followersCount !== undefined)
+              ? currentProfile.stats.followersCount
+              : (parseInt((document.getElementById('profileStatFollowers') || {}).textContent, 10) || 0);
+            newFollowers = isSub ? (prevFollowers + 1) : Math.max(0, prevFollowers - 1);
+          }
           updateProfileStats({ followersCount: newFollowers });
 
           showToast(isSub ? 'Вы подписались на автора' : 'Вы отписались от автора');
@@ -2417,6 +2484,327 @@
     if (modal) modal.style.display = 'none';
   }
 
+  function applyTopicFilter(topicId, topicTitle) {
+    if (!topicId) return;
+    if (currentTopicFilter === topicId) {
+      clearTopicFilter();
+      return;
+    }
+    currentTopicFilter = topicId;
+    const activeTopicBar = document.getElementById('profileActiveTopicBar');
+    const activeTopicName = document.getElementById('activeTopicName');
+    if (activeTopicName) {
+      activeTopicName.textContent = topicTitle || topicId;
+    }
+    if (activeTopicBar) {
+      activeTopicBar.style.display = 'inline-flex';
+    }
+
+    const pills = document.querySelectorAll('.profile-sidebar-topic-pill');
+    for (let i = 0; i < pills.length; i++) {
+      const pId = pills[i].getAttribute('data-topic-id');
+      pills[i].classList.toggle('is-active', pId === topicId);
+    }
+
+    if (activeTab !== 'publications') {
+      setActiveTab('publications', true);
+    }
+
+    if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+      pubOffset = 0;
+      pubItems = [];
+      loadPublications(currentProfile.id || currentProfile.userId, false);
+    }
+  }
+
+  function clearTopicFilter() {
+    currentTopicFilter = null;
+    const activeTopicBar = document.getElementById('profileActiveTopicBar');
+    if (activeTopicBar) {
+      activeTopicBar.style.display = 'none';
+    }
+
+    const pills = document.querySelectorAll('.profile-sidebar-topic-pill');
+    for (let i = 0; i < pills.length; i++) {
+      pills[i].classList.remove('is-active');
+    }
+
+    if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+      pubOffset = 0;
+      pubItems = [];
+      loadPublications(currentProfile.id || currentProfile.userId, false);
+    }
+  }
+
+  function switchToSolutions() {
+    setActiveTab('answers', true);
+    const filterBtn = document.getElementById('filterAnswersSolutions');
+    if (filterBtn) {
+      filterBtn.click();
+    } else {
+      ansFilter = 'solutions';
+      const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
+      for (let j = 0; j < ansFilterBtns.length; j++) {
+        ansFilterBtns[j].classList.toggle('is-active', ansFilterBtns[j].getAttribute('data-ans-filter') === 'solutions');
+      }
+      ansOffset = 0;
+      ansItems = [];
+      if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+        loadAnswers(currentProfile.id || currentProfile.userId, false);
+      }
+    }
+  }
+
+  function renderSocialAuthorItem(author) {
+    const name = escapeHtml(author.name || author.id || 'Пользователь');
+    const spec = escapeHtml(author.specialization || author.bio || 'Участник сообщества');
+    const url = author.url || ('profile.html?id=' + encodeURIComponent(author.id));
+    const initials = getInitials(author.name || author.id);
+
+    let avatarInner = '';
+    if (author.avatar) {
+      avatarInner = '<img src="' + escapeHtml(author.avatar) + '" alt="' + name + '" class="profile-social-avatar-img" onerror="this.onerror=null;this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
+        '<span class="profile-social-initials" style="display:none;">' + initials + '</span>';
+    } else {
+      avatarInner = '<span class="profile-social-initials">' + initials + '</span>';
+    }
+
+    return '<a href="' + url + '" class="profile-social-item">' +
+      '<div class="profile-social-avatar-box">' +
+        avatarInner +
+      '</div>' +
+      '<div class="profile-social-info">' +
+        '<div class="profile-social-name">' + name + '</div>' +
+        '<div class="profile-social-spec">' + spec + '</div>' +
+      '</div>' +
+    '</a>';
+  }
+
+  function renderSocialBlogItem(blog) {
+    const name = escapeHtml(blog.name || blog.title || blog.id || 'Блог');
+    const desc = escapeHtml(blog.description || 'Корпоративный блог');
+    const url = blog.url || ('club.html?id=' + encodeURIComponent(blog.id));
+    const initials = getInitials(blog.name || blog.title || blog.id);
+
+    let avatarInner = '';
+    if (blog.avatar) {
+      avatarInner = '<img src="' + escapeHtml(blog.avatar) + '" alt="' + name + '" class="profile-social-avatar-img" onerror="this.onerror=null;this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
+        '<span class="profile-social-initials" style="display:none;">' + initials + '</span>';
+    } else {
+      avatarInner = '<span class="profile-social-initials">' + initials + '</span>';
+    }
+
+    return '<a href="' + url + '" class="profile-social-item">' +
+      '<div class="profile-social-avatar-box">' +
+        avatarInner +
+      '</div>' +
+      '<div class="profile-social-info">' +
+        '<div class="profile-social-name">' + name + '</div>' +
+        '<div class="profile-social-spec">' + desc + '</div>' +
+      '</div>' +
+    '</a>';
+  }
+
+  function openSubscribersModal() {
+    if (!currentProfile) return;
+    lastSocialTriggerEl = document.activeElement;
+    socialModalMode = 'subscribers';
+
+    const titleEl = document.getElementById('socialModalTitle');
+    if (titleEl) titleEl.textContent = 'Подписчики';
+
+    const subnav = document.getElementById('socialModalSubnav');
+    if (subnav) subnav.style.display = 'none';
+
+    const actions = document.getElementById('profileSocialActions');
+    if (actions) actions.style.display = 'none';
+
+    const modal = document.getElementById('profileSocialModal');
+    if (modal) modal.style.display = 'flex';
+
+    subscribersOffset = 0;
+    subscribersHasMore = false;
+    isLoadingSubscribers = false;
+
+    const listEl = document.getElementById('profileSocialList');
+    if (listEl) {
+      listEl.innerHTML = '<div class="profile-empty-state">Загрузка подписчиков...</div>';
+    }
+
+    loadSubscribers(currentProfile.id || currentProfile.userId, false);
+  }
+
+  function loadSubscribers(userId, append) {
+    if (!userId || isLoadingSubscribers) return;
+    isLoadingSubscribers = true;
+
+    const listEl = document.getElementById('profileSocialList');
+    const actions = document.getElementById('profileSocialActions');
+
+    const url = '/api/users/' + encodeURIComponent(userId) + '/subscribers?limit=' + subscribersLimit + '&offset=' + subscribersOffset;
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        isLoadingSubscribers = false;
+        if (!data || !data.success) {
+          throw new Error('Failed to load subscribers');
+        }
+        const incoming = Array.isArray(data.subscribers) ? data.subscribers : [];
+        subscribersOffset += incoming.length;
+        subscribersHasMore = Boolean(data.hasMore);
+
+        if (!append) {
+          if (incoming.length === 0) {
+            if (listEl) listEl.innerHTML = '<div class="profile-empty-state">Пока нет подписчиков</div>';
+          } else {
+            if (listEl) listEl.innerHTML = incoming.map(renderSocialAuthorItem).join('');
+          }
+        } else {
+          if (listEl) {
+            const html = incoming.map(renderSocialAuthorItem).join('');
+            listEl.insertAdjacentHTML('beforeend', html);
+          }
+        }
+
+        if (actions) {
+          actions.style.display = subscribersHasMore ? 'block' : 'none';
+        }
+      })
+      .catch(function () {
+        isLoadingSubscribers = false;
+        if (!append) {
+          if (listEl) {
+            listEl.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Не удалось загрузить подписчиков</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetrySubscribers">Повторить попытку</button>' +
+              '</div>';
+            const btn = listEl.querySelector('#btnRetrySubscribers');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadSubscribers(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить подписчиков');
+        }
+      });
+  }
+
+  function openSubscriptionsModal() {
+    if (!currentProfile) return;
+    lastSocialTriggerEl = document.activeElement;
+    socialModalMode = 'subscriptions';
+    socialSubTab = 'authors';
+
+    const titleEl = document.getElementById('socialModalTitle');
+    if (titleEl) titleEl.textContent = 'Подписки';
+
+    const subnav = document.getElementById('socialModalSubnav');
+    if (subnav) subnav.style.display = 'none';
+
+    const actions = document.getElementById('profileSocialActions');
+    if (actions) actions.style.display = 'none';
+
+    const listEl = document.getElementById('profileSocialList');
+    if (listEl) {
+      listEl.innerHTML = '<div class="profile-empty-state">Загрузка подписок...</div>';
+    }
+
+    const modal = document.getElementById('profileSocialModal');
+    if (modal) modal.style.display = 'flex';
+
+    const userId = currentProfile.id || currentProfile.userId;
+    fetch('/api/users/' + encodeURIComponent(userId) + '/subscriptions')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.success) {
+          throw new Error('Failed to load subscriptions');
+        }
+        if (data.isPrivate) {
+          if (listEl) {
+            listEl.innerHTML = '<div class="profile-empty-state"><p>Список подписок скрыт настройками приватности пользователя.</p></div>';
+          }
+          if (subnav) subnav.style.display = 'none';
+          return;
+        }
+
+        currentSubscriptionsData = data;
+        const authors = Array.isArray(data.authors) ? data.authors : [];
+        const blogs = Array.isArray(data.blogs) ? data.blogs : [];
+
+        const authCountEl = document.getElementById('socialSubAuthorsCount');
+        if (authCountEl) authCountEl.textContent = authors.length;
+
+        const blogsCountEl = document.getElementById('socialSubBlogsCount');
+        if (blogsCountEl) blogsCountEl.textContent = blogs.length;
+
+        if (subnav) subnav.style.display = 'block';
+        renderSubscriptionsTabContent('authors');
+      })
+      .catch(function () {
+        if (listEl) {
+          listEl.innerHTML =
+            '<div class="profile-error-state">' +
+              '<p class="profile-error-text">Не удалось загрузить подписки</p>' +
+              '<button type="button" class="btn-profile-retry" id="btnRetrySubscriptions">Повторить попытку</button>' +
+            '</div>';
+          const btn = listEl.querySelector('#btnRetrySubscriptions');
+          if (btn) {
+            btn.addEventListener('click', function () {
+              openSubscriptionsModal();
+            });
+          }
+        }
+      });
+  }
+
+  function renderSubscriptionsTabContent(tab) {
+    socialSubTab = tab;
+    const tabAuthors = document.getElementById('socialSubTabAuthors');
+    const tabBlogs = document.getElementById('socialSubTabBlogs');
+    if (tabAuthors) tabAuthors.classList.toggle('is-active', tab === 'authors');
+    if (tabBlogs) tabBlogs.classList.toggle('is-active', tab === 'blogs');
+
+    const listEl = document.getElementById('profileSocialList');
+    if (!listEl || !currentSubscriptionsData) return;
+
+    if (tab === 'authors') {
+      const authors = Array.isArray(currentSubscriptionsData.authors) ? currentSubscriptionsData.authors : [];
+      if (authors.length === 0) {
+        listEl.innerHTML = '<div class="profile-empty-state">Вы пока не подписаны на авторов</div>';
+      } else {
+        listEl.innerHTML = authors.map(renderSocialAuthorItem).join('');
+      }
+    } else if (tab === 'blogs') {
+      const blogs = Array.isArray(currentSubscriptionsData.blogs) ? currentSubscriptionsData.blogs : [];
+      if (blogs.length === 0) {
+        listEl.innerHTML = '<div class="profile-empty-state">Вы пока не подписаны на блоги</div>';
+      } else {
+        listEl.innerHTML = blogs.map(renderSocialBlogItem).join('');
+      }
+    }
+  }
+
+  function closeSocialModal() {
+    const modal = document.getElementById('profileSocialModal');
+    if (modal) modal.style.display = 'none';
+    socialModalMode = null;
+    currentSubscriptionsData = null;
+    if (lastSocialTriggerEl && typeof lastSocialTriggerEl.focus === 'function') {
+      try { lastSocialTriggerEl.focus(); } catch (e) {}
+    }
+    lastSocialTriggerEl = null;
+  }
+
   function initEventListeners() {
     // 1. Subscribe button
     const btnSubscribe = document.getElementById('btnProfileSubscribe');
@@ -2746,13 +3134,19 @@
           closeAuthModal();
           return;
         }
+        const socialModal = document.getElementById('profileSocialModal');
+        if (socialModal && socialModal.style.display !== 'none') {
+          e.preventDefault();
+          closeSocialModal();
+          return;
+        }
       }
     });
 
     // 7. Silent refresh on votes
     window.addEventListener('smartcontractum:voted', function () {
-      if (currentProfile && currentProfile.id) {
-        loadProfile(currentProfile.id, true);
+      if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+        loadProfile(currentProfile.id || currentProfile.userId, true);
       }
     });
 
@@ -2975,6 +3369,110 @@
         triggerSearch('');
       });
     }
+
+    // 20. Stats bar interactive items
+    const statRatingWrap = document.getElementById('profileStatRatingWrap');
+    if (statRatingWrap) {
+      const showRatingTooltip = function () {
+        const tip = statRatingWrap.getAttribute('title');
+        if (tip) showToast(tip);
+      };
+      statRatingWrap.addEventListener('click', showRatingTooltip);
+      statRatingWrap.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showRatingTooltip();
+        }
+      });
+    }
+
+    const statSolutionsWrap = document.getElementById('profileStatSolutionsWrap');
+    if (statSolutionsWrap) {
+      statSolutionsWrap.addEventListener('click', switchToSolutions);
+      statSolutionsWrap.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          switchToSolutions();
+        }
+      });
+    }
+
+    const statFollowersWrap = document.getElementById('profileStatFollowersWrap');
+    if (statFollowersWrap) {
+      statFollowersWrap.addEventListener('click', openSubscribersModal);
+      statFollowersWrap.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openSubscribersModal();
+        }
+      });
+    }
+
+    const statFollowingWrap = document.getElementById('profileStatFollowingWrap');
+    if (statFollowingWrap) {
+      statFollowingWrap.addEventListener('click', openSubscriptionsModal);
+      statFollowingWrap.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openSubscriptionsModal();
+        }
+      });
+    }
+
+    const statPubsWrap = document.getElementById('profileStatPubsWrap');
+    if (statPubsWrap) {
+      statPubsWrap.addEventListener('click', function () { setActiveTab('publications'); });
+      statPubsWrap.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setActiveTab('publications');
+        }
+      });
+    }
+
+    // 21. Topic active bar reset
+    const btnClearTopic = document.getElementById('btnClearTopicFilter');
+    if (btnClearTopic) {
+      btnClearTopic.addEventListener('click', clearTopicFilter);
+    }
+
+    // 22. Social modal controls
+    const btnCloseSocial = document.getElementById('btnProfileSocialModalClose');
+    if (btnCloseSocial) {
+      btnCloseSocial.addEventListener('click', closeSocialModal);
+    }
+
+    const socialModal = document.getElementById('profileSocialModal');
+    if (socialModal) {
+      socialModal.addEventListener('click', function (e) {
+        if (e.target === socialModal) {
+          closeSocialModal();
+        }
+      });
+    }
+
+    const subTabAuthors = document.getElementById('socialSubTabAuthors');
+    if (subTabAuthors) {
+      subTabAuthors.addEventListener('click', function () {
+        renderSubscriptionsTabContent('authors');
+      });
+    }
+
+    const subTabBlogs = document.getElementById('socialSubTabBlogs');
+    if (subTabBlogs) {
+      subTabBlogs.addEventListener('click', function () {
+        renderSubscriptionsTabContent('blogs');
+      });
+    }
+
+    const btnSocialLoadMore = document.getElementById('btnSocialLoadMore');
+    if (btnSocialLoadMore) {
+      btnSocialLoadMore.addEventListener('click', function () {
+        if (socialModalMode === 'subscribers' && currentProfile && subscribersHasMore && !isLoadingSubscribers) {
+          loadSubscribers(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
   }
 
   function init() {
@@ -3075,6 +3573,23 @@
     },
     getCurrentProfile: function () {
       return currentProfile;
+    },
+    applyTopicFilter: applyTopicFilter,
+    clearTopicFilter: clearTopicFilter,
+    getCurrentTopicFilter: function () {
+      return currentTopicFilter;
+    },
+    switchToSolutions: switchToSolutions,
+    openSubscribersModal: openSubscribersModal,
+    loadSubscribers: loadSubscribers,
+    openSubscriptionsModal: openSubscriptionsModal,
+    renderSubscriptionsTabContent: renderSubscriptionsTabContent,
+    closeSocialModal: closeSocialModal,
+    getSocialModalMode: function () {
+      return socialModalMode;
+    },
+    getSocialSubTab: function () {
+      return socialSubTab;
     }
   };
 
