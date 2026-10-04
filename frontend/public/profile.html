@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профиль пользователя - SmartContractum</title>
+
+  <!-- Early Theme Initialization -->
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem('ag_theme') || localStorage.getItem('sc_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch(e) {}
+    })();
+  </script>
+
+  <!-- Application Styles (100% Offline-First, Onest font family) -->
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/feed.css">
+  <link rel="stylesheet" href="css/profile.css">
+
+  <style>
+    body, button, input, textarea, select, h1, h2, h3, h4, h5, h6, p, span, a, div, *, *::before, *::after {
+      font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    .header-search-wrap {
+      flex: 1;
+      max-width: 480px;
+      margin: 0 16px;
+    }
+    .header-search-form {
+      position: relative;
+      width: 100%;
+    }
+    .header-search-input {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px 0 34px;
+      border-radius: var(--radius-md, 8px);
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-size: 0.88rem;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color var(--transition-fast);
+    }
+    .header-search-input:focus {
+      border-color: var(--accent-color, #38bdf8);
+    }
+    .header-search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="app-body">
+  <div class="app-container">
+    <!-- ================================================================
+         TOP STICKY HEADER (Unified Design System)
+    ================================================================= -->
+    <header class="app-header feed-header" id="appHeader">
+      <div class="header-container">
+        <!-- Brand Logo -->
+        <a href="index.html" class="brand-logo" aria-label="SmartContractum Главная" title="На главную">
+          <div class="logo-icon-box" aria-hidden="true">
+            <svg class="smart-contract-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="scDocGradProfile" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#38bdf8"></stop>
+                  <stop offset="0.5" stop-color="#6188ff"></stop>
+                  <stop offset="1" stop-color="#16c784"></stop>
+                </linearGradient>
+              </defs>
+              <path d="M7 3.5h11.5l7.5 7.5v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z" fill="rgba(56, 189, 248, 0.06)" stroke="url(#scDocGradProfile)" stroke-width="1.8" stroke-linejoin="round"></path>
+              <path d="M18.5 3.5v6a1.5 1.5 0 0 0 1.5 1.5h6" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              <line x1="9.5" y1="12.5" x2="15.5" y2="12.5" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"></line>
+              <line x1="9.5" y1="17.5" x2="19.5" y2="17.5" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round"></line>
+              <line x1="9.5" y1="22.5" x2="16.5" y2="22.5" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round"></line>
+              <circle cx="23" cy="23" r="5" fill="#0b1426" stroke="#16c784" stroke-width="1.8"></circle>
+              <path d="M21 23l1.5 1.5 3-3" stroke="#16c784" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </div>
+          <div class="logo-text-group">
+            <span class="logo-title"><span class="logo-smart">Smart</span><span class="logo-contractum">Contractum</span></span>
+          </div>
+        </a>
+
+        <!-- Navigation (Дом, Лента) -->
+        <nav class="header-nav" id="headerNav" aria-label="Основная навигация">
+          <ul class="nav-list">
+            <li class="nav-item">
+              <a href="index.html" class="nav-link" id="navIndex">
+                <span class="nav-icon-box">
+                  <svg class="nav-svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                  </svg>
+                </span>
+                <span class="nav-text">Дом</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="feed.html" class="nav-link" id="navFeed">
+                <span class="nav-icon-box">
+                  <svg class="nav-svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+                    <path d="M18 14h-8"></path>
+                    <path d="M15 18h-5"></path>
+                    <path d="M10 6h8v4h-8V6Z"></path>
+                  </svg>
+                </span>
+                <span class="nav-text">Лента</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- Header Right Group: Theme Switcher + Auth -->
+        <div class="header-right-group">
+          <!-- Theme Toggle Switch -->
+          <button type="button" class="btn-theme-toggle" id="btnThemeToggle" role="switch" aria-checked="false" title="Переключить тему оформления" aria-label="Переключить тему оформления">
+            <span class="theme-toggle-track" aria-hidden="true">
+              <span class="theme-toggle-thumb">
+                <svg class="theme-icon-moon" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                </svg>
+                <svg class="theme-icon-sun" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+                </svg>
+              </span>
+            </span>
+          </button>
+
+          <!-- Notifications Bell button -->
+          <div class="header-notif-wrap" id="headerNotifWrap">
+            <button
+              type="button"
+              id="headerNotificationsBtn"
+              class="header-notif-btn"
+              title="Уведомления"
+              aria-label="Уведомления"
+              aria-expanded="false"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+              </svg>
+              <span id="headerNotifBadge" class="header-notif-badge" style="display: none;">0</span>
+            </button>
+            <div id="headerNotifPopup" class="header-notif-popup" style="display: none;" role="region" aria-label="Список уведомлений">
+              <div class="notif-popup-header">
+                <span class="notif-popup-title">Уведомления</span>
+                <button type="button" id="notifMarkAllReadBtn" class="notif-mark-read-btn">Прочитать все</button>
+              </div>
+              <div id="notifListContainer" class="notif-list-container">
+                <div class="notif-empty-state">Нет новых уведомлений</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="header-user-bar">
+            <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
+              <div class="btn-user-avatar-wrap" aria-hidden="true">
+                <svg class="btn-user-svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <span class="btn-user-label" id="headerUserLabel">Вход</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN PROFILE PAGE CONTENT
+    ================================================================= -->
+    <main class="profile-page" id="profilePage">
+      <div class="profile-page-container">
+        <!-- Error message box -->
+        <div id="profileErrorContainer" style="display: none;"></div>
+
+        <!-- Main Loaded Content -->
+        <div id="profileMainContent">
+          <!-- 1. Hero Block -->
+          <div class="profile-hero" id="profileHero">
+            <!-- Branded Cover -->
+            <div class="profile-cover"></div>
+
+            <!-- Identity Wrap -->
+            <div class="profile-identity-wrap">
+              <div class="profile-avatar-wrap">
+                <div class="profile-avatar" id="profileAvatar">
+                  <img class="profile-avatar-img" id="profileAvatarImg" src="" alt="" style="display: none;">
+                  <span class="profile-avatar-initials" id="profileAvatarInitials">SC</span>
+                </div>
+              </div>
+
+              <div class="profile-main-row">
+                <div class="profile-info">
+                  <h1 class="profile-name" id="profileName">Загрузка...</h1>
+                  <div class="profile-spec" id="profileSpec"></div>
+                  <div class="profile-company" id="profileCompany" style="display: none;"></div>
+                  <div class="profile-bio" id="profileBio" style="display: none;"></div>
+                </div>
+
+                <div class="profile-actions" id="profileActions">
+                  <button type="button" class="btn-profile-subscribe" id="btnProfileSubscribe" style="display: none;">
+                    <span>Подписаться</span>
+                  </button>
+                  <button type="button" class="btn-profile-edit" id="btnProfileEdit" style="display: none;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <span>Редактировать профиль</span>
+                  </button>
+                  <button type="button" class="btn-profile-more" id="btnProfileMore" title="Скопировать ссылку на профиль" aria-label="Скопировать ссылку на профиль">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="1"></circle>
+                      <circle cx="19" cy="12" r="1"></circle>
+                      <circle cx="5" cy="12" r="1"></circle>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Statistics & Reputation Bar -->
+          <div class="profile-stats-bar" id="profileStatsBar">
+            <div class="profile-stat-item profile-stat-rating" title="Рейтинг складывается из оценок публикаций, ответов и комментариев. Лайки не учитываются" tabindex="0">
+              <span class="profile-stat-value profile-stat-rating-value" id="profileStatRating">0</span>
+              <span class="profile-stat-label">Рейтинг</span>
+            </div>
+            <div class="profile-stat-item">
+              <span class="profile-stat-value" id="profileStatPublications">0</span>
+              <span class="profile-stat-label">Публикаций</span>
+            </div>
+            <div class="profile-stat-item">
+              <span class="profile-stat-value" id="profileStatQuestions">0</span>
+              <span class="profile-stat-label">Вопросов</span>
+            </div>
+            <div class="profile-stat-item">
+              <span class="profile-stat-value" id="profileStatAnswers">0</span>
+              <span class="profile-stat-label">Ответов</span>
+            </div>
+            <div class="profile-stat-item">
+              <span class="profile-stat-value" id="profileStatSolutions">0</span>
+              <span class="profile-stat-label">Решений</span>
+            </div>
+            <div class="profile-stat-item">
+              <span class="profile-stat-value" id="profileStatFollowers">0</span>
+              <span class="profile-stat-label">Подписчиков</span>
+            </div>
+            <div class="profile-stat-item">
+              <span class="profile-stat-value" id="profileStatFollowing">0</span>
+              <span class="profile-stat-label">Подписок</span>
+            </div>
+            <div class="profile-stat-item profile-account-age" id="profileAccountAgeWrap">
+              <span class="profile-stat-label">На платформе</span>
+              <span class="profile-account-age-value" id="profileAccountAge">На платформе с недавно</span>
+            </div>
+          </div>
+
+          <!-- 3. Content Area Placeholder -->
+          <div class="profile-content-area" id="profileContentArea">
+            <h2 class="profile-section-title">Публикации автора</h2>
+            <div class="profile-articles-list" id="profileArticlesList">
+              <div class="profile-empty-state">Загрузка материалов...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ================================================================
+         EDIT PROFILE MODAL
+    ================================================================= -->
+    <div id="editProfileModal" class="feed-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="editProfileModalTitle">
+      <div class="feed-modal-card" style="max-width: 520px;">
+        <div class="feed-modal-header">
+          <div class="feed-modal-title-wrap">
+            <h2 id="editProfileModalTitle" class="feed-modal-title">Редактирование профиля</h2>
+          </div>
+          <button type="button" class="feed-modal-close-btn" id="btnCloseEditProfileModal" title="Закрыть" aria-label="Закрыть">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="feed-modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px;">
+          <div>
+            <label for="editProfileName" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Имя или псевдоним</label>
+            <input type="text" id="editProfileName" class="feed-search-input" style="width: 100%; box-sizing: border-box;" placeholder="Ваше имя">
+          </div>
+          <div>
+            <label for="editProfileSpec" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Специализация</label>
+            <input type="text" id="editProfileSpec" class="feed-search-input" style="width: 100%; box-sizing: border-box;" placeholder="Например: Smart Contract Auditor">
+          </div>
+          <div>
+            <label for="editProfileCompany" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Компания или проект</label>
+            <input type="text" id="editProfileCompany" class="feed-search-input" style="width: 100%; box-sizing: border-box;" placeholder="Например: OpenZeppelin">
+          </div>
+          <div>
+            <label for="editProfileBio" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">О себе</label>
+            <textarea id="editProfileBio" class="feed-search-input" style="width: 100%; height: 90px; padding: 10px; resize: vertical; box-sizing: border-box;" placeholder="Краткая информация о вашем опыте и интересах..."></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
+            <button type="button" id="btnCancelEditProfile" class="btn-profile-edit">Отмена</button>
+            <button type="button" id="btnSaveProfile" class="btn-profile-subscribe">Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================
+         AUTH MODAL
+    ================================================================= -->
+    <div id="authModal" class="feed-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+      <div class="feed-modal-card auth-modal-card" style="max-width: 440px;">
+        <div class="feed-modal-header">
+          <div class="feed-modal-title-wrap">
+            <h2 id="authModalTitle" class="feed-modal-title">Вход в SmartContractum</h2>
+          </div>
+          <button type="button" class="feed-modal-close-btn" id="btnCloseAuthModal" title="Закрыть" aria-label="Закрыть">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="auth-modal-body" style="padding: 20px;">
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">Войдите, чтобы подписываться на авторов и настраивать ленту.</p>
+          <button type="button" id="btnAuthLoginDemo" class="btn-profile-subscribe" style="width: 100%; justify-content: center; padding: 10px;">
+            Войти как Демо Пользователь
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Profile Modal (shared popup component) -->
+    <div id="userProfileModal" class="feed-modal-overlay user-profile-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="userProfileModalTitle">
+      <div class="feed-modal-card user-profile-modal-card">
+        <div class="feed-modal-header">
+          <div class="feed-modal-title-wrap">
+            <h2 id="userProfileModalTitle" class="feed-modal-title">Профиль эксперта</h2>
+          </div>
+          <button type="button" class="feed-modal-close-btn" id="btnCloseUserProfileModal" title="Закрыть" aria-label="Закрыть">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="feed-modal-body" id="userProfileModalBody"></div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="feedToast" class="feed-toast" style="display: none;"></div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/votes.js"></script>
+  <script src="js/card.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/profile-page.js"></script>
+</body>
+</html>
