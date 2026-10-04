@@ -7737,6 +7737,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "avatar": avatar,
                 "createdAt": created_at_val,
                 "isSubscribed": is_sub,
+                "isOwnProfile": bool(curr_user and curr_user["id"] == user_id),
                 "rating": total_rating,
                 "karma": total_rating,
                 "publicationsCount": publications_count,
