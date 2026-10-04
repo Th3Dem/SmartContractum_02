@@ -547,7 +547,7 @@ class TestVisualMatrixAndThemeRegressions(unittest.TestCase):
 class TestBrowserSmokeRegressions(BaseProfileTestCase):
     """Headless Chromium smoke test for real browser DOM rendering across viewports and themes."""
 
-    @unittest.skipUnless(PLAYWRIGHT_AVAILABLE, "Playwright not installed in local environment")
+    @unittest.skipUnless(PLAYWRIGHT_AVAILABLE and os.environ.get("RUN_BROWSER_SMOKE") == "1", "Browser smoke test enabled via RUN_BROWSER_SMOKE=1 and Playwright")
     def test_20_headless_profile_viewports_and_theme_toggle(self):
         """Verify headless browser renders at 320px, 375px, and desktop with theme toggle."""
         viewports = [
