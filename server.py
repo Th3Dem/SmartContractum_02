@@ -510,6 +510,7 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_draft_id ON moderation_submissions(draft_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_status ON moderation_submissions(status);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_author ON moderation_submissions(author_id, status);")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS user_subscriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -633,6 +634,7 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_solution ON article_comments(article_id, is_solution);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_parent_answer ON article_comments(parent_answer_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_parent_comment ON article_comments(parent_comment_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_user_status ON article_comments(user_id, status);")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_user_answer ON article_comments(article_id, user_id) WHERE comment_type = 'answer' AND status = 'published';")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_client_operation ON article_comments(user_id, client_operation_id) WHERE client_operation_id IS NOT NULL;")
 
@@ -7693,10 +7695,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
                 cur.execute("""
-                    SELECT id, draft_id, title, publication_settings, created_at, article_html AS content
+                    SELECT id, draft_id, title, publication_settings, created_at
                     FROM moderation_submissions
                     WHERE author_id = ? AND status = 'approved'
-                    ORDER BY created_at DESC
+                    ORDER BY created_at DESC, id DESC
                 """, (user_id,))
                 pub_rows = cur.fetchall()
 
@@ -7837,26 +7839,43 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
 
             # Top contributions: 2-3 items with highest rating across approved publications and solutions
+            # Query at most 4 top rated publications and 4 top rated solutions to avoid N+1 and full archive scans
+            cur.execute("""
+                SELECT ms.id, ms.draft_id, ms.title, ms.publication_settings, ms.created_at,
+                       (SELECT COALESCE(SUM(v.value), 0)
+                        FROM article_votes v
+                        WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)
+                       ) AS rating,
+                       (SELECT COUNT(DISTINCT ac.id)
+                        FROM article_comments ac
+                        WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                          AND ac.status = 'published'
+                       ) AS comments_count
+                FROM moderation_submissions ms
+                WHERE ms.author_id = ? AND ms.status = 'approved'
+                ORDER BY rating DESC, ms.created_at DESC, ms.id DESC
+                LIMIT 4
+            """, (user_id,))
+            top_pub_rows = cur.fetchall()
+
+            cand_pub_ids = [r["id"] for r in top_pub_rows]
+            html_by_id = {}
+            if cand_pub_ids:
+                placeholders = ",".join("?" * len(cand_pub_ids))
+                cur.execute(f"SELECT id, article_html FROM moderation_submissions WHERE id IN ({placeholders})", tuple(cand_pub_ids))
+                html_by_id = {row["id"]: (row["article_html"] or "") for row in cur.fetchall()}
+
             top_contributions = []
-            for pr in pub_rows:
+            for pr in top_pub_rows:
                 try:
                     pst = json.loads(pr["publication_settings"]) if pr["publication_settings"] else {}
                 except Exception:
                     pst = {}
                 mtype = (pst.get("materialType") or pst.get("type") or "publication").strip().lower()
                 is_q = (mtype == "question")
-
-                cur.execute("""
-                    SELECT COALESCE(SUM(value), 0) AS val FROM article_votes
-                    WHERE article_id = ? OR (? IS NOT NULL AND article_id = ?)
-                """, (pr["id"], pr["draft_id"], pr["draft_id"]))
-                p_rating = cur.fetchone()["val"] or 0
-
-                cur.execute("""
-                    SELECT COUNT(DISTINCT id) AS cnt FROM article_comments
-                    WHERE (article_id = ? OR (? IS NOT NULL AND article_id = ?)) AND status = 'published'
-                """, (pr["id"], pr["draft_id"], pr["draft_id"]))
-                c_cnt = cur.fetchone()["cnt"] or 0
+                p_rating = int(pr["rating"] or 0)
+                c_cnt = int(pr["comments_count"] or 0)
+                art_content = html_by_id.get(pr["id"], "")
 
                 top_contributions.append({
                     "id": pr["id"],
@@ -7864,11 +7883,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "materialType": "question" if is_q else "publication",
                     "material_type": "question" if is_q else "publication",
                     "title": pr["title"],
-                    "contentSnippet": make_content_snippet(pr["content"]),
-                    "rating": int(p_rating),
-                    "score": int(p_rating),
-                    "commentsCount": int(c_cnt) if not is_q else 0,
-                    "answersCount": int(c_cnt) if is_q else 0,
+                    "contentSnippet": make_content_snippet(art_content),
+                    "rating": p_rating,
+                    "score": p_rating,
+                    "commentsCount": c_cnt if not is_q else 0,
+                    "answersCount": c_cnt if is_q else 0,
                     "isSolution": False,
                     "createdAt": pr["created_at"],
                     "date": format_date_ru(pr["created_at"]),
@@ -7887,6 +7906,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                   AND ms.status = 'approved'
                   AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
                 GROUP BY ac.id
+                ORDER BY rating DESC, ac.created_at DESC, ac.id DESC
+                LIMIT 4
             """, (user_id,))
             for sol in cur.fetchall():
                 top_contributions.append({
@@ -7907,8 +7928,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(sol['article_id'])}#comment-{urllib.parse.quote(sol['id'])}"
                 })
 
-            top_contributions.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
-            top_contributions = top_contributions[:3]
+            top_contributions.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or "", x.get("id") or ""), reverse=True)
 
             is_own_profile = bool(curr_user and curr_user["id"] == user_id)
             pinned_material = self.get_user_pinned_material(cur, user_id, is_owner=is_own_profile)
@@ -7916,6 +7936,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Exclude pinned material from top contributions to prevent duplicate display
                 p_id = pinned_material.get("id") or pinned_material.get("targetId")
                 top_contributions = [tc for tc in top_contributions if tc.get("id") != p_id]
+            top_contributions = top_contributions[:3]
 
             # Aggregated topics from author's approved publications
             topic_counts = {}
@@ -8265,17 +8286,42 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (curr_user["id"],))
                     user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
 
-                cur.execute("""
-                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count,
-                           (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
-                           (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
-                    FROM moderation_submissions ms
-                    WHERE ms.author_id = ? AND ms.status = 'approved'
-                      AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
-                """, (user_id,))
-                rows = cur.fetchall()
+                total_count = None
+                if not search_q and not topic_filter:
+                    cur.execute("""
+                        SELECT COUNT(*) AS total
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                    """, (user_id,))
+                    total_count = cur.fetchone()["total"] or 0
+
+                    order_sql = "rating DESC, ms.created_at DESC, ms.id DESC" if sort_by == "popular" else "ms.created_at DESC, ms.id DESC"
+                    cur.execute(f"""
+                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count,
+                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
+                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                        ORDER BY {order_sql}
+                        LIMIT ? OFFSET ?
+                    """, (user_id, limit, offset))
+                    rows = cur.fetchall()
+                else:
+                    cur.execute("""
+                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count,
+                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
+                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                    """, (user_id,))
+                    rows = cur.fetchall()
 
             items = []
             for r in rows:
@@ -8370,14 +8416,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(art_id)}"
                 })
 
-            if sort_by == "popular":
-                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            if total_count is not None:
+                total = total_count
+                paged_items = items
+                has_more = (offset + limit) < total
             else:
-                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
-
-            total = len(items)
-            paged_items = items[offset : offset + limit]
-            has_more = (offset + limit) < total
+                if sort_by == "popular":
+                    items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or "", x.get("id") or ""), reverse=True)
+                else:
+                    items.sort(key=lambda x: (x.get("createdAt") or "", x.get("id") or ""), reverse=True)
+                total = len(items)
+                paged_items = items[offset : offset + limit]
+                has_more = (offset + limit) < total
 
             self.send_json_response(200, {
                 "success": True,
@@ -8464,18 +8514,44 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (curr_user["id"],))
                     user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
 
-                cur.execute("""
-                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
-                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
-                           (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
-                           (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
-                    FROM moderation_submissions ms
-                    WHERE ms.author_id = ? AND ms.status = 'approved'
-                      AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                """, (user_id,))
-                rows = cur.fetchall()
+                total_count = None
+                if not search_q and not topic_filter and status_filter == "all":
+                    cur.execute("""
+                        SELECT COUNT(*) AS total
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                    """, (user_id,))
+                    total_count = cur.fetchone()["total"] or 0
+
+                    order_sql = "rating DESC, ms.created_at DESC, ms.id DESC" if sort_by == "popular" else "ms.created_at DESC, ms.id DESC"
+                    cur.execute(f"""
+                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
+                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
+                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
+                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                        ORDER BY {order_sql}
+                        LIMIT ? OFFSET ?
+                    """, (user_id, limit, offset))
+                    rows = cur.fetchall()
+                else:
+                    cur.execute("""
+                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
+                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
+                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
+                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                    """, (user_id,))
+                    rows = cur.fetchall()
 
             items = []
             for r in rows:
@@ -8577,14 +8653,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(art_id)}"
                 })
 
-            if sort_by == "popular":
-                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            if total_count is not None:
+                total = total_count
+                paged_items = items
+                has_more = (offset + limit) < total
             else:
-                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
-
-            total = len(items)
-            paged_items = items[offset : offset + limit]
-            has_more = (offset + limit) < total
+                if sort_by == "popular":
+                    items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or "", x.get("id") or ""), reverse=True)
+                else:
+                    items.sort(key=lambda x: (x.get("createdAt") or "", x.get("id") or ""), reverse=True)
+                total = len(items)
+                paged_items = items[offset : offset + limit]
+                has_more = (offset + limit) < total
 
             self.send_json_response(200, {
                 "success": True,
@@ -8646,24 +8726,65 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     return
 
-                cur.execute("""
-                    SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
-                           ms.title AS question_title,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
-                    FROM article_comments ac
-                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                    WHERE ac.user_id = ?
-                      AND ac.status = 'published'
-                      AND ac.comment_type = 'answer'
-                      AND ms.status = 'approved'
-                      AND (
-                          json_extract(ms.publication_settings, '$.materialType') = 'question'
-                          OR json_extract(ms.publication_settings, '$.type') = 'question'
-                      )
-                    GROUP BY ac.id
-                    ORDER BY ac.created_at DESC
-                """, (user_id,))
-                rows = cur.fetchall()
+                total_count = None
+                sol_condition = " AND ac.is_solution = 1" if filter_type in ("solutions", "solution") else ""
+                if not search_q:
+                    cur.execute(f"""
+                        SELECT COUNT(DISTINCT ac.id) AS total
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND ac.comment_type = 'answer'
+                          AND ms.status = 'approved'
+                          AND (
+                              json_extract(ms.publication_settings, '$.materialType') = 'question'
+                              OR json_extract(ms.publication_settings, '$.type') = 'question'
+                          )
+                          {sol_condition}
+                    """, (user_id,))
+                    total_count = cur.fetchone()["total"] or 0
+
+                    cur.execute(f"""
+                        SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
+                               ms.title AS question_title,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND ac.comment_type = 'answer'
+                          AND ms.status = 'approved'
+                          AND (
+                              json_extract(ms.publication_settings, '$.materialType') = 'question'
+                              OR json_extract(ms.publication_settings, '$.type') = 'question'
+                          )
+                          {sol_condition}
+                        GROUP BY ac.id
+                        ORDER BY ac.created_at DESC, ac.id DESC
+                        LIMIT ? OFFSET ?
+                    """, (user_id, limit, offset))
+                    rows = cur.fetchall()
+                else:
+                    cur.execute(f"""
+                        SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
+                               ms.title AS question_title,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND ac.comment_type = 'answer'
+                          AND ms.status = 'approved'
+                          AND (
+                              json_extract(ms.publication_settings, '$.materialType') = 'question'
+                              OR json_extract(ms.publication_settings, '$.type') = 'question'
+                          )
+                          {sol_condition}
+                        GROUP BY ac.id
+                        ORDER BY ac.created_at DESC, ac.id DESC
+                    """, (user_id,))
+                    rows = cur.fetchall()
 
             items = []
             for r in rows:
@@ -8691,9 +8812,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
                 })
 
-            total = len(items)
-            paged_items = items[offset : offset + limit]
-            has_more = (offset + limit) < total
+            if total_count is not None:
+                total = total_count
+                paged_items = items
+                has_more = (offset + limit) < total
+            else:
+                total = len(items)
+                paged_items = items[offset : offset + limit]
+                has_more = (offset + limit) < total
 
             self.send_json_response(200, {
                 "success": True,
@@ -8760,27 +8886,55 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     pass
 
-                sql = """
-                    SELECT ac.id, ac.article_id, ac.content, ac.created_at, ac.comment_type,
-                           ms.id AS material_id, ms.title AS parent_title,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
-                    FROM article_comments ac
-                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                    WHERE ac.user_id = ?
-                      AND ac.status = 'published'
-                      AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
-                      AND ms.status = 'approved'
-                """
-                params = [user_id]
-                if search_q:
-                    sql += " AND (lower(ac.content) LIKE lower(?) OR lower(ms.title) LIKE lower(?))"
+                total_count = None
+                order_sql = "rating DESC, ac.created_at DESC, ac.id DESC" if sort_by in ("rating", "popular") else "ac.created_at DESC, ac.id DESC"
+                if not search_q:
+                    count_sql = """
+                        SELECT COUNT(DISTINCT ac.id) AS total
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                          AND ms.status = 'approved'
+                    """
+                    cur.execute(count_sql, (user_id,))
+                    total_count = cur.fetchone()["total"] or 0
+
+                    sql = f"""
+                        SELECT ac.id, ac.article_id, ac.content, ac.created_at, ac.comment_type,
+                               ms.id AS material_id, ms.title AS parent_title,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                          AND ms.status = 'approved'
+                        GROUP BY ac.id
+                        ORDER BY {order_sql}
+                        LIMIT ? OFFSET ?
+                    """
+                    cur.execute(sql, (user_id, limit, offset))
+                    rows = cur.fetchall()
+                else:
+                    sql = f"""
+                        SELECT ac.id, ac.article_id, ac.content, ac.created_at, ac.comment_type,
+                               ms.id AS material_id, ms.title AS parent_title,
+                               (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                          AND ms.status = 'approved'
+                          AND (lower(ac.content) LIKE lower(?) OR lower(ms.title) LIKE lower(?))
+                        GROUP BY ac.id
+                        ORDER BY {order_sql}
+                    """
                     q_like = f"%{search_q}%"
-                    params.extend([q_like, q_like])
-
-                sql += " GROUP BY ac.id ORDER BY ac.created_at DESC"
-
-                cur.execute(sql, tuple(params))
-                rows = cur.fetchall()
+                    cur.execute(sql, (user_id, q_like, q_like))
+                    rows = cur.fetchall()
 
             items = []
             q_lower = search_q.lower() if search_q else ""
@@ -8820,21 +8974,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "permalink": permalink
                 })
 
-            if sort_by in ("rating", "popular"):
-                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            if total_count is not None:
+                total_count_val = total_count
+                paged_items = items
+                has_more = (offset + limit) < total_count_val
             else:
-                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
-
-            total_count = len(items)
-            paged_items = items[offset : offset + limit]
-            has_more = (offset + limit) < total_count
+                if sort_by in ("rating", "popular"):
+                    items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or "", x.get("id") or ""), reverse=True)
+                else:
+                    items.sort(key=lambda x: (x.get("createdAt") or "", x.get("id") or ""), reverse=True)
+                total_count_val = len(items)
+                paged_items = items[offset : offset + limit]
+                has_more = (offset + limit) < total_count_val
 
             self.send_json_response(200, {
                 "success": True,
                 "items": paged_items,
                 "comments": paged_items,
-                "totalCount": total_count,
-                "total": total_count,
+                "totalCount": total_count_val,
+                "total": total_count_val,
                 "limit": limit,
                 "offset": offset,
                 "hasMore": has_more
