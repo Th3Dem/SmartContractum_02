@@ -242,8 +242,13 @@
 
     const specEl = document.getElementById('profileSpec');
     if (specEl) {
-      specEl.textContent = p.specialization || 'Участник сообщества';
-      specEl.style.display = 'block';
+      if (p.specialization && p.specialization.trim()) {
+        specEl.textContent = p.specialization.trim();
+        specEl.style.display = 'block';
+      } else {
+        specEl.textContent = '';
+        specEl.style.display = 'none';
+      }
     }
 
     const compEl = document.getElementById('profileCompany');
@@ -450,7 +455,7 @@
       let badgeText = 'Публикация';
       if (isSolution) {
         badgeClass = 'solution';
-        badgeText = '✓ Решение';
+        badgeText = 'Решение';
       } else if (isQuestion) {
         badgeClass = 'question';
         badgeText = 'Вопрос';
@@ -530,13 +535,29 @@
       }
     }
 
+    const isOwn = !!(p.isOwnProfile || (window.currentUser && (window.currentUser.id === p.id || window.currentUser.id === p.userId)));
+
     // 2. Expertise widget
+    const widgetExp = document.getElementById('profileWidgetExpertise');
     const specEl = document.getElementById('sidebarUserSpecialization');
     if (specEl) {
-      specEl.textContent = p.specialization && p.specialization.trim() ? p.specialization.trim() : 'Участник сообщества';
+      if (p.specialization && p.specialization.trim()) {
+        specEl.textContent = p.specialization.trim();
+        specEl.className = 'profile-expertise-badge';
+        if (widgetExp) widgetExp.style.display = 'flex';
+      } else {
+        if (isOwn) {
+          specEl.textContent = 'Укажите специализацию';
+          specEl.className = 'profile-expertise-badge profile-expertise-hint';
+          if (widgetExp) widgetExp.style.display = 'flex';
+        } else {
+          if (widgetExp) widgetExp.style.display = 'none';
+        }
+      }
     }
 
     // 3. Topics widget
+    const widgetTopics = document.getElementById('profileWidgetTopics');
     const topicsContainer = document.getElementById('sidebarUserTopics');
     if (topicsContainer) {
       let topics = [];
@@ -547,6 +568,7 @@
       }
 
       if (topics.length > 0) {
+        if (widgetTopics) widgetTopics.style.display = 'flex';
         topicsContainer.innerHTML = topics.map(function (item) {
           let title = item.title || item.name || item.id || 'Тема';
           if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
@@ -563,11 +585,21 @@
           '</span>';
         }).join('');
       } else {
-        topicsContainer.innerHTML = '<div class="profile-sidebar-empty">Темы пока не определены</div>';
+        if (isOwn) {
+          if (widgetTopics) widgetTopics.style.display = 'flex';
+          topicsContainer.innerHTML = '<div class="profile-sidebar-empty">Темы формируются автоматически из ваших публикаций</div>';
+        } else {
+          if (widgetTopics) widgetTopics.style.display = 'none';
+        }
       }
     }
 
-    // 4. Reputation widget
+    // 4. Reputation widget (hidden to eliminate duplicate statistics)
+    const widgetRep = document.getElementById('profileWidgetReputation');
+    if (widgetRep) {
+      widgetRep.style.display = 'none';
+    }
+
     const stats = p.stats || {};
     const ratingVal = stats.rating !== undefined ? stats.rating : (p.rating || 0);
     const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
@@ -660,7 +692,7 @@
 
       if (item.type === 'answer') {
         const solutionBadge = item.isSolution
-          ? '<span class="activity-solution-badge">✓ Решение</span>'
+          ? '<span class="activity-solution-badge">Решение</span>'
           : '';
         badgeHtml = '<span class="activity-type-badge activity-badge-answer">Ответ</span>' + solutionBadge;
         titleWrapHtml = '<div class="activity-card-title-wrap">' +
@@ -954,7 +986,7 @@
       const questionUrl = item.url || ('article.html?id=' + encodeURIComponent(item.questionId || item.id));
 
       const solutionBadge = item.isSolution
-        ? '<span class="meta-badge solution-badge">✓ Решение</span>'
+        ? '<span class="meta-badge solution-badge">Решение</span>'
         : '';
       const snippetHtml = item.contentSnippet
         ? '<div class="answer-card-snippet">' + escapeHtml(item.contentSnippet) + '</div>'
