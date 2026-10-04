@@ -161,10 +161,10 @@
 
         const initials = u.initials || (u.name ? u.name.split(' ').map(function (s) { return s[0]; }).join('').toUpperCase() : 'SC');
         const stats = u.stats || {};
-        const rating = stats.rating !== undefined ? stats.rating : (u.rating !== undefined ? u.rating : 0);
-        const pubsCount = stats.publicationsCount !== undefined ? stats.publicationsCount : (stats.articlesCount !== undefined ? stats.articlesCount : (u.publicationsCount !== undefined ? u.publicationsCount : 0));
-        const answersCount = stats.answersCount !== undefined ? stats.answersCount : (u.answersCount !== undefined ? u.answersCount : 0);
-        const solutionsCount = stats.solutionsCount !== undefined ? stats.solutionsCount : (u.solutionsCount !== undefined ? u.solutionsCount : 0);
+        const rating = (stats.rating !== undefined) ? stats.rating : (u.rating || 0);
+        const pubsCount = stats.publicationsCount || stats.articlesCount || u.publicationsCount || 0;
+        const answersCount = stats.answersCount || u.answersCount || 0;
+        const solutionsCount = stats.solutionsCount || u.solutionsCount || 0;
 
         let avatarHtml = '';
         if (u.avatar) {

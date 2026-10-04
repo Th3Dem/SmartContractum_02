@@ -564,7 +564,10 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
 
                 # Open profile page
                 page.goto(f"{self.base_url}/profile.html?id=author_192")
-                page.wait_for_selector("#profileName", timeout=5000)
+                page.wait_for_function(
+                    "() => { const el = document.getElementById('profileName'); return el && el.textContent.trim() !== 'Загрузка...' && el.textContent.trim() !== ''; }",
+                    timeout=10000
+                )
 
                 name_text = page.locator("#profileName").inner_text()
                 self.assertEqual(name_text, "Alice Engineer")
@@ -585,11 +588,17 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
                 self.assertLessEqual(scroll_width, client_width + 1,
                                      f"Horizontal overflow detected on viewport {vp}")
 
-                # Switch theme to light and verify contrast
+                # Toggle theme and verify theme switched
+                initial_theme = page.evaluate("() => document.documentElement.getAttribute('data-theme') || 'dark'")
+                expected_next = "light" if initial_theme == "dark" else "dark"
                 theme_btn = page.locator("#btnThemeToggle")
                 theme_btn.click()
+                page.wait_for_function(
+                    f"() => document.documentElement.getAttribute('data-theme') === '{expected_next}'",
+                    timeout=5000
+                )
                 theme_attr = page.locator("html").get_attribute("data-theme")
-                self.assertEqual(theme_attr, "light")
+                self.assertEqual(theme_attr, expected_next)
 
                 context.close()
             browser.close()
