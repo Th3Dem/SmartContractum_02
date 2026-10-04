@@ -277,6 +277,7 @@
     previousBlogsSubtab: 'posts',
     savedOnly: false,
     savedType: 'all', // 'all' | 'publications' | 'questions' | 'comments'
+    publicationsAlias: false,
     limit: 10,
     offset: 0,
     total: 0,
@@ -344,28 +345,38 @@
       state.tab = 'clubs';
       state.activeClubId = clubParam;
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (companyParam) {
       state.tab = 'companies';
       state.activeCompanyId = companyParam;
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (tabParam === 'questions') {
       state.tab = 'questions';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (tabParam === 'my' || tabParam === 'subscriptions') {
       state.tab = 'subscriptions';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (tabParam === 'saved' || savedParam === '1' || savedParam === 'true') {
       state.tab = 'saved';
       state.savedOnly = true;
+      state.publicationsAlias = false;
       const typeParam = (params.get('type') || params.get('savedType') || 'all').toLowerCase();
       if (['all', 'publications', 'questions', 'comments'].includes(typeParam)) {
         state.savedType = typeParam;
       } else {
         state.savedType = 'all';
       }
+    } else if (tabParam === 'publications' || tabParam === 'pubs' || tabParam === 'articles') {
+      state.tab = 'all';
+      state.savedOnly = false;
+      state.publicationsAlias = (tabParam === 'publications');
     } else if (tabParam === 'all' || tabParam === 'focus') {
       state.tab = 'all';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else if (['top', 'new', 'clubs', 'companies', 'directions', 'topics', 'blogs'].includes(tabParam)) {
       if (tabParam === 'topics') {
         state.tab = 'directions';
@@ -375,9 +386,11 @@
         state.tab = tabParam;
       }
       state.savedOnly = false;
+      state.publicationsAlias = false;
     } else {
       state.tab = 'all';
       state.savedOnly = false;
+      state.publicationsAlias = false;
     }
     state.questionStatus = params.get('questionStatus') || 'all';
 
@@ -507,7 +520,9 @@
 
   function syncURL(replace) {
     const params = new URLSearchParams();
-    if (state.tab && state.tab !== 'focus') {
+    if (state.tab === 'all' && state.publicationsAlias) {
+      params.set('tab', 'publications');
+    } else if (state.tab && state.tab !== 'focus') {
       params.set('tab', state.tab === 'companies' ? 'blogs' : state.tab);
     }
     if (state.tab === 'saved' && state.savedType && state.savedType !== 'all') {
@@ -1286,6 +1301,12 @@
     if (tabName === 'my') tabName = 'subscriptions';
     if (tabName === 'focus') tabName = 'all';
     if (tabName === 'blogs') tabName = 'companies';
+    if (tabName === 'publications' || tabName === 'pubs' || tabName === 'articles') {
+      state.publicationsAlias = (tabName === 'publications');
+      tabName = 'all';
+    } else {
+      state.publicationsAlias = false;
+    }
 
     // Isolate filter state per tab
     state.tabFilters = state.tabFilters || {};
@@ -4578,11 +4599,11 @@
       }
     }
 
-    const isSaved = state.tab === 'saved';
-    let title = isSaved ? 'Нет сохраненных публикаций' : 'Ничего не найдено';
-    let desc = isSaved
-      ? 'Вы еще не добавили ни одной статьи в закладки. Нажмите на иконку закладки на любой публикации в ленте, чтобы сохранить ее.'
-      : 'По вашему запросу и выбранным фильтрам не найдено публикаций. Попробуйте изменить параметры или сбросить фильтры.';
+    const isSaved = (state.tab === 'saved');
+    const isQuestions = (state.tab === 'questions');
+    let title = '';
+    let desc = '';
+    let buttonsHtml = '';
 
     if (isSaved) {
       if (state.savedType === 'comments') {
@@ -4598,6 +4619,61 @@
         title = 'Нет сохраненных материалов';
         desc = 'Вы еще не сохранили ни одной публикации, вопроса или комментария.';
       }
+      buttonsHtml =
+        '<button type="button" id="feedEmptyResetBtn" class="btn btn-primary">' +
+          '<span>Перейти ко всем статьям</span>' +
+        '</button>';
+    } else if (isQuestions) {
+      const hasQuestionFilters = Boolean(
+        state.search ||
+        (state.questionStatus && state.questionStatus !== 'all') ||
+        (state.filters.topics && state.filters.topics.length > 0)
+      );
+      if (hasQuestionFilters) {
+        title = 'Не найдено вопросов';
+        desc = 'По вашему запросу и выбранным фильтрам не найдено вопросов. Попробуйте изменить формулировку поиска или сбросить фильтры.';
+      } else {
+        title = 'Вопросов пока нет';
+        desc = 'В сообществе пока нет вопросов. Задайте вопрос первым!';
+      }
+      buttonsHtml =
+        '<a href="editor.html?type=question" class="btn btn-primary" id="feedEmptyAskQuestionBtn">' +
+          '<span>Задать вопрос</span>' +
+        '</a>' +
+        (hasQuestionFilters
+          ? '<button type="button" id="feedEmptyResetBtn" class="btn btn-secondary">' +
+              '<span>Сбросить фильтры</span>' +
+            '</button>'
+          : '');
+    } else {
+      const hasPubFilters = Boolean(
+        state.search ||
+        (state.filters.topics && state.filters.topics.length > 0) ||
+        (state.filters.complexities && state.filters.complexities.length > 0) ||
+        (state.filters.types && state.filters.types.length > 0) ||
+        (state.filters.formats && state.filters.formats.length > 0) ||
+        (state.filters.audiences && state.filters.audiences.length > 0) ||
+        (state.filters.period && state.filters.period !== 'all') ||
+        state.filters.dateFrom || state.filters.dateTo
+      );
+      if (hasPubFilters) {
+        title = 'Не найдено публикаций';
+        desc = 'По вашему запросу и выбранным фильтрам не найдено публикаций. Попробуйте изменить параметры или сбросить фильтры.';
+        buttonsHtml =
+          '<button type="button" id="feedEmptyChangeFiltersBtn" class="btn btn-secondary">' +
+            '<span>Изменить фильтры</span>' +
+          '</button>' +
+          '<button type="button" id="feedEmptyResetBtn" class="btn btn-primary">' +
+            '<span>Сбросить фильтры</span>' +
+          '</button>';
+      } else {
+        title = 'Публикаций пока нет';
+        desc = 'В этом разделе пока нет публикаций. Напишите первую публикацию или вернитесь позже.';
+        buttonsHtml =
+          '<a href="editor.html" class="btn btn-primary" id="feedEmptyWritePubBtn">' +
+            '<span>Написать публикацию</span>' +
+          '</a>';
+      }
     }
 
     container.innerHTML =
@@ -4610,14 +4686,7 @@
         '<h3 class="empty-state-title">' + escapeHtml(title) + '</h3>' +
         '<p class="empty-state-desc">' + escapeHtml(desc) + '</p>' +
         '<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px;">' +
-          (!isSaved
-            ? '<button type="button" id="feedEmptyChangeFiltersBtn" class="btn btn-secondary">' +
-                '<span>Изменить фильтры</span>' +
-              '</button>'
-            : '') +
-          '<button type="button" id="feedEmptyResetBtn" class="btn btn-primary">' +
-            '<span>' + (isSaved ? 'Перейти ко всем статьям' : 'Сбросить фильтры') + '</span>' +
-          '</button>' +
+          buttonsHtml +
         '</div>' +
       '</div>';
 
@@ -4628,9 +4697,9 @@
       });
     }
 
-    const btn = document.getElementById('feedEmptyResetBtn');
-    if (btn) {
-      btn.addEventListener('click', function () {
+    const resetBtn = document.getElementById('feedEmptyResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
         if (isSaved) {
           switchTab('all');
         } else {
@@ -7244,6 +7313,8 @@
 
     window.addEventListener('popstate', function () {
       parseURLParams();
+      updateSubnavTabsUI();
+      ensureToolbarPlacement();
       if (state.tab === 'clubs') {
         if (state.activeClubId) openClubDetail(state.activeClubId);
         else loadClubs();
@@ -7277,6 +7348,9 @@
     window.__updateQuestionStatusPillsUI = updateQuestionStatusPillsUI;
     window.__parseURLParams = parseURLParams;
     window.__syncURL = syncURL;
+    window.__switchTab = switchTab;
+    window.__renderEmptyState = renderEmptyState;
+    window.__updateSubnavTabsUI = updateSubnavTabsUI;
     window.loadArticles = loadArticles;
     window.fetchFeed = fetchFeed;
     window.showOfflineBadge = showOfflineBadge;

@@ -4075,13 +4075,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND (json_extract(m.publication_settings, '$.materialType') != 'question' OR json_extract(m.publication_settings, '$.materialType') IS NULL)
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') != 'question'
                   ) as pubs_count,
                   (SELECT COUNT(DISTINCT s.article_id)
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND json_extract(m.publication_settings, '$.materialType') = 'question'
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') = 'question'
                   ) as questions_count,
                   (SELECT COUNT(*) FROM comment_saves WHERE user_id = ?) as comments_count
             """, (user["id"], user["id"], user["id"]))
@@ -4142,13 +4142,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND (json_extract(m.publication_settings, '$.materialType') != 'question' OR json_extract(m.publication_settings, '$.materialType') IS NULL)
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') != 'question'
                   ) as pubs_count,
                   (SELECT COUNT(DISTINCT s.article_id)
                    FROM article_saves s
                    JOIN moderation_submissions m ON (s.article_id = m.id OR s.article_id = m.draft_id)
                    WHERE s.user_id = ?
-                     AND json_extract(m.publication_settings, '$.materialType') = 'question'
+                     AND COALESCE(json_extract(m.publication_settings, '$.materialType'), json_extract(m.publication_settings, '$.type'), 'publication') = 'question'
                   ) as questions_count,
                   (SELECT COUNT(*) FROM comment_saves WHERE user_id = ?) as comments_count
             """, (user_id, user_id, user_id))
@@ -4229,7 +4229,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             settings = json.loads(ar["publication_settings"])
                         except Exception:
                             settings = {}
-                    mat_type = settings.get("materialType") or "article"
+                    raw_mat_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
+                    if raw_mat_type in ("article", "post", "news", "pubs"):
+                        mat_type = "publication"
+                    else:
+                        mat_type = raw_mat_type
                     is_question = (mat_type == "question")
                     if stype in ("questions", "question") and not is_question:
                         continue
@@ -6577,9 +6581,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     sub_companies.add(sid)
                     sub_companies_titles[sid] = stitle
 
+        is_publications_tab = tab in ("all", "publications", "pubs", "articles", "focus", "top", "new")
+        is_questions_tab = (tab == "questions")
+
         # Determine effective types filter
-        if tab == "questions":
+        if is_questions_tab:
             allowed_types = {"question"}
+        elif is_publications_tab:
+            if types_filter and types_filter != "all":
+                requested = set([t.strip().lower() for t in types_filter.split(",") if t.strip()])
+                allowed_types = {t for t in requested if t not in ("question", "questions")}
+                if not allowed_types:
+                    allowed_types = {"__none__"}
+            else:
+                allowed_types = {"publication", "article", "post", "news"}
         elif types_filter and types_filter != "all":
             allowed_types = set([t.strip().lower() for t in types_filter.split(",") if t.strip()])
         elif tab in ("subscriptions", "my") and user_types:
@@ -6587,7 +6602,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             allowed_types = None
 
-        if allowed_types and "all" in allowed_types:
+        if allowed_types and "all" in allowed_types and not is_publications_tab and not is_questions_tab:
             allowed_types = None
 
         # Determine effective complexity filter
@@ -6706,16 +6721,33 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 settings = {}
 
             draft_id = row["draft_id"]
+            raw_art_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
+            if raw_art_type in ("article", "post", "news", "pubs"):
+                art_type = "publication"
+            else:
+                art_type = raw_art_type
+
+            if is_questions_tab and art_type != "question":
+                continue
+            if is_publications_tab and art_type == "question":
+                continue
+
             topics = settings.get("topics") or []
             for t in topics:
                 topic_counts[t] = topic_counts.get(t, 0) + 1
 
             # Author metadata
-            author_name = settings.get("author") or (
-                "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
-            )
+            raw_author = settings.get("author")
+            if isinstance(raw_author, dict):
+                author_name = raw_author.get("name") or (
+                    "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
+                )
+            else:
+                author_name = raw_author or (
+                    "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
+                )
             author_initials = settings.get("authorInitials") or (
-                "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
+                "".join([part[0].upper() for part in str(author_name).split()[:2]]) if author_name else "SC"
             )
             author_role = settings.get("authorRole") or ""
             keywords = settings.get("keywords") or []
@@ -6790,14 +6822,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if art_id not in allowed_ids and draft_id not in allowed_ids:
                     continue
 
-            # Material type filtering (Issue #61: publication or question)
-            raw_art_type = (settings.get("materialType") or settings.get("type") or "publication").strip().lower()
-            if raw_art_type in ("article", "post", "news"):
-                art_type = "publication"
-            else:
-                art_type = raw_art_type
-
-            if tab == "questions":
+            # Material type filtering (Issue #61, #162: publication or question)
+            if is_questions_tab:
                 if art_type != "question":
                     continue
                 a_cnt = answers_counts.get(art_id, 0)
@@ -6806,6 +6832,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     continue
                 if question_status == "solved" and not is_sol:
                     continue
+            elif is_publications_tab:
+                if art_type == "question":
+                    continue
+                if allowed_types is not None:
+                    norm_allowed = []
+                    for at in allowed_types:
+                        at_norm = at.strip().lower()
+                        if at_norm in ("article", "post", "news", "publication", "publications", "pubs"):
+                            at_norm = "publication"
+                        norm_allowed.append(at_norm)
+                    if art_type not in norm_allowed:
+                        continue
             elif allowed_types is not None:
                 norm_allowed = []
                 for at in allowed_types:
@@ -6860,7 +6898,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 matches_main = all(w in search_haystack for w in words)
                 matches_comment = False
 
-                if not matches_main and tab in ("questions", "all"):
+                if not matches_main and is_questions_tab:
                     # Check comments/answers
                     for c_text in comment_search_map.get(art_id, []):
                         c_lower = c_text.lower()
