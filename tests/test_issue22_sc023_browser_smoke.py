@@ -324,15 +324,20 @@ class TestSmokeServerSeedAndContracts(unittest.TestCase):
                 self.assertGreater(len(content), 100)
 
     def test_02_articles_api_returns_seeded_data(self) -> None:
-        """Verify /api/articles returns seeded article and question."""
+        """Verify /api/articles returns seeded article and question across isolated tabs."""
         status, data = self._get_json("/api/articles?tab=all")
         self.assertEqual(status, 200)
         self.assertTrue(data.get("success"))
         articles = data.get("articles", [])
-        self.assertGreaterEqual(len(articles), 2)
+        self.assertGreaterEqual(len(articles), 1)
         titles = [a["title"] for a in articles]
         self.assertIn("Архитектура безопасных смарт-контрактов", titles)
-        self.assertIn("Как избежать уязвимостей reentrancy в Solidity?", titles)
+
+        # Questions are isolated to tab=questions (Issue #162)
+        status_q, data_q = self._get_json("/api/articles?tab=questions")
+        self.assertEqual(status_q, 200)
+        q_titles = [a["title"] for a in data_q.get("articles", [])]
+        self.assertIn("Как избежать уязвимостей reentrancy в Solidity?", q_titles)
 
     def test_03_user_profile_api_returns_author_info(self) -> None:
         """Verify /api/users/expert_alex_01 returns author profile (SC-007)."""

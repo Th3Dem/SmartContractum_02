@@ -6425,7 +6425,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Returns approved articles matching criteria.
         """
         query = urllib.parse.parse_qs(parsed_url.query)
-        tab_raw = (query.get("tab", ["all"])[0] or "all").strip().lower()
+        tab_param = query.get("tab", [None])[0]
+        types_raw = (query.get("types", [""])[0] or query.get("type", [""])[0] or query.get("materialType", [""])[0] or "").strip().lower()
+        if tab_param is None and types_raw in ("question", "questions"):
+            tab_raw = "questions"
+        else:
+            tab_raw = (tab_param or "all").strip().lower()
         tab = "subscriptions" if tab_raw == "my" else tab_raw
         search_query = (query.get("search", [""])[0] or query.get("q", [""])[0] or "").strip().lower()
         question_status = (query.get("questionStatus", ["all"])[0] or query.get("question_status", ["all"])[0] or query.get("status", ["all"])[0]).strip().lower()
@@ -6460,7 +6465,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             allowed_formats = None
 
         complexity_filter = (query.get("complexities", [""])[0] or query.get("complexity", [""])[0] or "").strip()
-        types_filter = (query.get("types", [""])[0] or query.get("type", [""])[0] or "").strip()
+        types_filter = types_raw
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         has_explicit_sort = "sort" in query
 
