@@ -1529,6 +1529,7 @@
   justify-content: space-between;
   gap: 8px;
   font-size: 0.84rem;
+  min-width: 0;
 }
 
 .profile-sidebar-meta-label {
@@ -1544,6 +1545,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .profile-sidebar-link {
@@ -1899,6 +1901,18 @@
     width: 100%;
     height: 100%;
     margin: 0;
+  }
+
+  .profile-page-container {
+    padding: 0 2px;
+  }
+
+  .profile-identity-wrap {
+    padding: 0 8px 12px 8px;
+  }
+
+  .profile-name {
+    font-size: 1.1rem;
   }
 
   .profile-stats-bar {
@@ -2453,6 +2467,47 @@
   font-weight: 600;
 }
 
+/* Comment Permalinks Deep Anchor & Highlight */
+.profile-comment-item.comment-highlight {
+  border-color: var(--accent-color, #38bdf8);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+  transition: all 400ms ease;
+}
 
+/* Large Desktop Breakpoint (1440px+) */
+@media (min-width: 1440px) {
+  .profile-page-container {
+    max-width: 1240px;
+  }
+}
 
+/* Light Theme Parity Styles */
+[data-theme="light"] .profile-pinned-card {
+  background-color: #ffffff;
+  border-color: var(--border-color);
+}
 
+[data-theme="light"] .profile-social-item {
+  background-color: #ffffff;
+  border-color: var(--border-color);
+}
+
+[data-theme="light"] .profile-social-avatar-box {
+  background-color: #f1f5f9;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .profile-comment-item.comment-highlight {
+  border-color: var(--accent-color, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="light"] .profile-owner-nav-widget {
+  background-color: #ffffff;
+  border-color: var(--border-color);
+}
+
+[data-theme="light"] .edit-avatar-section {
+  background-color: #f8fafc;
+  border-color: var(--border-color);
+}

@@ -71,6 +71,34 @@
   let isLoadingSubscribers = false;
   let currentSubscriptionsData = null;
   let lastSocialTriggerEl = null;
+  let lastAuthTriggerEl = null;
+
+  function trapModalFocus(e, modalEl) {
+    if (!modalEl || modalEl.style.display === 'none' || e.key !== 'Tab') return;
+    const focusable = modalEl.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    const visible = Array.prototype.filter.call(focusable, function (el) {
+      return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+    });
+    if (visible.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = visible[0];
+    const last = visible[visible.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first || !modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last || !modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -527,7 +555,10 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const initialTab = urlParams.get('tab') || 'overview';
+      let initialTab = urlParams.get('tab') || 'overview';
+      if (window.location.hash && window.location.hash.indexOf('#comment-') === 0) {
+        initialTab = 'comments';
+      }
       setActiveTab(initialTab, false);
     } catch (e) {
       setActiveTab('overview', false);
@@ -566,6 +597,7 @@
       if (btn) {
         btn.classList.toggle('is-active', isCurrent);
         btn.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        btn.setAttribute('tabindex', isCurrent ? '0' : '-1');
         if (isCurrent) {
           btn.setAttribute('aria-current', 'page');
         } else {
@@ -1599,6 +1631,7 @@
       return;
     }
     if (!currentUser) {
+      if (triggerBtn) lastAuthTriggerEl = triggerBtn;
       openAuthModal();
       showToast('Войдите, чтобы отправить жалобу');
       return;
@@ -1606,7 +1639,7 @@
     const modal = document.getElementById('articleReportModal');
     if (!modal) return;
 
-    modal._activeReportBtn = triggerBtn;
+    modal._activeReportBtn = triggerBtn || document.activeElement;
     const idInput = modal.querySelector('#reportArticleId');
     if (idInput) idInput.value = articleId;
     const defaultRadio = modal.querySelector('input[name="articleReportReason"][value="spam"]');
@@ -1615,12 +1648,23 @@
     if (detailsEl) detailsEl.value = '';
 
     modal.style.display = 'flex';
+    setTimeout(function () {
+      if (defaultRadio) {
+        try { defaultRadio.focus(); } catch (e) {}
+      } else {
+        const closeBtn = document.getElementById('btnCloseArticleReportModal');
+        if (closeBtn) try { closeBtn.focus(); } catch (e) {}
+      }
+    }, 50);
   }
 
   function closeArticleReportModal() {
     const modal = document.getElementById('articleReportModal');
     if (modal) {
       modal.style.display = 'none';
+      if (modal._activeReportBtn && typeof modal._activeReportBtn.focus === 'function') {
+        try { modal._activeReportBtn.focus(); } catch (e) {}
+      }
       modal._activeReportBtn = null;
     }
   }
@@ -2072,6 +2116,11 @@
     toRender.forEach(function (item) {
       const cardEl = document.createElement('div');
       cardEl.className = 'profile-comment-item profile-comment-card';
+      const commentId = item.id || item.commentId;
+      if (commentId) {
+        cardEl.id = 'comment-' + commentId;
+        cardEl.setAttribute('data-comment-id', commentId);
+      }
 
       const ratingVal = item.rating !== undefined ? item.rating : (item.score || 0);
       const ratingDisplay = ratingVal >= 0 ? '+' + ratingVal : ratingVal;
@@ -2113,6 +2162,18 @@
 
     if (actions) {
       actions.style.display = hasMore ? 'block' : 'none';
+    }
+
+    if (window.location.hash && window.location.hash.indexOf('#comment-') === 0) {
+      const hashId = window.location.hash.substring(1);
+      const targetCard = document.getElementById(hashId) || (list && list.querySelector('[data-comment-id="' + hashId.replace('comment-', '') + '"]'));
+      if (targetCard) {
+        try {
+          targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetCard.classList.add('comment-highlight');
+          setTimeout(function () { targetCard.classList.remove('comment-highlight'); }, 2500);
+        } catch (e) {}
+      }
     }
   }
 
@@ -2259,9 +2320,22 @@
     if (errBox) {
       errBox.className = 'feed-settings-error-msg';
       errBox.style.cssText = 'padding: 40px 20px; text-align: center; font-size: 1.05rem; display: block; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color);';
+      const isNotFound = (message === 'Пользователь не найден');
       errBox.innerHTML = '<h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">' + escapeHtml(message) + '</h2>' +
-        '<p style="color: var(--text-secondary); margin-bottom: 20px;">Запрашиваемый профиль не найден или был удален</p>' +
-        '<a href="feed.html" class="btn-profile-edit" style="display: inline-flex; text-decoration: none;">Вернуться в ленту</a>';
+        '<p style="color: var(--text-secondary); margin-bottom: 20px;">' +
+        (isNotFound ? 'Запрашиваемый профиль не найден или был удален' : 'Не удалось загрузить данные из-за ошибки сети') +
+        '</p>' +
+        '<div style="display: inline-flex; gap: 10px; justify-content: center; flex-wrap: wrap;">' +
+          (!isNotFound ? '<button type="button" class="btn btn-primary" id="btnProfileRetryLoad" style="font-size: 0.9rem;">Повторить попытку</button>' : '') +
+          '<a href="feed.html" class="btn-profile-edit" style="display: inline-flex; text-decoration: none;">Вернуться в ленту</a>' +
+        '</div>';
+      const retryBtn = errBox.querySelector('#btnProfileRetryLoad');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', function () {
+          const uid = getUserIdFromUrl();
+          if (uid) loadProfile(uid, false);
+        });
+      }
     }
   }
 
@@ -2667,15 +2741,31 @@
       });
   }
 
-  function openAuthModal() {
+  function openAuthModal(triggerEl) {
+    lastAuthTriggerEl = triggerEl || document.activeElement;
     const modal = document.getElementById('authModal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      const input = document.getElementById('authUserIdInput');
+      const closeBtn = document.getElementById('btnCloseAuthModal');
+      setTimeout(function () {
+        if (input) {
+          try { input.focus(); } catch (e) {}
+        } else if (closeBtn) {
+          try { closeBtn.focus(); } catch (e) {}
+        }
+      }, 50);
+    }
   }
   window.openAuthModal = openAuthModal;
 
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
     if (modal) modal.style.display = 'none';
+    if (lastAuthTriggerEl && typeof lastAuthTriggerEl.focus === 'function') {
+      try { lastAuthTriggerEl.focus(); } catch (e) {}
+    }
+    lastAuthTriggerEl = null;
   }
 
   function applyTopicFilter(topicId, topicTitle) {
@@ -2799,9 +2889,9 @@
     '</a>';
   }
 
-  function openSubscribersModal() {
+  function openSubscribersModal(triggerEl) {
     if (!currentProfile) return;
-    lastSocialTriggerEl = document.activeElement;
+    lastSocialTriggerEl = triggerEl || document.activeElement;
     socialModalMode = 'subscribers';
 
     const titleEl = document.getElementById('socialModalTitle');
@@ -2814,7 +2904,13 @@
     if (actions) actions.style.display = 'none';
 
     const modal = document.getElementById('profileSocialModal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      setTimeout(function () {
+        const closeBtn = document.getElementById('btnProfileSocialModalClose');
+        if (closeBtn) try { closeBtn.focus(); } catch (e) {}
+      }, 50);
+    }
 
     subscribersOffset = 0;
     subscribersHasMore = false;
@@ -2890,9 +2986,9 @@
       });
   }
 
-  function openSubscriptionsModal() {
+  function openSubscriptionsModal(triggerEl) {
     if (!currentProfile) return;
-    lastSocialTriggerEl = document.activeElement;
+    lastSocialTriggerEl = triggerEl || document.activeElement;
     socialModalMode = 'subscriptions';
     socialSubTab = 'authors';
 
@@ -2911,7 +3007,13 @@
     }
 
     const modal = document.getElementById('profileSocialModal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      setTimeout(function () {
+        const closeBtn = document.getElementById('btnProfileSocialModalClose');
+        if (closeBtn) try { closeBtn.focus(); } catch (e) {}
+      }, 50);
+    }
 
     const userId = currentProfile.id || currentProfile.userId;
     fetch('/api/users/' + encodeURIComponent(userId) + '/subscriptions')
@@ -3303,8 +3405,25 @@
       }
     });
 
-    // 6. Keyboard dismissals (Escape)
+    // 6. Keyboard dismissals (Escape) and Focus Trapping (Tab)
     document.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab') {
+        const modals = [
+          document.getElementById('editProfileModal'),
+          document.getElementById('authModal'),
+          document.getElementById('articleReportModal'),
+          document.getElementById('profileSocialModal'),
+          document.getElementById('userProfileModal')
+        ];
+        for (let i = 0; i < modals.length; i++) {
+          const m = modals[i];
+          if (m && m.style.display !== 'none' && m.style.display !== '') {
+            trapModalFocus(e, m);
+            return;
+          }
+        }
+      }
+
       if (e.key === 'Escape') {
         const sharePopover = document.getElementById('feedSharePopover');
         if (sharePopover && sharePopover.style.display !== 'none') {
@@ -3344,12 +3463,44 @@
       }
     });
 
-    // 8. Tab switching navigation
+    // 8. Tab switching navigation (Click & WAI-ARIA Keyboard navigation)
     const tabBtns = document.querySelectorAll('.profile-tab-btn[data-tab]');
     for (let i = 0; i < tabBtns.length; i++) {
       tabBtns[i].addEventListener('click', function () {
         const tab = this.getAttribute('data-tab');
         if (tab) setActiveTab(tab, true);
+      });
+    }
+
+    const tabList = document.querySelector('.profile-tabs-bar[role="tablist"]');
+    if (tabList) {
+      tabList.addEventListener('keydown', function (e) {
+        const tabs = Array.prototype.slice.call(tabList.querySelectorAll('.profile-tab-btn[role="tab"]'));
+        const currentIndex = tabs.indexOf(document.activeElement);
+        if (currentIndex === -1) return;
+
+        let nextIndex = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          nextIndex = (currentIndex + 1) % tabs.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          nextIndex = 0;
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          nextIndex = tabs.length - 1;
+        }
+
+        if (nextIndex !== -1 && tabs[nextIndex]) {
+          tabs[nextIndex].focus();
+          const targetTab = tabs[nextIndex].getAttribute('data-tab');
+          if (targetTab) {
+            setActiveTab(targetTab, true);
+          }
+        }
       });
     }
 
@@ -3794,7 +3945,8 @@
     renderPinnedMaterial: renderPinnedMaterial,
     pinMaterial: pinMaterial,
     unpinMaterial: unpinMaterial,
-    updateCardPinButtons: updateCardPinButtons
+    updateCardPinButtons: updateCardPinButtons,
+    trapModalFocus: trapModalFocus
   };
 
   document.addEventListener('DOMContentLoaded', init);
