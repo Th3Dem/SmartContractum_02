@@ -1,0 +1,460 @@
+#!/usr/bin/env python3
+"""
+tests/test_issue188_profile_edit_backend.py
+
+Automated test suite for Issue #188 backend requirements:
+1. Enforce authentication on POST /api/user/profile (401 if unauthenticated).
+2. Validate field lengths and constraints:
+   - name: 1..100 characters. Return 400 if empty.
+   - specialization: max 120 characters.
+   - company: max 120 characters.
+   - bio: max 1000 characters.
+   - website: max 300 characters, strictly http or https scheme (reject javascript:, data:, etc. with 400).
+3. Avatar handling:
+   - removeAvatar: true or avatar: "" sets avatar to None (NULL in DB).
+   - Non-empty avatar updates the avatar.
+   - Omitted or None avatar preserves existing avatar from user_profiles.
+4. Response DTO does not expose private data.
+5. Invariants: zero emojis, zero em dashes, 100% offline-first.
+"""
+
+import datetime
+import json
+import os
+import shutil
+import sqlite3
+import tempfile
+import threading
+import time
+import unicodedata
+import unittest
+import urllib.error
+import urllib.request
+
+import server
+from server import create_server, init_db
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+
+
+class TestIssue188ProfileEditBackend(unittest.TestCase):
+    """Test suite for Issue #188 backend profile editing and avatar constraints."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, "test_issue188.db")
+        server.DEFAULT_DB_PATH = cls.db_path
+
+        conn = init_db(cls.db_path, seed=False)
+        cls._seed_test_data(conn)
+        conn.close()
+
+        cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR, seed=False)
+        cls.port = cls.httpd.server_address[1]
+        cls.server_thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
+        cls.server_thread.start()
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+        time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.httpd.shutdown()
+            cls.httpd.server_close()
+        except Exception:
+            pass
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    @classmethod
+    def _seed_test_data(cls, conn):
+        cur = conn.cursor()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        t_exp = (now + datetime.timedelta(days=30)).isoformat()
+        t_created = (now - datetime.timedelta(days=10)).isoformat()
+
+        # Test User 1: Regular authenticated user with existing avatar
+        cur.execute("""
+            INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            "user_bob",
+            "Боб Тестовый",
+            "Smart Contract Auditor",
+            "ChainGuard",
+            "Тестирование безопасности смарт-контрактов.",
+            "https://chainguard.example.com",
+            "/media/avatars/bob_original.png",
+            t_created,
+            t_created
+        ))
+
+        cur.execute("""
+            INSERT OR REPLACE INTO sessions (token, user_id, user_name, user_role, expires_at, created_at, is_revoked)
+            VALUES (?, ?, ?, 'user', ?, ?, 0)
+        """, ("sess_bob", "user_bob", "Боб Тестовый", t_exp, t_created))
+
+        # Test User 2: Minimal user without avatar
+        cur.execute("""
+            INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            "user_alice",
+            "Алиса Инженер",
+            "",
+            "",
+            "",
+            "",
+            None,
+            t_created,
+            t_created
+        ))
+
+        cur.execute("""
+            INSERT OR REPLACE INTO sessions (token, user_id, user_name, user_role, expires_at, created_at, is_revoked)
+            VALUES (?, ?, ?, 'user', ?, ?, 0)
+        """, ("sess_alice", "user_alice", "Алиса Инженер", t_exp, t_created))
+
+        conn.commit()
+
+    def _api_post(self, path, payload, session_token=None):
+        url = f"{self.base_url}{path}"
+        body_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=body_bytes, method="POST")
+        req.add_header("Content-Type", "application/json; charset=utf-8")
+        if session_token:
+            req.add_header("Cookie", f"sc_session={session_token}")
+            req.add_header("Authorization", f"Bearer {session_token}")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                status = resp.status
+                body = resp.read().decode("utf-8")
+                return status, json.loads(body)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8")
+            try:
+                data = json.loads(body)
+            except Exception:
+                data = {"raw": body}
+            return e.code, data
+
+    def _get_db_profile(self, user_id):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+            return cur.fetchone()
+        finally:
+            conn.close()
+
+    # =========================================================================
+    # 1. Authentication Invariants
+    # =========================================================================
+
+    def test_01_unauthenticated_edit_rejected_401(self):
+        """POST /api/user/profile without session token must be rejected with 401."""
+        payload = {"name": "Хакер", "bio": "Попытка несанкционированного изменения"}
+        status, data = self._api_post("/api/user/profile", payload, session_token=None)
+        self.assertEqual(status, 401)
+        self.assertFalse(data.get("success"))
+        self.assertTrue(data.get("requireAuth"))
+
+    def test_02_invalid_session_rejected_401(self):
+        """POST /api/user/profile with invalid session token must be rejected with 401."""
+        payload = {"name": "Хакер 2"}
+        status, data = self._api_post("/api/user/profile", payload, session_token="invalid_token_999")
+        self.assertEqual(status, 401)
+        self.assertFalse(data.get("success"))
+        self.assertTrue(data.get("requireAuth"))
+
+    # =========================================================================
+    # 2. Successful Profile Edit and Boundary Length Checks
+    # =========================================================================
+
+    def test_03_successful_profile_edit_full_payload(self):
+        """Verifies full valid profile edit updates DB and returns clean DTO without private leaks."""
+        payload = {
+            "name": "Боб Обновленный",
+            "specialization": "Lead Security Auditor",
+            "company": "SecureChain Corp",
+            "bio": "Аудит L1 и L2 протоколов с формальной верификацией.",
+            "website": "https://securechain.example.com",
+            "avatar": "/media/avatars/bob_new.png"
+        }
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+
+        prof = data.get("profile")
+        self.assertIsNotNone(prof)
+        self.assertEqual(prof["userId"], "user_bob")
+        self.assertEqual(prof["name"], "Боб Обновленный")
+        self.assertEqual(prof["specialization"], "Lead Security Auditor")
+        self.assertEqual(prof["company"], "SecureChain Corp")
+        self.assertEqual(prof["bio"], "Аудит L1 и L2 протоколов с формальной верификацией.")
+        self.assertEqual(prof["website"], "https://securechain.example.com")
+        self.assertEqual(prof["avatar"], "/media/avatars/bob_new.png")
+        self.assertEqual(prof.get("initials"), "БО")
+
+        # Invariant: Verify no private data is exposed
+        for forbidden_key in ("password", "password_hash", "token", "session_token", "email", "ip_address"):
+            self.assertNotIn(forbidden_key, prof)
+            self.assertNotIn(forbidden_key, data)
+
+        # Invariant: Verify direct SQLite storage
+        row = self._get_db_profile("user_bob")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["name"], "Боб Обновленный")
+        self.assertEqual(row["specialization"], "Lead Security Auditor")
+        self.assertEqual(row["company"], "SecureChain Corp")
+        self.assertEqual(row["bio"], "Аудит L1 и L2 протоколов с формальной верификацией.")
+        self.assertEqual(row["website"], "https://securechain.example.com")
+        self.assertEqual(row["avatar"], "/media/avatars/bob_new.png")
+
+    def test_04_exact_boundary_lengths_success(self):
+        """Verifies profile edit succeeds at exact maximum allowed boundary lengths."""
+        name_100 = "N" * 100
+        spec_120 = "S" * 120
+        comp_120 = "C" * 120
+        bio_1000 = "B" * 1000
+        site_prefix = "https://example.com/"
+        site_300 = site_prefix + ("x" * (300 - len(site_prefix)))
+
+        self.assertEqual(len(name_100), 100)
+        self.assertEqual(len(spec_120), 120)
+        self.assertEqual(len(comp_120), 120)
+        self.assertEqual(len(bio_1000), 1000)
+        self.assertEqual(len(site_300), 300)
+
+        payload = {
+            "name": name_100,
+            "specialization": spec_120,
+            "company": comp_120,
+            "bio": bio_1000,
+            "website": site_300
+        }
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data["profile"]["name"], name_100)
+        self.assertEqual(data["profile"]["specialization"], spec_120)
+        self.assertEqual(data["profile"]["company"], comp_120)
+        self.assertEqual(data["profile"]["bio"], bio_1000)
+        self.assertEqual(data["profile"]["website"], site_300)
+
+    # =========================================================================
+    # 3. Validation Failures (Length and Scheme)
+    # =========================================================================
+
+    def test_05_name_empty_or_whitespace_rejection_400(self):
+        """Empty or whitespace-only name must be rejected with 400."""
+        for invalid_name in ["", "   ", "\t\n", None]:
+            with self.subTest(name_val=invalid_name):
+                payload = {"name": invalid_name}
+                status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+                self.assertEqual(status, 400)
+                self.assertFalse(data.get("success"))
+
+    def test_06_name_too_long_rejection_400(self):
+        """Name exceeding 100 characters must be rejected with 400."""
+        payload = {"name": "A" * 101}
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+    def test_07_specialization_too_long_rejection_400(self):
+        """Specialization exceeding 120 characters must be rejected with 400."""
+        payload = {"specialization": "S" * 121}
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+    def test_08_company_too_long_rejection_400(self):
+        """Company exceeding 120 characters must be rejected with 400."""
+        payload = {"company": "C" * 121}
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+    def test_09_bio_too_long_rejection_400(self):
+        """Bio exceeding 1000 characters must be rejected with 400."""
+        payload = {"bio": "B" * 1001}
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+    def test_10_website_too_long_rejection_400(self):
+        """Website exceeding 300 characters must be rejected with 400."""
+        site_301 = "https://example.com/" + ("x" * 285)
+        self.assertGreater(len(site_301), 300)
+        payload = {"website": site_301}
+        status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+    def test_11_dangerous_website_scheme_rejection_400(self):
+        """Dangerous or non-http(s) schemes must be rejected with 400."""
+        dangerous_urls = [
+            "javascript:alert(1)",
+            "javascript:void(0)",
+            "data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==",
+            "vbscript:msgbox(1)",
+            "file:///etc/passwd",
+            "ftp://files.example.com/pub",
+            "//example.com/relative-scheme",
+            "http://",
+            "https://"
+        ]
+        for url in dangerous_urls:
+            with self.subTest(dangerous_url=url):
+                payload = {"website": url}
+                status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+                self.assertEqual(
+                    status, 400,
+                    f"Dangerous scheme {url} should return 400, got {status}"
+                )
+                self.assertFalse(data.get("success"))
+
+    def test_12_valid_website_clearing_and_protocols(self):
+        """Verifies http and https are accepted, and empty string clears the website."""
+        # http
+        status, data = self._api_post("/api/user/profile", {"website": "http://my-domain.org"}, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["profile"]["website"], "http://my-domain.org")
+
+        # https
+        status, data = self._api_post("/api/user/profile", {"website": "https://my-secure-domain.org"}, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["profile"]["website"], "https://my-secure-domain.org")
+
+        # clearing with empty string
+        status, data = self._api_post("/api/user/profile", {"website": ""}, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["profile"]["website"], "")
+
+        # verify DB cleared
+        row = self._get_db_profile("user_bob")
+        self.assertEqual(row["website"], "")
+
+    # =========================================================================
+    # 4. Avatar Handling Invariants
+    # =========================================================================
+
+    def test_13_avatar_preservation_when_editing_other_fields(self):
+        """Editing other fields without specifying avatar must preserve existing avatar."""
+        # Setup known avatar for user_bob
+        self._api_post("/api/user/profile", {
+            "name": "Боб Хранитель",
+            "avatar": "/media/avatars/bob_preserved.png"
+        }, session_token="sess_bob")
+
+        row = self._get_db_profile("user_bob")
+        self.assertEqual(row["avatar"], "/media/avatars/bob_preserved.png")
+
+        # Edit bio only (avatar key omitted)
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб Хранитель",
+            "bio": "Только обновление био."
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["profile"]["avatar"], "/media/avatars/bob_preserved.png")
+
+        row = self._get_db_profile("user_bob")
+        self.assertEqual(row["avatar"], "/media/avatars/bob_preserved.png")
+
+        # Edit company with avatar explicitly set to None (omitted/None without removeAvatar)
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб Хранитель",
+            "company": "Preserved Co",
+            "avatar": None
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["profile"]["avatar"], "/media/avatars/bob_preserved.png")
+
+        row = self._get_db_profile("user_bob")
+        self.assertEqual(row["avatar"], "/media/avatars/bob_preserved.png")
+
+    def test_14_avatar_explicit_removal_with_remove_avatar_true(self):
+        """Setting removeAvatar: true must remove avatar and set it to None in DB."""
+        # Ensure user has an avatar
+        self._api_post("/api/user/profile", {
+            "name": "Боб С Аватаром",
+            "avatar": "/media/avatars/bob_to_remove.png"
+        }, session_token="sess_bob")
+
+        # Remove avatar via removeAvatar: True
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб С Аватаром",
+            "removeAvatar": True
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertIsNone(data["profile"]["avatar"])
+
+        # Check DB
+        row = self._get_db_profile("user_bob")
+        self.assertIsNone(row["avatar"])
+
+    def test_15_avatar_explicit_removal_with_empty_string(self):
+        """Setting avatar: '' or whitespace must remove avatar and set it to None in DB."""
+        # Ensure user has an avatar
+        self._api_post("/api/user/profile", {
+            "name": "Боб С Аватаром 2",
+            "avatar": "/media/avatars/bob_to_clear.png"
+        }, session_token="sess_bob")
+
+        # Clear avatar via empty string
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб С Аватаром 2",
+            "avatar": ""
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertIsNone(data["profile"]["avatar"])
+
+        row = self._get_db_profile("user_bob")
+        self.assertIsNone(row["avatar"])
+
+        # Set avatar again
+        self._api_post("/api/user/profile", {
+            "name": "Боб С Аватаром 2",
+            "avatar": "/media/avatars/bob_to_clear_whitespace.png"
+        }, session_token="sess_bob")
+
+        # Clear avatar via whitespace
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб С Аватаром 2",
+            "avatar": "   "
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertIsNone(data["profile"]["avatar"])
+
+        row = self._get_db_profile("user_bob")
+        self.assertIsNone(row["avatar"])
+
+    # =========================================================================
+    # 5. Code and Formatting Invariants
+    # =========================================================================
+
+    def test_16_invariants_zero_emojis_and_zero_em_dashes(self):
+        """Verifies zero emojis and zero em dashes in test file and server profile handler."""
+        for file_path in [__file__, os.path.join(PROJECT_ROOT, "server.py")]:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Em dash and en dash check
+            self.assertNotIn("\u2014", content, f"Em dash found in {file_path}")
+            self.assertNotIn("\u2013", content, f"En dash found in {file_path}")
+
+            # Emoji check in this test file
+            if file_path == __file__:
+                for ch in content:
+                    cat = unicodedata.category(ch)
+                    self.assertFalse(
+                        cat in ("So", "Cs") and ord(ch) > 127,
+                        f"Emoji or symbol character {ch!r} found in {file_path}"
+                    )
+
+
+if __name__ == "__main__":
+    unittest.main()

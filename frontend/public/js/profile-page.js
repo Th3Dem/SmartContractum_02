@@ -58,6 +58,9 @@
   let currentSearchQuery = '';
   let searchDebounceTimer = null;
   let lastEditTriggerEl = null;
+  let pendingAvatarData = null;
+  let uploadedAvatarUrl = null;
+  let isAvatarRemoved = false;
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -168,9 +171,17 @@
     const loginBtn = document.getElementById('headerLoginBtn');
     const userMenu = document.getElementById('headerUserMenu');
     const profileLink = document.getElementById('headerMenuProfileLink');
+    const avatarWrap = document.querySelector('.btn-user-avatar-wrap');
 
     if (userLabel) {
       userLabel.textContent = currentUser ? currentUser.name : 'Вход';
+    }
+    if (avatarWrap) {
+      if (currentUser && currentUser.avatar) {
+        avatarWrap.innerHTML = '<img src="' + escapeHtml(currentUser.avatar) + '" alt="' + escapeHtml(currentUser.name) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+      } else {
+        avatarWrap.innerHTML = '<svg class="btn-user-svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>';
+      }
     }
     if (loginBtn) {
       loginBtn.title = currentUser
@@ -719,6 +730,12 @@
     }
 
     const isOwn = !!(p.isOwnProfile || (window.currentUser && (window.currentUser.id === p.id || window.currentUser.id === p.userId)));
+
+    // 0. Owner personal navigation widget
+    const ownerNavWidget = document.getElementById('profileOwnerNavWidget');
+    if (ownerNavWidget) {
+      ownerNavWidget.style.display = isOwn ? 'flex' : 'none';
+    }
 
     // 2. Expertise widget
     const widgetExp = document.getElementById('profileWidgetExpertise');
@@ -1903,7 +1920,7 @@
   }
 
   function renderActions(p) {
-    const isOwn = Boolean(currentUser && (currentUser.id === p.id || currentUser.id === p.userId));
+    const isOwn = Boolean(p.isOwnProfile || (currentUser && (currentUser.id === p.id || currentUser.id === p.userId)));
     const btnSubscribe = document.getElementById('btnProfileSubscribe');
     const btnEdit = document.getElementById('btnProfileEdit');
     const btnMore = document.getElementById('btnProfileMore');
@@ -2072,22 +2089,149 @@
     copyTextToClipboard(window.location.href, 'Ссылка на профиль скопирована');
   }
 
+  function showEditError(msg) {
+    const errEl = document.getElementById('editProfileError');
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+  }
+
+  function clearEditError() {
+    const errEl = document.getElementById('editProfileError');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.style.display = 'none';
+    }
+  }
+
+  function updateModalAvatarPreview(avatarUrl, name) {
+    const previewImg = document.getElementById('editAvatarPreviewImg');
+    const initialsSpan = document.getElementById('editAvatarInitials');
+    const displayName = name || (currentProfile && currentProfile.name) || '';
+
+    if (previewImg) {
+      previewImg.onerror = function () {
+        previewImg.style.display = 'none';
+        if (initialsSpan) {
+          initialsSpan.textContent = getInitials(displayName);
+          initialsSpan.style.display = 'block';
+        }
+      };
+    }
+
+    if (avatarUrl) {
+      if (previewImg) {
+        previewImg.src = avatarUrl;
+        previewImg.style.display = 'block';
+      }
+      if (initialsSpan) initialsSpan.style.display = 'none';
+    } else {
+      if (previewImg) {
+        previewImg.src = '';
+        previewImg.style.display = 'none';
+      }
+      if (initialsSpan) {
+        initialsSpan.textContent = getInitials(displayName);
+        initialsSpan.style.display = 'block';
+      }
+    }
+  }
+
+  function handleChooseAvatar() {
+    const fileInput = document.getElementById('editAvatarFileInput');
+    if (fileInput) fileInput.click();
+  }
+
+  function handleRemoveAvatar() {
+    isAvatarRemoved = true;
+    pendingAvatarData = null;
+    uploadedAvatarUrl = null;
+    const fileInput = document.getElementById('editAvatarFileInput');
+    if (fileInput) fileInput.value = '';
+    const inpName = document.getElementById('editProfileName');
+    const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
+    updateModalAvatarPreview(null, name);
+  }
+
+  function handleAvatarFileSelected(e) {
+    const fileInput = e.target;
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+    const file = fileInput.files[0];
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type) && !/\.(png|jpe?g|webp|svg)$/i.test(file.name)) {
+      showEditError('Разрешены только изображения PNG, JPEG, WebP, SVG');
+      fileInput.value = '';
+      return;
+    }
+
+    const maxBytes = 10 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      showEditError('Размер изображения не должен превышать 10 МБ');
+      fileInput.value = '';
+      return;
+    }
+
+    clearEditError();
+
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      const dataUri = evt.target.result;
+      pendingAvatarData = dataUri;
+      uploadedAvatarUrl = null;
+      isAvatarRemoved = false;
+      const inpName = document.getElementById('editProfileName');
+      const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
+      updateModalAvatarPreview(dataUri, name);
+
+      // Preemptive upload to media storage
+      fetch('/api/media/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUri })
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (resData) {
+          if (resData && resData.success && resData.url) {
+            uploadedAvatarUrl = resData.url;
+          }
+        })
+        .catch(function () {
+          // Offline fallback: dataUri will be sent directly
+        });
+    };
+    reader.onerror = function () {
+      showEditError('Ошибка чтения файла изображения');
+    };
+    reader.readAsDataURL(file);
+  }
+
   function openEditModal() {
     lastEditTriggerEl = document.activeElement;
     const modal = document.getElementById('editProfileModal');
     if (!modal || !currentProfile) return;
+
+    clearEditError();
+    pendingAvatarData = null;
+    uploadedAvatarUrl = null;
+    isAvatarRemoved = false;
 
     const inpName = document.getElementById('editProfileName');
     const inpSpec = document.getElementById('editProfileSpec');
     const inpComp = document.getElementById('editProfileCompany');
     const inpSite = document.getElementById('editProfileWebsite');
     const inpBio = document.getElementById('editProfileBio');
+    const fileInput = document.getElementById('editAvatarFileInput');
+    if (fileInput) fileInput.value = '';
 
     if (inpName) inpName.value = currentProfile.name || '';
     if (inpSpec) inpSpec.value = currentProfile.specialization || '';
     if (inpComp) inpComp.value = currentProfile.company || '';
     if (inpSite) inpSite.value = currentProfile.website || '';
     if (inpBio) inpBio.value = currentProfile.bio || '';
+
+    updateModalAvatarPreview(currentProfile.avatar, currentProfile.name);
 
     modal.style.display = 'flex';
     if (inpName) {
@@ -2098,6 +2242,12 @@
   function closeEditModal() {
     const modal = document.getElementById('editProfileModal');
     if (modal) modal.style.display = 'none';
+    clearEditError();
+    pendingAvatarData = null;
+    uploadedAvatarUrl = null;
+    isAvatarRemoved = false;
+    const fileInput = document.getElementById('editAvatarFileInput');
+    if (fileInput) fileInput.value = '';
     if (lastEditTriggerEl && typeof lastEditTriggerEl.focus === 'function') {
       try { lastEditTriggerEl.focus(); } catch (e) {}
     }
@@ -2106,6 +2256,8 @@
   function saveProfileEdit() {
     if (!currentProfile) return;
 
+    clearEditError();
+
     const inpName = document.getElementById('editProfileName');
     const inpSpec = document.getElementById('editProfileSpec');
     const inpComp = document.getElementById('editProfileCompany');
@@ -2113,12 +2265,97 @@
     const inpBio = document.getElementById('editProfileBio');
     const saveBtn = document.getElementById('btnSaveProfile');
 
+    const rawName = inpName ? inpName.value : '';
+    const trimmedName = rawName.trim();
+    if (!trimmedName || trimmedName.length < 1 || trimmedName.length > 100) {
+      showEditError('Имя обязательно для заполнения и должно содержать от 1 до 100 символов');
+      if (inpName) inpName.focus();
+      return;
+    }
+
+    const rawSpec = inpSpec ? inpSpec.value : '';
+    const trimmedSpec = rawSpec.trim();
+    if (trimmedSpec.length > 120) {
+      showEditError('Специализация не должна превышать 120 символов');
+      if (inpSpec) inpSpec.focus();
+      return;
+    }
+
+    const rawComp = inpComp ? inpComp.value : '';
+    const trimmedComp = rawComp.trim();
+    if (trimmedComp.length > 120) {
+      showEditError('Название компании не должно превышать 120 символов');
+      if (inpComp) inpComp.focus();
+      return;
+    }
+
+    const rawBio = inpBio ? inpBio.value : '';
+    const trimmedBio = rawBio.trim();
+    if (trimmedBio.length > 1000) {
+      showEditError('О себе не должно превышать 1000 символов');
+      if (inpBio) inpBio.focus();
+      return;
+    }
+
+    let site = (inpSite ? inpSite.value : '').trim();
+    if (site) {
+      const schemeMatch = site.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+      if (schemeMatch) {
+        const scheme = schemeMatch[1].toLowerCase();
+        if (scheme !== 'http' && scheme !== 'https') {
+          showEditError('Адрес сайта должен использовать протокол http или https');
+          if (inpSite) inpSite.focus();
+          return;
+        }
+      } else {
+        const proto = 'https:' + '//';
+        site = proto + site;
+      }
+
+      if (site.length > 300) {
+        showEditError('Адрес сайта не должен превышать 300 символов');
+        if (inpSite) inpSite.focus();
+        return;
+      }
+
+      try {
+        const parsed = new URL(site);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          showEditError('Адрес сайта должен использовать протокол http или https');
+          if (inpSite) inpSite.focus();
+          return;
+        }
+        if (!parsed.hostname) {
+          showEditError('Укажите корректный адрес сайта');
+          if (inpSite) inpSite.focus();
+          return;
+        }
+      } catch (err) {
+        showEditError('Укажите корректный адрес сайта');
+        if (inpSite) inpSite.focus();
+        return;
+      }
+    }
+
+    let newAvatar = null;
+    if (isAvatarRemoved) {
+      newAvatar = null;
+    } else if (uploadedAvatarUrl) {
+      newAvatar = uploadedAvatarUrl;
+    } else if (pendingAvatarData) {
+      newAvatar = pendingAvatarData;
+    } else {
+      newAvatar = currentProfile.avatar || null;
+    }
+
     const payload = {
-      name: (inpName ? inpName.value : '').trim(),
-      specialization: (inpSpec ? inpSpec.value : '').trim(),
-      company: (inpComp ? inpComp.value : '').trim(),
-      website: (inpSite ? inpSite.value : '').trim(),
-      bio: (inpBio ? inpBio.value : '').trim()
+      name: trimmedName,
+      specialization: trimmedSpec,
+      company: trimmedComp,
+      bio: trimmedBio,
+      website: site,
+      avatar: newAvatar,
+      removeAvatar: isAvatarRemoved
     };
 
     if (saveBtn) saveBtn.disabled = true;
@@ -2128,26 +2365,44 @@
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(payload)
     })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, ok: res.ok, data: data };
+        }).catch(function () {
+          return { status: res.status, ok: false, data: null };
+        });
+      })
+      .then(function (result) {
         if (saveBtn) saveBtn.disabled = false;
-        if (data && data.success && data.profile) {
-          currentProfile.name = data.profile.name || payload.name;
-          currentProfile.specialization = data.profile.specialization || payload.specialization;
-          currentProfile.company = data.profile.company || payload.company;
-          currentProfile.website = data.profile.website || payload.website;
-          currentProfile.bio = data.profile.bio || payload.bio;
+        const data = result.data;
+        if (result.ok && data && data.success && data.profile) {
+          const prof = data.profile;
+          currentProfile.name = prof.name || payload.name;
+          currentProfile.specialization = prof.specialization !== undefined ? prof.specialization : payload.specialization;
+          currentProfile.company = prof.company !== undefined ? prof.company : payload.company;
+          currentProfile.bio = prof.bio !== undefined ? prof.bio : payload.bio;
+          currentProfile.website = prof.website !== undefined ? prof.website : payload.website;
+          currentProfile.avatar = isAvatarRemoved ? null : (prof.avatar !== undefined ? prof.avatar : payload.avatar);
+
+          const isOwn = Boolean(currentProfile.isOwnProfile || (currentUser && (currentUser.id === currentProfile.id || currentUser.id === currentProfile.userId)));
+          if (isOwn && currentUser) {
+            currentUser.name = currentProfile.name;
+            currentUser.avatar = currentProfile.avatar;
+            window.currentUser = currentUser;
+            updateHeaderUserBar();
+          }
 
           renderProfile(currentProfile);
           closeEditModal();
           showToast('Профиль успешно обновлен');
         } else {
-          showToast((data && data.error) || 'Ошибка сохранения профиля');
+          const errMsg = (data && data.error) || 'Ошибка сохранения профиля';
+          showEditError(errMsg);
         }
       })
       .catch(function () {
         if (saveBtn) saveBtn.disabled = false;
-        showToast('Ошибка сети при сохранении профиля');
+        showEditError('Ошибка сети при сохранении профиля');
       });
   }
 
@@ -2196,6 +2451,38 @@
     if (btnSave) {
       btnSave.addEventListener('click', saveProfileEdit);
     }
+
+    const btnChooseAvatar = document.getElementById('btnChooseAvatar');
+    if (btnChooseAvatar) {
+      btnChooseAvatar.addEventListener('click', handleChooseAvatar);
+    }
+
+    const btnRemoveAvatar = document.getElementById('btnRemoveAvatar');
+    if (btnRemoveAvatar) {
+      btnRemoveAvatar.addEventListener('click', handleRemoveAvatar);
+    }
+
+    const editAvatarFileInput = document.getElementById('editAvatarFileInput');
+    if (editAvatarFileInput) {
+      editAvatarFileInput.addEventListener('change', handleAvatarFileSelected);
+    }
+
+    const inpName = document.getElementById('editProfileName');
+    if (inpName) {
+      inpName.addEventListener('input', function () {
+        clearEditError();
+        const previewImg = document.getElementById('editAvatarPreviewImg');
+        if (!previewImg || previewImg.style.display === 'none') {
+          const initialsSpan = document.getElementById('editAvatarInitials');
+          if (initialsSpan) initialsSpan.textContent = getInitials(inpName.value || 'SC');
+        }
+      });
+    }
+
+    ['editProfileSpec', 'editProfileCompany', 'editProfileWebsite', 'editProfileBio'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', clearEditError);
+    });
 
     const editModal = document.getElementById('editProfileModal');
     if (editModal) {
@@ -2745,6 +3032,15 @@
     openEditModal: openEditModal,
     closeEditModal: closeEditModal,
     saveProfileEdit: saveProfileEdit,
+    handleChooseAvatar: handleChooseAvatar,
+    handleRemoveAvatar: handleRemoveAvatar,
+    handleAvatarFileSelected: handleAvatarFileSelected,
+    updateModalAvatarPreview: updateModalAvatarPreview,
+    showEditError: showEditError,
+    clearEditError: clearEditError,
+    getPendingAvatarData: function () { return pendingAvatarData; },
+    getUploadedAvatarUrl: function () { return uploadedAvatarUrl; },
+    getIsAvatarRemoved: function () { return isAvatarRemoved; },
     toggleArticleLike: toggleArticleLike,
     toggleArticleBookmark: toggleArticleBookmark,
     openArticleShare: openArticleShare,

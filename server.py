@@ -8775,7 +8775,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
     def handle_post_user_profile(self):
         """
         POST /api/user/profile
-        Updates specialization, company, bio, name for the authenticated user.
+        Updates specialization, company, bio, name, website, and avatar for the authenticated user.
         """
         payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
         if payload is None:
@@ -8790,18 +8790,126 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        name = (payload.get("name") or user.get("name") or "").strip()
-        specialization = (payload.get("specialization") or "").strip()
-        company = (payload.get("company") or "").strip()
-        bio = (payload.get("bio") or "").strip()
-        website = (payload.get("website") or "").strip() if payload.get("website") is not None else None
-        avatar = payload.get("avatar") or user.get("avatar")
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
         conn = self.get_db()
         try:
             with conn:
                 cur = conn.cursor()
+                try:
+                    cur.execute("SELECT name, specialization, company, bio, avatar, website, created_at FROM user_profiles WHERE user_id = ?", (user["id"],))
+                    existing_profile = cur.fetchone()
+                except sqlite3.OperationalError:
+                    cur.execute("SELECT name, specialization, company, bio, avatar, created_at FROM user_profiles WHERE user_id = ?", (user["id"],))
+                    existing_profile = cur.fetchone()
+
+                # 1. Validate name: 1..100 characters. Return 400 if empty.
+                if "name" in payload:
+                    raw_name = payload["name"]
+                    name = str(raw_name).strip() if raw_name is not None else ""
+                else:
+                    name = (existing_profile["name"] if existing_profile and existing_profile["name"] else user.get("name") or "").strip()
+
+                if not name or len(name) > 100:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Имя обязательно для заполнения и должно содержать от 1 до 100 символов"
+                    })
+                    return
+
+                # 2. Validate specialization: max 120 characters
+                if "specialization" in payload:
+                    raw_spec = payload["specialization"]
+                    specialization = str(raw_spec).strip() if raw_spec is not None else ""
+                else:
+                    specialization = (existing_profile["specialization"] if existing_profile and existing_profile["specialization"] else "").strip()
+
+                if len(specialization) > 120:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Специализация не должна превышать 120 символов"
+                    })
+                    return
+
+                # 3. Validate company: max 120 characters
+                if "company" in payload:
+                    raw_comp = payload["company"]
+                    company = str(raw_comp).strip() if raw_comp is not None else ""
+                else:
+                    company = (existing_profile["company"] if existing_profile and existing_profile["company"] else "").strip()
+
+                if len(company) > 120:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Название компании не должно превышать 120 символов"
+                    })
+                    return
+
+                # 4. Validate bio: max 1000 characters
+                if "bio" in payload:
+                    raw_bio = payload["bio"]
+                    bio = str(raw_bio).strip() if raw_bio is not None else ""
+                else:
+                    bio = (existing_profile["bio"] if existing_profile and existing_profile["bio"] else "").strip()
+
+                if len(bio) > 1000:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "О себе не должно превышать 1000 символов"
+                    })
+                    return
+
+                # 5. Validate website: max 300 characters, strictly http or https
+                if "website" in payload:
+                    raw_site = payload["website"]
+                    website = str(raw_site).strip() if raw_site is not None else ""
+                else:
+                    existing_website = ""
+                    if existing_profile:
+                        try:
+                            existing_website = existing_profile["website"] or ""
+                        except (IndexError, KeyError):
+                            existing_website = ""
+                    website = existing_website.strip()
+
+                if website:
+                    if len(website) > 300:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Адрес сайта не должен превышать 300 символов"
+                        })
+                        return
+
+                    parsed_url = urllib.parse.urlparse(website)
+                    if parsed_url.scheme.lower() not in ("http", "https") or not parsed_url.netloc:
+                        self.send_json_response(400, {
+                            "success": False,
+                            "error": "Адрес сайта должен использовать протокол http или https"
+                        })
+                        return
+
+                # 6. Avatar handling:
+                # - Check if removeAvatar is true or avatar is empty string: set avatar to None in db.
+                # - If avatar is provided in payload (non-empty string): update avatar with the provided value.
+                # - If avatar is omitted/None and removeAvatar is not true: preserve the existing avatar from user_profiles.
+                remove_avatar = payload.get("removeAvatar") in (True, "true", "True", 1)
+                raw_avatar = payload.get("avatar")
+
+                if remove_avatar:
+                    avatar = None
+                elif "avatar" in payload and raw_avatar is not None:
+                    if isinstance(raw_avatar, str):
+                        stripped_avatar = raw_avatar.strip()
+                        if not stripped_avatar:
+                            avatar = None
+                        else:
+                            avatar = stripped_avatar
+                    else:
+                        avatar = None
+                else:
+                    avatar = existing_profile["avatar"] if existing_profile and existing_profile["avatar"] else None
+
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                created_at_val = existing_profile["created_at"] if existing_profile and "created_at" in existing_profile.keys() and existing_profile["created_at"] else now_iso
+
                 try:
                     cur.execute("""
                         INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, website, created_at, updated_at)
@@ -8812,9 +8920,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             company = excluded.company,
                             bio = excluded.bio,
                             avatar = excluded.avatar,
-                            website = COALESCE(excluded.website, user_profiles.website),
+                            website = excluded.website,
                             updated_at = excluded.updated_at
-                    """, (user["id"], name, specialization, company, bio, avatar, website, now_iso, now_iso))
+                    """, (user["id"], name, specialization, company, bio, avatar, website, created_at_val, now_iso))
                 except sqlite3.OperationalError:
                     cur.execute("""
                         INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
@@ -8826,19 +8934,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             bio = excluded.bio,
                             avatar = excluded.avatar,
                             updated_at = excluded.updated_at
-                    """, (user["id"], name, specialization, company, bio, avatar, now_iso, now_iso))
+                    """, (user["id"], name, specialization, company, bio, avatar, created_at_val, now_iso))
 
+            initials = "".join([part[0].upper() for part in str(name).split()[:2]]) if name else "SC"
+            profile_dto = {
+                "id": user["id"],
+                "userId": user["id"],
+                "name": name,
+                "specialization": specialization,
+                "company": company,
+                "bio": bio,
+                "website": website or "",
+                "avatar": avatar,
+                "initials": initials
+            }
             self.send_json_response(200, {
                 "success": True,
-                "profile": {
-                    "userId": user["id"],
-                    "name": name,
-                    "specialization": specialization,
-                    "company": company,
-                    "bio": bio,
-                    "website": website or "",
-                    "avatar": avatar
-                }
+                "profile": profile_dto,
+                "user": profile_dto,
+                **profile_dto
             })
         finally:
             conn.close()
