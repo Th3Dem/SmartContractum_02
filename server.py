@@ -731,6 +731,10 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             conn.execute("ALTER TABLE user_feed_settings ADD COLUMN welcome_dismissed INTEGER DEFAULT 0;")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN website TEXT;")
+        except Exception:
+            pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS clubs (
                 id TEXT PRIMARY KEY,
@@ -7727,6 +7731,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             company = p_row["company"] if p_row and p_row["company"] else ""
             bio = p_row["bio"] if p_row and p_row["bio"] else ""
             avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
+            website = ""
+            if p_row:
+                try:
+                    website = p_row["website"] or ""
+                except (IndexError, KeyError):
+                    website = ""
 
             pubs = []
             questions_count = 0
@@ -7818,6 +7828,23 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             top_contributions.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
             top_contributions = top_contributions[:3]
 
+            # Aggregated topics from author's approved publications
+            topic_counts = {}
+            for pr in pub_rows:
+                try:
+                    pst = json.loads(pr["publication_settings"]) if pr["publication_settings"] else {}
+                except Exception:
+                    pst = {}
+                ts = pst.get("topics") or []
+                if isinstance(ts, str):
+                    ts = [ts]
+                for t in ts:
+                    if t and isinstance(t, str):
+                        t_clean = t.strip()
+                        if t_clean:
+                            topic_counts[t_clean] = topic_counts.get(t_clean, 0) + 1
+            topics_list = [{"id": tid, "title": tid, "count": cnt} for tid, cnt in sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:8]]
+
             profile_data = {
                 "id": user_id,
                 "userId": user_id,
@@ -7826,6 +7853,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "company": company,
                 "bio": bio,
                 "avatar": avatar,
+                "website": website,
                 "createdAt": created_at_val,
                 "isSubscribed": is_sub,
                 "isOwnProfile": bool(curr_user and curr_user["id"] == user_id),
@@ -7835,6 +7863,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "questionsCount": questions_count,
                 "followersCount": followers_count,
                 "followingCount": following_count,
+                "topics": topics_list,
                 "stats": {
                     "rating": total_rating,
                     "karma": total_rating,
@@ -8417,6 +8446,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         specialization = (payload.get("specialization") or "").strip()
         company = (payload.get("company") or "").strip()
         bio = (payload.get("bio") or "").strip()
+        website = (payload.get("website") or "").strip() if payload.get("website") is not None else None
         avatar = payload.get("avatar") or user.get("avatar")
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -8424,17 +8454,31 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("""
-                    INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(user_id) DO UPDATE SET
-                        name = excluded.name,
-                        specialization = excluded.specialization,
-                        company = excluded.company,
-                        bio = excluded.bio,
-                        avatar = excluded.avatar,
-                        updated_at = excluded.updated_at
-                """, (user["id"], name, specialization, company, bio, avatar, now_iso, now_iso))
+                try:
+                    cur.execute("""
+                        INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, website, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET
+                            name = excluded.name,
+                            specialization = excluded.specialization,
+                            company = excluded.company,
+                            bio = excluded.bio,
+                            avatar = excluded.avatar,
+                            website = COALESCE(excluded.website, user_profiles.website),
+                            updated_at = excluded.updated_at
+                    """, (user["id"], name, specialization, company, bio, avatar, website, now_iso, now_iso))
+                except sqlite3.OperationalError:
+                    cur.execute("""
+                        INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET
+                            name = excluded.name,
+                            specialization = excluded.specialization,
+                            company = excluded.company,
+                            bio = excluded.bio,
+                            avatar = excluded.avatar,
+                            updated_at = excluded.updated_at
+                    """, (user["id"], name, specialization, company, bio, avatar, now_iso, now_iso))
 
             self.send_json_response(200, {
                 "success": True,
@@ -8444,6 +8488,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "specialization": specialization,
                     "company": company,
                     "bio": bio,
+                    "website": website or "",
                     "avatar": avatar
                 }
             })

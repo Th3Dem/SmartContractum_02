@@ -1183,10 +1183,209 @@
   gap: 4px;
 }
 
+/* Two-Column Layout (Main + Sidebar) */
+.profile-layout-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.profile-main-column {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Sidebar Widgets */
+.profile-widget {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 8px);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-widget-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-widget-body {
+  font-size: 0.88rem;
+  color: var(--text-secondary, #94a3b8);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-sidebar-bio {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.88rem;
+}
+
+.profile-sidebar-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-sidebar-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.84rem;
+}
+
+.profile-sidebar-meta-label {
+  color: var(--text-muted, #64748b);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.profile-sidebar-meta-val {
+  color: var(--text-primary, #f8fafc);
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-sidebar-link {
+  color: var(--accent-color, #38bdf8);
+  text-decoration: none;
+  transition: color var(--transition-fast, 150ms ease);
+}
+
+.profile-sidebar-link:hover {
+  text-decoration: underline;
+}
+
+.profile-sidebar-expertise-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile-expertise-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.profile-sidebar-topics-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile-sidebar-topic-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-surface, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #94a3b8);
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.profile-sidebar-topic-pill:hover {
+  color: var(--text-primary, #f8fafc);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.profile-topic-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted, #94a3b8);
+}
+
+.profile-sidebar-empty {
+  font-size: 0.84rem;
+  color: var(--text-muted, #64748b);
+  padding: 6px 0;
+}
+
+.profile-sidebar-reputation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.profile-reputation-cell {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.profile-reputation-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary, #f8fafc);
+  line-height: 1.2;
+}
+
+.profile-reputation-label {
+  font-size: 0.74rem;
+  color: var(--text-muted, #64748b);
+  margin-top: 3px;
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 1024px) {
   .profile-page-container {
     padding: 0 8px;
+  }
+
+  .profile-layout-columns {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .profile-sidebar {
+    width: 100%;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
   }
 }
 
@@ -1221,6 +1420,10 @@
 
   .profile-account-age {
     grid-column: span 3;
+  }
+
+  .profile-sidebar {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -312,7 +312,10 @@
     // 6. Top contributions
     renderTopContributions(p.topContributions || []);
 
-    // 7. Reset tab caches
+    // 7. Desktop sidebar
+    renderSidebar(p);
+
+    // 8. Reset tab caches
     pubOffset = 0; pubItems = [];
     questOffset = 0; questItems = [];
     ansOffset = 0; ansItems = [];
@@ -461,6 +464,112 @@
         '</div>' +
       '</div>';
     }).join('');
+  }
+
+  function renderSidebar(p) {
+    if (!p) return;
+
+    // 1. About widget
+    const bioEl = document.getElementById('sidebarUserBio');
+    if (bioEl) {
+      if (p.bio && p.bio.trim()) {
+        bioEl.textContent = p.bio.trim();
+        bioEl.style.display = 'block';
+      } else {
+        bioEl.textContent = '';
+        bioEl.style.display = 'none';
+      }
+    }
+
+    const companyRow = document.getElementById('sidebarUserCompanyRow');
+    const companyEl = document.getElementById('sidebarUserCompany');
+    if (companyRow && companyEl) {
+      if (p.company && p.company.trim()) {
+        companyEl.textContent = p.company.trim();
+        companyRow.style.display = 'flex';
+      } else {
+        companyRow.style.display = 'none';
+      }
+    }
+
+    const websiteRow = document.getElementById('sidebarUserWebsiteRow');
+    const websiteEl = document.getElementById('sidebarUserWebsite');
+    if (websiteRow && websiteEl) {
+      const site = (p.website || '').trim();
+      if (site) {
+        const fullUrl = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(site) ? site : ('https:' + '//' + site);
+        const displaySite = site.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+        websiteEl.href = fullUrl;
+        websiteEl.textContent = displaySite;
+        websiteRow.style.display = 'flex';
+      } else {
+        websiteRow.style.display = 'none';
+      }
+    }
+
+    const regRow = document.getElementById('sidebarUserRegistrationRow');
+    const regEl = document.getElementById('sidebarUserRegistration');
+    if (regEl) {
+      const dateText = p.createdAt ? formatRegistrationDateRu(p.createdAt) : 'Недавно';
+      regEl.textContent = dateText;
+      if (regRow) regRow.style.display = 'flex';
+    }
+
+    // 2. Expertise widget
+    const specEl = document.getElementById('sidebarUserSpecialization');
+    if (specEl) {
+      specEl.textContent = p.specialization && p.specialization.trim() ? p.specialization.trim() : 'Участник сообщества';
+    }
+
+    // 3. Topics widget
+    const topicsContainer = document.getElementById('sidebarUserTopics');
+    if (topicsContainer) {
+      let topics = [];
+      if (Array.isArray(p.topics) && p.topics.length > 0) {
+        topics = p.topics;
+      } else if (window.SmartContractumProfile && typeof window.SmartContractumProfile.aggregateUserTopics === 'function') {
+        topics = window.SmartContractumProfile.aggregateUserTopics(p.publications || []);
+      }
+
+      if (topics.length > 0) {
+        topicsContainer.innerHTML = topics.map(function (item) {
+          let title = item.title || item.name || item.id || 'Тема';
+          if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
+            const conf = window.PublicationConfig.getTopicById(item.id || item.title);
+            if (conf && conf.title) {
+              title = conf.title;
+            }
+          }
+          const cnt = item.count !== undefined ? item.count : '';
+          const countBadge = cnt ? (' <span class="profile-topic-count">' + cnt + '</span>') : '';
+          return '<span class="profile-sidebar-topic-pill" data-topic-id="' + escapeHtml(item.id || item.title) + '">' +
+            '<span class="profile-topic-name">' + escapeHtml(title) + '</span>' +
+            countBadge +
+          '</span>';
+        }).join('');
+      } else {
+        topicsContainer.innerHTML = '<div class="profile-sidebar-empty">Темы пока не определены</div>';
+      }
+    }
+
+    // 4. Reputation widget
+    const stats = p.stats || {};
+    const ratingVal = stats.rating !== undefined ? stats.rating : (p.rating || 0);
+    const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
+    const questVal = stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0);
+    const solVal = stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0);
+
+    const rEl = document.getElementById('sidebarReputationRating');
+    if (rEl) rEl.textContent = ratingVal;
+
+    const sEl = document.getElementById('sidebarReputationSolutions');
+    if (sEl) sEl.textContent = solVal;
+
+    const pEl = document.getElementById('sidebarReputationPubs');
+    if (pEl) pEl.textContent = pubVal;
+
+    const qEl = document.getElementById('sidebarReputationQuestions');
+    if (qEl) qEl.textContent = questVal;
   }
 
   function loadActivity(userId, append) {
@@ -1033,11 +1142,13 @@
     const inpName = document.getElementById('editProfileName');
     const inpSpec = document.getElementById('editProfileSpec');
     const inpComp = document.getElementById('editProfileCompany');
+    const inpSite = document.getElementById('editProfileWebsite');
     const inpBio = document.getElementById('editProfileBio');
 
     if (inpName) inpName.value = currentProfile.name || '';
     if (inpSpec) inpSpec.value = currentProfile.specialization || '';
     if (inpComp) inpComp.value = currentProfile.company || '';
+    if (inpSite) inpSite.value = currentProfile.website || '';
     if (inpBio) inpBio.value = currentProfile.bio || '';
 
     modal.style.display = 'flex';
@@ -1057,6 +1168,7 @@
     const inpName = document.getElementById('editProfileName');
     const inpSpec = document.getElementById('editProfileSpec');
     const inpComp = document.getElementById('editProfileCompany');
+    const inpSite = document.getElementById('editProfileWebsite');
     const inpBio = document.getElementById('editProfileBio');
     const saveBtn = document.getElementById('btnSaveProfile');
 
@@ -1064,6 +1176,7 @@
       name: (inpName ? inpName.value : '').trim(),
       specialization: (inpSpec ? inpSpec.value : '').trim(),
       company: (inpComp ? inpComp.value : '').trim(),
+      website: (inpSite ? inpSite.value : '').trim(),
       bio: (inpBio ? inpBio.value : '').trim()
     };
 
@@ -1081,6 +1194,7 @@
           currentProfile.name = data.profile.name || payload.name;
           currentProfile.specialization = data.profile.specialization || payload.specialization;
           currentProfile.company = data.profile.company || payload.company;
+          currentProfile.website = data.profile.website || payload.website;
           currentProfile.bio = data.profile.bio || payload.bio;
 
           renderProfile(currentProfile);
@@ -1386,6 +1500,7 @@
     loadActivity: loadActivity,
     renderTopContributions: renderTopContributions,
     renderActivityFeed: renderActivityFeed,
+    renderSidebar: renderSidebar,
     loadPublications: loadPublications,
     renderPublicationsTab: renderPublicationsTab,
     loadQuestions: loadQuestions,

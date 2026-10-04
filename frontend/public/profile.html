@@ -269,113 +269,199 @@
             </div>
           </div>
 
-          <!-- 3. Navigation Tabs & Content Area -->
-          <div class="profile-content-area" id="profileContentArea">
-            <div class="profile-tabs-bar" role="tablist" aria-label="Разделы профиля">
-              <button type="button" class="profile-tab-btn is-active" id="tabBtnOverview" role="tab" aria-selected="true" aria-controls="profileTabOverview" data-tab="overview">
-                <span>Обзор</span>
-              </button>
-              <button type="button" class="profile-tab-btn" id="tabBtnPublications" role="tab" aria-selected="false" aria-controls="profileTabPublications" data-tab="publications">
-                <span>Публикации</span> <span class="profile-tab-count" id="tabCountPublications"></span>
-              </button>
-              <button type="button" class="profile-tab-btn" id="tabBtnQuestions" role="tab" aria-selected="false" aria-controls="profileTabQuestions" data-tab="questions">
-                <span>Вопросы</span> <span class="profile-tab-count" id="tabCountQuestions"></span>
-              </button>
-              <button type="button" class="profile-tab-btn" id="tabBtnAnswers" role="tab" aria-selected="false" aria-controls="profileTabAnswers" data-tab="answers">
-                <span>Ответы</span> <span class="profile-tab-count" id="tabCountAnswers"></span>
-              </button>
+          <!-- 3. Navigation Tabs & Content Area with Desktop Sidebar -->
+          <div class="profile-layout-columns" id="profileLayoutColumns">
+            <div class="profile-main-column" id="profileMainColumn">
+              <div class="profile-content-area" id="profileContentArea">
+                <div class="profile-tabs-bar" role="tablist" aria-label="Разделы профиля">
+                  <button type="button" class="profile-tab-btn is-active" id="tabBtnOverview" role="tab" aria-selected="true" aria-controls="profileTabOverview" data-tab="overview">
+                    <span>Обзор</span>
+                  </button>
+                  <button type="button" class="profile-tab-btn" id="tabBtnPublications" role="tab" aria-selected="false" aria-controls="profileTabPublications" data-tab="publications">
+                    <span>Публикации</span> <span class="profile-tab-count" id="tabCountPublications"></span>
+                  </button>
+                  <button type="button" class="profile-tab-btn" id="tabBtnQuestions" role="tab" aria-selected="false" aria-controls="profileTabQuestions" data-tab="questions">
+                    <span>Вопросы</span> <span class="profile-tab-count" id="tabCountQuestions"></span>
+                  </button>
+                  <button type="button" class="profile-tab-btn" id="tabBtnAnswers" role="tab" aria-selected="false" aria-controls="profileTabAnswers" data-tab="answers">
+                    <span>Ответы</span> <span class="profile-tab-count" id="tabCountAnswers"></span>
+                  </button>
+                </div>
+
+                <div class="profile-tab-panels" id="profileTabPanels">
+                  <!-- 1. Overview Tab Panel -->
+                  <div class="profile-tab-panel is-active" id="profileTabOverview" role="tabpanel" aria-labelledby="tabBtnOverview">
+                    <!-- Top Contributions Section («Лучший вклад») -->
+                    <div class="profile-top-contributions-section" id="profileTopContributionsSection" style="display: none;">
+                      <h3 class="profile-subheading">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        <span>Лучший вклад</span>
+                      </h3>
+                      <div class="profile-top-contributions-grid" id="profileTopContributionsGrid"></div>
+                    </div>
+
+                    <!-- Activity Stream Section («Лента активности») -->
+                    <div class="profile-activity-section" id="profileActivitySection">
+                      <h3 class="profile-subheading">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                        <span>Лента активности</span>
+                      </h3>
+                      <div class="profile-activity-feed" id="profileActivityFeed">
+                        <div class="profile-empty-state">Загрузка активности...</div>
+                      </div>
+                      <div class="profile-activity-actions" id="profileActivityActions" style="display: none;">
+                        <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMore">Показать еще</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 2. Publications Tab Panel -->
+                  <div class="profile-tab-panel" id="profileTabPublications" role="tabpanel" aria-labelledby="tabBtnPublications" style="display: none;">
+                    <div class="profile-tab-header">
+                      <h3 class="profile-subheading" style="margin-bottom: 0;">Публикации автора</h3>
+                      <div class="profile-tab-toolbar">
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка публикаций">
+                          <button type="button" class="profile-filter-pill is-active" id="sortPubNewest" data-pub-sort="newest">Новые</button>
+                          <button type="button" class="profile-filter-pill" id="sortPubPopular" data-pub-sort="popular">Популярные</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-feed-list" id="profilePublicationsList">
+                      <div class="profile-empty-state">Загрузка материалов...</div>
+                    </div>
+                    <div class="profile-tab-actions" id="profilePublicationsActions" style="display: none;">
+                      <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMorePublications">Показать еще</button>
+                    </div>
+                    <div id="profileArticlesList" style="display: none;"></div>
+                  </div>
+
+                  <!-- 3. Questions Tab Panel -->
+                  <div class="profile-tab-panel" id="profileTabQuestions" role="tabpanel" aria-labelledby="tabBtnQuestions" style="display: none;">
+                    <div class="profile-tab-header">
+                      <h3 class="profile-subheading" style="margin-bottom: 0;">Вопросы автора</h3>
+                      <div class="profile-tab-toolbar">
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка вопросов">
+                          <button type="button" class="profile-filter-pill is-active" id="sortQuestNewest" data-quest-sort="newest">Новые</button>
+                          <button type="button" class="profile-filter-pill" id="sortQuestPopular" data-quest-sort="popular">Популярные</button>
+                        </div>
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр статуса вопросов">
+                          <button type="button" class="profile-filter-pill is-active" id="filterQuestAll" data-quest-status="all">Все</button>
+                          <button type="button" class="profile-filter-pill" id="filterQuestSolved" data-quest-status="solved">Решенные</button>
+                          <button type="button" class="profile-filter-pill" id="filterQuestUnsolved" data-quest-status="unsolved">Нерешенные</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-feed-list" id="profileQuestionsList">
+                      <div class="profile-empty-state">Загрузка вопросов...</div>
+                    </div>
+                    <div class="profile-tab-actions" id="profileQuestionsActions" style="display: none;">
+                      <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreQuestions">Показать еще</button>
+                    </div>
+                  </div>
+
+                  <!-- 4. Answers Tab Panel -->
+                  <div class="profile-tab-panel" id="profileTabAnswers" role="tabpanel" aria-labelledby="tabBtnAnswers" style="display: none;">
+                    <div class="profile-tab-header">
+                      <h3 class="profile-subheading" style="margin-bottom: 0;">Ответы и решения</h3>
+                      <div class="profile-tab-toolbar">
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр ответов">
+                          <button type="button" class="profile-filter-pill is-active" id="filterAnswersAll" data-ans-filter="all">Все ответы</button>
+                          <button type="button" class="profile-filter-pill" id="filterAnswersSolutions" data-ans-filter="solutions">Решения</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-feed-list" id="profileAnswersList">
+                      <div class="profile-empty-state">Загрузка ответов...</div>
+                    </div>
+                    <div class="profile-tab-actions" id="profileAnswersActions" style="display: none;">
+                      <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreAnswers">Показать еще</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div class="profile-tab-panels" id="profileTabPanels">
-              <!-- 1. Overview Tab Panel -->
-              <div class="profile-tab-panel is-active" id="profileTabOverview" role="tabpanel" aria-labelledby="tabBtnOverview">
-                <!-- Top Contributions Section («Лучший вклад») -->
-                <div class="profile-top-contributions-section" id="profileTopContributionsSection" style="display: none;">
-                  <h3 class="profile-subheading">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                    <span>Лучший вклад</span>
-                  </h3>
-                  <div class="profile-top-contributions-grid" id="profileTopContributionsGrid"></div>
-                </div>
-
-                <!-- Activity Stream Section («Лента активности») -->
-                <div class="profile-activity-section" id="profileActivitySection">
-                  <h3 class="profile-subheading">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                    <span>Лента активности</span>
-                  </h3>
-                  <div class="profile-activity-feed" id="profileActivityFeed">
-                    <div class="profile-empty-state">Загрузка активности...</div>
-                  </div>
-                  <div class="profile-activity-actions" id="profileActivityActions" style="display: none;">
-                    <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMore">Показать еще</button>
+            <!-- Desktop Sidebar -->
+            <aside class="profile-sidebar" id="profileSidebar" aria-label="Паспорт автора">
+              <!-- 1. Widget About -->
+              <div class="profile-widget profile-widget-about" id="profileWidgetAbout">
+                <h3 class="profile-widget-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                  <span>О пользователе</span>
+                </h3>
+                <div class="profile-widget-body">
+                  <p class="profile-sidebar-bio" id="sidebarUserBio" style="display: none;"></p>
+                  <div class="profile-sidebar-meta-list" id="sidebarUserMetaList">
+                    <div class="profile-sidebar-meta-item" id="sidebarUserCompanyRow" style="display: none;">
+                      <span class="profile-sidebar-meta-label">Компания</span>
+                      <span class="profile-sidebar-meta-val" id="sidebarUserCompany"></span>
+                    </div>
+                    <div class="profile-sidebar-meta-item" id="sidebarUserWebsiteRow" style="display: none;">
+                      <span class="profile-sidebar-meta-label">Сайт</span>
+                      <a href="#" class="profile-sidebar-meta-val profile-sidebar-link" id="sidebarUserWebsite" target="_blank" rel="noopener noreferrer"></a>
+                    </div>
+                    <div class="profile-sidebar-meta-item" id="sidebarUserRegistrationRow">
+                      <span class="profile-sidebar-meta-label">На платформе</span>
+                      <span class="profile-sidebar-meta-val" id="sidebarUserRegistration">Недавно</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- 2. Publications Tab Panel -->
-              <div class="profile-tab-panel" id="profileTabPublications" role="tabpanel" aria-labelledby="tabBtnPublications" style="display: none;">
-                <div class="profile-tab-header">
-                  <h3 class="profile-subheading" style="margin-bottom: 0;">Публикации автора</h3>
-                  <div class="profile-tab-toolbar">
-                    <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка публикаций">
-                      <button type="button" class="profile-filter-pill is-active" id="sortPubNewest" data-pub-sort="newest">Новые</button>
-                      <button type="button" class="profile-filter-pill" id="sortPubPopular" data-pub-sort="popular">Популярные</button>
-                    </div>
+              <!-- 2. Widget Expertise -->
+              <div class="profile-widget profile-widget-expertise" id="profileWidgetExpertise">
+                <h3 class="profile-widget-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                  <span>Экспертиза</span>
+                </h3>
+                <div class="profile-widget-body">
+                  <div class="profile-sidebar-expertise-list" id="sidebarUserExpertise">
+                    <span class="profile-expertise-badge" id="sidebarUserSpecialization">Участник сообщества</span>
                   </div>
-                </div>
-                <div class="profile-feed-list" id="profilePublicationsList">
-                  <div class="profile-empty-state">Загрузка материалов...</div>
-                </div>
-                <div class="profile-tab-actions" id="profilePublicationsActions" style="display: none;">
-                  <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMorePublications">Показать еще</button>
-                </div>
-                <div id="profileArticlesList" style="display: none;"></div>
-              </div>
-
-              <!-- 3. Questions Tab Panel -->
-              <div class="profile-tab-panel" id="profileTabQuestions" role="tabpanel" aria-labelledby="tabBtnQuestions" style="display: none;">
-                <div class="profile-tab-header">
-                  <h3 class="profile-subheading" style="margin-bottom: 0;">Вопросы автора</h3>
-                  <div class="profile-tab-toolbar">
-                    <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка вопросов">
-                      <button type="button" class="profile-filter-pill is-active" id="sortQuestNewest" data-quest-sort="newest">Новые</button>
-                      <button type="button" class="profile-filter-pill" id="sortQuestPopular" data-quest-sort="popular">Популярные</button>
-                    </div>
-                    <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр статуса вопросов">
-                      <button type="button" class="profile-filter-pill is-active" id="filterQuestAll" data-quest-status="all">Все</button>
-                      <button type="button" class="profile-filter-pill" id="filterQuestSolved" data-quest-status="solved">Решенные</button>
-                      <button type="button" class="profile-filter-pill" id="filterQuestUnsolved" data-quest-status="unsolved">Нерешенные</button>
-                    </div>
-                  </div>
-                </div>
-                <div class="profile-feed-list" id="profileQuestionsList">
-                  <div class="profile-empty-state">Загрузка вопросов...</div>
-                </div>
-                <div class="profile-tab-actions" id="profileQuestionsActions" style="display: none;">
-                  <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreQuestions">Показать еще</button>
                 </div>
               </div>
 
-              <!-- 4. Answers Tab Panel -->
-              <div class="profile-tab-panel" id="profileTabAnswers" role="tabpanel" aria-labelledby="tabBtnAnswers" style="display: none;">
-                <div class="profile-tab-header">
-                  <h3 class="profile-subheading" style="margin-bottom: 0;">Ответы и решения</h3>
-                  <div class="profile-tab-toolbar">
-                    <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр ответов">
-                      <button type="button" class="profile-filter-pill is-active" id="filterAnswersAll" data-ans-filter="all">Все ответы</button>
-                      <button type="button" class="profile-filter-pill" id="filterAnswersSolutions" data-ans-filter="solutions">Решения</button>
+              <!-- 3. Widget Topics -->
+              <div class="profile-widget profile-widget-topics" id="profileWidgetTopics">
+                <h3 class="profile-widget-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                  <span>Основные темы</span>
+                </h3>
+                <div class="profile-widget-body">
+                  <div class="profile-sidebar-topics-list" id="sidebarUserTopics">
+                    <div class="profile-sidebar-empty">Темы пока не определены</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. Widget Reputation -->
+              <div class="profile-widget profile-widget-reputation" id="profileWidgetReputation">
+                <h3 class="profile-widget-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8l10-12h-9l1-8z"></path></svg>
+                  <span>Репутационный паспорт</span>
+                </h3>
+                <div class="profile-widget-body">
+                  <div class="profile-sidebar-reputation-grid">
+                    <div class="profile-reputation-cell">
+                      <span class="profile-reputation-value" id="sidebarReputationRating">0</span>
+                      <span class="profile-reputation-label">Рейтинг</span>
+                    </div>
+                    <div class="profile-reputation-cell">
+                      <span class="profile-reputation-value" id="sidebarReputationSolutions">0</span>
+                      <span class="profile-reputation-label">Решений</span>
+                    </div>
+                    <div class="profile-reputation-cell">
+                      <span class="profile-reputation-value" id="sidebarReputationPubs">0</span>
+                      <span class="profile-reputation-label">Публикаций</span>
+                    </div>
+                    <div class="profile-reputation-cell">
+                      <span class="profile-reputation-value" id="sidebarReputationQuestions">0</span>
+                      <span class="profile-reputation-label">Вопросов</span>
                     </div>
                   </div>
                 </div>
-                <div class="profile-feed-list" id="profileAnswersList">
-                  <div class="profile-empty-state">Загрузка ответов...</div>
-                </div>
-                <div class="profile-tab-actions" id="profileAnswersActions" style="display: none;">
-                  <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreAnswers">Показать еще</button>
-                </div>
               </div>
-            </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -409,6 +495,10 @@
           <div>
             <label for="editProfileCompany" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Компания или проект</label>
             <input type="text" id="editProfileCompany" class="feed-search-input" style="width: 100%; box-sizing: border-box;" placeholder="Например: OpenZeppelin">
+          </div>
+          <div>
+            <label for="editProfileWebsite" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Веб-сайт или ссылка</label>
+            <input type="text" id="editProfileWebsite" class="feed-search-input" style="width: 100%; box-sizing: border-box;" placeholder="Например: myblog.io">
           </div>
           <div>
             <label for="editProfileBio" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">О себе</label>

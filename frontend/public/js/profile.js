@@ -294,12 +294,63 @@
     }
   }
 
+  function aggregateUserTopics(publications, options) {
+    options = options || {};
+    const maxTopics = options.maxTopics || 6;
+    if (!Array.isArray(publications) || publications.length === 0) {
+      return [];
+    }
+
+    const counts = {};
+    publications.forEach(function (pub) {
+      if (!pub) return;
+      let topicsList = [];
+      if (Array.isArray(pub.topics) && pub.topics.length > 0) {
+        topicsList = pub.topics;
+      } else if (pub.topic) {
+        topicsList = [pub.topic];
+      } else if (pub.publicationSettings && pub.publicationSettings.topics) {
+        topicsList = pub.publicationSettings.topics;
+      }
+
+      topicsList.forEach(function (t) {
+        if (!t) return;
+        const topicId = typeof t === 'object' ? (t.id || t.title) : String(t);
+        if (topicId) {
+          counts[topicId] = (counts[topicId] || 0) + 1;
+        }
+      });
+    });
+
+    const result = Object.keys(counts).map(function (tid) {
+      let title = tid;
+      if (window.PublicationConfig && typeof window.PublicationConfig.getTopicById === 'function') {
+        const conf = window.PublicationConfig.getTopicById(tid);
+        if (conf && conf.title) {
+          title = conf.title;
+        }
+      }
+      return {
+        id: tid,
+        title: title,
+        count: counts[tid]
+      };
+    });
+
+    result.sort(function (a, b) {
+      return b.count - a.count;
+    });
+
+    return result.slice(0, maxTopics);
+  }
+
   window.openUserProfileModal = openUserProfileModal;
   window.closeUserProfileModal = closeUserProfileModal;
   window.SmartContractumProfile = {
     initUserProfileModal: initUserProfileModal,
     openUserProfileModal: openUserProfileModal,
-    closeUserProfileModal: closeUserProfileModal
+    closeUserProfileModal: closeUserProfileModal,
+    aggregateUserTopics: aggregateUserTopics
   };
 
 })(typeof window !== 'undefined' ? window : this);
