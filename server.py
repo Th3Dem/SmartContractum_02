@@ -7807,6 +7807,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                   AND ac.comment_type = 'answer'
                   AND ac.is_solution = 1
                   AND ms.status = 'approved'
+                  AND (
+                      json_extract(ms.publication_settings, '$.materialType') = 'question'
+                      OR json_extract(ms.publication_settings, '$.type') = 'question'
+                  )
+                GROUP BY ac.id
             """, (user_id,))
             for sol in cur.fetchall():
                 top_contributions.append({
@@ -7971,10 +7976,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                            ms.title AS question_title,
                            (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
                     FROM article_comments ac
-                    LEFT JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
                     WHERE ac.user_id = ?
                       AND ac.status = 'published'
                       AND ac.comment_type = 'answer'
+                      AND ms.status = 'approved'
+                      AND (
+                          json_extract(ms.publication_settings, '$.materialType') = 'question'
+                          OR json_extract(ms.publication_settings, '$.type') = 'question'
+                      )
+                    GROUP BY ac.id
                 """, (user_id,))
                 answer_rows = cur.fetchall()
 
@@ -8370,10 +8381,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                            ms.title AS question_title,
                            (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
                     FROM article_comments ac
-                    LEFT JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
                     WHERE ac.user_id = ?
                       AND ac.status = 'published'
                       AND ac.comment_type = 'answer'
+                      AND ms.status = 'approved'
+                      AND (
+                          json_extract(ms.publication_settings, '$.materialType') = 'question'
+                          OR json_extract(ms.publication_settings, '$.type') = 'question'
+                      )
+                    GROUP BY ac.id
                     ORDER BY ac.created_at DESC
                 """, (user_id,))
                 rows = cur.fetchall()
