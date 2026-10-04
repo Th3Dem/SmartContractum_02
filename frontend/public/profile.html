@@ -315,26 +315,64 @@
 
               <!-- 2. Publications Tab Panel -->
               <div class="profile-tab-panel" id="profileTabPublications" role="tabpanel" aria-labelledby="tabBtnPublications" style="display: none;">
-                <h3 class="profile-subheading">Все публикации автора</h3>
-                <div class="profile-articles-list" id="profilePublicationsList">
+                <div class="profile-tab-header">
+                  <h3 class="profile-subheading" style="margin-bottom: 0;">Публикации автора</h3>
+                  <div class="profile-tab-toolbar">
+                    <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка публикаций">
+                      <button type="button" class="profile-filter-pill is-active" id="sortPubNewest" data-pub-sort="newest">Новые</button>
+                      <button type="button" class="profile-filter-pill" id="sortPubPopular" data-pub-sort="popular">Популярные</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="profile-feed-list" id="profilePublicationsList">
                   <div class="profile-empty-state">Загрузка материалов...</div>
+                </div>
+                <div class="profile-tab-actions" id="profilePublicationsActions" style="display: none;">
+                  <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMorePublications">Показать еще</button>
                 </div>
                 <div id="profileArticlesList" style="display: none;"></div>
               </div>
 
               <!-- 3. Questions Tab Panel -->
               <div class="profile-tab-panel" id="profileTabQuestions" role="tabpanel" aria-labelledby="tabBtnQuestions" style="display: none;">
-                <h3 class="profile-subheading">Вопросы автора</h3>
-                <div class="profile-articles-list" id="profileQuestionsList">
+                <div class="profile-tab-header">
+                  <h3 class="profile-subheading" style="margin-bottom: 0;">Вопросы автора</h3>
+                  <div class="profile-tab-toolbar">
+                    <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка вопросов">
+                      <button type="button" class="profile-filter-pill is-active" id="sortQuestNewest" data-quest-sort="newest">Новые</button>
+                      <button type="button" class="profile-filter-pill" id="sortQuestPopular" data-quest-sort="popular">Популярные</button>
+                    </div>
+                    <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр статуса вопросов">
+                      <button type="button" class="profile-filter-pill is-active" id="filterQuestAll" data-quest-status="all">Все</button>
+                      <button type="button" class="profile-filter-pill" id="filterQuestSolved" data-quest-status="solved">Решенные</button>
+                      <button type="button" class="profile-filter-pill" id="filterQuestUnsolved" data-quest-status="unsolved">Нерешенные</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="profile-feed-list" id="profileQuestionsList">
                   <div class="profile-empty-state">Загрузка вопросов...</div>
+                </div>
+                <div class="profile-tab-actions" id="profileQuestionsActions" style="display: none;">
+                  <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreQuestions">Показать еще</button>
                 </div>
               </div>
 
               <!-- 4. Answers Tab Panel -->
               <div class="profile-tab-panel" id="profileTabAnswers" role="tabpanel" aria-labelledby="tabBtnAnswers" style="display: none;">
-                <h3 class="profile-subheading">Ответы и решения</h3>
-                <div class="profile-articles-list" id="profileAnswersList">
+                <div class="profile-tab-header">
+                  <h3 class="profile-subheading" style="margin-bottom: 0;">Ответы и решения</h3>
+                  <div class="profile-tab-toolbar">
+                    <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр ответов">
+                      <button type="button" class="profile-filter-pill is-active" id="filterAnswersAll" data-ans-filter="all">Все ответы</button>
+                      <button type="button" class="profile-filter-pill" id="filterAnswersSolutions" data-ans-filter="solutions">Решения</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="profile-feed-list" id="profileAnswersList">
                   <div class="profile-empty-state">Загрузка ответов...</div>
+                </div>
+                <div class="profile-tab-actions" id="profileAnswersActions" style="display: none;">
+                  <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreAnswers">Показать еще</button>
                 </div>
               </div>
             </div>

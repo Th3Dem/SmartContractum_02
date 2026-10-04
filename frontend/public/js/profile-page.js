@@ -16,6 +16,28 @@
   let activityHasMore = false;
   let isLoadingActivity = false;
 
+  let pubSort = 'newest';
+  let pubOffset = 0;
+  const pubLimit = 10;
+  let pubItems = [];
+  let pubHasMore = false;
+  let isLoadingPub = false;
+
+  let questSort = 'newest';
+  let questStatus = 'all';
+  let questOffset = 0;
+  const questLimit = 10;
+  let questItems = [];
+  let questHasMore = false;
+  let isLoadingQuest = false;
+
+  let ansFilter = 'all';
+  let ansOffset = 0;
+  const ansLimit = 10;
+  let ansItems = [];
+  let ansHasMore = false;
+  let isLoadingAns = false;
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -290,10 +312,10 @@
     // 6. Top contributions
     renderTopContributions(p.topContributions || []);
 
-    // 7. Dedicated tabs content
-    renderPublicationsTab(p);
-    renderQuestionsTab(p);
-    renderAnswersTab();
+    // 7. Reset tab caches
+    pubOffset = 0; pubItems = [];
+    questOffset = 0; questItems = [];
+    ansOffset = 0; ansItems = [];
 
     // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
@@ -361,12 +383,19 @@
     }
 
     if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
       if (tabName === 'publications') {
-        renderPublicationsTab(currentProfile);
+        if (pubItems.length === 0) {
+          loadPublications(uid, false);
+        }
       } else if (tabName === 'questions') {
-        renderQuestionsTab(currentProfile);
+        if (questItems.length === 0) {
+          loadQuestions(uid, false);
+        }
       } else if (tabName === 'answers') {
-        renderAnswersTab();
+        if (ansItems.length === 0) {
+          loadAnswers(uid, false);
+        }
       }
     }
   }
@@ -565,105 +594,270 @@
     }
   }
 
-  function renderPublicationsTab(p) {
+  // --------------------------------------------------------------------------
+  // Publications Tab: Loader & Renderer
+  // --------------------------------------------------------------------------
+  function loadPublications(userId, append) {
+    if (!userId || isLoadingPub) return;
+
     const list = document.getElementById('profilePublicationsList');
+    const actions = document.getElementById('profilePublicationsActions');
+
+    if (!append) {
+      pubOffset = 0;
+      pubItems = [];
+      if (list) {
+        list.innerHTML = '<div class="profile-empty-state">Загрузка материалов...</div>';
+      }
+      if (actions) actions.style.display = 'none';
+    }
+
+    isLoadingPub = true;
+    const url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
+
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.success) {
+          throw new Error((data && data.error) || 'Failed to load publications');
+        }
+        const incoming = Array.isArray(data.items) ? data.items : [];
+        pubItems = append ? pubItems.concat(incoming) : incoming;
+        pubHasMore = Boolean(data.hasMore);
+        renderPublicationsTab(pubItems, append, pubHasMore, incoming);
+      })
+      .catch(function () {
+        if (!append && list) {
+          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки публикаций</div>';
+        }
+      })
+      .finally(function () {
+        isLoadingPub = false;
+      });
+  }
+
+  function renderPublicationsTab(items, append, hasMore, newItems) {
+    const list = document.getElementById('profilePublicationsList');
+    const actions = document.getElementById('profilePublicationsActions');
     if (!list) return;
 
-    const pubs = (p && p.publications) ? p.publications.filter(function (it) {
-      return it.materialType !== 'question' && it.type !== 'question';
-    }) : [];
-
-    if (pubs.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Нет опубликованных статей</div>';
+    if (!Array.isArray(items) || items.length === 0) {
+      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не публиковал материалы.</div>';
+      if (actions) actions.style.display = 'none';
       return;
     }
 
-    list.innerHTML = pubs.map(function (item) {
-      const title = item.title || 'Без названия';
-      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
-      const itemUrl = 'article.html?id=' + encodeURIComponent(item.id);
-      return '<div class="user-profile-article-item">' +
-        '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +
-          '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Статья</span>' +
-          '<a href="' + itemUrl + '" style="color: var(--text-primary); text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-            escapeHtml(title) +
-          '</a>' +
-        '</div>' +
-        '<span style="color: var(--text-muted); font-size: 0.78rem; flex-shrink: 0; margin-left: 12px;">' +
-          escapeHtml(dateStr) +
-        '</span>' +
-      '</div>';
-    }).join('');
-  }
-
-  function renderQuestionsTab(p) {
-    const list = document.getElementById('profileQuestionsList');
-    if (!list) return;
-
-    const questions = (p && p.publications) ? p.publications.filter(function (it) {
-      return it.materialType === 'question' || it.type === 'question';
-    }) : [];
-
-    if (questions.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Нет опубликованных вопросов</div>';
-      return;
+    if (!append) {
+      list.innerHTML = '';
     }
 
-    list.innerHTML = questions.map(function (item) {
-      const title = item.title || 'Без названия';
-      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
-      const itemUrl = 'article.html?id=' + encodeURIComponent(item.id);
-      return '<div class="user-profile-article-item">' +
-        '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +
-          '<span class="meta-badge question-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Вопрос</span>' +
-          '<a href="' + itemUrl + '" style="color: var(--text-primary); text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-            escapeHtml(title) +
-          '</a>' +
-        '</div>' +
-        '<span style="color: var(--text-muted); font-size: 0.78rem; flex-shrink: 0; margin-left: 12px;">' +
-          escapeHtml(dateStr) +
-        '</span>' +
-      '</div>';
-    }).join('');
-  }
-
-  function renderAnswersTab() {
-    const list = document.getElementById('profileAnswersList');
-    if (!list) return;
-
-    const answers = activityItems.filter(function (it) {
-      return it.type === 'answer';
+    const toRender = append ? (newItems || []) : items;
+    toRender.forEach(function (item) {
+      if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
+        const cardEl = window.SmartContractumCard.createCardElement(item);
+        list.appendChild(cardEl);
+      } else {
+        const fallback = document.createElement('div');
+        fallback.className = 'user-profile-article-item';
+        fallback.innerHTML = '<a href="' + (item.url || ('article.html?id=' + encodeURIComponent(item.id))) + '">' + escapeHtml(item.title) + '</a>';
+        list.appendChild(fallback);
+      }
     });
 
-    if (answers.length === 0) {
-      if (isLoadingActivity) {
-        list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
-      } else {
-        list.innerHTML = '<div class="profile-empty-state">Нет опубликованных ответов</div>';
+    if (actions) {
+      actions.style.display = hasMore ? 'block' : 'none';
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Questions Tab: Loader & Renderer
+  // --------------------------------------------------------------------------
+  function loadQuestions(userId, append) {
+    if (!userId || isLoadingQuest) return;
+
+    const list = document.getElementById('profileQuestionsList');
+    const actions = document.getElementById('profileQuestionsActions');
+
+    if (!append) {
+      questOffset = 0;
+      questItems = [];
+      if (list) {
+        list.innerHTML = '<div class="profile-empty-state">Загрузка вопросов...</div>';
       }
+      if (actions) actions.style.display = 'none';
+    }
+
+    isLoadingQuest = true;
+    const url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
+
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.success) {
+          throw new Error((data && data.error) || 'Failed to load questions');
+        }
+        const incoming = Array.isArray(data.items) ? data.items : [];
+        questItems = append ? questItems.concat(incoming) : incoming;
+        questHasMore = Boolean(data.hasMore);
+        renderQuestionsTab(questItems, append, questHasMore, incoming);
+      })
+      .catch(function () {
+        if (!append && list) {
+          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки вопросов</div>';
+        }
+      })
+      .finally(function () {
+        isLoadingQuest = false;
+      });
+  }
+
+  function renderQuestionsTab(items, append, hasMore, newItems) {
+    const list = document.getElementById('profileQuestionsList');
+    const actions = document.getElementById('profileQuestionsActions');
+    if (!list) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не задавал вопросы.</div>';
+      if (actions) actions.style.display = 'none';
       return;
     }
 
-    list.innerHTML = answers.map(function (item) {
-      const title = item.title || 'Ответ на вопрос';
-      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
-      const itemUrl = item.url || ('article.html?id=' + encodeURIComponent(item.id));
-      const solutionBadge = item.isSolution
-        ? '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px; background: rgba(34, 197, 94, 0.15); color: #22c55e;">✓ Решение</span>'
-        : '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Ответ</span>';
+    if (!append) {
+      list.innerHTML = '';
+    }
 
-      return '<div class="user-profile-article-item">' +
-        '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +
-          solutionBadge +
-          '<a href="' + itemUrl + '" style="color: var(--text-primary); text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-            escapeHtml(title) +
-          '</a>' +
+    const toRender = append ? (newItems || []) : items;
+    toRender.forEach(function (item) {
+      item.materialType = 'question';
+      if (item.isSolved) {
+        item.hasSolution = true;
+      }
+      if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
+        const cardEl = window.SmartContractumCard.createCardElement(item);
+        list.appendChild(cardEl);
+      } else {
+        const fallback = document.createElement('div');
+        fallback.className = 'user-profile-article-item';
+        fallback.innerHTML = '<a href="' + (item.url || ('article.html?id=' + encodeURIComponent(item.id))) + '">' + escapeHtml(item.title) + '</a>';
+        list.appendChild(fallback);
+      }
+    });
+
+    if (actions) {
+      actions.style.display = hasMore ? 'block' : 'none';
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Answers Tab: Loader & Renderer
+  // --------------------------------------------------------------------------
+  function loadAnswers(userId, append) {
+    if (!userId || isLoadingAns) return;
+
+    const list = document.getElementById('profileAnswersList');
+    const actions = document.getElementById('profileAnswersActions');
+
+    if (!append) {
+      ansOffset = 0;
+      ansItems = [];
+      if (list) {
+        list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
+      }
+      if (actions) actions.style.display = 'none';
+    }
+
+    isLoadingAns = true;
+    const url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.success) {
+          throw new Error((data && data.error) || 'Failed to load answers');
+        }
+        const incoming = Array.isArray(data.items) ? data.items : [];
+        ansItems = append ? ansItems.concat(incoming) : incoming;
+        ansHasMore = Boolean(data.hasMore);
+        renderAnswersTab(ansItems, append, ansHasMore, incoming);
+      })
+      .catch(function () {
+        if (!append && list) {
+          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки ответов</div>';
+        }
+      })
+      .finally(function () {
+        isLoadingAns = false;
+      });
+  }
+
+  function renderAnswersTab(items, append, hasMore, newItems) {
+    const list = document.getElementById('profileAnswersList');
+    const actions = document.getElementById('profileAnswersActions');
+    if (!list) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не публиковал ответы на вопросы.</div>';
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+
+    if (!append) {
+      list.innerHTML = '';
+    }
+
+    const toRender = append ? (newItems || []) : items;
+    toRender.forEach(function (item) {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'answer-item-card';
+
+      const ratingVal = item.rating || 0;
+      const ratingDisplay = ratingVal >= 0 ? '+' + ratingVal : ratingVal;
+      const dateDisplay = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const questionTitle = item.questionTitle || item.title || 'Вопрос';
+      const questionUrl = item.url || ('article.html?id=' + encodeURIComponent(item.questionId || item.id));
+
+      const solutionBadge = item.isSolution
+        ? '<span class="meta-badge solution-badge">✓ Решение</span>'
+        : '';
+      const snippetHtml = item.contentSnippet
+        ? '<div class="answer-card-snippet">' + escapeHtml(item.contentSnippet) + '</div>'
+        : '';
+
+      cardEl.innerHTML =
+        '<div class="answer-item-header">' +
+          '<div class="answer-badges">' +
+            '<span class="meta-badge answer-badge">Ответ</span>' +
+            solutionBadge +
+          '</div>' +
+          '<div class="answer-question-wrap">' +
+            '<span class="answer-context-label">К вопросу:</span>' +
+            '<a href="' + questionUrl + '" class="answer-question-title">' + escapeHtml(questionTitle) + '</a>' +
+          '</div>' +
         '</div>' +
-        '<span style="color: var(--text-muted); font-size: 0.78rem; flex-shrink: 0; margin-left: 12px;">' +
-          escapeHtml(dateStr) +
-        '</span>' +
-      '</div>';
-    }).join('');
+        snippetHtml +
+        '<div class="answer-item-footer">' +
+          '<span class="answer-meta-date">' + escapeHtml(dateDisplay) + '</span>' +
+          '<span class="answer-meta-rating" title="Рейтинг ответа">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>' +
+            ' <span>' + ratingDisplay + '</span>' +
+          '</span>' +
+        '</div>';
+
+      list.appendChild(cardEl);
+    });
+
+    if (actions) {
+      actions.style.display = hasMore ? 'block' : 'none';
+    }
   }
 
   function renderActions(p) {
@@ -1060,6 +1254,110 @@
         setActiveTab(tab, false);
       } catch (e) {}
     });
+
+    // 11. Publications toolbar sorting
+    const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
+    for (let i = 0; i < pubSortBtns.length; i++) {
+      pubSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-pub-sort');
+        if (sort === pubSort) return;
+        pubSort = sort;
+        for (let j = 0; j < pubSortBtns.length; j++) {
+          pubSortBtns[j].classList.toggle('is-active', pubSortBtns[j] === this);
+        }
+        pubOffset = 0;
+        pubItems = [];
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadPublications(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
+    // 12. Publications Load More
+    const btnLoadMorePub = document.getElementById('btnProfileLoadMorePublications');
+    if (btnLoadMorePub) {
+      btnLoadMorePub.addEventListener('click', function () {
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && pubHasMore && !isLoadingPub) {
+          pubOffset += pubLimit;
+          loadPublications(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
+
+    // 13. Questions toolbar sorting & status filtering
+    const questSortBtns = document.querySelectorAll('[data-quest-sort]');
+    for (let i = 0; i < questSortBtns.length; i++) {
+      questSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-quest-sort');
+        if (sort === questSort) return;
+        questSort = sort;
+        for (let j = 0; j < questSortBtns.length; j++) {
+          questSortBtns[j].classList.toggle('is-active', questSortBtns[j] === this);
+        }
+        questOffset = 0;
+        questItems = [];
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadQuestions(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
+    const questStatusBtns = document.querySelectorAll('[data-quest-status]');
+    for (let i = 0; i < questStatusBtns.length; i++) {
+      questStatusBtns[i].addEventListener('click', function () {
+        const status = this.getAttribute('data-quest-status');
+        if (status === questStatus) return;
+        questStatus = status;
+        for (let j = 0; j < questStatusBtns.length; j++) {
+          questStatusBtns[j].classList.toggle('is-active', questStatusBtns[j] === this);
+        }
+        questOffset = 0;
+        questItems = [];
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadQuestions(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
+    // 14. Questions Load More
+    const btnLoadMoreQuest = document.getElementById('btnProfileLoadMoreQuestions');
+    if (btnLoadMoreQuest) {
+      btnLoadMoreQuest.addEventListener('click', function () {
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && questHasMore && !isLoadingQuest) {
+          questOffset += questLimit;
+          loadQuestions(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
+
+    // 15. Answers toolbar filter
+    const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
+    for (let i = 0; i < ansFilterBtns.length; i++) {
+      ansFilterBtns[i].addEventListener('click', function () {
+        const filter = this.getAttribute('data-ans-filter');
+        if (filter === ansFilter) return;
+        ansFilter = filter;
+        for (let j = 0; j < ansFilterBtns.length; j++) {
+          ansFilterBtns[j].classList.toggle('is-active', ansFilterBtns[j] === this);
+        }
+        ansOffset = 0;
+        ansItems = [];
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadAnswers(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
+    // 16. Answers Load More
+    const btnLoadMoreAns = document.getElementById('btnProfileLoadMoreAnswers');
+    if (btnLoadMoreAns) {
+      btnLoadMoreAns.addEventListener('click', function () {
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && ansHasMore && !isLoadingAns) {
+          ansOffset += ansLimit;
+          loadAnswers(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
   }
 
   function init() {
@@ -1088,6 +1386,12 @@
     loadActivity: loadActivity,
     renderTopContributions: renderTopContributions,
     renderActivityFeed: renderActivityFeed,
+    loadPublications: loadPublications,
+    renderPublicationsTab: renderPublicationsTab,
+    loadQuestions: loadQuestions,
+    renderQuestionsTab: renderQuestionsTab,
+    loadAnswers: loadAnswers,
+    renderAnswersTab: renderAnswersTab,
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
     openEditModal: openEditModal,

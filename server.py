@@ -2177,6 +2177,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             if rest.endswith("/activity"):
                 user_id = rest[:-len("/activity")].strip("/")
                 self.handle_get_user_activity(user_id, parsed)
+            elif rest.endswith("/publications"):
+                user_id = rest[:-len("/publications")].strip("/")
+                self.handle_get_user_publications(user_id, parsed)
+            elif rest.endswith("/questions"):
+                user_id = rest[:-len("/questions")].strip("/")
+                self.handle_get_user_questions(user_id, parsed)
+            elif rest.endswith("/answers"):
+                user_id = rest[:-len("/answers")].strip("/")
+                self.handle_get_user_answers(user_id, parsed)
             else:
                 user_id = rest
                 if user_id.endswith("/profile"):
@@ -7995,6 +8004,377 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(200, {
                 "success": True,
                 "activity": paged_activity,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": has_more
+            })
+        finally:
+            conn.close()
+
+    def handle_get_user_publications(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/publications
+        Returns author's approved publications (articles, posts, news, etc. where materialType != 'question').
+        Query params: sort ('newest'|'popular'), limit, offset.
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+                p_row = cur.fetchone()
+                user_exists = (p_row is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
+                author_name = p_row["name"] if p_row and p_row["name"] else f"Пользователь #{user_id[:6]}"
+                author_avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
+                author_initials = "".join([part[0].upper() for part in str(author_name).split()[:2]]) if author_name else "SC"
+                company = p_row["company"] if p_row and p_row["company"] else ""
+                specialization = p_row["specialization"] if p_row and p_row["specialization"] else ""
+
+                cur.execute("""
+                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published') AS comments_count,
+                           (SELECT COUNT(*) FROM article_likes al WHERE al.article_id = ms.id) AS likes_count,
+                           (SELECT COUNT(*) FROM article_saves asv WHERE asv.article_id = ms.id) AS saves_count
+                    FROM moderation_submissions ms
+                    WHERE ms.author_id = ? AND ms.status = 'approved'
+                      AND (
+                          json_extract(ms.publication_settings, '$.materialType') != 'question'
+                          OR json_extract(ms.publication_settings, '$.materialType') IS NULL
+                      )
+                """, (user_id,))
+                rows = cur.fetchall()
+
+            items = []
+            for r in rows:
+                try:
+                    pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                except Exception:
+                    pst = {}
+                topics = pst.get("topics") or []
+                cover_image = pst.get("coverImage") or None
+                snippet = make_content_snippet(r["article_html"])
+                reading_time, reading_minutes = calculate_reading_time(r["article_html"] or "")
+                date_str = format_date_ru(r["created_at"])
+                rating_val = int(r["rating"] or 0)
+                comments_val = int(r["comments_count"] or 0)
+                likes_val = int(r["likes_count"] or 0)
+                saves_val = int(r["saves_count"] or 0)
+
+                items.append({
+                    "id": r["id"],
+                    "draftId": r["draft_id"],
+                    "title": r["title"],
+                    "authorId": user_id,
+                    "author": author_name,
+                    "authorInitials": author_initials,
+                    "authorAvatar": author_avatar,
+                    "company": company,
+                    "specialization": specialization,
+                    "date": date_str,
+                    "createdAt": r["created_at"],
+                    "description": snippet,
+                    "snippet": snippet,
+                    "contentSnippet": snippet,
+                    "coverImage": cover_image,
+                    "topics": topics,
+                    "topic": topics[0] if topics else "",
+                    "materialType": "article",
+                    "type": "article",
+                    "format": pst.get("format") or "",
+                    "rating": rating_val,
+                    "commentsCount": comments_val,
+                    "likesCount": likes_val,
+                    "savesCount": saves_val,
+                    "readingTime": reading_time,
+                    "readingMinutes": reading_minutes,
+                    "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                })
+
+            if sort_by == "popular":
+                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            else:
+                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+
+            total = len(items)
+            paged_items = items[offset : offset + limit]
+            has_more = (offset + limit) < total
+
+            self.send_json_response(200, {
+                "success": True,
+                "items": paged_items,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": has_more
+            })
+        finally:
+            conn.close()
+
+    def handle_get_user_questions(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/questions
+        Returns author's approved questions.
+        Query params: sort ('newest'|'popular'), status ('all'|'solved'|'unsolved'), limit, offset.
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
+        status_filter = (query.get("status", ["all"])[0] or "all").strip().lower()
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+                p_row = cur.fetchone()
+                user_exists = (p_row is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
+                author_name = p_row["name"] if p_row and p_row["name"] else f"Пользователь #{user_id[:6]}"
+                author_avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
+                author_initials = "".join([part[0].upper() for part in str(author_name).split()[:2]]) if author_name else "SC"
+                company = p_row["company"] if p_row and p_row["company"] else ""
+                specialization = p_row["specialization"] if p_row and p_row["specialization"] else ""
+
+                cur.execute("""
+                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
+                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
+                           (SELECT COUNT(*) FROM article_likes al WHERE al.article_id = ms.id) AS likes_count,
+                           (SELECT COUNT(*) FROM article_saves asv WHERE asv.article_id = ms.id) AS saves_count
+                    FROM moderation_submissions ms
+                    WHERE ms.author_id = ? AND ms.status = 'approved'
+                      AND (
+                          json_extract(ms.publication_settings, '$.materialType') = 'question'
+                          OR json_extract(ms.publication_settings, '$.type') = 'question'
+                      )
+                """, (user_id,))
+                rows = cur.fetchall()
+
+            items = []
+            for r in rows:
+                sol_cnt = int(r["solutions_count"] or 0)
+                is_solved = (sol_cnt > 0)
+                if status_filter == "solved" and not is_solved:
+                    continue
+                if status_filter == "unsolved" and is_solved:
+                    continue
+
+                try:
+                    pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
+                except Exception:
+                    pst = {}
+                topics = pst.get("topics") or []
+                cover_image = pst.get("coverImage") or None
+                snippet = make_content_snippet(r["article_html"])
+                date_str = format_date_ru(r["created_at"])
+                rating_val = int(r["rating"] or 0)
+                answers_val = int(r["answers_count"] or 0)
+
+                items.append({
+                    "id": r["id"],
+                    "draftId": r["draft_id"],
+                    "title": r["title"],
+                    "authorId": user_id,
+                    "author": author_name,
+                    "authorInitials": author_initials,
+                    "authorAvatar": author_avatar,
+                    "company": company,
+                    "specialization": specialization,
+                    "date": date_str,
+                    "createdAt": r["created_at"],
+                    "description": snippet,
+                    "snippet": snippet,
+                    "contentSnippet": snippet,
+                    "coverImage": cover_image,
+                    "topics": topics,
+                    "topic": topics[0] if topics else "",
+                    "materialType": "question",
+                    "type": "question",
+                    "rating": rating_val,
+                    "answersCount": answers_val,
+                    "solutionsCount": sol_cnt,
+                    "isSolved": is_solved,
+                    "hasSolution": is_solved,
+                    "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                })
+
+            if sort_by == "popular":
+                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            else:
+                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+
+            total = len(items)
+            paged_items = items[offset : offset + limit]
+            has_more = (offset + limit) < total
+
+            self.send_json_response(200, {
+                "success": True,
+                "items": paged_items,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": has_more
+            })
+        finally:
+            conn.close()
+
+    def handle_get_user_answers(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/answers
+        Returns author's published answers from article_comments with question title context.
+        Query params: filter ('all'|'solutions'), limit, offset.
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        filter_type = (query.get("filter", ["all"])[0] or "all").strip().lower()
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+                user_exists = (cur.fetchone() is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
+                cur.execute("""
+                    SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
+                           ms.title AS question_title,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                    FROM article_comments ac
+                    LEFT JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    WHERE ac.user_id = ?
+                      AND ac.status = 'published'
+                      AND ac.comment_type = 'answer'
+                    ORDER BY ac.created_at DESC
+                """, (user_id,))
+                rows = cur.fetchall()
+
+            items = []
+            for r in rows:
+                is_sol = bool(r["is_solution"] == 1)
+                if filter_type in ("solutions", "solution") and not is_sol:
+                    continue
+
+                items.append({
+                    "id": r["id"],
+                    "questionId": r["article_id"],
+                    "questionTitle": r["question_title"] or "Ответ на вопрос",
+                    "title": r["question_title"] or "Ответ на вопрос",
+                    "contentSnippet": make_content_snippet(r["content"]),
+                    "rating": int(r["rating"] or 0),
+                    "isSolution": is_sol,
+                    "createdAt": r["created_at"],
+                    "date": format_date_ru(r["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
+                })
+
+            total = len(items)
+            paged_items = items[offset : offset + limit]
+            has_more = (offset + limit) < total
+
+            self.send_json_response(200, {
+                "success": True,
+                "items": paged_items,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
