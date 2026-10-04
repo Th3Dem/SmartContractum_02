@@ -385,9 +385,10 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         self.assertEqual(html.unescape(sc021_client_escaped), raw_sample)
 
     def test_08_verify_frontend_code_files_contain_escape_html(self):
-        """Verify that frontend js files (article.js and feed.js) properly call escapeHtml at DOM boundaries."""
+        """Verify that frontend js files properly call escapeHtml at DOM boundaries."""
         article_js_path = os.path.join(FRONTEND_DIR, "js", "article.js")
         feed_js_path = os.path.join(FRONTEND_DIR, "js", "feed.js")
+        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
 
         with open(article_js_path, "r", encoding="utf-8") as f:
             article_js = f.read()
@@ -395,9 +396,16 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
         with open(feed_js_path, "r", encoding="utf-8") as f:
             feed_js = f.read()
 
-        # Both files must define escapeHtml
+        profile_js = ""
+        if os.path.exists(profile_js_path):
+            with open(profile_js_path, "r", encoding="utf-8") as f:
+                profile_js = f.read()
+
+        # Files must define escapeHtml
         self.assertIn("function escapeHtml(str)", article_js)
         self.assertIn("function escapeHtml(str)", feed_js)
+        if profile_js:
+            self.assertIn("function escapeHtml(str)", profile_js)
 
         # article.js must escape comment.content before injecting into comment-text
         self.assertTrue(
@@ -405,22 +413,23 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
             "article.js must escape comment.content using escapeHtml()",
         )
 
-        # feed.js must escape u.name, u.specialization, u.company, u.bio in user profile modal
+        # User profile modal (profile.js or feed.js) must escape u.name, u.specialization, u.company, u.bio
+        target_modal_js = profile_js if profile_js else feed_js
         self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.name", feed_js)),
-            "feed.js must escape u.name using escapeHtml()",
+            bool(re.search(r"escapeHtml\(\s*u\.name", target_modal_js)),
+            "profile.js or feed.js must escape u.name using escapeHtml()",
         )
         self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.specialization\s*\)", feed_js)),
-            "feed.js must escape u.specialization using escapeHtml()",
+            bool(re.search(r"escapeHtml\(\s*u\.specialization\s*\)", target_modal_js)),
+            "profile.js or feed.js must escape u.specialization using escapeHtml()",
         )
         self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.company\s*\)", feed_js)),
-            "feed.js must escape u.company using escapeHtml()",
+            bool(re.search(r"escapeHtml\(\s*u\.company\s*\)", target_modal_js)),
+            "profile.js or feed.js must escape u.company using escapeHtml()",
         )
         self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.bio\s*\)", feed_js)),
-            "feed.js must escape u.bio using escapeHtml()",
+            bool(re.search(r"escapeHtml\(\s*u\.bio\s*\)", target_modal_js)),
+            "profile.js or feed.js must escape u.bio using escapeHtml()",
         )
 
 
