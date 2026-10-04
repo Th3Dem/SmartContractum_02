@@ -2169,6 +2169,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_user_profile(user_id)
         elif path == "/api/user/profile":
             self.handle_get_current_user_profile(parsed)
+        elif path.startswith("/user/"):
+            uid = path[len("/user/"):].strip("/")
+            if uid:
+                self.send_response(302)
+                self.send_header("Location", f"/profile.html?id={urllib.parse.quote(uid)}")
+                self.end_headers()
+                return
         elif path in ("/mobile", "/emulator", "/mobile/", "/emulator/"):
             self.send_response(302)
             self.send_header("Location", "/mobile.html")
@@ -2187,6 +2194,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         """Handle HEAD requests."""
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        if path.startswith("/user/"):
+            uid = path[len("/user/"):].strip("/")
+            if uid:
+                self.send_response(302)
+                self.send_header("Location", f"/profile.html?id={urllib.parse.quote(uid)}")
+                self.end_headers()
+                return
         if path in ("/mobile", "/emulator", "/mobile/", "/emulator/"):
             self.send_response(302)
             self.send_header("Location", "/mobile.html")
@@ -2569,6 +2583,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             normalized_id = raw_id
             title = raw_title or raw_id
+
+        if target_type == "author" and (normalized_id or "").strip() == (user["id"] or "").strip():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Нельзя подписаться на самого себя",
+                "code": "SELF_SUBSCRIPTION_FORBIDDEN"
+            })
+            return
 
         conn = self.get_db()
         with conn:
@@ -7542,6 +7564,31 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
                 p_row = cur.fetchone()
 
+                # User existence check: user_profiles, sessions, moderation_submissions, article_comments
+                user_exists = (p_row is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
                 cur.execute("""
                     SELECT id, title, publication_settings, created_at
                     FROM moderation_submissions
@@ -7593,6 +7640,56 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 total_rating = int(pub_score) + int(comm_score)
 
+                # Followers & following counts
+                cur.execute("""
+                    SELECT COUNT(*) AS cnt FROM user_subscriptions
+                    WHERE target_type = 'author' AND target_id = ?
+                """, (user_id,))
+                followers_count = cur.fetchone()["cnt"] or 0
+
+                cur.execute("""
+                    SELECT COUNT(*) AS cnt FROM user_subscriptions
+                    WHERE user_id = ? AND target_type = 'author'
+                """, (user_id,))
+                following_count = cur.fetchone()["cnt"] or 0
+
+                # Registration / creation date
+                created_at_val = None
+                if p_row and p_row["created_at"]:
+                    created_at_val = p_row["created_at"]
+                else:
+                    cur.execute("SELECT created_at FROM sessions WHERE user_id = ? ORDER BY created_at ASC LIMIT 1", (user_id,))
+                    s_row = cur.fetchone()
+                    if s_row and s_row["created_at"]:
+                        created_at_val = s_row["created_at"]
+                    else:
+                        cur.execute("SELECT created_at FROM moderation_submissions WHERE author_id = ? ORDER BY created_at ASC LIMIT 1", (user_id,))
+                        m_row = cur.fetchone()
+                        if m_row and m_row["created_at"]:
+                            created_at_val = m_row["created_at"]
+                        else:
+                            cur.execute("SELECT created_at FROM article_comments WHERE user_id = ? ORDER BY created_at ASC LIMIT 1", (user_id,))
+                            c_row = cur.fetchone()
+                            if c_row and c_row["created_at"]:
+                                created_at_val = c_row["created_at"]
+                if not created_at_val:
+                    created_at_val = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+                # Author name resolution
+                author_name = p_row["name"] if p_row and p_row["name"] else None
+                if not author_name:
+                    cur.execute("SELECT user_name FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1", (user_id,))
+                    sn_row = cur.fetchone()
+                    if sn_row and sn_row["user_name"]:
+                        author_name = sn_row["user_name"]
+                if not author_name:
+                    cur.execute("SELECT author_name FROM article_comments WHERE user_id = ? ORDER BY created_at DESC LIMIT 1", (user_id,))
+                    cn_row = cur.fetchone()
+                    if cn_row and cn_row["author_name"]:
+                        author_name = cn_row["author_name"]
+                if not author_name:
+                    author_name = f"Пользователь #{user_id[:6]}"
+
                 curr_user = self.get_current_user()
                 is_sub = False
                 if curr_user:
@@ -7602,25 +7699,33 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     )
                     is_sub = bool(cur.fetchone())
 
-            author_name = p_row["name"] if p_row and p_row["name"] else f"Пользователь #{user_id[:6]}"
             specialization = p_row["specialization"] if p_row and p_row["specialization"] else "Участник сообщества"
             company = p_row["company"] if p_row and p_row["company"] else ""
             bio = p_row["bio"] if p_row and p_row["bio"] else ""
             avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
 
             pubs = []
-            for pr in pub_rows[:10]:
+            questions_count = 0
+            publications_count = 0
+            for pr in pub_rows:
                 try:
                     pst = json.loads(pr["publication_settings"]) if pr["publication_settings"] else {}
                 except Exception:
                     pst = {}
-                pubs.append({
-                    "id": pr["id"],
-                    "title": pr["title"],
-                    "materialType": pst.get("materialType") or "article",
-                    "createdAt": pr["created_at"],
-                    "date": format_date_ru(pr["created_at"])
-                })
+                mtype = pst.get("materialType") or pst.get("type") or "article"
+                if mtype == "question":
+                    questions_count += 1
+                else:
+                    publications_count += 1
+
+                if len(pubs) < 10:
+                    pubs.append({
+                        "id": pr["id"],
+                        "title": pr["title"],
+                        "materialType": mtype,
+                        "createdAt": pr["created_at"],
+                        "date": format_date_ru(pr["created_at"])
+                    })
 
             profile_data = {
                 "id": user_id,
@@ -7630,13 +7735,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "company": company,
                 "bio": bio,
                 "avatar": avatar,
+                "createdAt": created_at_val,
                 "isSubscribed": is_sub,
                 "rating": total_rating,
                 "karma": total_rating,
+                "publicationsCount": publications_count,
+                "questionsCount": questions_count,
+                "followersCount": followers_count,
+                "followingCount": following_count,
                 "stats": {
                     "rating": total_rating,
                     "karma": total_rating,
-                    "publicationsCount": len(pub_rows),
+                    "publicationsCount": publications_count,
+                    "articlesCount": publications_count,
+                    "questionsCount": questions_count,
+                    "followersCount": followers_count,
+                    "followingCount": following_count,
                     "answersCount": (c_stats["total_answers"] or 0) if c_stats else 0,
                     "solutionsCount": (c_stats["total_solutions"] or 0) if c_stats else 0
                 },
