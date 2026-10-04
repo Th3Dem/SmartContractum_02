@@ -57,17 +57,17 @@
   }
 
   function formatRegistrationDateRu(dateStr) {
-    if (!dateStr) return 'недавно';
+    if (!dateStr) return '';
     try {
       const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return 'недавно';
+      if (isNaN(d.getTime())) return '';
       const day = d.getDate();
       const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
       const month = months[d.getMonth()] || '';
       const year = d.getFullYear();
       return day + ' ' + month + ' ' + year;
     } catch (e) {
-      return 'недавно';
+      return '';
     }
   }
 
@@ -301,7 +301,12 @@
 
     const ageEl = document.getElementById('profileAccountAge');
     if (ageEl) {
-      ageEl.textContent = 'На платформе с ' + formatRegistrationDateRu(p.createdAt);
+      const regFormatted = p.createdAt ? formatRegistrationDateRu(p.createdAt) : '';
+      if (regFormatted) {
+        ageEl.textContent = 'На платформе с ' + regFormatted;
+      } else {
+        ageEl.textContent = 'Участник сообщества';
+      }
     }
 
     // 4. Action Buttons (Own profile vs Foreign profile)
@@ -442,7 +447,7 @@
       const isSolution = item.isSolution || item.type === 'solution';
       const isQuestion = item.type === 'question' || item.materialType === 'question';
       let badgeClass = 'publication';
-      let badgeText = 'Статья';
+      let badgeText = 'Публикация';
       if (isSolution) {
         badgeClass = 'solution';
         badgeText = '✓ Решение';
@@ -516,9 +521,13 @@
     const regRow = document.getElementById('sidebarUserRegistrationRow');
     const regEl = document.getElementById('sidebarUserRegistration');
     if (regEl) {
-      const dateText = p.createdAt ? formatRegistrationDateRu(p.createdAt) : 'Недавно';
-      regEl.textContent = dateText;
-      if (regRow) regRow.style.display = 'flex';
+      const dateText = p.createdAt ? formatRegistrationDateRu(p.createdAt) : '';
+      if (dateText) {
+        regEl.textContent = dateText;
+        if (regRow) regRow.style.display = 'flex';
+      } else {
+        if (regRow) regRow.style.display = 'none';
+      }
     }
 
     // 2. Expertise widget
@@ -664,7 +673,7 @@
           '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
         '</div>';
       } else {
-        badgeHtml = '<span class="activity-type-badge activity-badge-publication">Статья</span>';
+        badgeHtml = '<span class="activity-type-badge activity-badge-publication">Публикация</span>';
         titleWrapHtml = '<div class="activity-card-title-wrap">' +
           '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
         '</div>';
@@ -772,7 +781,9 @@
     const toRender = append ? (newItems || []) : items;
     toRender.forEach(function (item) {
       if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
-        const cardEl = window.SmartContractumCard.createCardElement(item);
+        const cardEl = window.SmartContractumCard.createCardElement(item, {
+          currentUserId: currentUser ? currentUser.id : null
+        });
         list.appendChild(cardEl);
       } else {
         const fallback = document.createElement('div');
@@ -854,7 +865,9 @@
         item.hasSolution = true;
       }
       if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
-        const cardEl = window.SmartContractumCard.createCardElement(item);
+        const cardEl = window.SmartContractumCard.createCardElement(item, {
+          currentUserId: currentUser ? currentUser.id : null
+        });
         list.appendChild(cardEl);
       } else {
         const fallback = document.createElement('div');
@@ -1026,7 +1039,7 @@
       const isQuestion = (item.materialType === 'question' || item.type === 'question');
       const badgeHtml = isQuestion
         ? '<span class="meta-badge question-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Вопрос</span>'
-        : '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Статья</span>';
+        : '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Публикация</span>';
 
       return '<div class="user-profile-article-item">' +
         '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +

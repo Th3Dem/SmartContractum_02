@@ -402,7 +402,7 @@
         '</button>';
     }
 
-    const score = item.score !== undefined ? item.score : 0;
+    const score = item.score !== undefined ? item.score : (item.rating !== undefined ? item.rating : 0);
     const myVote = item.myVote !== undefined ? item.myVote : 0;
     const canVote = item.canVote !== undefined ? Boolean(item.canVote) : true;
     const isAuthor = Boolean(options.currentUserId && (options.currentUserId === (item.authorId || item.author_id)));
