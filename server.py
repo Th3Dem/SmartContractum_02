@@ -372,6 +372,16 @@ def extract_article_text(html_content: str) -> str:
     return normalized.strip()
 
 
+def make_content_snippet(raw_text: str, max_length: int = 180) -> str:
+    """
+    Creates a clean, plain-text snippet of given length from raw content or HTML.
+    """
+    cleaned = extract_article_text(raw_text or "")
+    if len(cleaned) <= max_length:
+        return cleaned
+    return cleaned[:max_length].rstrip() + "..."
+
+
 def has_valid_article_text(html_content: str) -> bool:
     """
     Validates that article body contains at least one text character [a-zA-Zа-яА-Я0-9].
@@ -2163,10 +2173,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path == "/api/notifications":
             self.handle_get_notifications()
         elif path.startswith("/api/users/"):
-            user_id = path[len("/api/users/"):].strip("/")
-            if user_id.endswith("/profile"):
-                user_id = user_id[:-len("/profile")].strip("/")
-            self.handle_get_user_profile(user_id)
+            rest = path[len("/api/users/"):].strip("/")
+            if rest.endswith("/activity"):
+                user_id = rest[:-len("/activity")].strip("/")
+                self.handle_get_user_activity(user_id, parsed)
+            else:
+                user_id = rest
+                if user_id.endswith("/profile"):
+                    user_id = user_id[:-len("/profile")].strip("/")
+                self.handle_get_user_profile(user_id)
         elif path == "/api/user/profile":
             self.handle_get_current_user_profile(parsed)
         elif path.startswith("/user/"):
@@ -7590,7 +7605,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
                 cur.execute("""
-                    SELECT id, title, publication_settings, created_at
+                    SELECT id, title, publication_settings, created_at, article_html AS content
                     FROM moderation_submissions
                     WHERE author_id = ? AND status = 'approved'
                     ORDER BY created_at DESC
@@ -7727,6 +7742,73 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "date": format_date_ru(pr["created_at"])
                     })
 
+            # Top contributions: 2-3 items with highest rating across approved publications and solutions
+            top_contributions = []
+            for pr in pub_rows:
+                try:
+                    pst = json.loads(pr["publication_settings"]) if pr["publication_settings"] else {}
+                except Exception:
+                    pst = {}
+                mtype = pst.get("materialType") or pst.get("type") or "article"
+
+                cur.execute("""
+                    SELECT COALESCE(SUM(value), 0) AS val FROM article_votes
+                    WHERE article_id = ?
+                """, (pr["id"],))
+                p_rating = cur.fetchone()["val"] or 0
+
+                cur.execute("""
+                    SELECT COUNT(*) AS cnt FROM article_comments
+                    WHERE article_id = ? AND status = 'published'
+                """, (pr["id"],))
+                c_cnt = cur.fetchone()["cnt"] or 0
+
+                top_contributions.append({
+                    "id": pr["id"],
+                    "type": "question" if mtype == "question" else "publication",
+                    "materialType": mtype,
+                    "title": pr["title"],
+                    "contentSnippet": make_content_snippet(pr["content"]),
+                    "rating": int(p_rating),
+                    "commentsCount": int(c_cnt) if mtype != "question" else 0,
+                    "answersCount": int(c_cnt) if mtype == "question" else 0,
+                    "isSolution": False,
+                    "createdAt": pr["created_at"],
+                    "date": format_date_ru(pr["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(pr['id'])}"
+                })
+
+            cur.execute("""
+                SELECT ac.id, ac.article_id, ac.content, ac.created_at, ms.title AS question_title,
+                       (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                FROM article_comments ac
+                JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                WHERE ac.user_id = ?
+                  AND ac.status = 'published'
+                  AND ac.comment_type = 'answer'
+                  AND ac.is_solution = 1
+                  AND ms.status = 'approved'
+            """, (user_id,))
+            for sol in cur.fetchall():
+                top_contributions.append({
+                    "id": sol["id"],
+                    "questionId": sol["article_id"],
+                    "type": "solution",
+                    "materialType": "solution",
+                    "title": sol["question_title"] or "Решение вопроса",
+                    "contentSnippet": make_content_snippet(sol["content"]),
+                    "rating": int(sol["rating"] or 0),
+                    "commentsCount": 0,
+                    "answersCount": 0,
+                    "isSolution": True,
+                    "createdAt": sol["created_at"],
+                    "date": format_date_ru(sol["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(sol['article_id'])}#comment-{urllib.parse.quote(sol['id'])}"
+                })
+
+            top_contributions.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            top_contributions = top_contributions[:3]
+
             profile_data = {
                 "id": user_id,
                 "userId": user_id,
@@ -7755,7 +7837,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "answersCount": (c_stats["total_answers"] or 0) if c_stats else 0,
                     "solutionsCount": (c_stats["total_solutions"] or 0) if c_stats else 0
                 },
-                "publications": pubs
+                "publications": pubs,
+                "topContributions": top_contributions
             }
 
             resp_payload = {
@@ -7765,6 +7848,158 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 **profile_data
             }
             self.send_json_response(200, resp_payload)
+        finally:
+            conn.close()
+
+    def handle_get_user_activity(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/activity
+        Returns unified chronological feed of author's activity (publications, questions, answers).
+        Supports limit and offset pagination.
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+                user_exists = (cur.fetchone() is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
+                # 1. Approved publications (articles)
+                cur.execute("""
+                    SELECT ms.id, ms.title, ms.article_html AS content, ms.created_at, ms.publication_settings,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published') AS comments_count
+                    FROM moderation_submissions ms
+                    WHERE ms.author_id = ? AND ms.status = 'approved'
+                      AND (
+                          json_extract(ms.publication_settings, '$.materialType') != 'question'
+                          OR json_extract(ms.publication_settings, '$.materialType') IS NULL
+                      )
+                """, (user_id,))
+                pub_rows = cur.fetchall()
+
+                # 2. Approved questions
+                cur.execute("""
+                    SELECT ms.id, ms.title, ms.article_html AS content, ms.created_at, ms.publication_settings,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                           (SELECT COUNT(*) FROM article_comments ac WHERE ac.article_id = ms.id AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count
+                    FROM moderation_submissions ms
+                    WHERE ms.author_id = ? AND ms.status = 'approved'
+                      AND (
+                          json_extract(ms.publication_settings, '$.materialType') = 'question'
+                          OR json_extract(ms.publication_settings, '$.type') = 'question'
+                      )
+                """, (user_id,))
+                question_rows = cur.fetchall()
+
+                # 3. Published answers
+                cur.execute("""
+                    SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
+                           ms.title AS question_title,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                    FROM article_comments ac
+                    LEFT JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    WHERE ac.user_id = ?
+                      AND ac.status = 'published'
+                      AND ac.comment_type = 'answer'
+                """, (user_id,))
+                answer_rows = cur.fetchall()
+
+            activity = []
+            for r in pub_rows:
+                activity.append({
+                    "type": "publication",
+                    "id": r["id"],
+                    "title": r["title"],
+                    "contentSnippet": make_content_snippet(r["content"]),
+                    "rating": int(r["rating"] or 0),
+                    "commentsCount": int(r["comments_count"] or 0),
+                    "answersCount": 0,
+                    "isSolution": False,
+                    "createdAt": r["created_at"],
+                    "date": format_date_ru(r["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                })
+
+            for r in question_rows:
+                activity.append({
+                    "type": "question",
+                    "id": r["id"],
+                    "title": r["title"],
+                    "contentSnippet": make_content_snippet(r["content"]),
+                    "rating": int(r["rating"] or 0),
+                    "commentsCount": 0,
+                    "answersCount": int(r["answers_count"] or 0),
+                    "isSolution": False,
+                    "createdAt": r["created_at"],
+                    "date": format_date_ru(r["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                })
+
+            for r in answer_rows:
+                activity.append({
+                    "type": "answer",
+                    "id": r["id"],
+                    "questionId": r["article_id"],
+                    "title": r["question_title"] or "Ответ на вопрос",
+                    "contentSnippet": make_content_snippet(r["content"]),
+                    "rating": int(r["rating"] or 0),
+                    "commentsCount": 0,
+                    "answersCount": 0,
+                    "isSolution": bool(r["is_solution"] == 1),
+                    "createdAt": r["created_at"],
+                    "date": format_date_ru(r["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
+                })
+
+            activity.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+            total = len(activity)
+            paged_activity = activity[offset : offset + limit]
+            has_more = (offset + limit) < total
+
+            self.send_json_response(200, {
+                "success": True,
+                "activity": paged_activity,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": has_more
+            })
         finally:
             conn.close()
 

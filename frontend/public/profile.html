@@ -269,11 +269,74 @@
             </div>
           </div>
 
-          <!-- 3. Content Area Placeholder -->
+          <!-- 3. Navigation Tabs & Content Area -->
           <div class="profile-content-area" id="profileContentArea">
-            <h2 class="profile-section-title">Публикации автора</h2>
-            <div class="profile-articles-list" id="profileArticlesList">
-              <div class="profile-empty-state">Загрузка материалов...</div>
+            <div class="profile-tabs-bar" role="tablist" aria-label="Разделы профиля">
+              <button type="button" class="profile-tab-btn is-active" id="tabBtnOverview" role="tab" aria-selected="true" aria-controls="profileTabOverview" data-tab="overview">
+                <span>Обзор</span>
+              </button>
+              <button type="button" class="profile-tab-btn" id="tabBtnPublications" role="tab" aria-selected="false" aria-controls="profileTabPublications" data-tab="publications">
+                <span>Публикации</span> <span class="profile-tab-count" id="tabCountPublications"></span>
+              </button>
+              <button type="button" class="profile-tab-btn" id="tabBtnQuestions" role="tab" aria-selected="false" aria-controls="profileTabQuestions" data-tab="questions">
+                <span>Вопросы</span> <span class="profile-tab-count" id="tabCountQuestions"></span>
+              </button>
+              <button type="button" class="profile-tab-btn" id="tabBtnAnswers" role="tab" aria-selected="false" aria-controls="profileTabAnswers" data-tab="answers">
+                <span>Ответы</span> <span class="profile-tab-count" id="tabCountAnswers"></span>
+              </button>
+            </div>
+
+            <div class="profile-tab-panels" id="profileTabPanels">
+              <!-- 1. Overview Tab Panel -->
+              <div class="profile-tab-panel is-active" id="profileTabOverview" role="tabpanel" aria-labelledby="tabBtnOverview">
+                <!-- Top Contributions Section («Лучший вклад») -->
+                <div class="profile-top-contributions-section" id="profileTopContributionsSection" style="display: none;">
+                  <h3 class="profile-subheading">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                    <span>Лучший вклад</span>
+                  </h3>
+                  <div class="profile-top-contributions-grid" id="profileTopContributionsGrid"></div>
+                </div>
+
+                <!-- Activity Stream Section («Лента активности») -->
+                <div class="profile-activity-section" id="profileActivitySection">
+                  <h3 class="profile-subheading">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    <span>Лента активности</span>
+                  </h3>
+                  <div class="profile-activity-feed" id="profileActivityFeed">
+                    <div class="profile-empty-state">Загрузка активности...</div>
+                  </div>
+                  <div class="profile-activity-actions" id="profileActivityActions" style="display: none;">
+                    <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMore">Показать еще</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Publications Tab Panel -->
+              <div class="profile-tab-panel" id="profileTabPublications" role="tabpanel" aria-labelledby="tabBtnPublications" style="display: none;">
+                <h3 class="profile-subheading">Все публикации автора</h3>
+                <div class="profile-articles-list" id="profilePublicationsList">
+                  <div class="profile-empty-state">Загрузка материалов...</div>
+                </div>
+                <div id="profileArticlesList" style="display: none;"></div>
+              </div>
+
+              <!-- 3. Questions Tab Panel -->
+              <div class="profile-tab-panel" id="profileTabQuestions" role="tabpanel" aria-labelledby="tabBtnQuestions" style="display: none;">
+                <h3 class="profile-subheading">Вопросы автора</h3>
+                <div class="profile-articles-list" id="profileQuestionsList">
+                  <div class="profile-empty-state">Загрузка вопросов...</div>
+                </div>
+              </div>
+
+              <!-- 4. Answers Tab Panel -->
+              <div class="profile-tab-panel" id="profileTabAnswers" role="tabpanel" aria-labelledby="tabBtnAnswers" style="display: none;">
+                <h3 class="profile-subheading">Ответы и решения</h3>
+                <div class="profile-articles-list" id="profileAnswersList">
+                  <div class="profile-empty-state">Загрузка ответов...</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

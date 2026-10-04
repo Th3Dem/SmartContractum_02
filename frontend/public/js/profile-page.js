@@ -9,6 +9,12 @@
   let currentProfile = null;
   let currentUser = null;
   let profileAbortController = null;
+  let activeTab = 'overview';
+  let activityItems = [];
+  let activityOffset = 0;
+  const activityLimit = 15;
+  let activityHasMore = false;
+  let isLoadingActivity = false;
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -278,8 +284,386 @@
     // 4. Action Buttons (Own profile vs Foreign profile)
     renderActions(p);
 
-    // 5. Recent Publications List
+    // 5. Tab counts
+    renderTabCounts(p);
+
+    // 6. Top contributions
+    renderTopContributions(p.topContributions || []);
+
+    // 7. Dedicated tabs content
+    renderPublicationsTab(p);
+    renderQuestionsTab(p);
+    renderAnswersTab();
+
+    // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
+
+    // 9. Load unified activity feed
+    loadActivity(p.id || p.userId, false);
+
+    // 10. Activate initial tab from URL
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const initialTab = urlParams.get('tab') || 'overview';
+      setActiveTab(initialTab, false);
+    } catch (e) {
+      setActiveTab('overview', false);
+    }
+  }
+
+  function setActiveTab(tabName, updateUrl) {
+    if (updateUrl === undefined) updateUrl = true;
+    const validTabs = ['overview', 'publications', 'questions', 'answers'];
+    if (validTabs.indexOf(tabName) === -1) {
+      tabName = 'overview';
+    }
+    activeTab = tabName;
+
+    const tabButtons = {
+      overview: document.getElementById('tabBtnOverview'),
+      publications: document.getElementById('tabBtnPublications'),
+      questions: document.getElementById('tabBtnQuestions'),
+      answers: document.getElementById('tabBtnAnswers')
+    };
+
+    const tabPanels = {
+      overview: document.getElementById('profileTabOverview'),
+      publications: document.getElementById('profileTabPublications'),
+      questions: document.getElementById('profileTabQuestions'),
+      answers: document.getElementById('profileTabAnswers')
+    };
+
+    Object.keys(tabButtons).forEach(function (key) {
+      const btn = tabButtons[key];
+      const panel = tabPanels[key];
+      const isCurrent = (key === tabName);
+
+      if (btn) {
+        btn.classList.toggle('is-active', isCurrent);
+        btn.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+      }
+      if (panel) {
+        panel.classList.toggle('is-active', isCurrent);
+        panel.style.display = isCurrent ? 'block' : 'none';
+      }
+    });
+
+    if (updateUrl && window.history && window.history.replaceState) {
+      try {
+        const url = new URL(window.location.href);
+        if (tabName === 'overview') {
+          url.searchParams.delete('tab');
+        } else {
+          url.searchParams.set('tab', tabName);
+        }
+        window.history.replaceState({}, '', url.toString());
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      if (tabName === 'publications') {
+        renderPublicationsTab(currentProfile);
+      } else if (tabName === 'questions') {
+        renderQuestionsTab(currentProfile);
+      } else if (tabName === 'answers') {
+        renderAnswersTab();
+      }
+    }
+  }
+
+  function renderTabCounts(p) {
+    if (!p) return;
+    const stats = p.stats || {};
+    const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
+    const questVal = stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0);
+    const ansVal = stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0);
+
+    const cPub = document.getElementById('tabCountPublications');
+    if (cPub) cPub.textContent = pubVal;
+
+    const cQuest = document.getElementById('tabCountQuestions');
+    if (cQuest) cQuest.textContent = questVal;
+
+    const cAns = document.getElementById('tabCountAnswers');
+    if (cAns) cAns.textContent = ansVal;
+  }
+
+  function renderTopContributions(topList) {
+    const sec = document.getElementById('profileTopContributionsSection');
+    const grid = document.getElementById('profileTopContributionsGrid');
+    if (!sec || !grid) return;
+
+    if (!Array.isArray(topList) || topList.length === 0) {
+      sec.style.display = 'none';
+      grid.innerHTML = '';
+      return;
+    }
+
+    sec.style.display = 'block';
+    grid.innerHTML = topList.map(function (item) {
+      const isSolution = item.isSolution || item.type === 'solution';
+      const isQuestion = item.type === 'question' || item.materialType === 'question';
+      let badgeClass = 'publication';
+      let badgeText = 'Статья';
+      if (isSolution) {
+        badgeClass = 'solution';
+        badgeText = '✓ Решение';
+      } else if (isQuestion) {
+        badgeClass = 'question';
+        badgeText = 'Вопрос';
+      }
+
+      const ratingNum = item.rating || 0;
+      const ratingDisplay = ratingNum >= 0 ? '+' + ratingNum : ratingNum;
+      const title = item.title || 'Без названия';
+      const url = item.url || ('article.html?id=' + encodeURIComponent(item.id));
+      const snippet = item.contentSnippet ? '<p class="top-contrib-snippet">' + escapeHtml(item.contentSnippet) + '</p>' : '';
+      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+
+      return '<div class="top-contribution-card">' +
+        '<div class="top-contrib-header">' +
+          '<span class="top-contrib-badge ' + badgeClass + '">' + badgeText + '</span>' +
+          '<span class="top-contrib-rating">' + ratingDisplay + '</span>' +
+        '</div>' +
+        '<a href="' + url + '" class="top-contrib-title">' + escapeHtml(title) + '</a>' +
+        snippet +
+        '<div class="top-contrib-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: auto; font-size: 0.78rem; color: var(--text-muted);">' +
+          '<span>' + escapeHtml(dateStr) + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function loadActivity(userId, append) {
+    if (!userId || isLoadingActivity) return;
+
+    const feedContainer = document.getElementById('profileActivityFeed');
+    const actionsContainer = document.getElementById('profileActivityActions');
+
+    if (!append) {
+      activityOffset = 0;
+      activityItems = [];
+      if (feedContainer) {
+        feedContainer.innerHTML = '<div class="profile-empty-state">Загрузка активности...</div>';
+      }
+    }
+
+    isLoadingActivity = true;
+    const url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('ACTIVITY_LOAD_FAILED');
+        return res.json();
+      })
+      .then(function (data) {
+        isLoadingActivity = false;
+        if (!data || !data.success) {
+          throw new Error('ACTIVITY_INVALID_DATA');
+        }
+        const newItems = data.activity || [];
+        if (append) {
+          activityItems = activityItems.concat(newItems);
+        } else {
+          activityItems = newItems;
+        }
+        activityHasMore = Boolean(data.hasMore);
+        renderActivityFeed(activityItems, activityHasMore);
+
+        if (activeTab === 'answers') {
+          renderAnswersTab();
+        }
+      })
+      .catch(function () {
+        isLoadingActivity = false;
+        if (!append && feedContainer) {
+          feedContainer.innerHTML = '<div class="profile-empty-state">Ошибка загрузки ленты активности</div>';
+        }
+        if (actionsContainer) {
+          actionsContainer.style.display = 'none';
+        }
+      });
+  }
+
+  function renderActivityFeed(items, hasMore) {
+    const feedContainer = document.getElementById('profileActivityFeed');
+    const actionsContainer = document.getElementById('profileActivityActions');
+    if (!feedContainer) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      feedContainer.innerHTML = '<div class="profile-empty-state">Нет недавней активности</div>';
+      if (actionsContainer) actionsContainer.style.display = 'none';
+      return;
+    }
+
+    feedContainer.innerHTML = items.map(function (item) {
+      let badgeHtml = '';
+      let titleWrapHtml = '';
+
+      const ratingVal = item.rating || 0;
+      const ratingDisplay = ratingVal >= 0 ? '+' + ratingVal : ratingVal;
+      const dateDisplay = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const url = item.url || ('article.html?id=' + encodeURIComponent(item.id));
+
+      if (item.type === 'answer') {
+        const solutionBadge = item.isSolution
+          ? '<span class="activity-solution-badge">✓ Решение</span>'
+          : '';
+        badgeHtml = '<span class="activity-type-badge activity-badge-answer">Ответ</span>' + solutionBadge;
+        titleWrapHtml = '<div class="activity-card-title-wrap">' +
+          '<span class="activity-context-label">К вопросу:</span>' +
+          '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
+        '</div>';
+      } else if (item.type === 'question') {
+        badgeHtml = '<span class="activity-type-badge activity-badge-question">Вопрос</span>';
+        titleWrapHtml = '<div class="activity-card-title-wrap">' +
+          '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
+        '</div>';
+      } else {
+        badgeHtml = '<span class="activity-type-badge activity-badge-publication">Статья</span>';
+        titleWrapHtml = '<div class="activity-card-title-wrap">' +
+          '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
+        '</div>';
+      }
+
+      const snippetHtml = item.contentSnippet
+        ? '<div class="activity-card-snippet">' + escapeHtml(item.contentSnippet) + '</div>'
+        : '';
+
+      let extraMeta = '';
+      if (item.type === 'publication' && item.commentsCount !== undefined) {
+        extraMeta = '<span class="activity-meta-stat" title="Комментарии">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>' +
+          ' <span>' + item.commentsCount + '</span>' +
+        '</span>';
+      } else if (item.type === 'question' && item.answersCount !== undefined) {
+        extraMeta = '<span class="activity-meta-stat" title="Ответы">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>' +
+          ' <span>' + item.answersCount + '</span>' +
+        '</span>';
+      }
+
+      return '<div class="activity-card">' +
+        '<div class="activity-card-header">' +
+          badgeHtml +
+          titleWrapHtml +
+        '</div>' +
+        snippetHtml +
+        '<div class="activity-card-footer">' +
+          '<span class="activity-meta-date">' + escapeHtml(dateDisplay) + '</span>' +
+          '<span class="activity-meta-stat" title="Рейтинг">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>' +
+            ' <span>' + ratingDisplay + '</span>' +
+          '</span>' +
+          extraMeta +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    if (actionsContainer) {
+      actionsContainer.style.display = hasMore ? 'block' : 'none';
+    }
+  }
+
+  function renderPublicationsTab(p) {
+    const list = document.getElementById('profilePublicationsList');
+    if (!list) return;
+
+    const pubs = (p && p.publications) ? p.publications.filter(function (it) {
+      return it.materialType !== 'question' && it.type !== 'question';
+    }) : [];
+
+    if (pubs.length === 0) {
+      list.innerHTML = '<div class="profile-empty-state">Нет опубликованных статей</div>';
+      return;
+    }
+
+    list.innerHTML = pubs.map(function (item) {
+      const title = item.title || 'Без названия';
+      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const itemUrl = 'article.html?id=' + encodeURIComponent(item.id);
+      return '<div class="user-profile-article-item">' +
+        '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +
+          '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Статья</span>' +
+          '<a href="' + itemUrl + '" style="color: var(--text-primary); text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+            escapeHtml(title) +
+          '</a>' +
+        '</div>' +
+        '<span style="color: var(--text-muted); font-size: 0.78rem; flex-shrink: 0; margin-left: 12px;">' +
+          escapeHtml(dateStr) +
+        '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderQuestionsTab(p) {
+    const list = document.getElementById('profileQuestionsList');
+    if (!list) return;
+
+    const questions = (p && p.publications) ? p.publications.filter(function (it) {
+      return it.materialType === 'question' || it.type === 'question';
+    }) : [];
+
+    if (questions.length === 0) {
+      list.innerHTML = '<div class="profile-empty-state">Нет опубликованных вопросов</div>';
+      return;
+    }
+
+    list.innerHTML = questions.map(function (item) {
+      const title = item.title || 'Без названия';
+      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const itemUrl = 'article.html?id=' + encodeURIComponent(item.id);
+      return '<div class="user-profile-article-item">' +
+        '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +
+          '<span class="meta-badge question-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Вопрос</span>' +
+          '<a href="' + itemUrl + '" style="color: var(--text-primary); text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+            escapeHtml(title) +
+          '</a>' +
+        '</div>' +
+        '<span style="color: var(--text-muted); font-size: 0.78rem; flex-shrink: 0; margin-left: 12px;">' +
+          escapeHtml(dateStr) +
+        '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderAnswersTab() {
+    const list = document.getElementById('profileAnswersList');
+    if (!list) return;
+
+    const answers = activityItems.filter(function (it) {
+      return it.type === 'answer';
+    });
+
+    if (answers.length === 0) {
+      if (isLoadingActivity) {
+        list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
+      } else {
+        list.innerHTML = '<div class="profile-empty-state">Нет опубликованных ответов</div>';
+      }
+      return;
+    }
+
+    list.innerHTML = answers.map(function (item) {
+      const title = item.title || 'Ответ на вопрос';
+      const dateStr = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const itemUrl = item.url || ('article.html?id=' + encodeURIComponent(item.id));
+      const solutionBadge = item.isSolution
+        ? '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px; background: rgba(34, 197, 94, 0.15); color: #22c55e;">✓ Решение</span>'
+        : '<span class="meta-badge" style="font-size: 0.72rem; padding: 2px 6px; margin-right: 8px;">Ответ</span>';
+
+      return '<div class="user-profile-article-item">' +
+        '<div style="display: flex; align-items: center; min-width: 0; gap: 4px;">' +
+          solutionBadge +
+          '<a href="' + itemUrl + '" style="color: var(--text-primary); text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+            escapeHtml(title) +
+          '</a>' +
+        '</div>' +
+        '<span style="color: var(--text-muted); font-size: 0.78rem; flex-shrink: 0; margin-left: 12px;">' +
+          escapeHtml(dateStr) +
+        '</span>' +
+      '</div>';
+    }).join('');
   }
 
   function renderActions(p) {
@@ -647,6 +1031,35 @@
         loadProfile(currentProfile.id, true);
       }
     });
+
+    // 8. Tab switching navigation
+    const tabBtns = document.querySelectorAll('.profile-tab-btn[data-tab]');
+    for (let i = 0; i < tabBtns.length; i++) {
+      tabBtns[i].addEventListener('click', function () {
+        const tab = this.getAttribute('data-tab');
+        if (tab) setActiveTab(tab, true);
+      });
+    }
+
+    // 9. Load more activity
+    const btnLoadMore = document.getElementById('btnProfileLoadMore');
+    if (btnLoadMore) {
+      btnLoadMore.addEventListener('click', function () {
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          activityOffset += activityLimit;
+          loadActivity(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
+
+    // 10. History popstate navigation
+    window.addEventListener('popstate', function () {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab') || 'overview';
+        setActiveTab(tab, false);
+      } catch (e) {}
+    });
   }
 
   function init() {
@@ -671,6 +1084,10 @@
     init: init,
     loadProfile: loadProfile,
     renderProfile: renderProfile,
+    setActiveTab: setActiveTab,
+    loadActivity: loadActivity,
+    renderTopContributions: renderTopContributions,
+    renderActivityFeed: renderActivityFeed,
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
     openEditModal: openEditModal,
