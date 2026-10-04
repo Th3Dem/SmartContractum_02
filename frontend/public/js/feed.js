@@ -1248,6 +1248,18 @@
     const searchInput = document.getElementById('feedSearchInput');
 
     const isBlogsPosts = (state.tab === 'companies' && (!state.companiesSubtab || state.companiesSubtab === 'posts') && !state.activeCompanyId);
+    const isBlogsParticipants = (state.tab === 'companies' && state.companiesSubtab === 'participants' && !state.activeCompanyId);
+
+    const drawerPanel = document.getElementById('feedFiltersPanel');
+    const drawerTitle = drawerPanel ? drawerPanel.querySelector('.feed-slide-panel-title') : null;
+    const drawerSubtitle = drawerPanel ? drawerPanel.querySelector('.feed-slide-panel-subtitle') : null;
+    const dateGroup = document.getElementById('feedFilterGroupDate');
+    const formatGroup = document.getElementById('feedFormatFilterGroup');
+    const audienceGroup = document.getElementById('feedAudienceFilterGroup');
+    const typesGroup = document.getElementById('feedFilterGroupTypes');
+    const compGroup = document.getElementById('feedFilterGroupComplexity');
+    const topicsGroup = document.getElementById('feedFilterGroupTopics');
+    const topicsLabel = document.getElementById('feedTopicsFilterLabel');
 
     if (isBlogsPosts) {
       const slot = document.getElementById('blogsPostsToolbarSlot');
@@ -1266,6 +1278,46 @@
 
       if (toolbar) toolbar.style.display = '';
       if (searchInput) searchInput.placeholder = 'Поиск публикаций компаний...';
+
+      if (dateGroup) dateGroup.style.display = '';
+      if (formatGroup) formatGroup.style.display = '';
+      if (audienceGroup) audienceGroup.style.display = '';
+      if (typesGroup) typesGroup.style.display = '';
+      if (compGroup) compGroup.style.display = '';
+      if (topicsGroup) topicsGroup.style.display = '';
+      if (topicsLabel) topicsLabel.textContent = 'Темы публикаций';
+      if (drawerTitle) drawerTitle.textContent = 'Фильтры публикаций';
+      if (drawerSubtitle) drawerSubtitle.textContent = 'Уточните текущую выдачу. Подписки и настройки сохранятся';
+    } else if (isBlogsParticipants) {
+      const slot = document.getElementById('blogsParticipantsToolbarSlot');
+      const participantsView = document.getElementById('blogsParticipantsView');
+      const catalogList = document.getElementById('companiesCatalogList');
+
+      if (slot) {
+        if (toolbar && toolbar.parentElement !== slot) slot.appendChild(toolbar);
+        if (drawerWrap && drawerWrap.parentElement !== slot) slot.appendChild(drawerWrap);
+        if (chipsBar && chipsBar.parentElement !== slot) slot.appendChild(chipsBar);
+      } else if (participantsView && catalogList) {
+        if (toolbar && toolbar.parentElement !== participantsView) participantsView.insertBefore(toolbar, catalogList);
+        if (drawerWrap && drawerWrap.parentElement !== participantsView) participantsView.insertBefore(drawerWrap, catalogList);
+        if (chipsBar && chipsBar.parentElement !== participantsView) chipsBar && participantsView.insertBefore(chipsBar, catalogList);
+      }
+
+      if (toolbar) toolbar.style.display = '';
+      if (searchInput) searchInput.placeholder = 'Поиск участников по названию или специализации';
+
+      const compToolbar = document.getElementById('companiesToolbar');
+      if (compToolbar) compToolbar.style.display = 'none';
+
+      if (dateGroup) dateGroup.style.display = 'none';
+      if (formatGroup) formatGroup.style.display = 'none';
+      if (audienceGroup) audienceGroup.style.display = 'none';
+      if (typesGroup) typesGroup.style.display = 'none';
+      if (compGroup) compGroup.style.display = 'none';
+      if (topicsGroup) topicsGroup.style.display = '';
+      if (topicsLabel) topicsLabel.textContent = 'Направления и темы';
+      if (drawerTitle) drawerTitle.textContent = 'Фильтры участников';
+      if (drawerSubtitle) drawerSubtitle.textContent = 'Уточните список компаний по направлениям';
     } else {
       const mainCol = document.getElementById('feedMainColumn');
       const articlesView = document.getElementById('feedArticlesView');
@@ -1276,15 +1328,29 @@
         if (chipsBar && chipsBar.parentElement !== mainCol) mainCol.insertBefore(chipsBar, articlesView);
       }
 
-      if (state.tab === 'companies' && (state.companiesSubtab === 'participants' || state.activeCompanyId)) {
+      if (state.tab === 'companies' && state.activeCompanyId) {
         if (toolbar) toolbar.style.display = 'none';
       } else if (state.tab === 'directions') {
         if (toolbar) toolbar.style.display = 'none';
+      } else {
+        if (toolbar) toolbar.style.display = '';
       }
 
-      if (searchInput && searchInput.placeholder === 'Поиск публикаций компаний...') {
+      if (dateGroup) dateGroup.style.display = '';
+      if (formatGroup) formatGroup.style.display = '';
+      if (audienceGroup) audienceGroup.style.display = '';
+      if (typesGroup) typesGroup.style.display = (state.tab === 'questions' ? 'none' : '');
+      if (compGroup) compGroup.style.display = (state.tab === 'questions' ? 'none' : '');
+      if (topicsGroup) topicsGroup.style.display = '';
+      if (topicsLabel) topicsLabel.textContent = 'Темы публикаций';
+      if (drawerTitle) drawerTitle.textContent = 'Фильтры публикаций';
+      if (drawerSubtitle) drawerSubtitle.textContent = 'Уточните текущую выдачу. Подписки и настройки сохранятся';
+
+      if (searchInput) {
         if (state.tab === 'questions') {
           searchInput.placeholder = 'Поиск по вопросам и ответам...';
+        } else if (state.tab === 'saved') {
+          searchInput.placeholder = 'Поиск в сохраненном...';
         } else {
           searchInput.placeholder = 'Поиск по ленте...';
         }
@@ -3985,6 +4051,15 @@
   }
 
   function fetchFeed(isInitial) {
+    if (state.tab === 'companies') {
+      if (state.activeCompanyId) {
+        openCompanyDetail(state.activeCompanyId);
+      } else {
+        loadCompanies(state.companiesSubtab || 'posts');
+      }
+      return;
+    }
+
     if (!isInitial && state.isLoading) return;
 
     if (isInitial) {
@@ -5851,16 +5926,35 @@
     } else {
       if (postsView) postsView.style.display = 'none';
       if (participantsView) participantsView.style.display = 'block';
-      if (streamToolbar) streamToolbar.style.display = 'none';
-      if (participantsToolbar) participantsToolbar.style.display = 'flex';
+      if (streamToolbar) streamToolbar.style.display = '';
+      if (participantsToolbar) participantsToolbar.style.display = 'none';
+
+      ensureToolbarPlacement();
 
       const pSearchInput = document.getElementById('companiesSearchInput');
-      const q = pSearchInput ? pSearchInput.value.trim().toLowerCase() : '';
+      const feedInp = document.getElementById('feedSearchInput');
+      const q = ((state.search !== undefined && state.search !== null && state.search !== '') ? state.search : (pSearchInput ? pSearchInput.value : '')).trim().toLowerCase();
+      if (pSearchInput && state.search !== undefined) {
+        pSearchInput.value = state.search;
+      }
+      if (feedInp && pSearchInput && !state.search && pSearchInput.value) {
+        state.search = pSearchInput.value.trim();
+        feedInp.value = state.search;
+      }
 
       const targetList = catalogList || legacyGrid;
       if (targetList) targetList.innerHTML = '<div class="feed-skeleton-card" style="height: 100px; margin: 12px 0;"></div>';
 
-      fetch('/api/companies')
+      const sortVal = state.sort || 'popular';
+      let compUrl = '/api/companies?sort=' + encodeURIComponent(sortVal);
+      if (q) {
+        compUrl += '&search=' + encodeURIComponent(q);
+      }
+      if (state.filters && state.filters.topics && state.filters.topics.length > 0) {
+        compUrl += '&topics=' + encodeURIComponent(state.filters.topics.join(','));
+      }
+
+      fetch(compUrl)
         .then(function (res) { return res.json(); })
         .then(function (data) {
           if (data && data.success) {
@@ -5872,16 +5966,24 @@
                 state.userSubscriptions.companies.push(c.id);
               }
             });
+
+            let listToRender = cachedCompaniesList.slice();
             if (q) {
               const terms = q.split(/\s+/).filter(Boolean);
-              const filtered = cachedCompaniesList.filter(function (comp) {
-                const hay = ((comp.name || '') + ' ' + (comp.specialization || '')).toLowerCase();
+              listToRender = listToRender.filter(function (comp) {
+                const hay = ((comp.name || '') + ' ' + (comp.specialization || '') + ' ' + (comp.description || '') + ' ' + (comp.website || '')).toLowerCase();
                 return terms.every(function (t) { return hay.indexOf(t) !== -1; });
               });
-              renderCompaniesParticipantsList(filtered);
-            } else {
-              renderCompaniesParticipantsList(cachedCompaniesList);
             }
+
+            if (state.filters && state.filters.topics && state.filters.topics.length > 0) {
+              listToRender = listToRender.filter(function (comp) {
+                const dirs = comp.directions || [];
+                return state.filters.topics.some(function (t) { return dirs.includes(t); });
+              });
+            }
+
+            renderCompaniesParticipantsList(listToRender);
           } else {
             if (targetList) targetList.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Не удалось загрузить компании.</p></div>';
           }
@@ -5900,7 +6002,7 @@
     containers.forEach(function (c) { c.innerHTML = ''; });
 
     const pSearchInput = document.getElementById('companiesSearchInput');
-    const isSearching = Boolean(pSearchInput && pSearchInput.value.trim());
+    const isSearching = Boolean((state.search && state.search.trim()) || (pSearchInput && pSearchInput.value.trim()) || (state.filters && state.filters.topics && state.filters.topics.length > 0));
 
     if (!companies || companies.length === 0) {
       let emptyHtml = '';
@@ -6730,13 +6832,16 @@
     if (companiesSearchInput) {
       function handleCompaniesFilter() {
         const q = (companiesSearchInput.value || '').trim().toLowerCase();
+        state.search = q;
+        const feedInp = document.getElementById('feedSearchInput');
+        if (feedInp) feedInp.value = q;
         if (cachedCompaniesList && cachedCompaniesList.length > 0) {
           if (!q) {
             renderCompaniesParticipantsList(cachedCompaniesList);
           } else {
             const terms = q.split(/\s+/).filter(Boolean);
             const filtered = cachedCompaniesList.filter(function (comp) {
-              const hay = ((comp.name || '') + ' ' + (comp.specialization || '')).toLowerCase();
+              const hay = ((comp.name || '') + ' ' + (comp.specialization || '') + ' ' + (comp.description || '')).toLowerCase();
               return terms.every(function (t) { return hay.indexOf(t) !== -1; });
             });
             renderCompaniesParticipantsList(filtered);

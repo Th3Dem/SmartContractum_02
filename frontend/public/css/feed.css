@@ -4819,12 +4819,16 @@ button.author-name:focus-visible,
   width: 100%;
 }
 
+.blogs-participants-toolbar-slot {
+  margin-bottom: 12px;
+}
+
 .company-participant-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 18px;
+  padding: 16px 20px;
   border: none;
   border-bottom: 1px solid var(--border-color);
   border-radius: 0;
@@ -4853,13 +4857,15 @@ button.author-name:focus-visible,
 }
 
 .participant-avatar {
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
   border-radius: var(--radius-md);
   background: rgba(56, 189, 248, 0.12);
   color: var(--accent-color);
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.15rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4867,6 +4873,11 @@ button.author-name:focus-visible,
 }
 
 .participant-avatar-img {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  border-radius: var(--radius-md);
   object-fit: cover;
   display: block;
 }
@@ -4887,25 +4898,25 @@ button.author-name:focus-visible,
 }
 
 .participant-name {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.3;
 }
 
 .participant-spec {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: var(--text-secondary);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .participant-desc {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
-  font-size: 0.84rem;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-size: 0.85rem;
   line-height: 1.35;
   color: var(--text-muted);
   margin: 0;
@@ -4917,18 +4928,19 @@ button.author-name:focus-visible,
   align-items: flex-end;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .participant-stats {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
 
 .btn-participant-sub {
-  height: 30px;
-  padding: 0 12px;
-  font-size: 0.8rem;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 0.82rem;
   font-weight: 600;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -4953,9 +4965,10 @@ button.author-name:focus-visible,
 }
 
 .btn-participant-sub.is-subscribed {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(56, 189, 248, 0.12);
   border-color: var(--accent-color);
   color: var(--accent-color);
+  font-weight: 600;
 }
 
 .companies-catalog-list .feed-empty-state {
@@ -6456,8 +6469,8 @@ body.is-directions-tab .widget-topics-card {
 /* Responsive adjustments for Participants directory */
 @media (max-width: 768px) {
   .company-participant-row {
-    padding: 12px 14px;
-    gap: 12px;
+    padding: 14px 16px;
+    gap: 14px;
   }
 }
 
@@ -6480,5 +6493,6 @@ body.is-directions-tab .widget-topics-card {
     align-items: center;
     padding-top: 8px;
     border-top: 1px solid var(--border-color);
+    margin-left: 0;
   }
 }
