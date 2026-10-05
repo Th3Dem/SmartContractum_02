@@ -575,6 +575,27 @@
         });
       }
 
+      const authorBtn = card.querySelector('.btn-author-profile');
+      if (authorBtn && typeof options.onAuthorClick === 'function') {
+        authorBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const aid = authorBtn.getAttribute('data-author-id') || authorBtn.getAttribute('data-user-id') || (item && (item.authorId || item.author));
+          options.onAuthorClick(aid, authorBtn, item);
+        });
+      }
+
+      const authorAvatar = card.querySelector('.author-avatar');
+      if (authorAvatar && typeof options.onAuthorClick === 'function') {
+        authorAvatar.style.cursor = 'pointer';
+        authorAvatar.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const aid = (authorBtn && (authorBtn.getAttribute('data-author-id') || authorBtn.getAttribute('data-user-id'))) || (item && (item.authorId || item.author));
+          options.onAuthorClick(aid, authorAvatar, item);
+        });
+      }
+
       const titleLink = card.querySelector('.card-title a');
       if (titleLink) {
         titleLink.addEventListener('click', function () {

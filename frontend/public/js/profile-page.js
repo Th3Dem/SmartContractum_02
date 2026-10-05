@@ -120,24 +120,25 @@
     }
   }
 
+  function setAuthState(user) {
+    currentUser = user || null;
+    window.currentUser = user || null;
+    updateHeaderUserBar();
+  }
+
   function checkAuthStatus(callback) {
     fetch('/api/auth/status')
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data && data.authenticated && data.user) {
-          currentUser = data.user;
-          window.currentUser = data.user;
+          setAuthState(data.user);
         } else {
-          currentUser = null;
-          window.currentUser = null;
+          setAuthState(null);
         }
-        updateHeaderUserBar();
         if (typeof callback === 'function') callback(currentUser);
       })
       .catch(function () {
-        currentUser = null;
-        window.currentUser = null;
-        updateHeaderUserBar();
+        setAuthState(null);
         if (typeof callback === 'function') callback(null);
       });
   }
@@ -145,14 +146,65 @@
   function updateHeaderUserBar() {
     const userLabel = document.getElementById('headerUserLabel');
     const loginBtn = document.getElementById('headerLoginBtn');
+    const userMenu = document.getElementById('headerUserMenu');
+    const profileLink = document.getElementById('headerMenuProfileLink');
+
     if (userLabel) {
       userLabel.textContent = currentUser ? currentUser.name : 'Вход';
     }
     if (loginBtn) {
       loginBtn.title = currentUser
-        ? 'Вы вошли как ' + currentUser.name + ' (нажмите для выхода)'
+        ? 'Вы вошли как ' + currentUser.name + ' (меню пользователя)'
         : 'Войти в личный кабинет';
+      loginBtn.setAttribute('aria-expanded', 'false');
     }
+    if (profileLink && currentUser) {
+      profileLink.href = 'profile.html?id=' + encodeURIComponent(currentUser.id);
+    }
+    if (userMenu && !currentUser) {
+      userMenu.style.display = 'none';
+    }
+  }
+
+  function loadHeaderNotifications() {
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifList = document.getElementById('notifListContainer');
+
+    if (!notifBtn) return;
+    fetch('/api/notifications')
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.success) return;
+        const count = data.unreadCount || 0;
+        if (notifBadge) {
+          if (count > 0) {
+            notifBadge.textContent = count > 99 ? '99+' : count;
+            notifBadge.style.display = 'inline-flex';
+          } else {
+            notifBadge.style.display = 'none';
+          }
+        }
+        if (notifList) {
+          const list = data.notifications || [];
+          if (list.length === 0) {
+            notifList.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
+          } else {
+            notifList.innerHTML = '';
+            list.forEach(function (n) {
+              const item = document.createElement('a');
+              item.className = 'notif-item' + (n.is_read ? ' is-read' : ' is-unread');
+              item.href = n.article_id ? ('article.html?id=' + encodeURIComponent(n.article_id) + '#comments') : '#';
+              item.innerHTML =
+                '<div class="notif-item-title">' + escapeHtml(n.title) + '</div>' +
+                '<div class="notif-item-msg">' + escapeHtml(n.message) + '</div>' +
+                '<div class="notif-item-time">' + escapeHtml(n.created_at ? n.created_at.substring(0, 16).replace('T', ' ') : '') + '</div>';
+              notifList.appendChild(item);
+            });
+          }
+        }
+      })
+      .catch(function () {});
   }
 
   function getUserIdFromUrl() {
@@ -221,6 +273,15 @@
     // 1. Avatar
     const avatarImg = document.getElementById('profileAvatarImg');
     const avatarInitials = document.getElementById('profileAvatarInitials');
+    if (avatarImg) {
+      avatarImg.onerror = function () {
+        avatarImg.style.display = 'none';
+        if (avatarInitials) {
+          avatarInitials.textContent = getInitials(displayName);
+          avatarInitials.style.display = 'block';
+        }
+      };
+    }
     if (p.avatar) {
       if (avatarImg) {
         avatarImg.src = p.avatar;
@@ -795,6 +856,363 @@
       });
   }
 
+  // --------------------------------------------------------------------------
+  // Article Card Actions & Interaction Helpers
+  // --------------------------------------------------------------------------
+  function getBookmarks() {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_bookmarks_' + currentUser.id) : 'sc_bookmarks_guest';
+      const data = localStorage.getItem(key);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function saveBookmarks(bookmarks) {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_bookmarks_' + currentUser.id) : 'sc_bookmarks_guest';
+      localStorage.setItem(key, JSON.stringify(bookmarks));
+      if (!currentUser) {
+        localStorage.setItem('sc_bookmarks', JSON.stringify(bookmarks));
+      }
+    } catch (e) {}
+  }
+
+  function isItemBookmarked(id, item) {
+    if (!id) return false;
+    if (item && (item.hasSaved !== undefined || item.isSaved !== undefined || item.isBookmarked !== undefined)) {
+      return Boolean(item.hasSaved || item.isSaved || item.isBookmarked);
+    }
+    return getBookmarks().includes(id);
+  }
+
+  function isItemReported(id, item) {
+    if (!id) return false;
+    if (item && (item.hasReported !== undefined || item.isReported !== undefined)) {
+      return Boolean(item.hasReported || item.isReported);
+    }
+    if (window._reportedArticleIds && window._reportedArticleIds.has(id)) return true;
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_articles_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (stored.includes(id)) {
+          window._reportedArticleIds = window._reportedArticleIds || new Set();
+          window._reportedArticleIds.add(id);
+          return true;
+        }
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function markArticleReported(articleId) {
+    if (!articleId) return;
+    window._reportedArticleIds = window._reportedArticleIds || new Set();
+    window._reportedArticleIds.add(articleId);
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_articles_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (!stored.includes(articleId)) {
+          stored.push(articleId);
+          localStorage.setItem(userKey, JSON.stringify(stored));
+        }
+      } catch (e) {}
+    }
+    const btns = document.querySelectorAll('.btn-card-report[data-id="' + articleId + '"]');
+    btns.forEach(function (btn) {
+      if (window.SmartContractumCard && typeof window.SmartContractumCard.updateReportButtonState === 'function') {
+        window.SmartContractumCard.updateReportButtonState(btn, true);
+      } else {
+        btn.classList.add('is-reported');
+        btn.setAttribute('title', 'Жалоба уже отправлена');
+        btn.setAttribute('aria-label', 'Жалоба уже отправлена');
+        const svg = btn.querySelector('svg');
+        if (svg) svg.setAttribute('fill', 'currentColor');
+      }
+    });
+  }
+
+  function toggleArticleLike(articleId, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Войдите, чтобы поставить лайк');
+      return;
+    }
+
+    const currentLiked = btn.classList.contains('is-liked');
+    const newLiked = !currentLiked;
+    const countEl = btn.querySelector('.like-count');
+    const currentCount = parseInt(countEl ? countEl.textContent : '0', 10) || 0;
+    const optimisticCount = newLiked ? (currentCount + 1) : Math.max(0, currentCount - 1);
+
+    btn.classList.toggle('is-liked', newLiked);
+    btn.setAttribute('aria-pressed', newLiked ? 'true' : 'false');
+    btn.title = newLiked ? 'Больше не нравится' : 'Нравится';
+    if (countEl) countEl.textContent = optimisticCount;
+    if (item) {
+      item.hasLiked = newLiked;
+      item.likesCount = optimisticCount;
+    }
+
+    fetch('/api/articles/' + encodeURIComponent(articleId) + '/like', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          const finalLiked = Boolean(data.hasLiked);
+          btn.classList.toggle('is-liked', finalLiked);
+          btn.setAttribute('aria-pressed', finalLiked ? 'true' : 'false');
+          btn.title = finalLiked ? 'Больше не нравится' : 'Нравится';
+          if (countEl) countEl.textContent = data.likesCount;
+          if (item) {
+            item.hasLiked = finalLiked;
+            item.likesCount = data.likesCount;
+          }
+        } else {
+          // Rollback
+          btn.classList.toggle('is-liked', currentLiked);
+          btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+          btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+          if (countEl) countEl.textContent = currentCount;
+          if (item) {
+            item.hasLiked = currentLiked;
+            item.likesCount = currentCount;
+          }
+          showToast((data && data.error) || 'Ошибка при сохранении отметки');
+        }
+      })
+      .catch(function (err) {
+        // Rollback unconditionally
+        btn.classList.toggle('is-liked', currentLiked);
+        btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+        btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+        if (countEl) countEl.textContent = currentCount;
+        if (item) {
+          item.hasLiked = currentLiked;
+          item.likesCount = currentCount;
+        }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Войдите, чтобы поставить отметку');
+        } else {
+          showToast('Не удалось обновить отметку');
+        }
+      });
+  }
+
+  function toggleArticleBookmark(articleId, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для сохранения публикации необходимо войти');
+      return;
+    }
+
+    const wasActive = btn.classList.contains('is-bookmarked') || btn.classList.contains('is-saved');
+    const nextActive = !wasActive;
+    const countEl = btn.querySelector('.card-save-count');
+    const prevCount = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
+    const optimisticCount = nextActive ? (prevCount + 1) : Math.max(0, prevCount - 1);
+
+    btn.classList.toggle('is-bookmarked', nextActive);
+    btn.classList.toggle('is-saved', nextActive);
+    const svg = btn.querySelector('svg');
+    if (svg) svg.setAttribute('fill', nextActive ? 'currentColor' : 'none');
+    const newTooltip = nextActive ? 'Убрать из сохраненного' : 'Сохранить публикацию';
+    btn.title = newTooltip;
+    btn.setAttribute('aria-label', newTooltip);
+    if (countEl) countEl.textContent = optimisticCount;
+    if (item) {
+      item.hasSaved = nextActive;
+      item.isSaved = nextActive;
+      item.isBookmarked = nextActive;
+      item.savesCount = optimisticCount;
+    }
+
+    const bms = getBookmarks();
+    const idx = bms.indexOf(articleId);
+    if (nextActive && idx === -1) { bms.push(articleId); saveBookmarks(bms); }
+    else if (!nextActive && idx !== -1) { bms.splice(idx, 1); saveBookmarks(bms); }
+
+    fetch('/api/articles/' + encodeURIComponent(articleId) + (nextActive ? '/save' : '/unsave'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          const finalSaved = Boolean(data.isSaved !== undefined ? data.isSaved : nextActive);
+          btn.classList.toggle('is-bookmarked', finalSaved);
+          btn.classList.toggle('is-saved', finalSaved);
+          if (svg) svg.setAttribute('fill', finalSaved ? 'currentColor' : 'none');
+          if (countEl && data.savesCount !== undefined) countEl.textContent = data.savesCount;
+          if (item) {
+            item.hasSaved = finalSaved;
+            item.isSaved = finalSaved;
+            item.isBookmarked = finalSaved;
+            if (data.savesCount !== undefined) item.savesCount = data.savesCount;
+          }
+          showToast(finalSaved ? 'Публикация сохранена' : 'Публикация удалена из сохраненного');
+        } else {
+          // Rollback
+          btn.classList.toggle('is-bookmarked', wasActive);
+          btn.classList.toggle('is-saved', wasActive);
+          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+          if (countEl) countEl.textContent = prevCount;
+          if (item) {
+            item.hasSaved = wasActive;
+            item.isSaved = wasActive;
+            item.isBookmarked = wasActive;
+            item.savesCount = prevCount;
+          }
+          const rbBms = getBookmarks();
+          const rbIdx = rbBms.indexOf(articleId);
+          if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
+          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+          showToast((data && data.error) || 'Ошибка сохранения публикации');
+        }
+      })
+      .catch(function (err) {
+        // Rollback unconditionally
+        btn.classList.toggle('is-bookmarked', wasActive);
+        btn.classList.toggle('is-saved', wasActive);
+        if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+        const prevTooltip = wasActive ? 'Убрать из сохраненного' : 'Сохранить публикацию';
+        btn.title = prevTooltip;
+        btn.setAttribute('aria-label', prevTooltip);
+        if (countEl) countEl.textContent = prevCount;
+        if (item) {
+          item.hasSaved = wasActive;
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+          item.savesCount = prevCount;
+        }
+        const rbBms = getBookmarks();
+        const rbIdx = rbBms.indexOf(articleId);
+        if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения публикации необходимо войти');
+        } else {
+          showToast('Не удалось обновить сохранение');
+        }
+      });
+  }
+
+  let activeSharePopoverArticleId = null;
+  let activeSharePopoverTrigger = null;
+
+  function closeSharePopover() {
+    const popover = document.getElementById('feedSharePopover');
+    if (popover) {
+      popover.style.display = 'none';
+    }
+    if (activeSharePopoverTrigger) {
+      activeSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+      activeSharePopoverTrigger = null;
+    }
+    activeSharePopoverArticleId = null;
+  }
+
+  function openArticleShare(articleId, triggerBtn, item) {
+    const popover = document.getElementById('feedSharePopover');
+    if (!popover || !triggerBtn) return;
+
+    if (activeSharePopoverArticleId === articleId && popover.style.display !== 'none') {
+      closeSharePopover();
+      return;
+    }
+
+    if (activeSharePopoverTrigger && activeSharePopoverTrigger !== triggerBtn) {
+      activeSharePopoverTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    activeSharePopoverArticleId = articleId;
+    activeSharePopoverTrigger = triggerBtn;
+    triggerBtn.setAttribute('aria-haspopup', 'true');
+    triggerBtn.setAttribute('aria-expanded', 'true');
+
+    const origin = window.location.origin || '';
+    const permalink = origin + '/article.html?id=' + encodeURIComponent(articleId);
+    const title = (item && item.title) || document.title || 'SmartContractum';
+    const encodedUrl = encodeURIComponent(permalink);
+    const encodedText = encodeURIComponent(title);
+
+    const proto = 'https:' + '//';
+    const tgLink = popover.querySelector('[data-action="telegram"]');
+    if (tgLink) tgLink.href = proto + 't.me/share/url?url=' + encodedUrl + '&text=' + encodedText;
+    const vkLink = popover.querySelector('[data-action="vk"]');
+    if (vkLink) vkLink.href = proto + 'vk.com/share.php?url=' + encodedUrl + '&title=' + encodedText;
+    const okLink = popover.querySelector('[data-action="ok"]');
+    if (okLink) okLink.href = proto + 'connect.ok.ru/offer?url=' + encodedUrl + '&title=' + encodedText;
+
+    popover._permalink = permalink;
+
+    const rect = triggerBtn.getBoundingClientRect();
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const popoverWidth = 190;
+    let top = rect.bottom + scrollY + 4;
+    let left = rect.left + scrollX;
+
+    if (left + popoverWidth > window.innerWidth - 10) {
+      left = Math.max(10, window.innerWidth - popoverWidth - 10);
+    }
+
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+    popover.style.display = 'flex';
+  }
+
+  function openArticleReport(articleId, triggerBtn, item) {
+    if (isItemReported(articleId, item)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Войдите, чтобы отправить жалобу');
+      return;
+    }
+    const modal = document.getElementById('articleReportModal');
+    if (!modal) return;
+
+    modal._activeReportBtn = triggerBtn;
+    const idInput = modal.querySelector('#reportArticleId');
+    if (idInput) idInput.value = articleId;
+    const defaultRadio = modal.querySelector('input[name="articleReportReason"][value="spam"]');
+    if (defaultRadio) defaultRadio.checked = true;
+    const detailsEl = modal.querySelector('#articleReportDetails');
+    if (detailsEl) detailsEl.value = '';
+
+    modal.style.display = 'flex';
+  }
+
+  function closeArticleReportModal() {
+    const modal = document.getElementById('articleReportModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal._activeReportBtn = null;
+    }
+  }
+
   function renderPublicationsTab(items, append, hasMore, newItems) {
     const list = document.getElementById('profilePublicationsList');
     const actions = document.getElementById('profilePublicationsActions');
@@ -814,6 +1232,13 @@
     toRender.forEach(function (item) {
       if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
         const cardEl = window.SmartContractumCard.createCardElement(item, {
+          onLikeToggle: toggleArticleLike,
+          onBookmarkToggle: toggleArticleBookmark,
+          onShareClick: openArticleShare,
+          onReportClick: openArticleReport,
+          isBookmarked: isItemBookmarked,
+          isReported: isItemReported,
+          onAuthorClick: function (aid) { if (aid) window.location.href = 'profile.html?userId=' + encodeURIComponent(aid); },
           currentUserId: currentUser ? currentUser.id : null
         });
         list.appendChild(cardEl);
@@ -898,6 +1323,13 @@
       }
       if (window.SmartContractumCard && typeof window.SmartContractumCard.createCardElement === 'function') {
         const cardEl = window.SmartContractumCard.createCardElement(item, {
+          onLikeToggle: toggleArticleLike,
+          onBookmarkToggle: toggleArticleBookmark,
+          onShareClick: openArticleShare,
+          onReportClick: openArticleReport,
+          isBookmarked: isItemBookmarked,
+          isReported: isItemReported,
+          onAuthorClick: function (aid) { if (aid) window.location.href = 'profile.html?userId=' + encodeURIComponent(aid); },
           currentUserId: currentUser ? currentUser.id : null
         });
         list.appendChild(cardEl);
@@ -1155,22 +1587,23 @@
       });
   }
 
-  function copyProfileLink() {
-    const url = window.location.href;
+  function copyTextToClipboard(text, successMsg) {
+    const msg = successMsg || 'Ссылка скопирована';
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      navigator.clipboard.writeText(url)
+      navigator.clipboard.writeText(text)
         .then(function () {
-          showToast('Ссылка на профиль скопирована');
+          showToast(msg);
         })
         .catch(function () {
-          fallbackCopyText(url);
+          fallbackCopyText(text, msg);
         });
     } else {
-      fallbackCopyText(url);
+      fallbackCopyText(text, msg);
     }
   }
 
-  function fallbackCopyText(text) {
+  function fallbackCopyText(text, successMsg) {
+    const msg = successMsg || 'Ссылка скопирована';
     try {
       const textarea = document.createElement('textarea');
       textarea.value = text;
@@ -1180,10 +1613,14 @@
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
-      showToast('Ссылка на профиль скопирована');
+      showToast(msg);
     } catch (e) {
       showToast('Не удалось скопировать ссылку');
     }
+  }
+
+  function copyProfileLink() {
+    copyTextToClipboard(window.location.href, 'Ссылка на профиль скопирована');
   }
 
   function openEditModal() {
@@ -1269,6 +1706,7 @@
     const modal = document.getElementById('authModal');
     if (modal) modal.style.display = 'flex';
   }
+  window.openAuthModal = openAuthModal;
 
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
@@ -1317,34 +1755,130 @@
       });
     }
 
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('editProfileModal');
-        if (modal && modal.style.display !== 'none') {
-          e.preventDefault();
-          closeEditModal();
-        }
-      }
-    });
-
-    // 5. Auth modal controls
+    // 5. Header user menu and auth controls
     const btnLogin = document.getElementById('headerLoginBtn');
+    const userMenu = document.getElementById('headerUserMenu');
     if (btnLogin) {
       btnLogin.addEventListener('click', function (e) {
         e.preventDefault();
+        e.stopPropagation();
         if (currentUser) {
-          if (confirm('Вы вошли как «' + currentUser.name + '». Выйти из профиля?')) {
-            fetch('/api/auth/logout', { method: 'POST' })
-              .then(function () {
-                checkAuthStatus(function () {
-                  const uid = getUserIdFromUrl() || (currentProfile && currentProfile.id);
-                  if (uid) loadProfile(uid);
-                });
-              });
+          if (userMenu) {
+            const isShown = userMenu.style.display === 'flex' || userMenu.style.display === 'block';
+            userMenu.style.display = isShown ? 'none' : 'flex';
+            btnLogin.setAttribute('aria-expanded', isShown ? 'false' : 'true');
           }
         } else {
           openAuthModal();
         }
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      const menu = document.getElementById('headerUserMenu');
+      const loginBtn = document.getElementById('headerLoginBtn');
+      if (menu && menu.style.display !== 'none') {
+        if (!menu.contains(e.target) && !(loginBtn && loginBtn.contains(e.target))) {
+          menu.style.display = 'none';
+          if (loginBtn) loginBtn.setAttribute('aria-expanded', 'false');
+        }
+      }
+    });
+
+    // Header notifications controls
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifPopup = document.getElementById('headerNotifPopup');
+    const notifList = document.getElementById('notifListContainer');
+    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+    const notifWrap = document.getElementById('headerNotifWrap');
+
+    if (notifBtn && notifPopup) {
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isVisible = notifPopup.style.display !== 'none';
+        if (isVisible) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          notifPopup.style.display = 'block';
+          notifBtn.setAttribute('aria-expanded', 'true');
+          loadHeaderNotifications();
+        }
+      });
+
+      if (markAllBtn) {
+        markAllBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.success) {
+                if (notifBadge) notifBadge.style.display = 'none';
+                if (notifList) {
+                  const items = notifList.querySelectorAll('.notif-item.is-unread');
+                  items.forEach(function (el) {
+                    el.classList.remove('is-unread');
+                    el.classList.add('is-read');
+                  });
+                }
+              }
+            })
+            .catch(function () {});
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (notifWrap && !notifWrap.contains(e.target)) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
+    const logoutBtn = document.getElementById('headerLogoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const menu = document.getElementById('headerUserMenu');
+        if (menu) menu.style.display = 'none';
+        const loginBtn = document.getElementById('headerLoginBtn');
+        if (loginBtn) loginBtn.setAttribute('aria-expanded', 'false');
+
+        fetch('/api/auth/logout', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function () {
+            setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
+            checkAuthStatus(function () {
+              const uid = getUserIdFromUrl() || (currentProfile && (currentProfile.id || currentProfile.userId));
+              if (uid) loadProfile(uid);
+            });
+            showToast('Вы вышли из системы');
+          })
+          .catch(function () {
+            setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
+            showToast('Вы вышли из системы');
+          });
       });
     }
 
@@ -1360,30 +1894,179 @@
       });
     }
 
+    function performLogin(userId, name) {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId, name: name || userId })
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.success && data.user) {
+            closeAuthModal();
+            setAuthState(data.user);
+            loadHeaderNotifications();
+            checkAuthStatus(function () {
+              const uid = getUserIdFromUrl() || data.user.id;
+              if (uid) loadProfile(uid);
+            });
+            showToast('Вход выполнен: ' + data.user.name);
+          } else {
+            showToast((data && data.error) || 'Ошибка входа');
+          }
+        })
+        .catch(function () {
+          showToast('Ошибка сети при авторизации');
+        });
+    }
+
     const btnDemoLogin = document.getElementById('btnAuthLoginDemo');
     if (btnDemoLogin) {
       btnDemoLogin.addEventListener('click', function () {
-        fetch('/api/auth/login', {
+        performLogin('user_demo', 'Демо Пользователь');
+      });
+    }
+
+    const btnSubmitLogin = document.getElementById('btnAuthLoginSubmit');
+    const authInput = document.getElementById('authUserIdInput');
+    if (btnSubmitLogin) {
+      btnSubmitLogin.addEventListener('click', function () {
+        const val = (authInput ? authInput.value.trim() : '') || 'user_demo';
+        performLogin(val, val);
+      });
+    }
+    if (authInput) {
+      authInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = authInput.value.trim() || 'user_demo';
+          performLogin(val, val);
+        }
+      });
+    }
+
+    // Article report modal controls
+    const reportModal = document.getElementById('articleReportModal');
+    const btnCloseReport = document.getElementById('btnCloseArticleReportModal');
+    if (btnCloseReport) {
+      btnCloseReport.addEventListener('click', closeArticleReportModal);
+    }
+    const btnCancelReport = document.getElementById('btnCancelArticleReport');
+    if (btnCancelReport) {
+      btnCancelReport.addEventListener('click', closeArticleReportModal);
+    }
+    if (reportModal) {
+      reportModal.addEventListener('click', function (e) {
+        if (e.target === reportModal) closeArticleReportModal();
+      });
+    }
+
+    const reportForm = document.getElementById('articleReportForm');
+    if (reportForm) {
+      reportForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const articleId = (document.getElementById('reportArticleId') || {}).value;
+        const selectedReasonRadio = reportForm.querySelector('input[name="articleReportReason"]:checked');
+        const reason = selectedReasonRadio ? selectedReasonRadio.value : 'spam';
+        const detailsEl = document.getElementById('articleReportDetails');
+        const details = detailsEl ? detailsEl.value.trim() : '';
+
+        if (!articleId) {
+          closeArticleReportModal();
+          return;
+        }
+
+        const submitBtn = document.getElementById('btnSubmitArticleReport');
+        if (submitBtn) submitBtn.disabled = true;
+
+        fetch('/api/articles/' + encodeURIComponent(articleId) + '/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: 'user_demo', name: 'Демо Пользователь' })
+          body: JSON.stringify({ reason: reason, details: details })
         })
-          .then(function (res) { return res.json(); })
-          .then(function (data) {
-            if (data && data.success && data.user) {
-              closeAuthModal();
-              checkAuthStatus(function () {
-                const uid = getUserIdFromUrl() || data.user.id;
-                loadProfile(uid);
-              });
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { status: res.status, data: data };
+            });
+          })
+          .then(function (result) {
+            if (submitBtn) submitBtn.disabled = false;
+            if (result.status === 200 && result.data && result.data.success) {
+              closeArticleReportModal();
+              showToast('Жалоба отправлена');
+              markArticleReported(articleId);
+            } else if (result.status === 409) {
+              closeArticleReportModal();
+              showToast('Вы уже отправили жалобу на этот материал');
+              markArticleReported(articleId);
+            } else if (result.status === 403) {
+              closeArticleReportModal();
+              showToast('Нельзя пожаловаться на собственный материал');
+            } else if (result.status === 401) {
+              closeArticleReportModal();
+              openAuthModal();
+              showToast('Войдите, чтобы отправить жалобу');
+            } else {
+              showToast((result.data && result.data.error) || 'Ошибка при отправке жалобы');
             }
+          })
+          .catch(function () {
+            if (submitBtn) submitBtn.disabled = false;
+            showToast('Ошибка сети при отправке жалобы');
           });
       });
     }
 
+    // Feed share popover controls
+    const sharePopover = document.getElementById('feedSharePopover');
+    if (sharePopover) {
+      const copyBtn = sharePopover.querySelector('[data-action="copy"]');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const permalink = sharePopover._permalink || window.location.href;
+          copyTextToClipboard(permalink, 'Ссылка скопирована');
+          closeSharePopover();
+        });
+      }
+
+      const socialLinks = sharePopover.querySelectorAll('a.comment-share-item');
+      socialLinks.forEach(function (link) {
+        link.addEventListener('click', function () {
+          setTimeout(closeSharePopover, 100);
+        });
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      const popover = document.getElementById('feedSharePopover');
+      if (popover && popover.style.display !== 'none') {
+        if (!popover.contains(e.target) && !e.target.closest('.btn-card-share')) {
+          closeSharePopover();
+        }
+      }
+    });
+
     // 6. Keyboard dismissals (Escape)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const notifPopup = document.getElementById('headerNotifPopup');
+        if (notifPopup && notifPopup.style.display !== 'none') {
+          notifPopup.style.display = 'none';
+          const notifBtn = document.getElementById('headerNotificationsBtn');
+          if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        const sharePopover = document.getElementById('feedSharePopover');
+        if (sharePopover && sharePopover.style.display !== 'none') {
+          closeSharePopover();
+          return;
+        }
+        const reportModal = document.getElementById('articleReportModal');
+        if (reportModal && reportModal.style.display !== 'none') {
+          closeArticleReportModal();
+          return;
+        }
         const editModal = document.getElementById('editProfileModal');
         if (editModal && editModal.style.display !== 'none') {
           e.preventDefault();
@@ -1394,6 +2077,7 @@
         if (authModal && authModal.style.display !== 'none') {
           e.preventDefault();
           closeAuthModal();
+          return;
         }
       }
     });
@@ -1544,6 +2228,9 @@
     initEventListeners();
 
     checkAuthStatus(function (user) {
+      if (user) {
+        loadHeaderNotifications();
+      }
       let targetUserId = getUserIdFromUrl();
       if (!targetUserId && user) {
         targetUserId = user.id;
@@ -1576,7 +2263,19 @@
     copyProfileLink: copyProfileLink,
     openEditModal: openEditModal,
     closeEditModal: closeEditModal,
-    saveProfileEdit: saveProfileEdit
+    saveProfileEdit: saveProfileEdit,
+    toggleArticleLike: toggleArticleLike,
+    toggleArticleBookmark: toggleArticleBookmark,
+    openArticleShare: openArticleShare,
+    closeSharePopover: closeSharePopover,
+    openArticleReport: openArticleReport,
+    closeArticleReportModal: closeArticleReportModal,
+    isItemBookmarked: isItemBookmarked,
+    isItemReported: isItemReported,
+    openAuthModal: openAuthModal,
+    closeAuthModal: closeAuthModal,
+    setAuthState: setAuthState,
+    loadHeaderNotifications: loadHeaderNotifications
   };
 
   document.addEventListener('DOMContentLoaded', init);
