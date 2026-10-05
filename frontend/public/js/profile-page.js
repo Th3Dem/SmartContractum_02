@@ -49,11 +49,13 @@
 
   let currentSearchQuery = '';
   let currentTopic = '';
+  let searchDebounceTimer = null;
   let tabLoadedState = {
     overview: null,
     publications: null,
     questions: null,
-    answers: null
+    answers: null,
+    comments: null
   };
 
   function getCurrentTabParams(tabName) {
@@ -67,6 +69,9 @@
       return { q: currentSearchQuery, filter: ansFilter };
     }
     if (tabName === 'overview') {
+      return { q: currentSearchQuery };
+    }
+    if (tabName === 'comments') {
       return { q: currentSearchQuery };
     }
     return {};
@@ -85,7 +90,7 @@
   }
 
   function invalidateTabCaches(tabs) {
-    const list = tabs || ['overview', 'publications', 'questions', 'answers'];
+    const list = tabs || ['overview', 'publications', 'questions', 'answers', 'comments'];
     for (let i = 0; i < list.length; i++) {
       const t = list[i];
       tabLoadedState[t] = null;
@@ -101,16 +106,28 @@
       } else if (t === 'overview') {
         activityItems = [];
         activityOffset = 0;
+      } else if (t === 'comments') {
+        if (typeof commentsItems !== 'undefined') commentsItems = [];
+        if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
       }
     }
   }
 
   function updateSearchInputUI(q) {
+    const val = q || '';
+    const profInput = document.getElementById('profileSearchInput');
+    if (profInput) {
+      profInput.value = val;
+    }
     const searchInputs = document.querySelectorAll(
       '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
     );
     for (let i = 0; i < searchInputs.length; i++) {
-      searchInputs[i].value = q || '';
+      searchInputs[i].value = val;
+    }
+    const clearBtn = document.getElementById('btnProfileSearchClear');
+    if (clearBtn) {
+      clearBtn.style.display = (val && String(val).trim()) ? 'flex' : 'none';
     }
   }
 
@@ -173,10 +190,45 @@
   function setSearchQuery(q, updateUrl) {
     if (q === undefined || q === null) q = '';
     const normalized = String(q).trim();
-    if (normalized === currentSearchQuery) return;
+
+    let urlMatches = false;
+    if (typeof window !== 'undefined' && window.location && window.location.search !== undefined) {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const urlQ = (searchParams.get('q') || '').trim();
+        urlMatches = (urlQ === normalized);
+      } catch (e) {}
+    }
+
+    if (normalized === currentSearchQuery) {
+      if (!updateUrl || urlMatches) {
+        return;
+      }
+    }
+
+    const queryChanged = (normalized !== currentSearchQuery);
     currentSearchQuery = normalized;
 
-    invalidateTabCaches();
+    if (queryChanged) {
+      invalidateTabCaches();
+      if (activeTab === 'publications') {
+        pubItems = [];
+        pubOffset = 0;
+      } else if (activeTab === 'questions') {
+        questItems = [];
+        questOffset = 0;
+      } else if (activeTab === 'answers') {
+        ansItems = [];
+        ansOffset = 0;
+      } else if (activeTab === 'comments') {
+        if (typeof commentsItems !== 'undefined') commentsItems = [];
+        if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
+      } else {
+        activityItems = [];
+        activityOffset = 0;
+      }
+    }
+
     updateSearchInputUI(currentSearchQuery);
 
     if (updateUrl && window.history) {
@@ -187,15 +239,18 @@
         } else {
           url.searchParams.delete('q');
         }
+        const stateObj = {
+          tab: activeTab,
+          q: currentSearchQuery || undefined,
+          topic: currentTopic || undefined,
+          sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+          status: (activeTab === 'questions' ? questStatus : undefined),
+          filter: (activeTab === 'answers' ? ansFilter : undefined)
+        };
         if (window.history.pushState) {
-          window.history.pushState({
-            tab: activeTab,
-            q: currentSearchQuery,
-            topic: currentTopic || undefined,
-            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
-            status: (activeTab === 'questions' ? questStatus : undefined),
-            filter: (activeTab === 'answers' ? ansFilter : undefined)
-          }, '', url.toString());
+          window.history.pushState(stateObj, '', url.toString());
+        } else if (window.history.replaceState) {
+          window.history.replaceState(stateObj, '', url.toString());
         }
       } catch (e) {}
     }
@@ -208,10 +263,22 @@
         loadQuestions(uid, false);
       } else if (activeTab === 'answers') {
         loadAnswers(uid, false);
+      } else if (activeTab === 'comments') {
+        if (typeof loadComments === 'function') {
+          loadComments(uid, false);
+        }
       } else {
         loadActivity(uid, false);
       }
     }
+  }
+
+  function triggerSearch(val) {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+    setSearchQuery(val, true);
   }
 
   function setTopicFilter(topic, updateUrl) {
@@ -2300,6 +2367,14 @@
       // If any parameter changed, invalidate cached tab data
       if (targetQ !== currentSearchQuery) {
         currentSearchQuery = targetQ;
+        const profileSearchInput = document.getElementById('profileSearchInput');
+        if (profileSearchInput) {
+          profileSearchInput.value = currentSearchQuery;
+        }
+        const searchClearBtn = document.getElementById('btnProfileSearchClear');
+        if (searchClearBtn) {
+          searchClearBtn.style.display = currentSearchQuery ? 'flex' : 'none';
+        }
         invalidateTabCaches();
       }
 
@@ -2754,16 +2829,62 @@
     // 10. History popstate navigation
     window.addEventListener('popstate', handlePopState);
 
-    // Search input listener
-    const searchInputs = document.querySelectorAll(
-      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
-    );
-    for (let i = 0; i < searchInputs.length; i++) {
-      searchInputs[i].addEventListener('input', function (e) {
-        setSearchQuery(e.target.value, false);
+    // Search input (#profileSearchInput) and clear button (#btnProfileSearchClear)
+    const profileSearchInput = document.getElementById('profileSearchInput');
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+
+    if (profileSearchInput) {
+      profileSearchInput.addEventListener('input', function (e) {
+        const val = this.value || '';
+        if (searchClearBtn) {
+          searchClearBtn.style.display = val.trim() ? 'flex' : 'none';
+        }
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+        searchDebounceTimer = setTimeout(function () {
+          setSearchQuery(val, true);
+        }, 300);
       });
-      searchInputs[i].addEventListener('change', function (e) {
-        setSearchQuery(e.target.value, true);
+
+      profileSearchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+          }
+          setSearchQuery(this.value || '', true);
+        } else if (e.key === 'Escape') {
+          if (this.value) {
+            e.preventDefault();
+            this.value = '';
+            if (searchClearBtn) {
+              searchClearBtn.style.display = 'none';
+            }
+            if (searchDebounceTimer) {
+              clearTimeout(searchDebounceTimer);
+              searchDebounceTimer = null;
+            }
+            setSearchQuery('', true);
+          }
+        }
+      });
+    }
+
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function () {
+        const searchInput = document.getElementById('profileSearchInput') || profileSearchInput;
+        if (searchInput) {
+          searchInput.value = '';
+        }
+        searchClearBtn.style.display = 'none';
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+        setSearchQuery('', true);
       });
     }
 
@@ -3023,8 +3144,13 @@
       return currentProfile;
     },
     setSearchQuery: setSearchQuery,
+    triggerSearch: triggerSearch,
+    getSearchQuery: function () {
+      return currentSearchQuery;
+    },
     setTopicFilter: setTopicFilter,
     invalidateTabCaches: invalidateTabCaches,
+    initEventListeners: initEventListeners,
     getTabLoadedState: function () {
       return tabLoadedState;
     }
