@@ -886,6 +886,11 @@
     // 5. Tab counts
     renderTabCounts(p);
 
+    const isOwn = !!(p.isOwnProfile || (window.currentUser && (window.currentUser.id === p.id || window.currentUser.id === p.userId)));
+
+    // 5.5 Pinned material
+    renderPinnedMaterial(p.pinnedMaterial, isOwn);
+
     // 6. Top contributions with fallback
     renderTopContributions(p.topContributions || [], p.publications || p.articles || []);
 
@@ -1152,6 +1157,167 @@
     if (cComm) cComm.textContent = commVal;
   }
 
+  function renderPinnedMaterial(pinned, isOwn) {
+    const sec = document.getElementById('profilePinnedSection');
+    const card = document.getElementById('profilePinnedCard');
+    const btnUnpin = document.getElementById('btnProfileUnpin');
+    if (!sec || !card) return;
+
+    if (!pinned) {
+      sec.style.display = 'none';
+      card.innerHTML = '';
+      if (btnUnpin) btnUnpin.style.display = 'none';
+      return;
+    }
+
+    if (pinned.isUnavailable) {
+      if (isOwn) {
+        sec.style.display = 'block';
+        if (btnUnpin) btnUnpin.style.display = 'inline-flex';
+        card.innerHTML =
+          '<div class="profile-pinned-unavailable-card">' +
+            '<div class="profile-pinned-unavailable-title">Закрепленный материал недоступен посетителям</div>' +
+            '<div class="profile-pinned-unavailable-desc">' + escapeHtml(pinned.reason || 'Материал был удален или снят с публикации') + '</div>' +
+          '</div>';
+      } else {
+        sec.style.display = 'none';
+        card.innerHTML = '';
+        if (btnUnpin) btnUnpin.style.display = 'none';
+      }
+      return;
+    }
+
+    sec.style.display = 'block';
+    if (btnUnpin) btnUnpin.style.display = isOwn ? 'inline-flex' : 'none';
+
+    const isSolution = pinned.isSolution || pinned.targetType === 'solution';
+    const tagClass = isSolution ? 'solution' : 'publication';
+    const tagText = isSolution ? 'Решение' : 'Публикация';
+    const ratingVal = pinned.rating !== undefined ? pinned.rating : (pinned.score || 0);
+    const ratingDisplay = ratingVal >= 0 ? '+' + ratingVal : ratingVal;
+    const title = pinned.title || 'Материал';
+    const url = pinned.url || ('article.html?id=' + encodeURIComponent(pinned.id || pinned.targetId));
+    const snippetHtml = pinned.contentSnippet ? '<p class="profile-pinned-snippet">' + escapeHtml(pinned.contentSnippet) + '</p>' : '';
+    const dateStr = pinned.date || (pinned.createdAt ? formatRegistrationDateRu(pinned.createdAt) : '');
+    const topicHtml = pinned.topicTitle ? ('<span class="profile-pinned-topic">' + escapeHtml(pinned.topicTitle) + '</span>') : '';
+
+    let extraStat = '';
+    if (!isSolution && pinned.commentsCount !== undefined) {
+      extraStat = '<span>' + pinned.commentsCount + ' коммент.</span>';
+    }
+
+    card.innerHTML =
+      '<div class="profile-pinned-card-header">' +
+        '<span class="profile-pinned-type-tag ' + tagClass + '">' + tagText + '</span>' +
+        '<span class="profile-pinned-rating">' + ratingDisplay + '</span>' +
+      '</div>' +
+      '<a href="' + url + '" class="profile-pinned-title">' + escapeHtml(title) + '</a>' +
+      snippetHtml +
+      '<div class="profile-pinned-footer">' +
+        (topicHtml ? topicHtml + ' <span>&bull;</span> ' : '') +
+        (dateStr ? '<span>' + escapeHtml(dateStr) + '</span>' : '') +
+        (extraStat ? ' <span>&bull;</span> ' + extraStat : '') +
+      '</div>';
+  }
+
+  function isMaterialPinned(targetId) {
+    if (!targetId || !currentProfile || !currentProfile.pinnedMaterial || currentProfile.pinnedMaterial.isUnavailable) {
+      return false;
+    }
+    const currentPinnedId = currentProfile.pinnedMaterial.id || currentProfile.pinnedMaterial.targetId;
+    return Boolean(currentPinnedId && (currentPinnedId === targetId || String(currentPinnedId) === String(targetId)));
+  }
+
+  let isPinningInProgress = false;
+
+  function pinMaterial(targetType, targetId) {
+    if (isPinningInProgress) return;
+    if (!targetType || !targetId) return;
+    if (!currentUser) {
+      openAuthModal();
+      return;
+    }
+
+    isPinningInProgress = true;
+    return fetch('/api/user/pinned', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ targetType: targetType, targetId: targetId })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        isPinningInProgress = false;
+        if (data && data.success) {
+          if (currentProfile) {
+            currentProfile.pinnedMaterial = data.pinnedMaterial;
+            renderPinnedMaterial(data.pinnedMaterial, true);
+            renderTopContributions(currentProfile.topContributions || [], currentProfile.publications || []);
+          }
+          const activePinId = data.pinnedMaterial ? (data.pinnedMaterial.id || data.pinnedMaterial.targetId) : targetId;
+          updateCardPinButtons(activePinId);
+          showToast('Материал закреплен в профиле');
+        } else {
+          showToast((data && data.error) || 'Не удалось закрепить материал');
+        }
+        return data;
+      })
+      .catch(function () {
+        isPinningInProgress = false;
+        showToast('Ошибка сети при закреплении материала');
+      });
+  }
+
+  function unpinMaterial() {
+    if (isPinningInProgress) return;
+    if (!currentUser) {
+      openAuthModal();
+      return;
+    }
+
+    isPinningInProgress = true;
+    return fetch('/api/user/pinned', {
+      method: 'DELETE'
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        isPinningInProgress = false;
+        if (data && data.success) {
+          if (currentProfile) {
+            currentProfile.pinnedMaterial = null;
+            renderPinnedMaterial(null, true);
+            renderTopContributions(currentProfile.topContributions || [], currentProfile.publications || []);
+          }
+          updateCardPinButtons(null);
+          showToast('Материал откреплен');
+        } else {
+          showToast((data && data.error) || 'Не удалось открепить материал');
+        }
+        return data;
+      })
+      .catch(function () {
+        isPinningInProgress = false;
+        showToast('Ошибка сети при откреплении материала');
+      });
+  }
+
+  function updateCardPinButtons(pinnedId) {
+    const pinBtns = document.querySelectorAll('.btn-card-pin');
+    for (let i = 0; i < pinBtns.length; i++) {
+      const b = pinBtns[i];
+      const tid = b.getAttribute('data-target-id');
+      const targetType = b.getAttribute('data-target-type');
+      const isNowPinned = Boolean(pinnedId && tid && String(tid) === String(pinnedId));
+      b.classList.toggle('is-pinned', isNowPinned);
+      b.setAttribute('data-is-pinned', isNowPinned ? 'true' : 'false');
+      b.textContent = isNowPinned ? 'Закреплено' : 'Закрепить';
+      if (targetType === 'solution') {
+        b.title = isNowPinned ? 'Решение закреплено в профиле' : 'Закрепить решение в профиле';
+      } else {
+        b.title = isNowPinned ? 'Материал закреплен в профиле' : 'Закрепить в профиле';
+      }
+    }
+  }
+
   function updateSearchResultsCount(count) {
     const infoEl = document.getElementById('profileSearchResultsInfo');
     const countEl = document.getElementById('profileSearchResultsCount');
@@ -1170,7 +1336,14 @@
     const grid = document.getElementById('profileTopContributionsGrid');
     if (!sec || !grid) return;
 
+    const pinId = (currentProfile && currentProfile.pinnedMaterial && !currentProfile.pinnedMaterial.isUnavailable)
+      ? (currentProfile.pinnedMaterial.id || currentProfile.pinnedMaterial.targetId)
+      : null;
+
     let items = Array.isArray(topList) ? topList.slice() : [];
+    if (pinId) {
+      items = items.filter(function (it) { return it.id !== pinId; });
+    }
     if (items.length === 0) {
       const pubs = Array.isArray(fallbackPubs) ? fallbackPubs : (currentProfile && (currentProfile.publications || currentProfile.articles));
       if (Array.isArray(pubs) && pubs.length > 0) {
@@ -2057,6 +2230,29 @@
         fallback.innerHTML = '<a href="' + (item.url || ('article.html?id=' + encodeURIComponent(item.id))) + '">' + escapeHtml(item.title) + '</a>';
         list.appendChild(fallback);
       }
+
+      const isOwn = !!(currentProfile && (currentProfile.isOwnProfile || (window.currentUser && (window.currentUser.id === currentProfile.id || window.currentUser.id === currentProfile.userId))));
+      if (isOwn && item.id) {
+        const isThisPinned = isMaterialPinned(item.id);
+        const pinBtn = document.createElement('button');
+        pinBtn.type = 'button';
+        pinBtn.className = 'btn-card-pin' + (isThisPinned ? ' is-pinned' : '');
+        pinBtn.setAttribute('data-target-id', item.id);
+        pinBtn.setAttribute('data-target-type', 'publication');
+        pinBtn.setAttribute('data-is-pinned', isThisPinned ? 'true' : 'false');
+        pinBtn.textContent = isThisPinned ? 'Закреплено' : 'Закрепить';
+        pinBtn.title = isThisPinned ? 'Материал закреплен в профиле' : 'Закрепить в профиле';
+        pinBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (isMaterialPinned(item.id)) {
+            unpinMaterial();
+          } else {
+            pinMaterial('publication', item.id);
+          }
+        });
+        const footer = list.lastElementChild.querySelector('.feed-card-footer') || list.lastElementChild;
+        footer.appendChild(pinBtn);
+      }
     });
 
     if (actions) {
@@ -2324,6 +2520,29 @@
             ' <span>' + ratingDisplay + '</span>' +
           '</span>' +
         '</div>';
+
+      const isOwn = !!(currentProfile && (currentProfile.isOwnProfile || (window.currentUser && (window.currentUser.id === currentProfile.id || window.currentUser.id === currentProfile.userId))));
+      if (isOwn && item.isSolution && item.id) {
+        const isThisPinned = isMaterialPinned(item.id);
+        const pinBtn = document.createElement('button');
+        pinBtn.type = 'button';
+        pinBtn.className = 'btn-card-pin' + (isThisPinned ? ' is-pinned' : '');
+        pinBtn.setAttribute('data-target-id', item.id);
+        pinBtn.setAttribute('data-target-type', 'solution');
+        pinBtn.setAttribute('data-is-pinned', isThisPinned ? 'true' : 'false');
+        pinBtn.textContent = isThisPinned ? 'Закреплено' : 'Закрепить';
+        pinBtn.title = isThisPinned ? 'Решение закреплено в профиле' : 'Закрепить решение в профиле';
+        pinBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (isMaterialPinned(item.id)) {
+            unpinMaterial();
+          } else {
+            pinMaterial('solution', item.id);
+          }
+        });
+        const footer = cardEl.querySelector('.answer-item-footer') || cardEl;
+        footer.appendChild(pinBtn);
+      }
 
       list.appendChild(cardEl);
     });
@@ -4916,6 +5135,14 @@
         }
       });
     }
+
+    // 23. Pinned material controls
+    const btnUnpin = document.getElementById('btnProfileUnpin');
+    if (btnUnpin) {
+      btnUnpin.addEventListener('click', function () {
+        unpinMaterial();
+      });
+    }
   }
 
   function init() {
@@ -5048,6 +5275,11 @@
     getSocialSubTab: function () {
       return socialSubTab;
     },
+    renderPinnedMaterial: renderPinnedMaterial,
+    pinMaterial: pinMaterial,
+    unpinMaterial: unpinMaterial,
+    updateCardPinButtons: updateCardPinButtons,
+    isMaterialPinned: isMaterialPinned,
     setSearchQuery: setSearchQuery,
     triggerSearch: triggerSearch,
     getSearchQuery: function () {
