@@ -702,6 +702,77 @@ body {
 }
 
 /* ==========================================================================
+   Responsive Header Breakpoints (Desktop, Tablet, Mobile)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .header-container {
+    padding: 0 16px;
+    gap: 12px;
+    grid-template-columns: auto 1fr auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-container {
+    padding: 0 12px;
+    gap: 8px;
+    grid-template-columns: auto 1fr auto;
+  }
+  .header-nav .nav-text {
+    display: none;
+  }
+  .nav-link {
+    padding: 6px 8px;
+    gap: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-container {
+    padding: 0 8px;
+    gap: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .logo-text-group {
+    display: none;
+  }
+  .btn-user-label {
+    display: none;
+  }
+  .header-login-action-btn {
+    padding: 4px;
+    gap: 0;
+  }
+  .header-right-group {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 320px) {
+  .header-container {
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .header-right-group {
+    gap: 4px;
+  }
+  .theme-toggle-track {
+    width: 44px;
+    height: 24px;
+  }
+  .theme-toggle-thumb {
+    width: 18px;
+    height: 18px;
+  }
+  .header-notif-btn {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* ==========================================================================
    Universal Buttons (SmartContractum Design System)
    ========================================================================== */
 .btn {

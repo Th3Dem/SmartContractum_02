@@ -68,6 +68,33 @@
   let lastProfileTriggerEl = null;
   let isEventsBound = false;
 
+  function trapModalFocus(e, modalEl) {
+    if (!modalEl || modalEl.style.display === 'none' || e.key !== 'Tab') return;
+    const focusable = modalEl.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    const visible = Array.prototype.filter.call(focusable, function (el) {
+      return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+    });
+    if (visible.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = visible[0];
+    const last = visible[visible.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first || !modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last || !modalEl.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
   function closeUserProfileModal() {
     userModal = userModal || document.getElementById('userProfileModal');
     if (!userModal) return;
@@ -134,14 +161,15 @@
 
         const initials = u.initials || (u.name ? u.name.split(' ').map(function (s) { return s[0]; }).join('').toUpperCase() : 'SC');
         const stats = u.stats || {};
-        const rating = stats.rating !== undefined ? stats.rating : (u.rating !== undefined ? u.rating : 0);
-        const pubsCount = stats.publicationsCount !== undefined ? stats.publicationsCount : (stats.articlesCount !== undefined ? stats.articlesCount : (u.publicationsCount !== undefined ? u.publicationsCount : 0));
-        const answersCount = stats.answersCount !== undefined ? stats.answersCount : (u.answersCount !== undefined ? u.answersCount : 0);
-        const solutionsCount = stats.solutionsCount !== undefined ? stats.solutionsCount : (u.solutionsCount !== undefined ? u.solutionsCount : 0);
+        const rating = (stats.rating !== undefined) ? stats.rating : (u.rating || 0);
+        const pubsCount = stats.publicationsCount || stats.articlesCount || u.publicationsCount || 0;
+        const answersCount = stats.answersCount || u.answersCount || 0;
+        const solutionsCount = stats.solutionsCount || u.solutionsCount || 0;
 
         let avatarHtml = '';
         if (u.avatar) {
-          avatarHtml = '<img src="' + escapeHtml(u.avatar) + '" alt="' + escapeHtml(u.name || userId) + '" class="user-profile-avatar-img">';
+          avatarHtml = '<img src="' + escapeHtml(u.avatar) + '" alt="' + escapeHtml(u.name || userId) + '" class="user-profile-avatar-img" onerror="this.onerror=null;this.style.display=\'none\';if(this.nextElementSibling){this.nextElementSibling.style.display=\'flex\';}">' +
+            '<span class="user-profile-avatar-initials" style="display:none;">' + escapeHtml(initials) + '</span>';
         } else {
           avatarHtml = '<span class="user-profile-avatar-initials">' + escapeHtml(initials) + '</span>';
         }
@@ -256,6 +284,8 @@
         if (e.key === 'Escape' && userModal && userModal.style.display !== 'none') {
           e.preventDefault();
           closeUserProfileModal();
+        } else if (e.key === 'Tab' && userModal && userModal.style.display !== 'none') {
+          trapModalFocus(e, userModal);
         } else if (e.key === 'Enter' || e.key === ' ') {
           const authorBtn = e.target.closest && e.target.closest('.btn-author-profile');
           if (authorBtn && authorBtn.tagName !== 'BUTTON' && authorBtn.tagName !== 'A') {
@@ -350,7 +380,8 @@
     initUserProfileModal: initUserProfileModal,
     openUserProfileModal: openUserProfileModal,
     closeUserProfileModal: closeUserProfileModal,
-    aggregateUserTopics: aggregateUserTopics
+    aggregateUserTopics: aggregateUserTopics,
+    trapModalFocus: trapModalFocus
   };
 
 })(typeof window !== 'undefined' ? window : this);

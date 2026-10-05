@@ -20,7 +20,7 @@ Verifies:
    - Load more errors preserve offset for subsequent retry.
 4. History and tab navigation:
    - pushState on explicit tab clicks.
-   - popstate handler (window.onpopstate and addEventListener) activates tab without duplicating history.
+   - popstate handler (addEventListener) activates tab without duplicating history.
 5. In-place stats update:
    - updateProfileStats updates stats, tab counts, and sidebar in-place.
    - Silent refresh does not wipe loaded tabs, reset scroll, or re-trigger feed loaders.
