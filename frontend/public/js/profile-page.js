@@ -38,6 +38,7 @@
   let questAbortCtrl = null;
 
   let ansFilter = 'all';
+  let ansSort = 'new';
   let ansOffset = 0;
   const ansLimit = 10;
   let ansItems = [];
@@ -76,7 +77,7 @@
       return { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
     }
     if (tabName === 'answers') {
-      return { q: currentSearchQuery, filter: ansFilter };
+      return { q: currentSearchQuery, filter: ansFilter, sort: ansSort };
     }
     if (tabName === 'overview') {
       return { q: currentSearchQuery };
@@ -184,6 +185,18 @@
     }
   }
 
+  function updateAnsSortUI(sort) {
+    const ansSortBtns = document.querySelectorAll('[data-ans-sort], #sortAnswersNewest, #sortAnswersRating');
+    for (let i = 0; i < ansSortBtns.length; i++) {
+      const s = ansSortBtns[i].getAttribute('data-ans-sort');
+      const isActive = (s === sort);
+      ansSortBtns[i].classList.toggle('is-active', isActive);
+      if (ansSortBtns[i].hasAttribute('aria-pressed')) {
+        ansSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
   function updateCommSortUI(sort) {
     const commSortBtns = document.querySelectorAll('[data-comm-sort]');
     for (let i = 0; i < commSortBtns.length; i++) {
@@ -226,9 +239,10 @@
             tab: activeTab,
             q: currentSearchQuery,
             topic: currentTopic || undefined,
-            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : (activeTab === 'answers' ? ansSort : (activeTab === 'comments' ? commSort : undefined)))),
             status: (activeTab === 'questions' ? questStatus : undefined),
-            filter: (activeTab === 'answers' ? ansFilter : undefined)
+            filter: (activeTab === 'answers' ? ansFilter : undefined),
+            ans_sort: (activeTab === 'answers' ? ansSort : undefined)
           }, '', url.toString());
         }
       } catch (e) {}
@@ -760,9 +774,15 @@
         pubSort = s;
         questSort = s;
         commSort = s;
+        ansSort = s;
         updatePubSortUI(pubSort);
         updateQuestSortUI(questSort);
         updateCommSortUI(commSort);
+        updateAnsSortUI(ansSort);
+      }
+      if (urlParams.get('ans_sort')) {
+        ansSort = urlParams.get('ans_sort').trim();
+        updateAnsSortUI(ansSort);
       }
       if (urlParams.get('status')) {
         questStatus = urlParams.get('status').trim();
@@ -855,26 +875,35 @@
         } else if (tabName === 'answers') {
           if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
           else url.searchParams.delete('filter');
-          url.searchParams.delete('sort');
+          if (ansSort !== 'new') {
+            url.searchParams.set('sort', ansSort);
+            url.searchParams.set('ans_sort', ansSort);
+          } else {
+            url.searchParams.delete('sort');
+            url.searchParams.delete('ans_sort');
+          }
           url.searchParams.delete('status');
         } else if (tabName === 'comments') {
           if (commSort !== 'new') url.searchParams.set('sort', commSort);
           else url.searchParams.delete('sort');
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
         } else {
           url.searchParams.delete('sort');
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
         }
 
         const stateObj = {
           tab: tabName,
           q: currentSearchQuery || undefined,
           topic: currentTopic || undefined,
-          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'comments' ? commSort : undefined))),
+          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'answers' ? ansSort : (tabName === 'comments' ? commSort : undefined)))),
           status: (tabName === 'questions' ? questStatus : undefined),
-          filter: (tabName === 'answers' ? ansFilter : undefined)
+          filter: (tabName === 'answers' ? ansFilter : undefined),
+          ans_sort: (tabName === 'answers' ? ansSort : undefined)
         };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
@@ -958,6 +987,19 @@
 
     const cComm = document.getElementById('profileTabCountComments') || document.getElementById('tabCountComments');
     if (cComm) cComm.textContent = commVal;
+  }
+
+  function updateSearchResultsCount(count) {
+    const infoEl = document.getElementById('profileSearchResultsInfo');
+    const countEl = document.getElementById('profileSearchResultsCount');
+    if (infoEl && countEl) {
+      if (currentSearchQuery) {
+        countEl.textContent = count !== undefined ? count : 0;
+        infoEl.style.display = 'flex';
+      } else {
+        infoEl.style.display = 'none';
+      }
+    }
   }
 
   function renderTopContributions(topList, fallbackPubs) {
@@ -1401,6 +1443,7 @@
         pubItems = append ? pubItems.concat(incoming) : incoming;
         pubOffset += incoming.length;
         pubHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderPublicationsTab(pubItems, append, pubHasMore, incoming);
       })
       .catch(function (err) {
@@ -1881,6 +1924,7 @@
         questItems = append ? questItems.concat(incoming) : incoming;
         questOffset += incoming.length;
         questHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderQuestionsTab(questItems, append, questHasMore, incoming);
       })
       .catch(function (err) {
@@ -1974,7 +2018,7 @@
       }
       ansOffset = 0;
       ansItems = [];
-      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter };
+      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter, sort: ansSort };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
       }
@@ -1985,6 +2029,7 @@
     const currentReqSeq = ++ansReqSeq;
     isLoadingAns = true;
     let url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    url += '&sort=' + encodeURIComponent(ansSort);
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
     }
@@ -2005,6 +2050,7 @@
         ansItems = append ? ansItems.concat(incoming) : incoming;
         ansOffset += incoming.length;
         ansHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderAnswersTab(ansItems, append, ansHasMore, incoming);
       })
       .catch(function (err) {
@@ -2144,6 +2190,7 @@
         commOffset += incoming.length;
         commHasMore = Boolean(data.hasMore);
         tabLoadedState.comments = { q: currentSearchQuery, sort: commSort };
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderCommentsTab(commItems, append, commHasMore, incoming);
       })
       .catch(function (err) {
@@ -2168,6 +2215,223 @@
           if (actions) actions.style.display = 'none';
         } else {
           showToast('Не удалось загрузить комментарии. Попробуйте еще раз.');
+        }
+      });
+  }
+
+  // --------------------------------------------------------------------------
+  // Comment Card Actions & Interaction Helpers
+  // --------------------------------------------------------------------------
+  function getCommentBookmarks() {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
+      const data = localStorage.getItem(key) || localStorage.getItem('sc_comment_bookmarks');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCommentBookmarks(bookmarks) {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
+      localStorage.setItem(key, JSON.stringify(bookmarks));
+      localStorage.setItem('sc_comment_bookmarks', JSON.stringify(bookmarks));
+    } catch (e) {}
+  }
+
+  function isCommentBookmarked(id, item) {
+    if (!id) return false;
+    if (item && (item.isBookmarked !== undefined || item.isSaved !== undefined || item.hasSaved !== undefined)) {
+      return Boolean(item.isBookmarked || item.isSaved || item.hasSaved);
+    }
+    return getCommentBookmarks().includes(id);
+  }
+
+  function isCommentReported(id, item) {
+    if (!id) return false;
+    if (item && (item.hasReported !== undefined || item.isReported !== undefined)) {
+      return Boolean(item.hasReported || item.isReported);
+    }
+    if (window._reportedCommentIds && window._reportedCommentIds.has(id)) return true;
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_comments_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (stored.includes(id)) {
+          window._reportedCommentIds = window._reportedCommentIds || new Set();
+          window._reportedCommentIds.add(id);
+          return true;
+        }
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function toggleCommentSave(commentId, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для сохранения комментария необходимо войти');
+      return;
+    }
+
+    const wasActive = btn ? (btn.classList.contains('is-bookmarked') || btn.classList.contains('is-saved')) : false;
+    const nextActive = !wasActive;
+
+    if (btn) {
+      btn.classList.toggle('is-bookmarked', nextActive);
+      btn.classList.toggle('is-saved', nextActive);
+      const svg = btn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', nextActive ? 'currentColor' : 'none');
+      const newTooltip = nextActive ? 'Удалить из закладок' : 'Сохранить';
+      btn.title = newTooltip;
+      btn.setAttribute('aria-label', newTooltip);
+    }
+    if (item) {
+      item.isSaved = nextActive;
+      item.isBookmarked = nextActive;
+    }
+
+    const bms = getCommentBookmarks();
+    const idx = bms.indexOf(commentId);
+    if (nextActive && idx === -1) { bms.push(commentId); saveCommentBookmarks(bms); }
+    else if (!nextActive && idx !== -1) { bms.splice(idx, 1); saveCommentBookmarks(bms); }
+
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: nextActive ? 'save' : 'unsave' })
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          const finalSaved = Boolean(data.isSaved !== undefined ? data.isSaved : nextActive);
+          if (btn) {
+            btn.classList.toggle('is-bookmarked', finalSaved);
+            btn.classList.toggle('is-saved', finalSaved);
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', finalSaved ? 'currentColor' : 'none');
+          }
+          if (item) {
+            item.isSaved = finalSaved;
+            item.isBookmarked = finalSaved;
+          }
+          showToast(finalSaved ? 'Комментарий сохранен в закладки' : 'Комментарий удален из закладок');
+        } else {
+          // Rollback
+          if (btn) {
+            btn.classList.toggle('is-bookmarked', wasActive);
+            btn.classList.toggle('is-saved', wasActive);
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+            const prevTooltip = wasActive ? 'Удалить из закладок' : 'Сохранить';
+            btn.title = prevTooltip;
+            btn.setAttribute('aria-label', prevTooltip);
+          }
+          if (item) {
+            item.isSaved = wasActive;
+            item.isBookmarked = wasActive;
+          }
+          const rbBms = getCommentBookmarks();
+          const rbIdx = rbBms.indexOf(commentId);
+          if (wasActive && rbIdx === -1) { rbBms.push(commentId); saveCommentBookmarks(rbBms); }
+          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveCommentBookmarks(rbBms); }
+          showToast((data && data.error) || 'Ошибка сохранения комментария');
+        }
+      })
+      .catch(function (err) {
+        // Rollback unconditionally
+        if (btn) {
+          btn.classList.toggle('is-bookmarked', wasActive);
+          btn.classList.toggle('is-saved', wasActive);
+          const svg = btn.querySelector('svg');
+          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+          const prevTooltip = wasActive ? 'Удалить из закладок' : 'Сохранить';
+          btn.title = prevTooltip;
+          btn.setAttribute('aria-label', prevTooltip);
+        }
+        if (item) {
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+        }
+        const rbBms = getCommentBookmarks();
+        const rbIdx = rbBms.indexOf(commentId);
+        if (wasActive && rbIdx === -1) { rbBms.push(commentId); saveCommentBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveCommentBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения комментария необходимо войти');
+        } else {
+          showToast('Не удалось обновить сохранение');
+        }
+      });
+  }
+
+  function openCommentReport(commentId, triggerBtn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для отправки жалобы необходимо войти');
+      return;
+    }
+    if (isCommentReported(commentId, item)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'spam' })
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          if (triggerBtn) {
+            triggerBtn.classList.add('is-reported');
+            triggerBtn.title = 'Жалоба уже отправлена';
+            triggerBtn.setAttribute('aria-label', 'Жалоба уже отправлена');
+            const svg = triggerBtn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', 'currentColor');
+          }
+          if (item) {
+            item.isReported = true;
+            item.hasReported = true;
+          }
+          window._reportedCommentIds = window._reportedCommentIds || new Set();
+          window._reportedCommentIds.add(commentId);
+          if (currentUser) {
+            try {
+              const userKey = 'sc_reported_comments_' + currentUser.id;
+              const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+              if (!stored.includes(commentId)) {
+                stored.push(commentId);
+                localStorage.setItem(userKey, JSON.stringify(stored));
+              }
+            } catch (e) {}
+          }
+          showToast('Жалоба отправлена');
+        } else {
+          showToast((data && data.error) || 'Ошибка отправки жалобы');
+        }
+      })
+      .catch(function (err) {
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для отправки жалобы необходимо войти');
+        } else {
+          showToast('Не удалось отправить жалобу');
         }
       });
   }
@@ -2209,6 +2473,40 @@
         ? '<div class="profile-comment-snippet">' + escapeHtml(snippet) + '</div>'
         : '';
 
+      const isSaved = isCommentBookmarked(commentId, item);
+      const isReported = isCommentReported(commentId, item);
+      const authorId = item.userId || item.authorId || item.author_id || (currentProfile && (currentProfile.id || currentProfile.userId));
+      const isMyComment = Boolean(currentUser && authorId && (currentUser.id === authorId));
+
+      const saveBtnHtml =
+        '<button type="button" class="btn-comment-action btn-save-comment' + (isSaved ? ' is-bookmarked is-saved' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(commentId) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+        '</button>';
+
+      const shareBtnHtml =
+        '<button type="button" class="btn-comment-action btn-share-comment" title="Поделиться" aria-label="Поделиться" data-comment-id="' + escapeHtml(commentId) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<circle cx="18" cy="5" r="3"></circle>' +
+            '<circle cx="6" cy="12" r="3"></circle>' +
+            '<circle cx="18" cy="19" r="3"></circle>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+            '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+          '</svg>' +
+        '</button>';
+
+      let reportBtnHtml = '';
+      if (!isMyComment) {
+        reportBtnHtml =
+          '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" data-comment-id="' + escapeHtml(commentId) + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+              '<line x1="4" y1="22" x2="4" y2="15"></line>' +
+            '</svg>' +
+          '</button>';
+      }
+
       cardEl.innerHTML =
         '<div class="profile-comment-header">' +
           '<span class="profile-comment-badge">Комментарий</span>' +
@@ -2224,11 +2522,45 @@
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>' +
             ' <span>' + ratingDisplay + '</span>' +
           '</span>' +
+          '<div class="profile-comment-actions">' +
+            saveBtnHtml +
+            shareBtnHtml +
+            reportBtnHtml +
+          '</div>' +
           '<a href="' + permalink + '" class="profile-comment-link" title="Перейти к комментарию">' +
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' +
             ' <span>Перейти</span>' +
           '</a>' +
         '</div>';
+
+      const saveBtn = cardEl.querySelector('.btn-save-comment');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleCommentSave(commentId, saveBtn, item);
+        });
+      }
+
+      const shareBtn = cardEl.querySelector('.btn-share-comment');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+          const fullUrl = permalink.startsWith('http') ? permalink : (origin + (permalink.startsWith('/') ? '' : '/') + permalink);
+          copyTextToClipboard(fullUrl, 'Ссылка на комментарий скопирована');
+        });
+      }
+
+      const reportBtn = cardEl.querySelector('.btn-report-comment');
+      if (reportBtn) {
+        reportBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openCommentReport(commentId, reportBtn, item);
+        });
+      }
 
       list.appendChild(cardEl);
     });
@@ -2251,6 +2583,11 @@
     const clearBtn = document.getElementById('btnProfileSearchClear');
     if (clearBtn) {
       clearBtn.style.display = currentSearchQuery ? 'flex' : 'none';
+    }
+
+    if (!currentSearchQuery) {
+      const infoEl = document.getElementById('profileSearchResultsInfo');
+      if (infoEl) infoEl.style.display = 'none';
     }
 
     if (window.history && (window.history.pushState || window.history.replaceState)) {
@@ -2577,10 +2914,14 @@
       const rawSort = (state.sort !== undefined && state.sort !== null) ? String(state.sort).trim() : (params.get('sort') || '').trim();
       const rawStatus = (state.status !== undefined && state.status !== null) ? String(state.status).trim() : (params.get('status') || '').trim();
       const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
+      const rawAnsSort = (state.ans_sort !== undefined && state.ans_sort !== null)
+        ? String(state.ans_sort).trim()
+        : (params.get('ans_sort') || (tab === 'answers' ? rawSort : '') || '').trim();
 
       let targetPubSort = pubSort;
       let targetQuestSort = questSort;
       let targetCommSort = commSort;
+      let targetAnsSort = ansSort;
       if (rawSort) {
         if (tab === 'publications') {
           targetPubSort = rawSort;
@@ -2588,15 +2929,22 @@
           targetQuestSort = rawSort;
         } else if (tab === 'comments') {
           targetCommSort = rawSort;
+        } else if (tab === 'answers') {
+          targetAnsSort = rawSort;
         } else {
           targetPubSort = rawSort;
           targetQuestSort = rawSort;
           targetCommSort = rawSort;
+          targetAnsSort = rawSort;
         }
       } else {
         if (tab === 'publications') targetPubSort = 'newest';
         if (tab === 'questions') targetQuestSort = 'newest';
         if (tab === 'comments') targetCommSort = 'new';
+        if (tab === 'answers') targetAnsSort = 'new';
+      }
+      if (rawAnsSort) {
+        targetAnsSort = rawAnsSort;
       }
 
       const targetQuestStatus = rawStatus || 'all';
@@ -2646,6 +2994,13 @@
         ansOffset = 0;
       }
 
+      if (targetAnsSort !== ansSort) {
+        ansSort = targetAnsSort;
+        tabLoadedState.answers = null;
+        ansItems = [];
+        ansOffset = 0;
+      }
+
       if (targetCommSort !== commSort) {
         commSort = targetCommSort;
         tabLoadedState.comments = null;
@@ -2659,6 +3014,7 @@
       updateQuestSortUI(questSort);
       updateQuestStatusUI(questStatus);
       updateAnsFilterUI(ansFilter);
+      updateAnsSortUI(ansSort);
       updateCommSortUI(commSort);
       updateTopicFilterUI(currentTopic);
 
@@ -3216,7 +3572,44 @@
       });
     }
 
-    // 15. Answers toolbar filter
+    // 15. Answers toolbar filter & sorting
+    const ansSortBtns = document.querySelectorAll('[data-ans-sort], #sortAnswersNewest, #sortAnswersRating');
+    for (let i = 0; i < ansSortBtns.length; i++) {
+      ansSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-ans-sort');
+        if (sort === ansSort) return;
+        ansSort = sort;
+        for (let j = 0; j < ansSortBtns.length; j++) {
+          ansSortBtns[j].classList.toggle('is-active', ansSortBtns[j] === this);
+        }
+        tabLoadedState.answers = null;
+        ansOffset = 0;
+        ansItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (ansSort !== 'new') {
+              url.searchParams.set('sort', ansSort);
+              url.searchParams.set('ans_sort', ansSort);
+            } else {
+              url.searchParams.delete('sort');
+              url.searchParams.delete('ans_sort');
+            }
+            window.history.pushState({
+              tab: 'answers',
+              filter: ansFilter,
+              sort: ansSort,
+              ans_sort: ansSort,
+              q: currentSearchQuery || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadAnswers(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
     const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
     for (let i = 0; i < ansFilterBtns.length; i++) {
       ansFilterBtns[i].addEventListener('click', function () {
@@ -3237,6 +3630,8 @@
             window.history.pushState({
               tab: 'answers',
               filter: ansFilter,
+              sort: ansSort,
+              ans_sort: ansSort,
               q: currentSearchQuery || undefined
             }, '', url.toString());
           } catch (e) {}
@@ -3427,6 +3822,13 @@
     setSearchQuery: setSearchQuery,
     setTopicFilter: setTopicFilter,
     invalidateTabCaches: invalidateTabCaches,
+    updateSearchResultsCount: updateSearchResultsCount,
+    toggleCommentSave: toggleCommentSave,
+    openCommentReport: openCommentReport,
+    isCommentBookmarked: isCommentBookmarked,
+    isCommentReported: isCommentReported,
+    getAnsSort: function () { return ansSort; },
+    setAnsSort: function (s) { ansSort = s; updateAnsSortUI(s); },
     getTabLoadedState: function () {
       return tabLoadedState;
     }

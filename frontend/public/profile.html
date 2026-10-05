@@ -308,6 +308,9 @@
                     </button>
                   </div>
                   <div class="profile-tabs-toolbar" id="profileTabsToolbar">
+                    <div class="profile-search-results-info" id="profileSearchResultsInfo" style="display: none;">
+                      <span>Найдено:</span> <strong id="profileSearchResultsCount">0</strong>
+                    </div>
                     <div class="profile-search-wrap">
                       <svg class="profile-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -400,6 +403,10 @@
                     <div class="profile-tab-header">
                       <h3 class="profile-subheading" style="margin-bottom: 0;">Ответы и решения</h3>
                       <div class="profile-tab-toolbar">
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка ответов">
+                          <button type="button" class="profile-filter-pill is-active" id="sortAnswersNewest" data-ans-sort="new">Новые</button>
+                          <button type="button" class="profile-filter-pill" id="sortAnswersRating" data-ans-sort="rating">По рейтингу</button>
+                        </div>
                         <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр ответов">
                           <button type="button" class="profile-filter-pill is-active" id="filterAnswersAll" data-ans-filter="all">Все ответы</button>
                           <button type="button" class="profile-filter-pill" id="filterAnswersSolutions" data-ans-filter="solutions">Решения</button>
