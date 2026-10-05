@@ -7750,7 +7750,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     )
                     is_sub = bool(cur.fetchone())
 
-            specialization = p_row["specialization"] if p_row and p_row["specialization"] else "Участник сообщества"
+            specialization = p_row["specialization"].strip() if p_row and p_row["specialization"] else ""
             company = p_row["company"] if p_row and p_row["company"] else ""
             bio = p_row["bio"] if p_row and p_row["bio"] else ""
             avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
