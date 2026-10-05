@@ -234,9 +234,34 @@
 
   function updateTopicFilterUI(topic) {
     const topicPills = document.querySelectorAll('.profile-sidebar-topic-pill[data-topic-id], [data-profile-topic]');
+    let resolvedTitle = '';
     for (let i = 0; i < topicPills.length; i++) {
       const tid = topicPills[i].getAttribute('data-topic-id') || topicPills[i].getAttribute('data-profile-topic');
-      topicPills[i].classList.toggle('is-active', Boolean(topic && tid === topic));
+      const isActive = Boolean(topic && tid === topic);
+      topicPills[i].classList.toggle('is-active', isActive);
+      if (isActive && !resolvedTitle) {
+        const nameEl = topicPills[i].querySelector ? topicPills[i].querySelector('.profile-topic-name') : null;
+        if (nameEl && nameEl.textContent) {
+          resolvedTitle = nameEl.textContent.trim();
+        }
+      }
+    }
+    const activeTopicBar = document.getElementById('profileActiveTopicBar');
+    const activeTopicName = document.getElementById('activeTopicName');
+    if (topic) {
+      if (activeTopicBar) {
+        activeTopicBar.style.display = 'inline-flex';
+      }
+      if (activeTopicName) {
+        activeTopicName.textContent = resolvedTitle || topic;
+      }
+    } else {
+      if (activeTopicBar) {
+        activeTopicBar.style.display = 'none';
+      }
+      if (activeTopicName) {
+        activeTopicName.textContent = '';
+      }
     }
   }
 
@@ -341,10 +366,9 @@
   }
 
   function setTopicFilter(topic, updateUrl) {
-    if (topic === undefined || topic === null) topic = '';
-    const normalized = String(topic).trim();
-    if (normalized === currentTopic) return;
+    const normalized = String(topic || '').trim();
     currentTopic = normalized;
+    updateTopicFilterUI(currentTopic);
 
     tabLoadedState.publications = null;
     pubItems = [];
@@ -352,7 +376,6 @@
     tabLoadedState.questions = null;
     questItems = [];
     questOffset = 0;
-    updateTopicFilterUI(currentTopic);
 
     if (updateUrl && window.history) {
       try {
@@ -383,8 +406,6 @@
       }
     }
   }
-
-  let currentTopicFilter = null;
   let socialModalMode = null;
   let socialSubTab = 'authors';
   let subscribersOffset = 0;
@@ -1321,7 +1342,7 @@
           const cnt = item.count !== undefined ? item.count : '';
           const countBadge = cnt ? (' <span class="profile-topic-count">' + cnt + '</span>') : '';
           const topicId = item.id || item.title;
-          const isActive = (currentTopicFilter === topicId);
+          const isActive = (currentTopic === topicId);
           return '<span class="profile-sidebar-topic-pill' + (isActive ? ' is-active' : '') + '" data-topic-id="' + escapeHtml(topicId) + '" role="button" tabindex="0" title="Фильтровать публикации по теме ' + escapeHtml(title) + '">' +
             '<span class="profile-topic-name">' + escapeHtml(title) + '</span>' +
             countBadge +
@@ -1330,6 +1351,8 @@
         const topicPills = topicsContainer.querySelectorAll('.profile-sidebar-topic-pill');
         for (let i = 0; i < topicPills.length; i++) {
           const pill = topicPills[i];
+          if (pill._topicHandlerAttached) continue;
+          pill._topicHandlerAttached = true;
           const tId = pill.getAttribute('data-topic-id');
           const nameEl = pill.querySelector('.profile-topic-name');
           const tTitle = nameEl ? nameEl.textContent : tId;
@@ -1339,12 +1362,12 @@
           pill.addEventListener('click', handler);
           pill.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
+              if (e.preventDefault) e.preventDefault();
               handler();
             }
           });
         }
-        updateTopicFilterUI(currentTopic || currentTopicFilter);
+        updateTopicFilterUI(currentTopic);
       } else {
         if (isOwn) {
           if (widgetTopics) widgetTopics.style.display = 'flex';
@@ -1590,9 +1613,8 @@
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
     }
-    const activeTopicVal = currentTopicFilter || currentTopic;
-    if (activeTopicVal) {
-      url += '&topic=' + encodeURIComponent(activeTopicVal);
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
     }
     const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
@@ -3500,54 +3522,24 @@
 
   function applyTopicFilter(topicId, topicTitle) {
     if (!topicId) return;
-    if (currentTopicFilter === topicId) {
+    if (currentTopic === topicId) {
       clearTopicFilter();
       return;
     }
-    currentTopicFilter = topicId;
-    const activeTopicBar = document.getElementById('profileActiveTopicBar');
-    const activeTopicName = document.getElementById('activeTopicName');
-    if (activeTopicName) {
-      activeTopicName.textContent = topicTitle || topicId;
-    }
-    if (activeTopicBar) {
-      activeTopicBar.style.display = 'inline-flex';
-    }
-
-    const pills = document.querySelectorAll('.profile-sidebar-topic-pill');
-    for (let i = 0; i < pills.length; i++) {
-      const pId = pills[i].getAttribute('data-topic-id');
-      pills[i].classList.toggle('is-active', pId === topicId);
-    }
-
     if (activeTab !== 'publications') {
       setActiveTab('publications', true);
     }
-
-    if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-      pubOffset = 0;
-      pubItems = [];
-      loadPublications(currentProfile.id || currentProfile.userId, false);
+    setTopicFilter(topicId, true);
+    if (topicTitle) {
+      const activeTopicName = document.getElementById('activeTopicName');
+      if (activeTopicName) {
+        activeTopicName.textContent = topicTitle;
+      }
     }
   }
 
   function clearTopicFilter() {
-    currentTopicFilter = null;
-    const activeTopicBar = document.getElementById('profileActiveTopicBar');
-    if (activeTopicBar) {
-      activeTopicBar.style.display = 'none';
-    }
-
-    const pills = document.querySelectorAll('.profile-sidebar-topic-pill');
-    for (let i = 0; i < pills.length; i++) {
-      pills[i].classList.remove('is-active');
-    }
-
-    if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-      pubOffset = 0;
-      pubItems = [];
-      loadPublications(currentProfile.id || currentProfile.userId, false);
-    }
+    setTopicFilter('', true);
   }
 
   function switchToSolutions() {
@@ -4609,13 +4601,26 @@
       });
     }
 
-    // Sidebar topic pill click listener
-    document.addEventListener('click', function (e) {
-      const pill = e.target.closest('.profile-sidebar-topic-pill[data-topic-id]');
-      if (!pill) return;
-      const topicId = pill.getAttribute('data-topic-id') || '';
-      setTopicFilter(topicId === currentTopic ? '' : topicId, true);
-    });
+    // Sidebar topic pill listeners
+    const initialTopicPills = document.querySelectorAll('.profile-sidebar-topic-pill');
+    for (let i = 0; i < initialTopicPills.length; i++) {
+      const pill = initialTopicPills[i];
+      if (pill._topicHandlerAttached) continue;
+      pill._topicHandlerAttached = true;
+      const tId = pill.getAttribute('data-topic-id');
+      const nameEl = pill.querySelector ? pill.querySelector('.profile-topic-name') : null;
+      const tTitle = nameEl ? nameEl.textContent : tId;
+      const handler = function () {
+        applyTopicFilter(tId, tTitle);
+      };
+      pill.addEventListener('click', handler);
+      pill.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.preventDefault) e.preventDefault();
+          handler();
+        }
+      });
+    }
 
     // 11. Publications toolbar sorting
     const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
@@ -5093,7 +5098,7 @@
     applyTopicFilter: applyTopicFilter,
     clearTopicFilter: clearTopicFilter,
     getCurrentTopicFilter: function () {
-      return currentTopicFilter;
+      return currentTopic;
     },
     switchToSolutions: switchToSolutions,
     openSubscribersModal: openSubscribersModal,
