@@ -491,6 +491,14 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
 
     conn = sqlite3.connect(target_path)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.create_function("lower", 1, lambda s: s.lower() if s is not None else None)
+    except Exception:
+        pass
+    try:
+        conn.create_function("extract_text", 1, lambda s: extract_article_text(s) if s is not None else "")
+    except Exception:
+        pass
     with conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS moderation_submissions (
@@ -1429,6 +1437,10 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     try:
         conn.create_function("lower", 1, lambda s: s.lower() if s is not None else None)
+    except Exception:
+        pass
+    try:
+        conn.create_function("extract_text", 1, lambda s: extract_article_text(s) if s is not None else "")
     except Exception:
         pass
     return conn
@@ -8045,6 +8057,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
         try:
             limit = max(1, min(100, int(query.get("limit", [20])[0])))
         except ValueError:
@@ -8083,65 +8096,136 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
                 # Phase 1: Fast indexed total calculation
-                count_sql = """
-                    SELECT (
-                        (SELECT COUNT(*) FROM moderation_submissions ms
-                         WHERE ms.author_id = ? AND ms.status = 'approved'
-                           AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question')
-                        +
-                        (SELECT COUNT(*) FROM moderation_submissions ms
-                         WHERE ms.author_id = ? AND ms.status = 'approved'
-                           AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question')
-                        +
-                        (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
-                         JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                         WHERE ac.user_id = ? AND ac.status = 'published' AND ac.comment_type = 'answer' AND ms.status = 'approved'
-                           AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question')
-                        +
-                        (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
-                         JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                         WHERE ac.user_id = ? AND ac.status = 'published' AND (ac.comment_type IS NULL OR ac.comment_type != 'answer') AND ms.status = 'approved')
-                    ) AS total
-                """
-                cur.execute(count_sql, (user_id, user_id, user_id, user_id))
+                # Complexity note: O(1) refers to bounded data transfer, payload size, and server memory per page via LIMIT ? OFFSET ?, while database filtering performs indexed/author scanning.
+                if not search_q:
+                    count_sql = """
+                        SELECT (
+                            (SELECT COUNT(*) FROM moderation_submissions ms
+                             WHERE ms.author_id = ? AND ms.status = 'approved'
+                               AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question')
+                            +
+                            (SELECT COUNT(*) FROM moderation_submissions ms
+                             WHERE ms.author_id = ? AND ms.status = 'approved'
+                               AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question')
+                            +
+                            (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
+                             JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                             WHERE ac.user_id = ? AND ac.status = 'published' AND ac.comment_type = 'answer' AND ms.status = 'approved'
+                               AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question')
+                            +
+                            (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
+                             JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                             WHERE ac.user_id = ? AND ac.status = 'published' AND (ac.comment_type IS NULL OR ac.comment_type != 'answer') AND ms.status = 'approved')
+                        ) AS total
+                    """
+                    cur.execute(count_sql, (user_id, user_id, user_id, user_id))
+                else:
+                    q_like = f"%{search_q}%"
+                    count_sql = """
+                        SELECT (
+                            (SELECT COUNT(*) FROM moderation_submissions ms
+                             WHERE ms.author_id = ? AND ms.status = 'approved'
+                               AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                               AND (LOWER(ms.title) LIKE ? OR LOWER(extract_text(ms.article_html)) LIKE ?))
+                            +
+                            (SELECT COUNT(*) FROM moderation_submissions ms
+                             WHERE ms.author_id = ? AND ms.status = 'approved'
+                               AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                               AND (LOWER(ms.title) LIKE ? OR LOWER(extract_text(ms.article_html)) LIKE ?))
+                            +
+                            (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
+                             JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                             WHERE ac.user_id = ? AND ac.status = 'published' AND ac.comment_type = 'answer' AND ms.status = 'approved'
+                               AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                               AND (LOWER(ac.content) LIKE ? OR LOWER(extract_text(ac.content)) LIKE ? OR LOWER(ms.title) LIKE ?))
+                            +
+                            (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
+                             JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                             WHERE ac.user_id = ? AND ac.status = 'published' AND (ac.comment_type IS NULL OR ac.comment_type != 'answer') AND ms.status = 'approved'
+                               AND (LOWER(ac.content) LIKE ? OR LOWER(extract_text(ac.content)) LIKE ? OR LOWER(ms.title) LIKE ?))
+                        ) AS total
+                    """
+                    cur.execute(count_sql, (user_id, q_like, q_like, user_id, q_like, q_like, user_id, q_like, q_like, q_like, user_id, q_like, q_like, q_like))
                 total = cur.fetchone()["total"] or 0
 
                 # Phase 2: Retrieve ordered IDs and types for the requested page using SQLite UNION ALL
-                union_sql = """
-                    SELECT item_type, item_id, act_time, tie_breaker FROM (
-                        SELECT 'publication' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
-                        UNION ALL
-                        SELECT 'question' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                        UNION ALL
-                        SELECT 'answer' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker
-                        FROM article_comments ac
-                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                        WHERE ac.user_id = ?
-                          AND ac.status = 'published'
-                          AND ac.comment_type = 'answer'
-                          AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                        GROUP BY ac.id
-                        UNION ALL
-                        SELECT 'comment' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker
-                        FROM article_comments ac
-                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                        WHERE ac.user_id = ?
-                          AND ac.status = 'published'
-                          AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
-                          AND ms.status = 'approved'
-                        GROUP BY ac.id
-                    )
-                    ORDER BY act_time DESC, tie_breaker DESC
-                    LIMIT ? OFFSET ?
-                """
-                cur.execute(union_sql, (user_id, user_id, user_id, user_id, limit, offset))
+                if not search_q:
+                    union_sql = """
+                        SELECT item_type, item_id, act_time, tie_breaker, parent_ms_id FROM (
+                            SELECT 'publication' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker, NULL AS parent_ms_id
+                            FROM moderation_submissions ms
+                            WHERE ms.author_id = ? AND ms.status = 'approved'
+                              AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                            UNION ALL
+                            SELECT 'question' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker, NULL AS parent_ms_id
+                            FROM moderation_submissions ms
+                            WHERE ms.author_id = ? AND ms.status = 'approved'
+                              AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                            UNION ALL
+                            SELECT 'answer' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker, ms.id AS parent_ms_id
+                            FROM article_comments ac
+                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                            WHERE ac.user_id = ?
+                              AND ac.status = 'published'
+                              AND ac.comment_type = 'answer'
+                              AND ms.status = 'approved'
+                              AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                            GROUP BY ac.id
+                            UNION ALL
+                            SELECT 'comment' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker, ms.id AS parent_ms_id
+                            FROM article_comments ac
+                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                            WHERE ac.user_id = ?
+                              AND ac.status = 'published'
+                              AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                              AND ms.status = 'approved'
+                            GROUP BY ac.id
+                        )
+                        ORDER BY act_time DESC, tie_breaker DESC
+                        LIMIT ? OFFSET ?
+                    """
+                    cur.execute(union_sql, (user_id, user_id, user_id, user_id, limit, offset))
+                else:
+                    q_like = f"%{search_q}%"
+                    union_sql = """
+                        SELECT item_type, item_id, act_time, tie_breaker, parent_ms_id FROM (
+                            SELECT 'publication' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker, NULL AS parent_ms_id
+                            FROM moderation_submissions ms
+                            WHERE ms.author_id = ? AND ms.status = 'approved'
+                              AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                              AND (LOWER(ms.title) LIKE ? OR LOWER(extract_text(ms.article_html)) LIKE ?)
+                            UNION ALL
+                            SELECT 'question' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker, NULL AS parent_ms_id
+                            FROM moderation_submissions ms
+                            WHERE ms.author_id = ? AND ms.status = 'approved'
+                              AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                              AND (LOWER(ms.title) LIKE ? OR LOWER(extract_text(ms.article_html)) LIKE ?)
+                            UNION ALL
+                            SELECT 'answer' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker, ms.id AS parent_ms_id
+                            FROM article_comments ac
+                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                            WHERE ac.user_id = ?
+                              AND ac.status = 'published'
+                              AND ac.comment_type = 'answer'
+                              AND ms.status = 'approved'
+                              AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                              AND (LOWER(ac.content) LIKE ? OR LOWER(extract_text(ac.content)) LIKE ? OR LOWER(ms.title) LIKE ?)
+                            GROUP BY ac.id
+                            UNION ALL
+                            SELECT 'comment' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker, ms.id AS parent_ms_id
+                            FROM article_comments ac
+                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                            WHERE ac.user_id = ?
+                              AND ac.status = 'published'
+                              AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                              AND ms.status = 'approved'
+                              AND (LOWER(ac.content) LIKE ? OR LOWER(extract_text(ac.content)) LIKE ? OR LOWER(ms.title) LIKE ?)
+                            GROUP BY ac.id
+                        )
+                        ORDER BY act_time DESC, tie_breaker DESC
+                        LIMIT ? OFFSET ?
+                    """
+                    cur.execute(union_sql, (user_id, q_like, q_like, user_id, q_like, q_like, user_id, q_like, q_like, q_like, user_id, q_like, q_like, q_like, limit, offset))
                 paged_refs = cur.fetchall()
 
                 # Phase 3: Fetch content/details and compute snippets ONLY for items on the requested page
@@ -8151,6 +8235,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     quest_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "question"]
                     ans_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "answer"]
                     comm_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "comment"]
+                    ans_parent_map = {r["item_id"]: r["parent_ms_id"] for r in paged_refs if r["item_type"] == "answer"}
+                    comm_parent_map = {r["item_id"]: r["parent_ms_id"] for r in paged_refs if r["item_type"] == "comment"}
 
                     pub_map = {}
                     if pub_ids:
@@ -8183,30 +8269,56 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         qmarks = ",".join("?" for _ in ans_ids)
                         cur.execute(f"""
                             SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
-                                   ms.title AS question_title,
                                    (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
                             FROM article_comments ac
-                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
                             WHERE ac.id IN ({qmarks})
-                            GROUP BY ac.id
                         """, tuple(ans_ids))
                         for row in cur.fetchall():
-                            ans_map[row["id"]] = row
+                            ans_map[row["id"]] = dict(row)
+
+                        parent_ms_ids = list({ans_parent_map[aid] for aid in ans_ids if ans_parent_map.get(aid)})
+                        if parent_ms_ids:
+                            p_qmarks = ",".join("?" for _ in parent_ms_ids)
+                            cur.execute(f"""
+                                SELECT ms.id, ms.title
+                                FROM moderation_submissions ms
+                                WHERE ms.id IN ({p_qmarks}) AND ms.status = 'approved'
+                            """, tuple(parent_ms_ids))
+                            p_titles = {row["id"]: row["title"] for row in cur.fetchall()}
+                            for aid, row_dict in ans_map.items():
+                                p_id = ans_parent_map.get(aid)
+                                row_dict["question_title"] = p_titles.get(p_id)
+                        else:
+                            for row_dict in ans_map.values():
+                                row_dict["question_title"] = None
 
                     comm_map = {}
                     if comm_ids:
                         qmarks = ",".join("?" for _ in comm_ids)
                         cur.execute(f"""
                             SELECT ac.id, ac.article_id, ac.content, ac.created_at,
-                                   ms.title AS parent_title,
                                    (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
                             FROM article_comments ac
-                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
                             WHERE ac.id IN ({qmarks})
-                            GROUP BY ac.id
                         """, tuple(comm_ids))
                         for row in cur.fetchall():
-                            comm_map[row["id"]] = row
+                            comm_map[row["id"]] = dict(row)
+
+                        parent_ms_ids = list({comm_parent_map[cid] for cid in comm_ids if comm_parent_map.get(cid)})
+                        if parent_ms_ids:
+                            p_qmarks = ",".join("?" for _ in parent_ms_ids)
+                            cur.execute(f"""
+                                SELECT ms.id, ms.title
+                                FROM moderation_submissions ms
+                                WHERE ms.id IN ({p_qmarks}) AND ms.status = 'approved'
+                            """, tuple(parent_ms_ids))
+                            p_titles = {row["id"]: row["title"] for row in cur.fetchall()}
+                            for cid, row_dict in comm_map.items():
+                                p_id = comm_parent_map.get(cid)
+                                row_dict["parent_title"] = p_titles.get(p_id)
+                        else:
+                            for row_dict in comm_map.values():
+                                row_dict["parent_title"] = None
 
                     for ref in paged_refs:
                         itype = ref["item_type"]
@@ -8384,8 +8496,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 ]
                 params = [user_id]
 
+                # Complexity note: O(1) refers to bounded data transfer, payload size, and server memory per page via LIMIT ? OFFSET ?, while database filtering performs indexed/author scanning.
                 if search_q:
-                    conditions.append("(LOWER(ms.title) LIKE ? OR LOWER(ms.article_html) LIKE ?)")
+                    conditions.append("(LOWER(ms.title) LIKE ? OR LOWER(extract_text(ms.article_html)) LIKE ?)")
                     params.extend([f"%{search_q}%", f"%{search_q}%"])
 
                 if topic_filter:
@@ -8399,8 +8512,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     topic_clauses = []
                     topic_params = []
                     for cand in topic_candidates:
-                        topic_clauses.append("(LOWER(json_extract(ms.publication_settings, '$.topic')) = ? OR LOWER(ms.publication_settings) LIKE ?)")
-                        topic_params.extend([cand, f"%{cand}%"])
+                        topic_clauses.append("""(
+                            json_valid(ms.publication_settings) = 1 AND (
+                                LOWER(json_extract(ms.publication_settings, '$.topic')) = ?
+                                OR (json_type(ms.publication_settings, '$.topics') = 'text' AND LOWER(json_extract(ms.publication_settings, '$.topics')) = ?)
+                                OR (json_type(ms.publication_settings, '$.topics') = 'array' AND EXISTS (SELECT 1 FROM json_each(ms.publication_settings, '$.topics') WHERE LOWER(value) = ?))
+                            )
+                        )""")
+                        topic_params.extend([cand, cand, cand])
                     conditions.append(f"({' OR '.join(topic_clauses)})")
                     params.extend(topic_params)
 
@@ -8596,8 +8715,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 ]
                 params = [user_id]
 
+                # Complexity note: O(1) refers to bounded data transfer, payload size, and server memory per page via LIMIT ? OFFSET ?, while database filtering performs indexed/author scanning.
                 if search_q:
-                    conditions.append("(LOWER(ms.title) LIKE ? OR LOWER(ms.article_html) LIKE ?)")
+                    conditions.append("(LOWER(ms.title) LIKE ? OR LOWER(extract_text(ms.article_html)) LIKE ?)")
                     params.extend([f"%{search_q}%", f"%{search_q}%"])
 
                 if topic_filter:
@@ -8611,8 +8731,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     topic_clauses = []
                     topic_params = []
                     for cand in topic_candidates:
-                        topic_clauses.append("(LOWER(json_extract(ms.publication_settings, '$.topic')) = ? OR LOWER(ms.publication_settings) LIKE ?)")
-                        topic_params.extend([cand, f"%{cand}%"])
+                        topic_clauses.append("""(
+                            json_valid(ms.publication_settings) = 1 AND (
+                                LOWER(json_extract(ms.publication_settings, '$.topic')) = ?
+                                OR (json_type(ms.publication_settings, '$.topics') = 'text' AND LOWER(json_extract(ms.publication_settings, '$.topics')) = ?)
+                                OR (json_type(ms.publication_settings, '$.topics') = 'array' AND EXISTS (SELECT 1 FROM json_each(ms.publication_settings, '$.topics') WHERE LOWER(value) = ?))
+                            )
+                        )""")
+                        topic_params.extend([cand, cand, cand])
                     conditions.append(f"({' OR '.join(topic_clauses)})")
                     params.extend(topic_params)
 
@@ -8948,6 +9074,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 try:
                     conn.create_function("lower", 1, lambda s: s.lower() if s is not None else None)
+                except Exception:
+                    pass
+                try:
+                    conn.create_function("extract_text", 1, lambda s: extract_article_text(s) if s is not None else "")
                 except Exception:
                     pass
 
