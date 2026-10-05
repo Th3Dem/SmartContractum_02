@@ -15,6 +15,8 @@
   const activityLimit = 15;
   let activityHasMore = false;
   let isLoadingActivity = false;
+  let actReqSeq = 0;
+  let actAbortCtrl = null;
 
   let pubSort = 'newest';
   let pubOffset = 0;
@@ -22,6 +24,8 @@
   let pubItems = [];
   let pubHasMore = false;
   let isLoadingPub = false;
+  let pubReqSeq = 0;
+  let pubAbortCtrl = null;
 
   let questSort = 'newest';
   let questStatus = 'all';
@@ -30,6 +34,8 @@
   let questItems = [];
   let questHasMore = false;
   let isLoadingQuest = false;
+  let questReqSeq = 0;
+  let questAbortCtrl = null;
 
   let ansFilter = 'all';
   let ansOffset = 0;
@@ -37,7 +43,287 @@
   let ansItems = [];
   let ansHasMore = false;
   let isLoadingAns = false;
+  let ansReqSeq = 0;
+  let ansAbortCtrl = null;
   let lastEditTriggerEl = null;
+
+  let currentSearchQuery = '';
+  let currentTopic = '';
+  let searchDebounceTimer = null;
+  let tabLoadedState = {
+    overview: null,
+    publications: null,
+    questions: null,
+    answers: null,
+    comments: null
+  };
+
+  function getCurrentTabParams(tabName) {
+    if (tabName === 'publications') {
+      return { q: currentSearchQuery, sort: pubSort, topic: currentTopic };
+    }
+    if (tabName === 'questions') {
+      return { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
+    }
+    if (tabName === 'answers') {
+      return { q: currentSearchQuery, filter: ansFilter };
+    }
+    if (tabName === 'overview') {
+      return { q: currentSearchQuery };
+    }
+    if (tabName === 'comments') {
+      return { q: currentSearchQuery };
+    }
+    return {};
+  }
+
+  function areTabParamsEqual(p1, p2) {
+    if (!p1 || !p2) return false;
+    const keys1 = Object.keys(p1);
+    const keys2 = Object.keys(p2);
+    if (keys1.length !== keys2.length) return false;
+    for (let i = 0; i < keys1.length; i++) {
+      const k = keys1[i];
+      if (p1[k] !== p2[k]) return false;
+    }
+    return true;
+  }
+
+  function invalidateTabCaches(tabs) {
+    const list = tabs || ['overview', 'publications', 'questions', 'answers', 'comments'];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      tabLoadedState[t] = null;
+      if (t === 'publications') {
+        pubItems = [];
+        pubOffset = 0;
+      } else if (t === 'questions') {
+        questItems = [];
+        questOffset = 0;
+      } else if (t === 'answers') {
+        ansItems = [];
+        ansOffset = 0;
+      } else if (t === 'overview') {
+        activityItems = [];
+        activityOffset = 0;
+      } else if (t === 'comments') {
+        if (typeof commentsItems !== 'undefined') commentsItems = [];
+        if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
+      }
+    }
+  }
+
+  function updateSearchInputUI(q) {
+    const val = q || '';
+    const profInput = document.getElementById('profileSearchInput');
+    if (profInput) {
+      profInput.value = val;
+    }
+    const searchInputs = document.querySelectorAll(
+      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
+    );
+    for (let i = 0; i < searchInputs.length; i++) {
+      searchInputs[i].value = val;
+    }
+    const clearBtn = document.getElementById('btnProfileSearchClear');
+    if (clearBtn) {
+      clearBtn.style.display = (val && String(val).trim()) ? 'flex' : 'none';
+    }
+  }
+
+  function updatePubSortUI(sort) {
+    const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
+    for (let i = 0; i < pubSortBtns.length; i++) {
+      const s = pubSortBtns[i].getAttribute('data-pub-sort');
+      const isActive = (s === sort);
+      pubSortBtns[i].classList.toggle('is-active', isActive);
+      if (pubSortBtns[i].hasAttribute('aria-pressed')) {
+        pubSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateQuestSortUI(sort) {
+    const questSortBtns = document.querySelectorAll('[data-quest-sort]');
+    for (let i = 0; i < questSortBtns.length; i++) {
+      const s = questSortBtns[i].getAttribute('data-quest-sort');
+      const isActive = (s === sort);
+      questSortBtns[i].classList.toggle('is-active', isActive);
+      if (questSortBtns[i].hasAttribute('aria-pressed')) {
+        questSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateQuestStatusUI(status) {
+    const questStatusBtns = document.querySelectorAll('[data-quest-status]');
+    for (let i = 0; i < questStatusBtns.length; i++) {
+      const s = questStatusBtns[i].getAttribute('data-quest-status');
+      const isActive = (s === status);
+      questStatusBtns[i].classList.toggle('is-active', isActive);
+      if (questStatusBtns[i].hasAttribute('aria-pressed')) {
+        questStatusBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateAnsFilterUI(filter) {
+    const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
+    for (let i = 0; i < ansFilterBtns.length; i++) {
+      const f = ansFilterBtns[i].getAttribute('data-ans-filter');
+      const isActive = (f === filter);
+      ansFilterBtns[i].classList.toggle('is-active', isActive);
+      if (ansFilterBtns[i].hasAttribute('aria-pressed')) {
+        ansFilterBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateTopicFilterUI(topic) {
+    const topicPills = document.querySelectorAll('.profile-sidebar-topic-pill[data-topic-id], [data-profile-topic]');
+    for (let i = 0; i < topicPills.length; i++) {
+      const tid = topicPills[i].getAttribute('data-topic-id') || topicPills[i].getAttribute('data-profile-topic');
+      topicPills[i].classList.toggle('is-active', Boolean(topic && tid === topic));
+    }
+  }
+
+  function setSearchQuery(q, updateUrl) {
+    if (q === undefined || q === null) q = '';
+    const normalized = String(q).trim();
+
+    let urlMatches = false;
+    if (typeof window !== 'undefined' && window.location && window.location.search !== undefined) {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const urlQ = (searchParams.get('q') || '').trim();
+        urlMatches = (urlQ === normalized);
+      } catch (e) {}
+    }
+
+    if (normalized === currentSearchQuery) {
+      if (!updateUrl || urlMatches) {
+        return;
+      }
+    }
+
+    const queryChanged = (normalized !== currentSearchQuery);
+    currentSearchQuery = normalized;
+
+    if (queryChanged) {
+      invalidateTabCaches();
+      if (activeTab === 'publications') {
+        pubItems = [];
+        pubOffset = 0;
+      } else if (activeTab === 'questions') {
+        questItems = [];
+        questOffset = 0;
+      } else if (activeTab === 'answers') {
+        ansItems = [];
+        ansOffset = 0;
+      } else if (activeTab === 'comments') {
+        if (typeof commentsItems !== 'undefined') commentsItems = [];
+        if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
+      } else {
+        activityItems = [];
+        activityOffset = 0;
+      }
+    }
+
+    updateSearchInputUI(currentSearchQuery);
+
+    if (updateUrl && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        const stateObj = {
+          tab: activeTab,
+          q: currentSearchQuery || undefined,
+          topic: currentTopic || undefined,
+          sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+          status: (activeTab === 'questions' ? questStatus : undefined),
+          filter: (activeTab === 'answers' ? ansFilter : undefined)
+        };
+        if (window.history.pushState) {
+          window.history.pushState(stateObj, '', url.toString());
+        } else if (window.history.replaceState) {
+          window.history.replaceState(stateObj, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
+      if (activeTab === 'publications') {
+        loadPublications(uid, false);
+      } else if (activeTab === 'questions') {
+        loadQuestions(uid, false);
+      } else if (activeTab === 'answers') {
+        loadAnswers(uid, false);
+      } else if (activeTab === 'comments') {
+        if (typeof loadComments === 'function') {
+          loadComments(uid, false);
+        }
+      } else {
+        loadActivity(uid, false);
+      }
+    }
+  }
+
+  function triggerSearch(val) {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+    setSearchQuery(val, true);
+  }
+
+  function setTopicFilter(topic, updateUrl) {
+    if (topic === undefined || topic === null) topic = '';
+    const normalized = String(topic).trim();
+    if (normalized === currentTopic) return;
+    currentTopic = normalized;
+
+    tabLoadedState.publications = null;
+    pubItems = [];
+    pubOffset = 0;
+    tabLoadedState.questions = null;
+    questItems = [];
+    questOffset = 0;
+    updateTopicFilterUI(currentTopic);
+
+    if (updateUrl && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentTopic) {
+          url.searchParams.set('topic', currentTopic);
+        } else {
+          url.searchParams.delete('topic');
+        }
+        if (window.history.pushState) {
+          window.history.pushState({
+            tab: activeTab,
+            q: currentSearchQuery || undefined,
+            topic: currentTopic || undefined,
+            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+            status: (activeTab === 'questions' ? questStatus : undefined)
+          }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
+      if (activeTab === 'publications') {
+        loadPublications(uid, false);
+      } else if (activeTab === 'questions') {
+        loadQuestions(uid, false);
+      }
+    }
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -246,7 +532,21 @@
         if (!data || !data.success) {
           throw new Error('PROFILE_LOAD_FAILED');
         }
-        currentProfile = (data.profile || data.user || data);
+        const profile = (data.profile || data.user || data);
+        if (isSilentRefresh && currentProfile) {
+          const s = profile.stats || {};
+          updateProfileStats({
+            rating: s.rating !== undefined ? s.rating : (profile.rating !== undefined ? profile.rating : 0),
+            publicationsCount: s.publicationsCount !== undefined ? s.publicationsCount : (profile.publicationsCount || 0),
+            questionsCount: s.questionsCount !== undefined ? s.questionsCount : (profile.questionsCount || 0),
+            answersCount: s.answersCount !== undefined ? s.answersCount : (profile.answersCount || 0),
+            solutionsCount: s.solutionsCount !== undefined ? s.solutionsCount : (profile.solutionsCount || 0),
+            followersCount: s.followersCount !== undefined ? s.followersCount : (profile.followersCount || 0),
+            followingCount: s.followingCount !== undefined ? s.followingCount : (profile.followingCount || 0)
+          });
+          return;
+        }
+        currentProfile = profile;
         renderProfile(currentProfile);
       })
       .catch(function (err) {
@@ -255,8 +555,88 @@
       });
   }
 
+  function updateProfileStats(stats) {
+    if (!stats) return;
+
+    if (currentProfile) {
+      currentProfile.stats = currentProfile.stats || {};
+      if (stats.rating !== undefined) {
+        currentProfile.stats.rating = stats.rating;
+        currentProfile.rating = stats.rating;
+      }
+      if (stats.publicationsCount !== undefined) {
+        currentProfile.stats.publicationsCount = stats.publicationsCount;
+        currentProfile.publicationsCount = stats.publicationsCount;
+      }
+      if (stats.questionsCount !== undefined) {
+        currentProfile.stats.questionsCount = stats.questionsCount;
+        currentProfile.questionsCount = stats.questionsCount;
+      }
+      if (stats.answersCount !== undefined) {
+        currentProfile.stats.answersCount = stats.answersCount;
+        currentProfile.answersCount = stats.answersCount;
+      }
+      if (stats.solutionsCount !== undefined) {
+        currentProfile.stats.solutionsCount = stats.solutionsCount;
+        currentProfile.solutionsCount = stats.solutionsCount;
+      }
+      if (stats.followersCount !== undefined) {
+        currentProfile.stats.followersCount = stats.followersCount;
+        currentProfile.followersCount = stats.followersCount;
+      }
+      if (stats.followingCount !== undefined) {
+        currentProfile.stats.followingCount = stats.followingCount;
+        currentProfile.followingCount = stats.followingCount;
+      }
+    }
+
+    if (stats.rating !== undefined) {
+      const rEl = document.getElementById('profileStatRating');
+      if (rEl) rEl.textContent = stats.rating;
+      const srEl = document.getElementById('sidebarReputationRating');
+      if (srEl) srEl.textContent = stats.rating;
+    }
+    if (stats.publicationsCount !== undefined) {
+      const pEl = document.getElementById('profileStatPublications');
+      if (pEl) pEl.textContent = stats.publicationsCount;
+      const cPub = document.getElementById('tabCountPublications');
+      if (cPub) cPub.textContent = stats.publicationsCount;
+      const spEl = document.getElementById('sidebarReputationPubs');
+      if (spEl) spEl.textContent = stats.publicationsCount;
+    }
+    if (stats.questionsCount !== undefined) {
+      const qEl = document.getElementById('profileStatQuestions');
+      if (qEl) qEl.textContent = stats.questionsCount;
+      const cQuest = document.getElementById('tabCountQuestions');
+      if (cQuest) cQuest.textContent = stats.questionsCount;
+      const sqEl = document.getElementById('sidebarReputationQuestions');
+      if (sqEl) sqEl.textContent = stats.questionsCount;
+    }
+    if (stats.answersCount !== undefined) {
+      const aEl = document.getElementById('profileStatAnswers');
+      if (aEl) aEl.textContent = stats.answersCount;
+      const cAns = document.getElementById('tabCountAnswers');
+      if (cAns) cAns.textContent = stats.answersCount;
+    }
+    if (stats.solutionsCount !== undefined) {
+      const sEl = document.getElementById('profileStatSolutions');
+      if (sEl) sEl.textContent = stats.solutionsCount;
+      const ssEl = document.getElementById('sidebarReputationSolutions');
+      if (ssEl) ssEl.textContent = stats.solutionsCount;
+    }
+    if (stats.followersCount !== undefined) {
+      const fEl = document.getElementById('profileStatFollowers');
+      if (fEl) fEl.textContent = stats.followersCount;
+    }
+    if (stats.followingCount !== undefined) {
+      const fwEl = document.getElementById('profileStatFollowing');
+      if (fwEl) fwEl.textContent = stats.followingCount;
+    }
+  }
+
   function renderProfile(p) {
     if (!p) return;
+    currentProfile = p;
 
     // Document title
     const displayName = p.name || p.id || 'Пользователь';
@@ -334,36 +714,17 @@
       }
     }
 
-    // 3. Stats & Reputation
+    // 3. Stats & Reputation via unified updater
     const stats = p.stats || {};
-    const ratingVal = stats.rating !== undefined ? stats.rating : (p.rating !== undefined ? p.rating : 0);
-    const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
-    const questVal = stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0);
-    const ansVal = stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0);
-    const solVal = stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0);
-    const followVal = stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0);
-    const followingVal = stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0);
-
-    const rEl = document.getElementById('profileStatRating');
-    if (rEl) rEl.textContent = ratingVal;
-
-    const pEl = document.getElementById('profileStatPublications');
-    if (pEl) pEl.textContent = pubVal;
-
-    const qEl = document.getElementById('profileStatQuestions');
-    if (qEl) qEl.textContent = questVal;
-
-    const aEl = document.getElementById('profileStatAnswers');
-    if (aEl) aEl.textContent = ansVal;
-
-    const sEl = document.getElementById('profileStatSolutions');
-    if (sEl) sEl.textContent = solVal;
-
-    const fEl = document.getElementById('profileStatFollowers');
-    if (fEl) fEl.textContent = followVal;
-
-    const fwEl = document.getElementById('profileStatFollowing');
-    if (fwEl) fwEl.textContent = followingVal;
+    updateProfileStats({
+      rating: stats.rating !== undefined ? stats.rating : (p.rating !== undefined ? p.rating : 0),
+      publicationsCount: stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0),
+      questionsCount: stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0),
+      answersCount: stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0),
+      solutionsCount: stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0),
+      followersCount: stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0),
+      followingCount: stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0)
+    });
 
     const ageEl = document.getElementById('profileAccountAge');
     if (ageEl) {
@@ -381,8 +742,8 @@
     // 5. Tab counts
     renderTabCounts(p);
 
-    // 6. Top contributions
-    renderTopContributions(p.topContributions || []);
+    // 6. Top contributions with fallback
+    renderTopContributions(p.topContributions || [], p.publications || p.articles || []);
 
     // 7. Desktop sidebar
     renderSidebar(p);
@@ -391,6 +752,7 @@
     pubOffset = 0; pubItems = [];
     questOffset = 0; questItems = [];
     ansOffset = 0; ansItems = [];
+    tabLoadedState = { overview: null, publications: null, questions: null, answers: null };
 
     // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
@@ -401,6 +763,29 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('q')) {
+        currentSearchQuery = urlParams.get('q').trim();
+        updateSearchInputUI(currentSearchQuery);
+      }
+      if (urlParams.get('topic')) {
+        currentTopic = urlParams.get('topic').trim();
+        updateTopicFilterUI(currentTopic);
+      }
+      if (urlParams.get('sort')) {
+        const s = urlParams.get('sort').trim();
+        pubSort = s;
+        questSort = s;
+        updatePubSortUI(pubSort);
+        updateQuestSortUI(questSort);
+      }
+      if (urlParams.get('status')) {
+        questStatus = urlParams.get('status').trim();
+        updateQuestStatusUI(questStatus);
+      }
+      if (urlParams.get('filter')) {
+        ansFilter = urlParams.get('filter').trim();
+        updateAnsFilterUI(ansFilter);
+      }
       const initialTab = urlParams.get('tab') || 'overview';
       setActiveTab(initialTab, false);
     } catch (e) {
@@ -450,7 +835,7 @@
       }
     });
 
-    if (updateUrl && window.history && window.history.replaceState) {
+    if (updateUrl && window.history) {
       try {
         const url = new URL(window.location.href);
         if (tabName === 'overview') {
@@ -458,23 +843,93 @@
         } else {
           url.searchParams.set('tab', tabName);
         }
-        window.history.replaceState({}, '', url.toString());
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        if (currentTopic) {
+          url.searchParams.set('topic', currentTopic);
+        } else {
+          url.searchParams.delete('topic');
+        }
+        if (tabName === 'publications') {
+          if (pubSort !== 'newest') url.searchParams.set('sort', pubSort);
+          else url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else if (tabName === 'questions') {
+          if (questSort !== 'newest') url.searchParams.set('sort', questSort);
+          else url.searchParams.delete('sort');
+          if (questStatus !== 'all') url.searchParams.set('status', questStatus);
+          else url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else if (tabName === 'answers') {
+          if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
+          else url.searchParams.delete('filter');
+          url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+        } else {
+          url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        }
+
+        const stateObj = {
+          tab: tabName,
+          q: currentSearchQuery || undefined,
+          topic: currentTopic || undefined,
+          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : undefined)),
+          status: (tabName === 'questions' ? questStatus : undefined),
+          filter: (tabName === 'answers' ? ansFilter : undefined)
+        };
+        if (updateUrl === true || updateUrl === 'push') {
+          if (window.history.pushState) {
+            window.history.pushState(stateObj, '', url.toString());
+          } else if (window.history.replaceState) {
+            window.history.replaceState(stateObj, '', url.toString());
+          }
+        } else if (updateUrl === 'replace') {
+          if (window.history.replaceState) {
+            window.history.replaceState(stateObj, '', url.toString());
+          }
+        }
       } catch (e) {}
     }
 
     if (currentProfile) {
       const uid = currentProfile.id || currentProfile.userId;
       if (tabName === 'publications') {
-        if (pubItems.length === 0) {
+        const currentParams = getCurrentTabParams('publications');
+        const isUpToDate = tabLoadedState.publications && areTabParamsEqual(tabLoadedState.publications, currentParams);
+        if (!isUpToDate || (pubItems.length === 0 && !isLoadingPub)) {
+          pubItems = [];
+          pubOffset = 0;
           loadPublications(uid, false);
         }
       } else if (tabName === 'questions') {
-        if (questItems.length === 0) {
+        const currentParams = getCurrentTabParams('questions');
+        const isUpToDate = tabLoadedState.questions && areTabParamsEqual(tabLoadedState.questions, currentParams);
+        if (!isUpToDate || (questItems.length === 0 && !isLoadingQuest)) {
+          questItems = [];
+          questOffset = 0;
           loadQuestions(uid, false);
         }
       } else if (tabName === 'answers') {
-        if (ansItems.length === 0) {
+        const currentParams = getCurrentTabParams('answers');
+        const isUpToDate = tabLoadedState.answers && areTabParamsEqual(tabLoadedState.answers, currentParams);
+        if (!isUpToDate || (ansItems.length === 0 && !isLoadingAns)) {
+          ansItems = [];
+          ansOffset = 0;
           loadAnswers(uid, false);
+        }
+      } else if (tabName === 'overview') {
+        const currentParams = getCurrentTabParams('overview');
+        const isUpToDate = tabLoadedState.overview && areTabParamsEqual(tabLoadedState.overview, currentParams);
+        if (!isUpToDate || (activityItems.length === 0 && !isLoadingActivity)) {
+          activityItems = [];
+          activityOffset = 0;
+          loadActivity(uid, false);
         }
       }
     }
@@ -497,19 +952,46 @@
     if (cAns) cAns.textContent = ansVal;
   }
 
-  function renderTopContributions(topList) {
+  function renderTopContributions(topList, fallbackPubs) {
     const sec = document.getElementById('profileTopContributionsSection');
     const grid = document.getElementById('profileTopContributionsGrid');
     if (!sec || !grid) return;
 
-    if (!Array.isArray(topList) || topList.length === 0) {
+    let items = Array.isArray(topList) ? topList.slice() : [];
+    if (items.length === 0) {
+      const pubs = Array.isArray(fallbackPubs) ? fallbackPubs : (currentProfile && (currentProfile.publications || currentProfile.articles));
+      if (Array.isArray(pubs) && pubs.length > 0) {
+        const candidates = pubs.slice();
+        candidates.sort(function (a, b) {
+          const rA = a.rating !== undefined ? a.rating : 0;
+          const rB = b.rating !== undefined ? b.rating : 0;
+          if (rB !== rA) return rB - rA;
+          const dA = new Date(a.date || a.createdAt || 0).getTime();
+          const dB = new Date(b.date || b.createdAt || 0).getTime();
+          return dB - dA;
+        });
+        items = candidates.slice(0, 3).map(function (item) {
+          return {
+            id: item.id,
+            title: item.title,
+            rating: item.rating !== undefined ? item.rating : 0,
+            type: item.materialType || item.type || 'publication',
+            url: item.url || ('article.html?id=' + encodeURIComponent(item.id)),
+            contentSnippet: item.contentSnippet || '',
+            date: item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '')
+          };
+        });
+      }
+    }
+
+    if (items.length === 0) {
       sec.style.display = 'none';
       grid.innerHTML = '';
       return;
     }
 
     sec.style.display = 'block';
-    grid.innerHTML = topList.map(function (item) {
+    grid.innerHTML = items.map(function (item) {
       const isSolution = item.isSolution || item.type === 'solution';
       const isQuestion = item.type === 'question' || item.materialType === 'question';
       let badgeClass = 'publication';
@@ -645,6 +1127,7 @@
             countBadge +
           '</span>';
         }).join('');
+        updateTopicFilterUI(currentTopic);
       } else {
         if (isOwn) {
           if (widgetTopics) widgetTopics.style.display = 'flex';
@@ -681,38 +1164,54 @@
   }
 
   function loadActivity(userId, append) {
-    if (!userId || isLoadingActivity) return;
+    if (!userId) return;
+    if (append && isLoadingActivity) return;
 
     const feedContainer = document.getElementById('profileActivityFeed');
     const actionsContainer = document.getElementById('profileActivityActions');
 
     if (!append) {
+      if (actAbortCtrl) {
+        try { actAbortCtrl.abort(); } catch (e) {}
+      }
       activityOffset = 0;
       activityItems = [];
+      tabLoadedState.overview = { q: currentSearchQuery };
       if (feedContainer) {
         feedContainer.innerHTML = '<div class="profile-empty-state">Загрузка активности...</div>';
       }
+      if (actionsContainer) {
+        actionsContainer.style.display = 'none';
+      }
     }
 
+    actAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++actReqSeq;
     isLoadingActivity = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    const fetchOpts = actAbortCtrl ? { signal: actAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('ACTIVITY_LOAD_FAILED');
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== actReqSeq) return;
         isLoadingActivity = false;
         if (!data || !data.success) {
           throw new Error('ACTIVITY_INVALID_DATA');
         }
-        const newItems = data.activity || [];
+        const newItems = Array.isArray(data.activity) ? data.activity : [];
         if (append) {
           activityItems = activityItems.concat(newItems);
         } else {
           activityItems = newItems;
         }
+        activityOffset += newItems.length;
         activityHasMore = Boolean(data.hasMore);
         renderActivityFeed(activityItems, activityHasMore);
 
@@ -720,13 +1219,30 @@
           renderAnswersTab();
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== actReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingActivity = false;
-        if (!append && feedContainer) {
-          feedContainer.innerHTML = '<div class="profile-empty-state">Ошибка загрузки ленты активности</div>';
-        }
-        if (actionsContainer) {
-          actionsContainer.style.display = 'none';
+        if (!append) {
+          tabLoadedState.overview = null;
+          if (feedContainer) {
+            feedContainer.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки ленты активности</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryActivity">Повторить попытку</button>' +
+              '</div>';
+            const btn = feedContainer.querySelector('#btnRetryActivity');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadActivity(userId, false);
+              });
+            }
+          }
+          if (actionsContainer) {
+            actionsContainer.style.display = 'none';
+          }
+        } else {
+          showToast('Не удалось загрузить активность. Попробуйте еще раз.');
         }
       });
   }
@@ -815,44 +1331,77 @@
   // Publications Tab: Loader & Renderer
   // --------------------------------------------------------------------------
   function loadPublications(userId, append) {
-    if (!userId || isLoadingPub) return;
+    if (!userId) return;
+    if (append && isLoadingPub) return;
 
     const list = document.getElementById('profilePublicationsList');
     const actions = document.getElementById('profilePublicationsActions');
 
     if (!append) {
+      if (pubAbortCtrl) {
+        try { pubAbortCtrl.abort(); } catch (e) {}
+      }
       pubOffset = 0;
       pubItems = [];
+      tabLoadedState.publications = { q: currentSearchQuery, sort: pubSort, topic: currentTopic };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка материалов...</div>';
       }
       if (actions) actions.style.display = 'none';
     }
 
+    pubAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++pubReqSeq;
     isLoadingPub = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
+    }
+    const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== pubReqSeq) return;
+        isLoadingPub = false;
         if (!data || !data.success) {
           throw new Error((data && data.error) || 'Failed to load publications');
         }
         const incoming = Array.isArray(data.items) ? data.items : [];
         pubItems = append ? pubItems.concat(incoming) : incoming;
+        pubOffset += incoming.length;
         pubHasMore = Boolean(data.hasMore);
         renderPublicationsTab(pubItems, append, pubHasMore, incoming);
       })
-      .catch(function () {
-        if (!append && list) {
-          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки публикаций</div>';
-        }
-      })
-      .finally(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== pubReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingPub = false;
+        if (!append) {
+          tabLoadedState.publications = null;
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки публикаций</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryPublications">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryPublications');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadPublications(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить публикации. Попробуйте еще раз.');
+        }
       });
   }
 
@@ -1259,44 +1808,77 @@
   // Questions Tab: Loader & Renderer
   // --------------------------------------------------------------------------
   function loadQuestions(userId, append) {
-    if (!userId || isLoadingQuest) return;
+    if (!userId) return;
+    if (append && isLoadingQuest) return;
 
     const list = document.getElementById('profileQuestionsList');
     const actions = document.getElementById('profileQuestionsActions');
 
     if (!append) {
+      if (questAbortCtrl) {
+        try { questAbortCtrl.abort(); } catch (e) {}
+      }
       questOffset = 0;
       questItems = [];
+      tabLoadedState.questions = { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка вопросов...</div>';
       }
       if (actions) actions.style.display = 'none';
     }
 
+    questAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++questReqSeq;
     isLoadingQuest = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
+    }
+    const fetchOpts = questAbortCtrl ? { signal: questAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== questReqSeq) return;
+        isLoadingQuest = false;
         if (!data || !data.success) {
           throw new Error((data && data.error) || 'Failed to load questions');
         }
         const incoming = Array.isArray(data.items) ? data.items : [];
         questItems = append ? questItems.concat(incoming) : incoming;
+        questOffset += incoming.length;
         questHasMore = Boolean(data.hasMore);
         renderQuestionsTab(questItems, append, questHasMore, incoming);
       })
-      .catch(function () {
-        if (!append && list) {
-          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки вопросов</div>';
-        }
-      })
-      .finally(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== questReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingQuest = false;
+        if (!append) {
+          tabLoadedState.questions = null;
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки вопросов</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryQuestions">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryQuestions');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadQuestions(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить вопросы. Попробуйте еще раз.');
+        }
       });
   }
 
@@ -1350,44 +1932,74 @@
   // Answers Tab: Loader & Renderer
   // --------------------------------------------------------------------------
   function loadAnswers(userId, append) {
-    if (!userId || isLoadingAns) return;
+    if (!userId) return;
+    if (append && isLoadingAns) return;
 
     const list = document.getElementById('profileAnswersList');
     const actions = document.getElementById('profileAnswersActions');
 
     if (!append) {
+      if (ansAbortCtrl) {
+        try { ansAbortCtrl.abort(); } catch (e) {}
+      }
       ansOffset = 0;
       ansItems = [];
+      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
       }
       if (actions) actions.style.display = 'none';
     }
 
+    ansAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++ansReqSeq;
     isLoadingAns = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    const fetchOpts = ansAbortCtrl ? { signal: ansAbortCtrl.signal } : {};
 
-    fetch(url)
+    fetch(url, fetchOpts)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (currentReqSeq !== ansReqSeq) return;
+        isLoadingAns = false;
         if (!data || !data.success) {
           throw new Error((data && data.error) || 'Failed to load answers');
         }
         const incoming = Array.isArray(data.items) ? data.items : [];
         ansItems = append ? ansItems.concat(incoming) : incoming;
+        ansOffset += incoming.length;
         ansHasMore = Boolean(data.hasMore);
         renderAnswersTab(ansItems, append, ansHasMore, incoming);
       })
-      .catch(function () {
-        if (!append && list) {
-          list.innerHTML = '<div class="profile-empty-state">Ошибка загрузки ответов</div>';
-        }
-      })
-      .finally(function () {
+      .catch(function (err) {
+        if (currentReqSeq !== ansReqSeq) return;
+        if (err && err.name === 'AbortError') return;
         isLoadingAns = false;
+        if (!append) {
+          tabLoadedState.answers = null;
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки ответов</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryAnswers">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryAnswers');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadAnswers(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить ответы. Попробуйте еще раз.');
+        }
       });
   }
 
@@ -1569,12 +2181,11 @@
           updateSubscribeButtonState(btn, isSub);
 
           // Update follower counter in UI
-          const fEl = document.getElementById('profileStatFollowers');
-          if (fEl) {
-            let count = parseInt(fEl.textContent, 10) || 0;
-            count = isSub ? (count + 1) : Math.max(0, count - 1);
-            fEl.textContent = count;
-          }
+          let prevFollowers = (currentProfile.stats && currentProfile.stats.followersCount !== undefined)
+            ? currentProfile.stats.followersCount
+            : (parseInt((document.getElementById('profileStatFollowers') || {}).textContent, 10) || 0);
+          const newFollowers = isSub ? (prevFollowers + 1) : Math.max(0, prevFollowers - 1);
+          updateProfileStats({ followersCount: newFollowers });
 
           showToast(isSub ? 'Вы подписались на автора' : 'Вы отписались от автора');
         } else if (data && data.error) {
@@ -1711,6 +2322,113 @@
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
     if (modal) modal.style.display = 'none';
+  }
+
+  function handlePopState(e) {
+    try {
+      const state = (e && e.state) || {};
+      let params = null;
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.search !== undefined) {
+          params = new URLSearchParams(window.location.search);
+        }
+      } catch (errParams) {}
+      if (!params) {
+        params = new URLSearchParams();
+      }
+
+      // Extract all parameters: tab, q, sort, topic, status from URL and state
+      const tab = state.tab || params.get('tab') || 'overview';
+      const targetQ = (state.q !== undefined && state.q !== null) ? String(state.q).trim() : (params.get('q') || '').trim();
+      const targetTopic = (state.topic !== undefined && state.topic !== null) ? String(state.topic).trim() : (params.get('topic') || '').trim();
+      const rawSort = (state.sort !== undefined && state.sort !== null) ? String(state.sort).trim() : (params.get('sort') || '').trim();
+      const rawStatus = (state.status !== undefined && state.status !== null) ? String(state.status).trim() : (params.get('status') || '').trim();
+      const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
+
+      let targetPubSort = pubSort;
+      let targetQuestSort = questSort;
+      if (rawSort) {
+        if (tab === 'publications') {
+          targetPubSort = rawSort;
+        } else if (tab === 'questions') {
+          targetQuestSort = rawSort;
+        } else {
+          targetPubSort = rawSort;
+          targetQuestSort = rawSort;
+        }
+      } else {
+        if (tab === 'publications') targetPubSort = 'newest';
+        if (tab === 'questions') targetQuestSort = 'newest';
+      }
+
+      const targetQuestStatus = rawStatus || 'all';
+      const targetAnsFilter = rawFilter || 'all';
+
+      // If any parameter changed, invalidate cached tab data
+      if (targetQ !== currentSearchQuery) {
+        currentSearchQuery = targetQ;
+        const profileSearchInput = document.getElementById('profileSearchInput');
+        if (profileSearchInput) {
+          profileSearchInput.value = currentSearchQuery;
+        }
+        const searchClearBtn = document.getElementById('btnProfileSearchClear');
+        if (searchClearBtn) {
+          searchClearBtn.style.display = currentSearchQuery ? 'flex' : 'none';
+        }
+        invalidateTabCaches();
+      }
+
+      if (targetTopic !== currentTopic) {
+        currentTopic = targetTopic;
+        tabLoadedState.publications = null;
+        pubItems = [];
+        pubOffset = 0;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetPubSort !== pubSort) {
+        pubSort = targetPubSort;
+        tabLoadedState.publications = null;
+        pubItems = [];
+        pubOffset = 0;
+      }
+
+      if (targetQuestSort !== questSort) {
+        questSort = targetQuestSort;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetQuestStatus !== questStatus) {
+        questStatus = targetQuestStatus;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetAnsFilter !== ansFilter) {
+        ansFilter = targetAnsFilter;
+        tabLoadedState.answers = null;
+        ansItems = [];
+        ansOffset = 0;
+      }
+
+      // Restore UI controls
+      updateSearchInputUI(currentSearchQuery);
+      updatePubSortUI(pubSort);
+      updateQuestSortUI(questSort);
+      updateQuestStatusUI(questStatus);
+      updateAnsFilterUI(ansFilter);
+      updateTopicFilterUI(currentTopic);
+
+      // Activate tab and reload fresh data if cache was invalidated
+      setActiveTab(tab, false);
+    } catch (err) {
+      setActiveTab('overview', false);
+    }
   }
 
   function initEventListeners() {
@@ -2102,20 +2820,91 @@
     const btnLoadMore = document.getElementById('btnProfileLoadMore');
     if (btnLoadMore) {
       btnLoadMore.addEventListener('click', function () {
-        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-          activityOffset += activityLimit;
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && activityHasMore && !isLoadingActivity) {
           loadActivity(currentProfile.id || currentProfile.userId, true);
         }
       });
     }
 
     // 10. History popstate navigation
-    window.addEventListener('popstate', function () {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const tab = params.get('tab') || 'overview';
-        setActiveTab(tab, false);
-      } catch (e) {}
+    window.addEventListener('popstate', handlePopState);
+
+    // Search input (#profileSearchInput) and clear button (#btnProfileSearchClear)
+    const profileSearchInput = document.getElementById('profileSearchInput');
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+
+    if (profileSearchInput) {
+      profileSearchInput.addEventListener('input', function (e) {
+        const val = this.value || '';
+        if (searchClearBtn) {
+          searchClearBtn.style.display = val.trim() ? 'flex' : 'none';
+        }
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+        searchDebounceTimer = setTimeout(function () {
+          setSearchQuery(val, true);
+        }, 300);
+      });
+
+      profileSearchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+          }
+          setSearchQuery(this.value || '', true);
+        } else if (e.key === 'Escape') {
+          if (this.value) {
+            e.preventDefault();
+            this.value = '';
+            if (searchClearBtn) {
+              searchClearBtn.style.display = 'none';
+            }
+            if (searchDebounceTimer) {
+              clearTimeout(searchDebounceTimer);
+              searchDebounceTimer = null;
+            }
+            setSearchQuery('', true);
+          }
+        }
+      });
+    }
+
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function () {
+        const searchInput = document.getElementById('profileSearchInput') || profileSearchInput;
+        if (searchInput) {
+          searchInput.value = '';
+        }
+        searchClearBtn.style.display = 'none';
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+        setSearchQuery('', true);
+      });
+    }
+
+    const searchForms = document.querySelectorAll('.header-search-form, #profileSearchForm');
+    for (let i = 0; i < searchForms.length; i++) {
+      searchForms[i].addEventListener('submit', function (e) {
+        e.preventDefault();
+        const inp = this.querySelector('input');
+        if (inp) {
+          setSearchQuery(inp.value, true);
+        }
+      });
+    }
+
+    // Sidebar topic pill click listener
+    document.addEventListener('click', function (e) {
+      const pill = e.target.closest('.profile-sidebar-topic-pill[data-topic-id]');
+      if (!pill) return;
+      const topicId = pill.getAttribute('data-topic-id') || '';
+      setTopicFilter(topicId === currentTopic ? '' : topicId, true);
     });
 
     // 11. Publications toolbar sorting
@@ -2128,8 +2917,22 @@
         for (let j = 0; j < pubSortBtns.length; j++) {
           pubSortBtns[j].classList.toggle('is-active', pubSortBtns[j] === this);
         }
+        tabLoadedState.publications = null;
         pubOffset = 0;
         pubItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (pubSort !== 'newest') url.searchParams.set('sort', pubSort);
+            else url.searchParams.delete('sort');
+            window.history.pushState({
+              tab: 'publications',
+              sort: pubSort,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadPublications(currentProfile.id || currentProfile.userId, false);
         }
@@ -2141,7 +2944,6 @@
     if (btnLoadMorePub) {
       btnLoadMorePub.addEventListener('click', function () {
         if (currentProfile && (currentProfile.id || currentProfile.userId) && pubHasMore && !isLoadingPub) {
-          pubOffset += pubLimit;
           loadPublications(currentProfile.id || currentProfile.userId, true);
         }
       });
@@ -2157,8 +2959,23 @@
         for (let j = 0; j < questSortBtns.length; j++) {
           questSortBtns[j].classList.toggle('is-active', questSortBtns[j] === this);
         }
+        tabLoadedState.questions = null;
         questOffset = 0;
         questItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (questSort !== 'newest') url.searchParams.set('sort', questSort);
+            else url.searchParams.delete('sort');
+            window.history.pushState({
+              tab: 'questions',
+              sort: questSort,
+              status: questStatus,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadQuestions(currentProfile.id || currentProfile.userId, false);
         }
@@ -2174,8 +2991,23 @@
         for (let j = 0; j < questStatusBtns.length; j++) {
           questStatusBtns[j].classList.toggle('is-active', questStatusBtns[j] === this);
         }
+        tabLoadedState.questions = null;
         questOffset = 0;
         questItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (questStatus !== 'all') url.searchParams.set('status', questStatus);
+            else url.searchParams.delete('status');
+            window.history.pushState({
+              tab: 'questions',
+              sort: questSort,
+              status: questStatus,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadQuestions(currentProfile.id || currentProfile.userId, false);
         }
@@ -2187,7 +3019,6 @@
     if (btnLoadMoreQuest) {
       btnLoadMoreQuest.addEventListener('click', function () {
         if (currentProfile && (currentProfile.id || currentProfile.userId) && questHasMore && !isLoadingQuest) {
-          questOffset += questLimit;
           loadQuestions(currentProfile.id || currentProfile.userId, true);
         }
       });
@@ -2203,8 +3034,21 @@
         for (let j = 0; j < ansFilterBtns.length; j++) {
           ansFilterBtns[j].classList.toggle('is-active', ansFilterBtns[j] === this);
         }
+        tabLoadedState.answers = null;
         ansOffset = 0;
         ansItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
+            else url.searchParams.delete('filter');
+            window.history.pushState({
+              tab: 'answers',
+              filter: ansFilter,
+              q: currentSearchQuery || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadAnswers(currentProfile.id || currentProfile.userId, false);
         }
@@ -2216,7 +3060,6 @@
     if (btnLoadMoreAns) {
       btnLoadMoreAns.addEventListener('click', function () {
         if (currentProfile && (currentProfile.id || currentProfile.userId) && ansHasMore && !isLoadingAns) {
-          ansOffset += ansLimit;
           loadAnswers(currentProfile.id || currentProfile.userId, true);
         }
       });
@@ -2248,7 +3091,9 @@
     init: init,
     loadProfile: loadProfile,
     renderProfile: renderProfile,
+    updateProfileStats: updateProfileStats,
     setActiveTab: setActiveTab,
+    handlePopState: handlePopState,
     loadActivity: loadActivity,
     renderTopContributions: renderTopContributions,
     renderActivityFeed: renderActivityFeed,
@@ -2275,7 +3120,40 @@
     openAuthModal: openAuthModal,
     closeAuthModal: closeAuthModal,
     setAuthState: setAuthState,
-    loadHeaderNotifications: loadHeaderNotifications
+    loadHeaderNotifications: loadHeaderNotifications,
+    getOffsets: function () {
+      return {
+        activity: activityOffset,
+        publications: pubOffset,
+        questions: questOffset,
+        answers: ansOffset
+      };
+    },
+    getSeqTokens: function () {
+      return {
+        activity: actReqSeq,
+        publications: pubReqSeq,
+        questions: questReqSeq,
+        answers: ansReqSeq
+      };
+    },
+    getActiveTab: function () {
+      return activeTab;
+    },
+    getCurrentProfile: function () {
+      return currentProfile;
+    },
+    setSearchQuery: setSearchQuery,
+    triggerSearch: triggerSearch,
+    getSearchQuery: function () {
+      return currentSearchQuery;
+    },
+    setTopicFilter: setTopicFilter,
+    invalidateTabCaches: invalidateTabCaches,
+    initEventListeners: initEventListeners,
+    getTabLoadedState: function () {
+      return tabLoadedState;
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);
