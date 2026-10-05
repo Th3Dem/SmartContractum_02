@@ -162,6 +162,24 @@ class TestIssue184ProfileThemesAvatarLayout(unittest.TestCase):
         self.assertIsNotNone(quick_btn_match, ".btn-quick-profile-open rule must exist")
         self.assertIn("#ffffff", quick_btn_match.group(1), "Quick profile open button must have high-contrast white text")
 
+    def test_subscribed_button_contrast_in_light_theme(self):
+        """Verify subscribed button contrast in light theme and absence of !important on base color."""
+        sub_btn_match = re.search(r"\.btn-profile-subscribe\s*\{([^}]+)\}", self.css)
+        self.assertIsNotNone(sub_btn_match, ".btn-profile-subscribe rule must exist")
+        base_body = sub_btn_match.group(1)
+        self.assertNotIn("!important", base_body, "Base .btn-profile-subscribe must not use !important on color")
+        self.assertIn("color: #ffffff", base_body, "Base .btn-profile-subscribe must specify color: #ffffff")
+
+        subscribed_match = re.search(r"\.btn-profile-subscribe\.is-subscribed\s*\{([^}]+)\}", self.css)
+        self.assertIsNotNone(subscribed_match, ".btn-profile-subscribe.is-subscribed rule must exist")
+        sub_body = subscribed_match.group(1)
+        self.assertIn("var(--text-secondary)", sub_body, ".btn-profile-subscribe.is-subscribed must specify var(--text-secondary)")
+
+        light_sub_match = re.search(r"\[data-theme=[\"']light[\"']\]\s*\.btn-profile-subscribe\.is-subscribed\s*\{([^}]+)\}", self.css)
+        self.assertIsNotNone(light_sub_match, "[data-theme=\"light\"] .btn-profile-subscribe.is-subscribed rule must exist")
+        light_body = light_sub_match.group(1)
+        self.assertIn("var(--text-primary)", light_body, "Light theme subscribed button must specify var(--text-primary)")
+
     # =========================================================================
     # 2. Avatar Placement & Geometric Overlap Prevention
     # =========================================================================
