@@ -38,6 +38,7 @@
   let questAbortCtrl = null;
 
   let ansFilter = 'all';
+  let ansSort = 'new';
   let ansOffset = 0;
   const ansLimit = 10;
   let ansItems = [];
@@ -61,6 +62,260 @@
   let pendingAvatarData = null;
   let uploadedAvatarUrl = null;
   let isAvatarRemoved = false;
+  let avatarUploadSeq = 0;
+  let rawSelectedImage = null;
+  let cropZoom = 1;
+  let cropPanX = 0;
+  let cropPanY = 0;
+  let isDraggingCrop = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
+  let currentTopic = '';
+  let tabLoadedState = {
+    overview: null,
+    publications: null,
+    questions: null,
+    answers: null,
+    comments: null
+  };
+
+  function getCurrentTabParams(tabName) {
+    if (tabName === 'publications') {
+      return { q: currentSearchQuery, sort: pubSort, topic: currentTopic };
+    }
+    if (tabName === 'questions') {
+      return { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
+    }
+    if (tabName === 'answers') {
+      return { q: currentSearchQuery, filter: ansFilter, sort: ansSort };
+    }
+    if (tabName === 'overview') {
+      return { q: currentSearchQuery };
+    }
+    if (tabName === 'comments') {
+      return { q: currentSearchQuery, sort: commSort };
+    }
+    return {};
+  }
+
+  function areTabParamsEqual(p1, p2) {
+    if (!p1 || !p2) return false;
+    const keys1 = Object.keys(p1);
+    const keys2 = Object.keys(p2);
+    if (keys1.length !== keys2.length) return false;
+    for (let i = 0; i < keys1.length; i++) {
+      const k = keys1[i];
+      if (p1[k] !== p2[k]) return false;
+    }
+    return true;
+  }
+
+  function invalidateTabCaches(tabs) {
+    const list = tabs || ['overview', 'publications', 'questions', 'answers', 'comments'];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      tabLoadedState[t] = null;
+      if (t === 'publications') {
+        pubItems = [];
+        pubOffset = 0;
+      } else if (t === 'questions') {
+        questItems = [];
+        questOffset = 0;
+      } else if (t === 'answers') {
+        ansItems = [];
+        ansOffset = 0;
+      } else if (t === 'overview') {
+        activityItems = [];
+        activityOffset = 0;
+      } else if (t === 'comments') {
+        commItems = [];
+        commOffset = 0;
+      }
+    }
+  }
+
+  function updateSearchInputUI(q) {
+    const searchInputs = document.querySelectorAll(
+      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
+    );
+    for (let i = 0; i < searchInputs.length; i++) {
+      searchInputs[i].value = q || '';
+    }
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+    if (searchClearBtn) {
+      searchClearBtn.style.display = q ? 'flex' : 'none';
+    }
+  }
+
+  function updatePubSortUI(sort) {
+    const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
+    for (let i = 0; i < pubSortBtns.length; i++) {
+      const s = pubSortBtns[i].getAttribute('data-pub-sort');
+      const isActive = (s === sort);
+      pubSortBtns[i].classList.toggle('is-active', isActive);
+      if (pubSortBtns[i].hasAttribute('aria-pressed')) {
+        pubSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateQuestSortUI(sort) {
+    const questSortBtns = document.querySelectorAll('[data-quest-sort]');
+    for (let i = 0; i < questSortBtns.length; i++) {
+      const s = questSortBtns[i].getAttribute('data-quest-sort');
+      const isActive = (s === sort);
+      questSortBtns[i].classList.toggle('is-active', isActive);
+      if (questSortBtns[i].hasAttribute('aria-pressed')) {
+        questSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateQuestStatusUI(status) {
+    const questStatusBtns = document.querySelectorAll('[data-quest-status]');
+    for (let i = 0; i < questStatusBtns.length; i++) {
+      const s = questStatusBtns[i].getAttribute('data-quest-status');
+      const isActive = (s === status);
+      questStatusBtns[i].classList.toggle('is-active', isActive);
+      if (questStatusBtns[i].hasAttribute('aria-pressed')) {
+        questStatusBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateAnsFilterUI(filter) {
+    const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
+    for (let i = 0; i < ansFilterBtns.length; i++) {
+      const f = ansFilterBtns[i].getAttribute('data-ans-filter');
+      const isActive = (f === filter);
+      ansFilterBtns[i].classList.toggle('is-active', isActive);
+      if (ansFilterBtns[i].hasAttribute('aria-pressed')) {
+        ansFilterBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateAnsSortUI(sort) {
+    const ansSortBtns = document.querySelectorAll('[data-ans-sort], #sortAnswersNewest, #sortAnswersRating');
+    for (let i = 0; i < ansSortBtns.length; i++) {
+      const s = ansSortBtns[i].getAttribute('data-ans-sort');
+      const isActive = (s === sort);
+      ansSortBtns[i].classList.toggle('is-active', isActive);
+      if (ansSortBtns[i].hasAttribute('aria-pressed')) {
+        ansSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateCommSortUI(sort) {
+    const commSortBtns = document.querySelectorAll('[data-comm-sort]');
+    for (let i = 0; i < commSortBtns.length; i++) {
+      const s = commSortBtns[i].getAttribute('data-comm-sort');
+      const isActive = (s === sort);
+      commSortBtns[i].classList.toggle('is-active', isActive);
+      if (commSortBtns[i].hasAttribute('aria-pressed')) {
+        commSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateTopicFilterUI(topic) {
+    const topicPills = document.querySelectorAll('.profile-sidebar-topic-pill[data-topic-id], [data-profile-topic]');
+    for (let i = 0; i < topicPills.length; i++) {
+      const tid = topicPills[i].getAttribute('data-topic-id') || topicPills[i].getAttribute('data-profile-topic');
+      topicPills[i].classList.toggle('is-active', Boolean(topic && tid === topic));
+    }
+  }
+
+  function setSearchQuery(q, updateUrl) {
+    if (q === undefined || q === null) q = '';
+    const normalized = String(q).trim();
+    if (normalized === currentSearchQuery) return;
+    currentSearchQuery = normalized;
+
+    invalidateTabCaches();
+    updateSearchInputUI(currentSearchQuery);
+
+    if (updateUrl && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        if (window.history.pushState) {
+          window.history.pushState({
+            tab: activeTab,
+            q: currentSearchQuery,
+            topic: currentTopic || undefined,
+            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : (activeTab === 'answers' ? ansSort : (activeTab === 'comments' ? commSort : undefined)))),
+            status: (activeTab === 'questions' ? questStatus : undefined),
+            filter: (activeTab === 'answers' ? ansFilter : undefined),
+            ans_sort: (activeTab === 'answers' ? ansSort : undefined)
+          }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
+      if (activeTab === 'publications') {
+        loadPublications(uid, false);
+      } else if (activeTab === 'questions') {
+        loadQuestions(uid, false);
+      } else if (activeTab === 'answers') {
+        loadAnswers(uid, false);
+      } else {
+        loadActivity(uid, false);
+      }
+    }
+  }
+
+  function setTopicFilter(topic, updateUrl) {
+    if (topic === undefined || topic === null) topic = '';
+    const normalized = String(topic).trim();
+    if (normalized === currentTopic) return;
+    currentTopic = normalized;
+
+    tabLoadedState.publications = null;
+    pubItems = [];
+    pubOffset = 0;
+    tabLoadedState.questions = null;
+    questItems = [];
+    questOffset = 0;
+    updateTopicFilterUI(currentTopic);
+
+    if (updateUrl && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentTopic) {
+          url.searchParams.set('topic', currentTopic);
+        } else {
+          url.searchParams.delete('topic');
+        }
+        if (window.history.pushState) {
+          window.history.pushState({
+            tab: activeTab,
+            q: currentSearchQuery || undefined,
+            topic: currentTopic || undefined,
+            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+            status: (activeTab === 'questions' ? questStatus : undefined)
+          }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
+      if (activeTab === 'publications') {
+        loadPublications(uid, false);
+      } else if (activeTab === 'questions') {
+        loadQuestions(uid, false);
+      }
+    }
+  }
 
   let currentTopicFilter = null;
   let socialModalMode = null;
@@ -205,6 +460,47 @@
     if (userMenu && !currentUser) {
       userMenu.style.display = 'none';
     }
+  }
+
+  function loadHeaderNotifications() {
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifList = document.getElementById('notifListContainer');
+
+    if (!notifBtn) return;
+    fetch('/api/notifications')
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.success) return;
+        const count = data.unreadCount || 0;
+        if (notifBadge) {
+          if (count > 0) {
+            notifBadge.textContent = count > 99 ? '99+' : count;
+            notifBadge.style.display = 'inline-flex';
+          } else {
+            notifBadge.style.display = 'none';
+          }
+        }
+        if (notifList) {
+          const list = data.notifications || [];
+          if (list.length === 0) {
+            notifList.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
+          } else {
+            notifList.innerHTML = '';
+            list.forEach(function (n) {
+              const item = document.createElement('a');
+              item.className = 'notif-item' + (n.is_read ? ' is-read' : ' is-unread');
+              item.href = n.article_id ? ('article.html?id=' + encodeURIComponent(n.article_id) + '#comments') : '#';
+              item.innerHTML =
+                '<div class="notif-item-title">' + escapeHtml(n.title) + '</div>' +
+                '<div class="notif-item-msg">' + escapeHtml(n.message) + '</div>' +
+                '<div class="notif-item-time">' + escapeHtml(n.created_at ? n.created_at.substring(0, 16).replace('T', ' ') : '') + '</div>';
+              notifList.appendChild(item);
+            });
+          }
+        }
+      })
+      .catch(function () {});
   }
 
   function getUserIdFromUrl() {
@@ -363,6 +659,7 @@
 
   function renderProfile(p) {
     if (!p) return;
+    currentProfile = p;
 
     // Document title
     const displayName = p.name || p.id || 'Пользователь';
@@ -515,8 +812,8 @@
     // 8. Reset tab caches
     pubOffset = 0; pubItems = [];
     questOffset = 0; questItems = [];
-    ansOffset = 0; ansItems = [];
     commOffset = 0; commItems = [];
+    tabLoadedState = { overview: null, publications: null, questions: null, answers: null, comments: null };
 
     // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
@@ -527,6 +824,37 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('q')) {
+        currentSearchQuery = urlParams.get('q').trim();
+        updateSearchInputUI(currentSearchQuery);
+      }
+      if (urlParams.get('topic')) {
+        currentTopic = urlParams.get('topic').trim();
+        updateTopicFilterUI(currentTopic);
+      }
+      if (urlParams.get('sort')) {
+        const s = urlParams.get('sort').trim();
+        pubSort = s;
+        questSort = s;
+        commSort = s;
+        ansSort = s;
+        updatePubSortUI(pubSort);
+        updateQuestSortUI(questSort);
+        updateCommSortUI(commSort);
+        updateAnsSortUI(ansSort);
+      }
+      if (urlParams.get('ans_sort')) {
+        ansSort = urlParams.get('ans_sort').trim();
+        updateAnsSortUI(ansSort);
+      }
+      if (urlParams.get('status')) {
+        questStatus = urlParams.get('status').trim();
+        updateQuestStatusUI(questStatus);
+      }
+      if (urlParams.get('filter')) {
+        ansFilter = urlParams.get('filter').trim();
+        updateAnsFilterUI(ansFilter);
+      }
       const initialTab = urlParams.get('tab') || 'overview';
       setActiveTab(initialTab, false);
     } catch (e) {
@@ -586,7 +914,60 @@
         } else {
           url.searchParams.set('tab', tabName);
         }
-        const stateObj = { tab: tabName, q: currentSearchQuery };
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        if (currentTopic) {
+          url.searchParams.set('topic', currentTopic);
+        } else {
+          url.searchParams.delete('topic');
+        }
+        if (tabName === 'publications') {
+          if (pubSort !== 'newest') url.searchParams.set('sort', pubSort);
+          else url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else if (tabName === 'questions') {
+          if (questSort !== 'newest') url.searchParams.set('sort', questSort);
+          else url.searchParams.delete('sort');
+          if (questStatus !== 'all') url.searchParams.set('status', questStatus);
+          else url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else if (tabName === 'answers') {
+          if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
+          else url.searchParams.delete('filter');
+          if (ansSort !== 'new') {
+            url.searchParams.set('sort', ansSort);
+            url.searchParams.set('ans_sort', ansSort);
+          } else {
+            url.searchParams.delete('sort');
+            url.searchParams.delete('ans_sort');
+          }
+          url.searchParams.delete('status');
+        } else if (tabName === 'comments') {
+          if (commSort !== 'new') url.searchParams.set('sort', commSort);
+          else url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+        } else {
+          url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+        }
+
+        const stateObj = {
+          tab: tabName,
+          q: currentSearchQuery || undefined,
+          topic: currentTopic || undefined,
+          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'answers' ? ansSort : (tabName === 'comments' ? commSort : undefined)))),
+          status: (tabName === 'questions' ? questStatus : undefined),
+          filter: (tabName === 'answers' ? ansFilter : undefined),
+          ans_sort: (tabName === 'answers' ? ansSort : undefined)
+        };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
             window.history.pushState(stateObj, '', url.toString());
@@ -604,20 +985,44 @@
     if (currentProfile) {
       const uid = currentProfile.id || currentProfile.userId;
       if (tabName === 'publications') {
-        if (pubItems.length === 0) {
+        const currentParams = getCurrentTabParams('publications');
+        const isUpToDate = tabLoadedState.publications && areTabParamsEqual(tabLoadedState.publications, currentParams);
+        if (!isUpToDate || (pubItems.length === 0 && !isLoadingPub)) {
+          pubItems = [];
+          pubOffset = 0;
           loadPublications(uid, false);
         }
       } else if (tabName === 'questions') {
-        if (questItems.length === 0) {
+        const currentParams = getCurrentTabParams('questions');
+        const isUpToDate = tabLoadedState.questions && areTabParamsEqual(tabLoadedState.questions, currentParams);
+        if (!isUpToDate || (questItems.length === 0 && !isLoadingQuest)) {
+          questItems = [];
+          questOffset = 0;
           loadQuestions(uid, false);
         }
       } else if (tabName === 'answers') {
-        if (ansItems.length === 0) {
+        const currentParams = getCurrentTabParams('answers');
+        const isUpToDate = tabLoadedState.answers && areTabParamsEqual(tabLoadedState.answers, currentParams);
+        if (!isUpToDate || (ansItems.length === 0 && !isLoadingAns)) {
+          ansItems = [];
+          ansOffset = 0;
           loadAnswers(uid, false);
         }
       } else if (tabName === 'comments') {
-        if (commItems.length === 0) {
+        const currentParams = getCurrentTabParams('comments');
+        const isUpToDate = tabLoadedState.comments && areTabParamsEqual(tabLoadedState.comments, currentParams);
+        if (!isUpToDate || (commItems.length === 0 && !isLoadingComm)) {
+          commItems = [];
+          commOffset = 0;
           loadComments(uid, false);
+        }
+      } else if (tabName === 'overview') {
+        const currentParams = getCurrentTabParams('overview');
+        const isUpToDate = tabLoadedState.overview && areTabParamsEqual(tabLoadedState.overview, currentParams);
+        if (!isUpToDate || (activityItems.length === 0 && !isLoadingActivity)) {
+          activityItems = [];
+          activityOffset = 0;
+          loadActivity(uid, false);
         }
       }
     }
@@ -778,6 +1183,19 @@
       b.classList.toggle('is-pinned', isPinned);
       b.textContent = isPinned ? 'Закреплено' : 'Закрепить';
       b.title = isPinned ? 'Материал закреплен в профиле' : 'Закрепить в профиле';
+    }
+  }
+
+  function updateSearchResultsCount(count) {
+    const infoEl = document.getElementById('profileSearchResultsInfo');
+    const countEl = document.getElementById('profileSearchResultsCount');
+    if (infoEl && countEl) {
+      if (currentSearchQuery) {
+        countEl.textContent = count !== undefined ? count : 0;
+        infoEl.style.display = 'flex';
+      } else {
+        infoEl.style.display = 'none';
+      }
     }
   }
 
@@ -971,7 +1389,6 @@
             countBadge +
           '</span>';
         }).join('');
-
         const topicPills = topicsContainer.querySelectorAll('.profile-sidebar-topic-pill');
         for (let i = 0; i < topicPills.length; i++) {
           const pill = topicPills[i];
@@ -989,6 +1406,7 @@
             }
           });
         }
+        updateTopicFilterUI(currentTopic || currentTopicFilter);
       } else {
         if (isOwn) {
           if (widgetTopics) widgetTopics.style.display = 'flex';
@@ -1037,6 +1455,7 @@
       }
       activityOffset = 0;
       activityItems = [];
+      tabLoadedState.overview = { q: currentSearchQuery };
       if (feedContainer) {
         feedContainer.innerHTML = '<div class="profile-empty-state">Загрузка активности...</div>';
       }
@@ -1048,7 +1467,10 @@
     actAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const currentReqSeq = ++actReqSeq;
     isLoadingActivity = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
     const fetchOpts = actAbortCtrl ? { signal: actAbortCtrl.signal } : {};
 
     fetch(url, fetchOpts)
@@ -1081,6 +1503,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingActivity = false;
         if (!append) {
+          tabLoadedState.overview = null;
           if (feedContainer) {
             feedContainer.innerHTML =
               '<div class="profile-error-state">' +
@@ -1215,6 +1638,7 @@
       }
       pubOffset = 0;
       pubItems = [];
+      tabLoadedState.publications = { q: currentSearchQuery, sort: pubSort, topic: currentTopic };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка материалов...</div>';
       }
@@ -1228,8 +1652,9 @@
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
     }
-    if (currentTopicFilter) {
-      url += '&topic=' + encodeURIComponent(currentTopicFilter);
+    const activeTopicVal = currentTopicFilter || currentTopic;
+    if (activeTopicVal) {
+      url += '&topic=' + encodeURIComponent(activeTopicVal);
     }
     const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
@@ -1248,6 +1673,7 @@
         pubItems = append ? pubItems.concat(incoming) : incoming;
         pubOffset += incoming.length;
         pubHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderPublicationsTab(pubItems, append, pubHasMore, incoming);
       })
       .catch(function (err) {
@@ -1255,6 +1681,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingPub = false;
         if (!append) {
+          tabLoadedState.publications = null;
           if (list) {
             list.innerHTML =
               '<div class="profile-error-state">' +
@@ -1414,16 +1841,18 @@
         }
       })
       .catch(function (err) {
-        if (err.message !== 'AUTH_REQUIRED') {
-          // Rollback
-          btn.classList.toggle('is-liked', currentLiked);
-          btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
-          btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
-          if (countEl) countEl.textContent = currentCount;
-          if (item) {
-            item.hasLiked = currentLiked;
-            item.likesCount = currentCount;
-          }
+        // Rollback unconditionally
+        btn.classList.toggle('is-liked', currentLiked);
+        btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+        btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+        if (countEl) countEl.textContent = currentCount;
+        if (item) {
+          item.hasLiked = currentLiked;
+          item.likesCount = currentCount;
+        }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Войдите, чтобы поставить отметку');
+        } else {
           showToast('Не удалось обновить отметку');
         }
       });
@@ -1507,22 +1936,27 @@
         }
       })
       .catch(function (err) {
-        if (err.message !== 'AUTH_REQUIRED') {
-          // Rollback
-          btn.classList.toggle('is-bookmarked', wasActive);
-          btn.classList.toggle('is-saved', wasActive);
-          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
-          if (countEl) countEl.textContent = prevCount;
-          if (item) {
-            item.hasSaved = wasActive;
-            item.isSaved = wasActive;
-            item.isBookmarked = wasActive;
-            item.savesCount = prevCount;
-          }
-          const rbBms = getBookmarks();
-          const rbIdx = rbBms.indexOf(articleId);
-          if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
-          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        // Rollback unconditionally
+        btn.classList.toggle('is-bookmarked', wasActive);
+        btn.classList.toggle('is-saved', wasActive);
+        if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+        const prevTooltip = wasActive ? 'Убрать из сохраненного' : 'Сохранить публикацию';
+        btn.title = prevTooltip;
+        btn.setAttribute('aria-label', prevTooltip);
+        if (countEl) countEl.textContent = prevCount;
+        if (item) {
+          item.hasSaved = wasActive;
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+          item.savesCount = prevCount;
+        }
+        const rbBms = getBookmarks();
+        const rbIdx = rbBms.indexOf(articleId);
+        if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения публикации необходимо войти');
+        } else {
           showToast('Не удалось обновить сохранение');
         }
       });
@@ -1710,6 +2144,7 @@
       }
       questOffset = 0;
       questItems = [];
+      tabLoadedState.questions = { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка вопросов...</div>';
       }
@@ -1722,6 +2157,9 @@
     let url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
     }
     const fetchOpts = questAbortCtrl ? { signal: questAbortCtrl.signal } : {};
 
@@ -1740,6 +2178,7 @@
         questItems = append ? questItems.concat(incoming) : incoming;
         questOffset += incoming.length;
         questHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderQuestionsTab(questItems, append, questHasMore, incoming);
       })
       .catch(function (err) {
@@ -1747,6 +2186,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingQuest = false;
         if (!append) {
+          tabLoadedState.questions = null;
           if (list) {
             list.innerHTML =
               '<div class="profile-error-state">' +
@@ -1832,6 +2272,7 @@
       }
       ansOffset = 0;
       ansItems = [];
+      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter, sort: ansSort };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
       }
@@ -1842,6 +2283,7 @@
     const currentReqSeq = ++ansReqSeq;
     isLoadingAns = true;
     let url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    url += '&sort=' + encodeURIComponent(ansSort);
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
     }
@@ -1862,6 +2304,7 @@
         ansItems = append ? ansItems.concat(incoming) : incoming;
         ansOffset += incoming.length;
         ansHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderAnswersTab(ansItems, append, ansHasMore, incoming);
       })
       .catch(function (err) {
@@ -1869,6 +2312,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingAns = false;
         if (!append) {
+          tabLoadedState.answers = null;
           if (list) {
             list.innerHTML =
               '<div class="profile-error-state">' +
@@ -2023,12 +2467,15 @@
         commItems = append ? commItems.concat(incoming) : incoming;
         commOffset += incoming.length;
         commHasMore = Boolean(data.hasMore);
+        tabLoadedState.comments = { q: currentSearchQuery, sort: commSort };
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderCommentsTab(commItems, append, commHasMore, incoming);
       })
       .catch(function (err) {
         if (currentReqSeq !== commReqSeq) return;
         if (err && err.name === 'AbortError') return;
         isLoadingComm = false;
+        tabLoadedState.comments = null;
         if (!append) {
           if (list) {
             list.innerHTML =
@@ -2046,6 +2493,223 @@
           if (actions) actions.style.display = 'none';
         } else {
           showToast('Не удалось загрузить комментарии. Попробуйте еще раз.');
+        }
+      });
+  }
+
+  // --------------------------------------------------------------------------
+  // Comment Card Actions & Interaction Helpers
+  // --------------------------------------------------------------------------
+  function getCommentBookmarks() {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
+      const data = localStorage.getItem(key) || localStorage.getItem('sc_comment_bookmarks');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCommentBookmarks(bookmarks) {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
+      localStorage.setItem(key, JSON.stringify(bookmarks));
+      localStorage.setItem('sc_comment_bookmarks', JSON.stringify(bookmarks));
+    } catch (e) {}
+  }
+
+  function isCommentBookmarked(id, item) {
+    if (!id) return false;
+    if (item && (item.isBookmarked !== undefined || item.isSaved !== undefined || item.hasSaved !== undefined)) {
+      return Boolean(item.isBookmarked || item.isSaved || item.hasSaved);
+    }
+    return getCommentBookmarks().includes(id);
+  }
+
+  function isCommentReported(id, item) {
+    if (!id) return false;
+    if (item && (item.hasReported !== undefined || item.isReported !== undefined)) {
+      return Boolean(item.hasReported || item.isReported);
+    }
+    if (window._reportedCommentIds && window._reportedCommentIds.has(id)) return true;
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_comments_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (stored.includes(id)) {
+          window._reportedCommentIds = window._reportedCommentIds || new Set();
+          window._reportedCommentIds.add(id);
+          return true;
+        }
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function toggleCommentSave(commentId, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для сохранения комментария необходимо войти');
+      return;
+    }
+
+    const wasActive = btn ? (btn.classList.contains('is-bookmarked') || btn.classList.contains('is-saved')) : false;
+    const nextActive = !wasActive;
+
+    if (btn) {
+      btn.classList.toggle('is-bookmarked', nextActive);
+      btn.classList.toggle('is-saved', nextActive);
+      const svg = btn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', nextActive ? 'currentColor' : 'none');
+      const newTooltip = nextActive ? 'Удалить из закладок' : 'Сохранить';
+      btn.title = newTooltip;
+      btn.setAttribute('aria-label', newTooltip);
+    }
+    if (item) {
+      item.isSaved = nextActive;
+      item.isBookmarked = nextActive;
+    }
+
+    const bms = getCommentBookmarks();
+    const idx = bms.indexOf(commentId);
+    if (nextActive && idx === -1) { bms.push(commentId); saveCommentBookmarks(bms); }
+    else if (!nextActive && idx !== -1) { bms.splice(idx, 1); saveCommentBookmarks(bms); }
+
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: nextActive ? 'save' : 'unsave' })
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          const finalSaved = Boolean(data.isSaved !== undefined ? data.isSaved : nextActive);
+          if (btn) {
+            btn.classList.toggle('is-bookmarked', finalSaved);
+            btn.classList.toggle('is-saved', finalSaved);
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', finalSaved ? 'currentColor' : 'none');
+          }
+          if (item) {
+            item.isSaved = finalSaved;
+            item.isBookmarked = finalSaved;
+          }
+          showToast(finalSaved ? 'Комментарий сохранен в закладки' : 'Комментарий удален из закладок');
+        } else {
+          // Rollback
+          if (btn) {
+            btn.classList.toggle('is-bookmarked', wasActive);
+            btn.classList.toggle('is-saved', wasActive);
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+            const prevTooltip = wasActive ? 'Удалить из закладок' : 'Сохранить';
+            btn.title = prevTooltip;
+            btn.setAttribute('aria-label', prevTooltip);
+          }
+          if (item) {
+            item.isSaved = wasActive;
+            item.isBookmarked = wasActive;
+          }
+          const rbBms = getCommentBookmarks();
+          const rbIdx = rbBms.indexOf(commentId);
+          if (wasActive && rbIdx === -1) { rbBms.push(commentId); saveCommentBookmarks(rbBms); }
+          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveCommentBookmarks(rbBms); }
+          showToast((data && data.error) || 'Ошибка сохранения комментария');
+        }
+      })
+      .catch(function (err) {
+        // Rollback unconditionally
+        if (btn) {
+          btn.classList.toggle('is-bookmarked', wasActive);
+          btn.classList.toggle('is-saved', wasActive);
+          const svg = btn.querySelector('svg');
+          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+          const prevTooltip = wasActive ? 'Удалить из закладок' : 'Сохранить';
+          btn.title = prevTooltip;
+          btn.setAttribute('aria-label', prevTooltip);
+        }
+        if (item) {
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+        }
+        const rbBms = getCommentBookmarks();
+        const rbIdx = rbBms.indexOf(commentId);
+        if (wasActive && rbIdx === -1) { rbBms.push(commentId); saveCommentBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveCommentBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения комментария необходимо войти');
+        } else {
+          showToast('Не удалось обновить сохранение');
+        }
+      });
+  }
+
+  function openCommentReport(commentId, triggerBtn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для отправки жалобы необходимо войти');
+      return;
+    }
+    if (isCommentReported(commentId, item)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'spam' })
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          if (triggerBtn) {
+            triggerBtn.classList.add('is-reported');
+            triggerBtn.title = 'Жалоба уже отправлена';
+            triggerBtn.setAttribute('aria-label', 'Жалоба уже отправлена');
+            const svg = triggerBtn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', 'currentColor');
+          }
+          if (item) {
+            item.isReported = true;
+            item.hasReported = true;
+          }
+          window._reportedCommentIds = window._reportedCommentIds || new Set();
+          window._reportedCommentIds.add(commentId);
+          if (currentUser) {
+            try {
+              const userKey = 'sc_reported_comments_' + currentUser.id;
+              const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+              if (!stored.includes(commentId)) {
+                stored.push(commentId);
+                localStorage.setItem(userKey, JSON.stringify(stored));
+              }
+            } catch (e) {}
+          }
+          showToast('Жалоба отправлена');
+        } else {
+          showToast((data && data.error) || 'Ошибка отправки жалобы');
+        }
+      })
+      .catch(function (err) {
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для отправки жалобы необходимо войти');
+        } else {
+          showToast('Не удалось отправить жалобу');
         }
       });
   }
@@ -2087,6 +2751,40 @@
         ? '<div class="profile-comment-snippet">' + escapeHtml(snippet) + '</div>'
         : '';
 
+      const isSaved = isCommentBookmarked(commentId, item);
+      const isReported = isCommentReported(commentId, item);
+      const authorId = item.userId || item.authorId || item.author_id || (currentProfile && (currentProfile.id || currentProfile.userId));
+      const isMyComment = Boolean(currentUser && authorId && (currentUser.id === authorId));
+
+      const saveBtnHtml =
+        '<button type="button" class="btn-comment-action btn-save-comment' + (isSaved ? ' is-bookmarked is-saved' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(commentId) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+        '</button>';
+
+      const shareBtnHtml =
+        '<button type="button" class="btn-comment-action btn-share-comment" title="Поделиться" aria-label="Поделиться" data-comment-id="' + escapeHtml(commentId) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<circle cx="18" cy="5" r="3"></circle>' +
+            '<circle cx="6" cy="12" r="3"></circle>' +
+            '<circle cx="18" cy="19" r="3"></circle>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+            '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+          '</svg>' +
+        '</button>';
+
+      let reportBtnHtml = '';
+      if (!isMyComment) {
+        reportBtnHtml =
+          '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" data-comment-id="' + escapeHtml(commentId) + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+              '<line x1="4" y1="22" x2="4" y2="15"></line>' +
+            '</svg>' +
+          '</button>';
+      }
+
       cardEl.innerHTML =
         '<div class="profile-comment-header">' +
           '<span class="profile-comment-badge">Комментарий</span>' +
@@ -2102,11 +2800,45 @@
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>' +
             ' <span>' + ratingDisplay + '</span>' +
           '</span>' +
+          '<div class="profile-comment-actions">' +
+            saveBtnHtml +
+            shareBtnHtml +
+            reportBtnHtml +
+          '</div>' +
           '<a href="' + permalink + '" class="profile-comment-link" title="Перейти к комментарию">' +
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' +
             ' <span>Перейти</span>' +
           '</a>' +
         '</div>';
+
+      const saveBtn = cardEl.querySelector('.btn-save-comment');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleCommentSave(commentId, saveBtn, item);
+        });
+      }
+
+      const shareBtn = cardEl.querySelector('.btn-share-comment');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+          const fullUrl = permalink.startsWith('http') ? permalink : (origin + (permalink.startsWith('/') ? '' : '/') + permalink);
+          copyTextToClipboard(fullUrl, 'Ссылка на комментарий скопирована');
+        });
+      }
+
+      const reportBtn = cardEl.querySelector('.btn-report-comment');
+      if (reportBtn) {
+        reportBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openCommentReport(commentId, reportBtn, item);
+        });
+      }
 
       list.appendChild(cardEl);
     });
@@ -2129,6 +2861,11 @@
     const clearBtn = document.getElementById('btnProfileSearchClear');
     if (clearBtn) {
       clearBtn.style.display = currentSearchQuery ? 'flex' : 'none';
+    }
+
+    if (!currentSearchQuery) {
+      const infoEl = document.getElementById('profileSearchResultsInfo');
+      if (infoEl) infoEl.style.display = 'none';
     }
 
     if (window.history && (window.history.pushState || window.history.replaceState)) {
@@ -2405,14 +3142,19 @@
   }
 
   function handleRemoveAvatar() {
+    avatarUploadSeq++;
     isAvatarRemoved = true;
     pendingAvatarData = null;
     uploadedAvatarUrl = null;
+    rawSelectedImage = null;
     const fileInput = document.getElementById('editAvatarFileInput');
     if (fileInput) fileInput.value = '';
+    const btnCrop = document.getElementById('btnCropAvatar');
+    if (btnCrop) btnCrop.style.display = 'none';
     const inpName = document.getElementById('editProfileName');
     const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
     updateModalAvatarPreview(null, name);
+    clearEditError();
   }
 
   function handleAvatarFileSelected(e) {
@@ -2436,12 +3178,26 @@
 
     clearEditError();
 
+    const seq = ++avatarUploadSeq;
+    isAvatarRemoved = false;
+
     const reader = new FileReader();
     reader.onload = function (evt) {
+      if (seq !== avatarUploadSeq || isAvatarRemoved) return;
+
       const dataUri = evt.target.result;
       pendingAvatarData = dataUri;
       uploadedAvatarUrl = null;
-      isAvatarRemoved = false;
+
+      const img = new Image();
+      img.onload = function () {
+        if (seq !== avatarUploadSeq || isAvatarRemoved) return;
+        rawSelectedImage = img;
+        const btnCrop = document.getElementById('btnCropAvatar');
+        if (btnCrop) btnCrop.style.display = 'inline-flex';
+      };
+      img.src = dataUri;
+
       const inpName = document.getElementById('editProfileName');
       const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
       updateModalAvatarPreview(dataUri, name);
@@ -2452,20 +3208,161 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUri })
       })
-        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          if (!res.ok) {
+            return res.json().then(function (d) { throw new Error((d && d.error) || 'Ошибка загрузки аватара'); });
+          }
+          return res.json();
+        })
         .then(function (resData) {
+          if (seq !== avatarUploadSeq || isAvatarRemoved) return;
           if (resData && resData.success && resData.url) {
             uploadedAvatarUrl = resData.url;
+          } else {
+            showEditError((resData && resData.error) || 'Ошибка загрузки аватара');
+            pendingAvatarData = null;
+            uploadedAvatarUrl = null;
           }
         })
-        .catch(function () {
-          // Offline fallback: dataUri will be sent directly
+        .catch(function (err) {
+          if (seq !== avatarUploadSeq || isAvatarRemoved) return;
+          showEditError(err.message || 'Ошибка загрузки аватара');
+          pendingAvatarData = null;
+          uploadedAvatarUrl = null;
         });
     };
     reader.onerror = function () {
+      if (seq !== avatarUploadSeq || isAvatarRemoved) return;
       showEditError('Ошибка чтения файла изображения');
     };
     reader.readAsDataURL(file);
+  }
+
+  function openAvatarCropModal() {
+    if (!rawSelectedImage) {
+      const previewImg = document.getElementById('editAvatarPreviewImg');
+      if (previewImg && previewImg.src && previewImg.style.display !== 'none') {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function () {
+          rawSelectedImage = img;
+          initAvatarCropper();
+        };
+        img.src = previewImg.src;
+        return;
+      }
+      return;
+    }
+    initAvatarCropper();
+  }
+
+  function initAvatarCropper() {
+    const modal = document.getElementById('avatarCropModal');
+    if (!modal) return;
+    cropZoom = 1;
+    cropPanX = 0;
+    cropPanY = 0;
+    const zoomInput = document.getElementById('avatarCropZoom');
+    if (zoomInput) zoomInput.value = '1';
+    modal.style.display = 'flex';
+    drawAvatarCropCanvas();
+  }
+
+  function closeAvatarCropModal() {
+    const modal = document.getElementById('avatarCropModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function drawAvatarCropCanvas() {
+    const canvas = document.getElementById('avatarCropCanvas');
+    if (!canvas || !rawSelectedImage) return;
+    const ctx = canvas.getContext('2d');
+    const cw = canvas.width;
+    const ch = canvas.height;
+
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, cw, ch);
+
+    const img = rawSelectedImage;
+    const baseScale = Math.max(cw / (img.naturalWidth || cw), ch / (img.naturalHeight || ch));
+    const scale = baseScale * cropZoom;
+    const drawW = (img.naturalWidth || cw) * scale;
+    const drawH = (img.naturalHeight || ch) * scale;
+
+    const maxPanX = Math.max(0, (drawW - cw) / 2);
+    const maxPanY = Math.max(0, (drawH - ch) / 2);
+    cropPanX = Math.max(-maxPanX, Math.min(maxPanX, cropPanX));
+    cropPanY = Math.max(-maxPanY, Math.min(maxPanY, cropPanY));
+
+    const drawX = (cw - drawW) / 2 + cropPanX;
+    const drawY = (ch - drawH) / 2 + cropPanY;
+
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  }
+
+  function applyAvatarCrop() {
+    const canvas = document.getElementById('avatarCropCanvas');
+    if (!canvas || !rawSelectedImage) return;
+
+    const targetSize = 256;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = targetSize;
+    offscreen.height = targetSize;
+    const ctx = offscreen.getContext('2d');
+
+    const img = rawSelectedImage;
+    const baseScale = Math.max(targetSize / (img.naturalWidth || targetSize), targetSize / (img.naturalHeight || targetSize));
+    const scale = baseScale * cropZoom;
+    const drawW = (img.naturalWidth || targetSize) * scale;
+    const drawH = (img.naturalHeight || targetSize) * scale;
+
+    const scaleFactor = targetSize / canvas.width;
+    const drawX = (targetSize - drawW) / 2 + (cropPanX * scaleFactor);
+    const drawY = (targetSize - drawH) / 2 + (cropPanY * scaleFactor);
+
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+    const croppedDataUrl = offscreen.toDataURL('image/png');
+    closeAvatarCropModal();
+
+    const seq = ++avatarUploadSeq;
+    pendingAvatarData = croppedDataUrl;
+    uploadedAvatarUrl = null;
+    isAvatarRemoved = false;
+
+    const inpName = document.getElementById('editProfileName');
+    const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
+    updateModalAvatarPreview(croppedDataUrl, name);
+
+    // Preemptive upload of cropped avatar
+    fetch('/api/media/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: croppedDataUrl })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (d) { throw new Error((d && d.error) || 'Ошибка загрузки аватара'); });
+        }
+        return res.json();
+      })
+      .then(function (resData) {
+        if (seq !== avatarUploadSeq || isAvatarRemoved) return;
+        if (resData && resData.success && resData.url) {
+          uploadedAvatarUrl = resData.url;
+        } else {
+          showEditError((resData && resData.error) || 'Ошибка загрузки аватара');
+          pendingAvatarData = null;
+          uploadedAvatarUrl = null;
+        }
+      })
+      .catch(function (err) {
+        if (seq !== avatarUploadSeq || isAvatarRemoved) return;
+        showEditError(err.message || 'Ошибка загрузки аватара');
+        pendingAvatarData = null;
+        uploadedAvatarUrl = null;
+      });
   }
 
   function openEditModal() {
@@ -2474,8 +3371,10 @@
     if (!modal || !currentProfile) return;
 
     clearEditError();
+    avatarUploadSeq++;
     pendingAvatarData = null;
     uploadedAvatarUrl = null;
+    rawSelectedImage = null;
     isAvatarRemoved = false;
 
     const inpName = document.getElementById('editProfileName');
@@ -2494,6 +3393,19 @@
 
     updateModalAvatarPreview(currentProfile.avatar, currentProfile.name);
 
+    const btnCrop = document.getElementById('btnCropAvatar');
+    if (btnCrop) {
+      btnCrop.style.display = currentProfile.avatar ? 'inline-flex' : 'none';
+      if (currentProfile.avatar) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function () {
+          rawSelectedImage = img;
+        };
+        img.src = currentProfile.avatar;
+      }
+    }
+
     modal.style.display = 'flex';
     if (inpName) {
       setTimeout(function () { inpName.focus(); }, 50);
@@ -2503,9 +3415,12 @@
   function closeEditModal() {
     const modal = document.getElementById('editProfileModal');
     if (modal) modal.style.display = 'none';
+    closeAvatarCropModal();
     clearEditError();
+    avatarUploadSeq++;
     pendingAvatarData = null;
     uploadedAvatarUrl = null;
+    rawSelectedImage = null;
     isAvatarRemoved = false;
     const fileInput = document.getElementById('editAvatarFileInput');
     if (fileInput) fileInput.value = '';
@@ -2999,6 +3914,137 @@
     lastSocialTriggerEl = null;
   }
 
+  function handlePopState(e) {
+    try {
+      const state = (e && e.state) || {};
+      let params = null;
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.search !== undefined) {
+          params = new URLSearchParams(window.location.search);
+        }
+      } catch (errParams) {}
+      if (!params) {
+        params = new URLSearchParams();
+      }
+
+      // Extract all parameters: tab, q, sort, topic, status from URL and state
+      const tab = state.tab || params.get('tab') || 'overview';
+      const targetQ = (state.q !== undefined && state.q !== null) ? String(state.q).trim() : (params.get('q') || '').trim();
+      const targetTopic = (state.topic !== undefined && state.topic !== null) ? String(state.topic).trim() : (params.get('topic') || '').trim();
+      const rawSort = (state.sort !== undefined && state.sort !== null) ? String(state.sort).trim() : (params.get('sort') || '').trim();
+      const rawStatus = (state.status !== undefined && state.status !== null) ? String(state.status).trim() : (params.get('status') || '').trim();
+      const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
+      const rawAnsSort = (state.ans_sort !== undefined && state.ans_sort !== null)
+        ? String(state.ans_sort).trim()
+        : (params.get('ans_sort') || (tab === 'answers' ? rawSort : '') || '').trim();
+
+      let targetPubSort = pubSort;
+      let targetQuestSort = questSort;
+      let targetCommSort = commSort;
+      let targetAnsSort = ansSort;
+      if (rawSort) {
+        if (tab === 'publications') {
+          targetPubSort = rawSort;
+        } else if (tab === 'questions') {
+          targetQuestSort = rawSort;
+        } else if (tab === 'comments') {
+          targetCommSort = rawSort;
+        } else if (tab === 'answers') {
+          targetAnsSort = rawSort;
+        } else {
+          targetPubSort = rawSort;
+          targetQuestSort = rawSort;
+          targetCommSort = rawSort;
+          targetAnsSort = rawSort;
+        }
+      } else {
+        if (tab === 'publications') targetPubSort = 'newest';
+        if (tab === 'questions') targetQuestSort = 'newest';
+        if (tab === 'comments') targetCommSort = 'new';
+        if (tab === 'answers') targetAnsSort = 'new';
+      }
+      if (rawAnsSort) {
+        targetAnsSort = rawAnsSort;
+      }
+
+      const targetQuestStatus = rawStatus || 'all';
+      const targetAnsFilter = rawFilter || 'all';
+
+      // If any parameter changed, invalidate cached tab data
+      if (targetQ !== currentSearchQuery) {
+        currentSearchQuery = targetQ;
+        invalidateTabCaches();
+      }
+
+      if (targetTopic !== currentTopic) {
+        currentTopic = targetTopic;
+        tabLoadedState.publications = null;
+        pubItems = [];
+        pubOffset = 0;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetPubSort !== pubSort) {
+        pubSort = targetPubSort;
+        tabLoadedState.publications = null;
+        pubItems = [];
+        pubOffset = 0;
+      }
+
+      if (targetQuestSort !== questSort) {
+        questSort = targetQuestSort;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetQuestStatus !== questStatus) {
+        questStatus = targetQuestStatus;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetAnsFilter !== ansFilter) {
+        ansFilter = targetAnsFilter;
+        tabLoadedState.answers = null;
+        ansItems = [];
+        ansOffset = 0;
+      }
+
+      if (targetAnsSort !== ansSort) {
+        ansSort = targetAnsSort;
+        tabLoadedState.answers = null;
+        ansItems = [];
+        ansOffset = 0;
+      }
+
+      if (targetCommSort !== commSort) {
+        commSort = targetCommSort;
+        tabLoadedState.comments = null;
+        commItems = [];
+        commOffset = 0;
+      }
+
+      // Restore UI controls
+      updateSearchInputUI(currentSearchQuery);
+      updatePubSortUI(pubSort);
+      updateQuestSortUI(questSort);
+      updateQuestStatusUI(questStatus);
+      updateAnsFilterUI(ansFilter);
+      updateAnsSortUI(ansSort);
+      updateCommSortUI(commSort);
+      updateTopicFilterUI(currentTopic);
+
+      // Activate tab and reload fresh data if cache was invalidated
+      setActiveTab(tab, false);
+    } catch (err) {
+      setActiveTab('overview', false);
+    }
+  }
+
   function initEventListeners() {
     // 1. Subscribe button
     const btnSubscribe = document.getElementById('btnProfileSubscribe');
@@ -3049,6 +4095,75 @@
       editAvatarFileInput.addEventListener('change', handleAvatarFileSelected);
     }
 
+    const btnCropAvatar = document.getElementById('btnCropAvatar');
+    if (btnCropAvatar) {
+      btnCropAvatar.addEventListener('click', openAvatarCropModal);
+    }
+
+    const btnCloseCrop = document.getElementById('btnCloseAvatarCropModal');
+    if (btnCloseCrop) {
+      btnCloseCrop.addEventListener('click', closeAvatarCropModal);
+    }
+
+    const btnCancelCrop = document.getElementById('btnCancelAvatarCrop');
+    if (btnCancelCrop) {
+      btnCancelCrop.addEventListener('click', closeAvatarCropModal);
+    }
+
+    const btnApplyCrop = document.getElementById('btnApplyAvatarCrop');
+    if (btnApplyCrop) {
+      btnApplyCrop.addEventListener('click', applyAvatarCrop);
+    }
+
+    const zoomInput = document.getElementById('avatarCropZoom');
+    if (zoomInput) {
+      zoomInput.addEventListener('input', function (e) {
+        cropZoom = parseFloat(e.target.value) || 1;
+        drawAvatarCropCanvas();
+      });
+    }
+
+    const cropCanvas = document.getElementById('avatarCropCanvas');
+    if (cropCanvas) {
+      cropCanvas.addEventListener('mousedown', function (e) {
+        isDraggingCrop = true;
+        dragStartX = e.clientX - cropPanX;
+        dragStartY = e.clientY - cropPanY;
+      });
+      window.addEventListener('mousemove', function (e) {
+        if (!isDraggingCrop) return;
+        cropPanX = e.clientX - dragStartX;
+        cropPanY = e.clientY - dragStartY;
+        drawAvatarCropCanvas();
+      });
+      window.addEventListener('mouseup', function () {
+        isDraggingCrop = false;
+      });
+      cropCanvas.addEventListener('touchstart', function (e) {
+        if (e.touches && e.touches.length === 1) {
+          isDraggingCrop = true;
+          dragStartX = e.touches[0].clientX - cropPanX;
+          dragStartY = e.touches[0].clientY - cropPanY;
+        }
+      }, { passive: true });
+      window.addEventListener('touchmove', function (e) {
+        if (!isDraggingCrop || !e.touches || e.touches.length !== 1) return;
+        cropPanX = e.touches[0].clientX - dragStartX;
+        cropPanY = e.touches[0].clientY - dragStartY;
+        drawAvatarCropCanvas();
+      }, { passive: true });
+      window.addEventListener('touchend', function () {
+        isDraggingCrop = false;
+      });
+    }
+
+    const cropModal = document.getElementById('avatarCropModal');
+    if (cropModal) {
+      cropModal.addEventListener('click', function (e) {
+        if (e.target === cropModal) closeAvatarCropModal();
+      });
+    }
+
     const inpName = document.getElementById('editProfileName');
     if (inpName) {
       inpName.addEventListener('input', function () {
@@ -3072,16 +4187,6 @@
         if (e.target === editModal) closeEditModal();
       });
     }
-
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('editProfileModal');
-        if (modal && modal.style.display !== 'none') {
-          e.preventDefault();
-          closeEditModal();
-        }
-      }
-    });
 
     // 5. Header user menu and auth controls
     const btnLogin = document.getElementById('headerLoginBtn');
@@ -3113,6 +4218,61 @@
       }
     });
 
+    // Header notifications controls
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifPopup = document.getElementById('headerNotifPopup');
+    const notifList = document.getElementById('notifListContainer');
+    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+    const notifWrap = document.getElementById('headerNotifWrap');
+
+    if (notifBtn && notifPopup) {
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isVisible = notifPopup.style.display !== 'none';
+        if (isVisible) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          notifPopup.style.display = 'block';
+          notifBtn.setAttribute('aria-expanded', 'true');
+          loadHeaderNotifications();
+        }
+      });
+
+      if (markAllBtn) {
+        markAllBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.success) {
+                if (notifBadge) notifBadge.style.display = 'none';
+                if (notifList) {
+                  const items = notifList.querySelectorAll('.notif-item.is-unread');
+                  items.forEach(function (el) {
+                    el.classList.remove('is-unread');
+                    el.classList.add('is-read');
+                  });
+                }
+              }
+            })
+            .catch(function () {});
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (notifWrap && !notifWrap.contains(e.target)) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
     const logoutBtn = document.getElementById('headerLogoutBtn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function (e) {
@@ -3126,6 +4286,14 @@
           .then(function (res) { return res.json(); })
           .then(function () {
             setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
             checkAuthStatus(function () {
               const uid = getUserIdFromUrl() || (currentProfile && (currentProfile.id || currentProfile.userId));
               if (uid) loadProfile(uid);
@@ -3134,6 +4302,14 @@
           })
           .catch(function () {
             setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
             showToast('Вы вышли из системы');
           });
       });
@@ -3162,6 +4338,7 @@
           if (data && data.success && data.user) {
             closeAuthModal();
             setAuthState(data.user);
+            loadHeaderNotifications();
             checkAuthStatus(function () {
               const uid = getUserIdFromUrl() || data.user.id;
               if (uid) loadProfile(uid);
@@ -3306,6 +4483,13 @@
     // 6. Keyboard dismissals (Escape)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const notifPopup = document.getElementById('headerNotifPopup');
+        if (notifPopup && notifPopup.style.display !== 'none') {
+          notifPopup.style.display = 'none';
+          const notifBtn = document.getElementById('headerNotificationsBtn');
+          if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false');
+          return;
+        }
         const sharePopover = document.getElementById('feedSharePopover');
         if (sharePopover && sharePopover.style.display !== 'none') {
           closeSharePopover();
@@ -3364,31 +4548,39 @@
     }
 
     // 10. History popstate navigation
-    function handlePopState(e) {
-      try {
-        let tab = (e && e.state && e.state.tab) || null;
-        let q = (e && e.state && e.state.q !== undefined) ? e.state.q : null;
-        const params = new URLSearchParams(window.location.search);
-        if (!tab) {
-          tab = params.get('tab') || 'overview';
-        }
-        if (q === null) {
-          q = params.get('q') || '';
-        }
-        if (q !== currentSearchQuery) {
-          currentSearchQuery = q;
-          const sInp = document.getElementById('profileSearchInput');
-          if (sInp) sInp.value = q;
-          const sClr = document.getElementById('btnProfileSearchClear');
-          if (sClr) sClr.style.display = q ? 'flex' : 'none';
-        }
-        setActiveTab(tab, false);
-      } catch (err) {
-        setActiveTab('overview', false);
-      }
-    }
     window.addEventListener('popstate', handlePopState);
-    window.onpopstate = handlePopState;
+
+    // Search input listener
+    const searchInputs = document.querySelectorAll(
+      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
+    );
+    for (let i = 0; i < searchInputs.length; i++) {
+      searchInputs[i].addEventListener('input', function (e) {
+        setSearchQuery(e.target.value, false);
+      });
+      searchInputs[i].addEventListener('change', function (e) {
+        setSearchQuery(e.target.value, true);
+      });
+    }
+
+    const searchForms = document.querySelectorAll('.header-search-form, #profileSearchForm');
+    for (let i = 0; i < searchForms.length; i++) {
+      searchForms[i].addEventListener('submit', function (e) {
+        e.preventDefault();
+        const inp = this.querySelector('input');
+        if (inp) {
+          setSearchQuery(inp.value, true);
+        }
+      });
+    }
+
+    // Sidebar topic pill click listener
+    document.addEventListener('click', function (e) {
+      const pill = e.target.closest('.profile-sidebar-topic-pill[data-topic-id]');
+      if (!pill) return;
+      const topicId = pill.getAttribute('data-topic-id') || '';
+      setTopicFilter(topicId === currentTopic ? '' : topicId, true);
+    });
 
     // 11. Publications toolbar sorting
     const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
@@ -3400,8 +4592,22 @@
         for (let j = 0; j < pubSortBtns.length; j++) {
           pubSortBtns[j].classList.toggle('is-active', pubSortBtns[j] === this);
         }
+        tabLoadedState.publications = null;
         pubOffset = 0;
         pubItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (pubSort !== 'newest') url.searchParams.set('sort', pubSort);
+            else url.searchParams.delete('sort');
+            window.history.pushState({
+              tab: 'publications',
+              sort: pubSort,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadPublications(currentProfile.id || currentProfile.userId, false);
         }
@@ -3428,8 +4634,23 @@
         for (let j = 0; j < questSortBtns.length; j++) {
           questSortBtns[j].classList.toggle('is-active', questSortBtns[j] === this);
         }
+        tabLoadedState.questions = null;
         questOffset = 0;
         questItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (questSort !== 'newest') url.searchParams.set('sort', questSort);
+            else url.searchParams.delete('sort');
+            window.history.pushState({
+              tab: 'questions',
+              sort: questSort,
+              status: questStatus,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadQuestions(currentProfile.id || currentProfile.userId, false);
         }
@@ -3445,8 +4666,23 @@
         for (let j = 0; j < questStatusBtns.length; j++) {
           questStatusBtns[j].classList.toggle('is-active', questStatusBtns[j] === this);
         }
+        tabLoadedState.questions = null;
         questOffset = 0;
         questItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (questStatus !== 'all') url.searchParams.set('status', questStatus);
+            else url.searchParams.delete('status');
+            window.history.pushState({
+              tab: 'questions',
+              sort: questSort,
+              status: questStatus,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadQuestions(currentProfile.id || currentProfile.userId, false);
         }
@@ -3463,7 +4699,44 @@
       });
     }
 
-    // 15. Answers toolbar filter
+    // 15. Answers toolbar filter & sorting
+    const ansSortBtns = document.querySelectorAll('[data-ans-sort], #sortAnswersNewest, #sortAnswersRating');
+    for (let i = 0; i < ansSortBtns.length; i++) {
+      ansSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-ans-sort');
+        if (sort === ansSort) return;
+        ansSort = sort;
+        for (let j = 0; j < ansSortBtns.length; j++) {
+          ansSortBtns[j].classList.toggle('is-active', ansSortBtns[j] === this);
+        }
+        tabLoadedState.answers = null;
+        ansOffset = 0;
+        ansItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (ansSort !== 'new') {
+              url.searchParams.set('sort', ansSort);
+              url.searchParams.set('ans_sort', ansSort);
+            } else {
+              url.searchParams.delete('sort');
+              url.searchParams.delete('ans_sort');
+            }
+            window.history.pushState({
+              tab: 'answers',
+              filter: ansFilter,
+              sort: ansSort,
+              ans_sort: ansSort,
+              q: currentSearchQuery || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadAnswers(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
     const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
     for (let i = 0; i < ansFilterBtns.length; i++) {
       ansFilterBtns[i].addEventListener('click', function () {
@@ -3473,8 +4746,23 @@
         for (let j = 0; j < ansFilterBtns.length; j++) {
           ansFilterBtns[j].classList.toggle('is-active', ansFilterBtns[j] === this);
         }
+        tabLoadedState.answers = null;
         ansOffset = 0;
         ansItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
+            else url.searchParams.delete('filter');
+            window.history.pushState({
+              tab: 'answers',
+              filter: ansFilter,
+              sort: ansSort,
+              ans_sort: ansSort,
+              q: currentSearchQuery || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadAnswers(currentProfile.id || currentProfile.userId, false);
         }
@@ -3666,6 +4954,8 @@
           loadSubscribers(currentProfile.id || currentProfile.userId, true);
         }
       });
+    }
+
     // 23. Pinned material controls
     const btnUnpin = document.getElementById('btnProfileUnpin');
     if (btnUnpin) {
@@ -3690,6 +4980,9 @@
     }
 
     checkAuthStatus(function (user) {
+      if (user) {
+        loadHeaderNotifications();
+      }
       let targetUserId = getUserIdFromUrl();
       if (!targetUserId && user) {
         targetUserId = user.id;
@@ -3723,7 +5016,6 @@
     loadComments: loadComments,
     renderCommentsTab: renderCommentsTab,
     triggerSearch: triggerSearch,
-    setSearchQuery: function (q) { triggerSearch(q); },
     getSearchQuery: function () { return currentSearchQuery; },
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
@@ -3739,6 +5031,10 @@
     getPendingAvatarData: function () { return pendingAvatarData; },
     getUploadedAvatarUrl: function () { return uploadedAvatarUrl; },
     getIsAvatarRemoved: function () { return isAvatarRemoved; },
+    openAvatarCropModal: openAvatarCropModal,
+    closeAvatarCropModal: closeAvatarCropModal,
+    applyAvatarCrop: applyAvatarCrop,
+    getAvatarUploadSeq: function () { return avatarUploadSeq; },
     toggleArticleLike: toggleArticleLike,
     toggleArticleBookmark: toggleArticleBookmark,
     openArticleShare: openArticleShare,
@@ -3750,6 +5046,7 @@
     openAuthModal: openAuthModal,
     closeAuthModal: closeAuthModal,
     setAuthState: setAuthState,
+    loadHeaderNotifications: loadHeaderNotifications,
     getOffsets: function () {
       return {
         activity: activityOffset,
@@ -3794,7 +5091,20 @@
     renderPinnedMaterial: renderPinnedMaterial,
     pinMaterial: pinMaterial,
     unpinMaterial: unpinMaterial,
-    updateCardPinButtons: updateCardPinButtons
+    updateCardPinButtons: updateCardPinButtons,
+    setSearchQuery: setSearchQuery,
+    setTopicFilter: setTopicFilter,
+    invalidateTabCaches: invalidateTabCaches,
+    updateSearchResultsCount: updateSearchResultsCount,
+    toggleCommentSave: toggleCommentSave,
+    openCommentReport: openCommentReport,
+    isCommentBookmarked: isCommentBookmarked,
+    isCommentReported: isCommentReported,
+    getAnsSort: function () { return ansSort; },
+    setAnsSort: function (s) { ansSort = s; updateAnsSortUI(s); },
+    getTabLoadedState: function () {
+      return tabLoadedState;
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);

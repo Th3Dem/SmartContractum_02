@@ -97,6 +97,7 @@ class TestIssue188ProfileEditFrontend(unittest.TestCase):
 
         # 4. Buttons for avatar selection and removal
         self.assertIn('id="btnChooseAvatar"', self.html, "Button to choose avatar must have id='btnChooseAvatar'")
+        self.assertIn('id="btnCropAvatar"', self.html, "Button to crop avatar must have id='btnCropAvatar'")
         self.assertIn('id="btnRemoveAvatar"', self.html, "Button to remove avatar must have id='btnRemoveAvatar'")
 
         # 5. Error box hidden by default
@@ -104,6 +105,12 @@ class TestIssue188ProfileEditFrontend(unittest.TestCase):
         error_match = re.search(r'<div[^>]*id="editProfileError"[^>]*>', self.html)
         self.assertIsNotNone(error_match, "editProfileError element must exist in profile.html")
         self.assertIn('display: none;', error_match.group(0), "editProfileError must be hidden by default")
+
+        # 6. Avatar crop modal and controls
+        self.assertIn('id="avatarCropModal"', self.html, "Cropper modal must have id='avatarCropModal'")
+        self.assertIn('id="avatarCropCanvas"', self.html, "Cropper canvas must have id='avatarCropCanvas'")
+        self.assertIn('id="avatarCropZoom"', self.html, "Cropper zoom slider must have id='avatarCropZoom'")
+        self.assertIn('id="btnApplyAvatarCrop"', self.html, "Button to apply crop must have id='btnApplyAvatarCrop'")
 
     def test_02_profile_html_owner_navigation_widget(self):
         """Verify owner personal navigation widget in profile.html sidebar."""
@@ -114,15 +121,17 @@ class TestIssue188ProfileEditFrontend(unittest.TestCase):
         self.assertIsNotNone(widget_match, "profileOwnerNavWidget element must exist in profile.html")
         self.assertIn('display: none;', widget_match.group(0), "profileOwnerNavWidget must be hidden by default")
 
-        # 2. Links to drafts, saved, and following
+        # 2. Links to drafts, saved, following, and settings
         self.assertIn('href="editor.html"', self.html, "Personal nav must contain link to editor.html (Черновики)")
         self.assertIn('href="feed.html?tab=saved"', self.html, "Personal nav must contain link to feed.html?tab=saved (Сохраненное)")
         self.assertIn('href="feed.html?tab=my"', self.html, "Personal nav must contain link to feed.html?tab=my (Подписки)")
+        self.assertIn('href="feed.html?panel=settings"', self.html, "Personal nav must contain link to feed.html?panel=settings (Настройки)")
 
         # Verify link labels
         self.assertIn('Черновики', self.html, "Personal nav must display label 'Черновики'")
         self.assertIn('Сохраненное', self.html, "Personal nav must display label 'Сохраненное'")
         self.assertIn('Подписки', self.html, "Personal nav must display label 'Подписки'")
+        self.assertIn('Настройки', self.html, "Personal nav must display label 'Настройки'")
 
     # =========================================================================
     # 2. profile.css Styles
@@ -272,6 +281,29 @@ class TestIssue188ProfileEditFrontend(unittest.TestCase):
         self.assertIn("getPendingAvatarData:", self.page_js)
         self.assertIn("getUploadedAvatarUrl:", self.page_js)
         self.assertIn("getIsAvatarRemoved:", self.page_js)
+        self.assertIn("openAvatarCropModal: openAvatarCropModal", self.page_js)
+        self.assertIn("closeAvatarCropModal: closeAvatarCropModal", self.page_js)
+        self.assertIn("applyAvatarCrop: applyAvatarCrop", self.page_js)
+        self.assertIn("getAvatarUploadSeq:", self.page_js)
+
+    def test_11_avatar_cropping_and_settings_navigation(self):
+        """Verify avatar cropping logic, race condition safety seq counter, and settings navigation."""
+        # 1. Cropping logic and handlers in profile-page.js
+        self.assertIn("function openAvatarCropModal", self.page_js)
+        self.assertIn("function closeAvatarCropModal", self.page_js)
+        self.assertIn("function drawAvatarCropCanvas", self.page_js)
+        self.assertIn("function applyAvatarCrop", self.page_js)
+        self.assertIn("avatarUploadSeq", self.page_js)
+
+        # 2. Sequential counter guards against stale uploads
+        self.assertIn("if (seq !== avatarUploadSeq || isAvatarRemoved) return;", self.page_js)
+
+        # 3. Settings navigation in feed.js opens panel
+        feed_js_path = os.path.join(FRONTEND_DIR, "js", "feed.js")
+        with open(feed_js_path, "r", encoding="utf-8") as f:
+            feed_js = f.read()
+        self.assertIn("openFeedSettingsPanel()", feed_js)
+        self.assertIn("panelParam === 'settings'", feed_js)
 
     # =========================================================================
     # 7. Strict Invariants

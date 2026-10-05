@@ -381,6 +381,29 @@ class TestIssue189ProfileReputationSubscribersBackend(unittest.TestCase):
         self.assertTrue(data2.get("subscribed"))
         self.assertEqual(data2.get("followersCount"), 2)
 
+    def test_10_subscriber_without_user_profile_row_fallback_to_session_name(self):
+        """Verify subscriber without user_profiles row resolves name from sessions.user_name without SQL errors."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        t_exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).isoformat()
+        conn = sqlite3.connect(self.db_path)
+        with conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO sessions (token, user_id, user_name, user_role, expires_at, created_at, is_revoked)
+                VALUES ('david_token', 'user_david_no_profile', 'Давид Гоцман', 'user', ?, ?, 0)
+            """, (t_exp, now))
+            conn.execute("""
+                INSERT OR REPLACE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                VALUES ('user_david_no_profile', 'author', 'author_alice', 'Алиса Селезнева', ?)
+            """, (now,))
+        conn.close()
+
+        status, data = self._request("GET", "/api/users/author_alice/subscribers?limit=10&offset=0")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        david_items = [it for it in data.get("items", []) if it.get("userId") == "user_david_no_profile"]
+        self.assertEqual(len(david_items), 1)
+        self.assertEqual(david_items[0]["name"], "Давид Гоцман")
+
     # =========================================================================
     # 7. Strict Invariants
     # =========================================================================

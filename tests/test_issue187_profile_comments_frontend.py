@@ -221,7 +221,96 @@ class TestIssue187ProfileCommentsFrontend(unittest.TestCase):
         self.assertIn("renderCommentsTab: renderCommentsTab", self.page_js, "renderCommentsTab must be exported on SmartContractumProfilePage")
 
     # =========================================================================
-    # 6. Strict Invariants
+    # 6. Answers Sorting, Search Counter, and Comment Actions
+    # =========================================================================
+
+    def test_10_answers_sorting_buttons_and_wiring(self):
+        """Verify answer sort buttons exist in profile.html and are wired in profile-page.js."""
+        # 1. HTML buttons in Answers toolbar
+        self.assertIn('id="sortAnswersNewest"', self.html, "Answers tab must have #sortAnswersNewest button")
+        self.assertIn('id="sortAnswersRating"', self.html, "Answers tab must have #sortAnswersRating button")
+        self.assertIn('data-ans-sort="new"', self.html, "Newest answers button must have data-ans-sort='new'")
+        self.assertIn('data-ans-sort="rating"', self.html, "Rating answers button must have data-ans-sort='rating'")
+
+        # 2. JS state and loading
+        self.assertIn("ansSort", self.page_js, "profile-page.js must define ansSort state")
+        self.assertIn("&sort=", self.page_js, "loadAnswers must append sort parameter")
+        self.assertIn("data-ans-sort", self.page_js, "Answers sort buttons must be queried by data-ans-sort")
+
+        # 3. URL and popstate synchronization
+        self.assertIn("ans_sort", self.page_js, "URL synchronization must handle ans_sort")
+        self.assertIn("updateAnsSortUI", self.page_js, "Must define updateAnsSortUI helper")
+
+    def test_11_search_results_counter_indicator(self):
+        """Verify search results count indicator is shown when q is present and does not overwrite overall tab counters."""
+        # 1. HTML elements
+        self.assertIn('id="profileSearchResultsInfo"', self.html, "HTML must contain #profileSearchResultsInfo")
+        self.assertIn('id="profileSearchResultsCount"', self.html, "HTML must contain #profileSearchResultsCount")
+
+        # 2. CSS styling
+        self.assertIn(".profile-search-results-info", self.css, "CSS must style .profile-search-results-info")
+
+        # 3. JS helper function and triggerSearch handling
+        self.assertIn("function updateSearchResultsCount", self.page_js, "Must define updateSearchResultsCount helper")
+        self.assertIn("profileSearchResultsInfo", self.page_js, "JS must update profileSearchResultsInfo display")
+        self.assertIn("profileSearchResultsCount", self.page_js, "JS must update profileSearchResultsCount text")
+
+        # 4. Fetch resolution calls across content tabs
+        match_pub = re.search(r"function loadPublications\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(match_pub)
+        self.assertIn("updateSearchResultsCount", match_pub.group(1), "loadPublications must call updateSearchResultsCount")
+
+        match_quest = re.search(r"function loadQuestions\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(match_quest)
+        self.assertIn("updateSearchResultsCount", match_quest.group(1), "loadQuestions must call updateSearchResultsCount")
+
+        match_ans = re.search(r"function loadAnswers\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(match_ans)
+        self.assertIn("updateSearchResultsCount", match_ans.group(1), "loadAnswers must call updateSearchResultsCount")
+
+        match_comm = re.search(r"function loadComments\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(match_comm)
+        self.assertIn("updateSearchResultsCount", match_comm.group(1), "loadComments must call updateSearchResultsCount")
+
+        # 5. Tab counts isolated from search results count
+        match_tab_counts = re.search(r"function renderTabCounts\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(match_tab_counts)
+        tc_body = match_tab_counts.group(1)
+        self.assertIn("tabCountPublications", tc_body)
+        self.assertIn("tabCountQuestions", tc_body)
+        self.assertIn("tabCountAnswers", tc_body)
+        self.assertIn("profileTabCountComments", tc_body)
+        self.assertNotIn("profileSearchResultsCount", tc_body, "renderTabCounts must not touch profileSearchResultsCount")
+
+    def test_12_comment_card_action_buttons(self):
+        """Verify comment cards have save, share, and report action buttons with proper wiring."""
+        match = re.search(r"function renderCommentsTab\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(match, "renderCommentsTab must be defined")
+        body = match.group(1)
+
+        # 1. Action buttons rendered
+        self.assertIn("btn-save-comment", body, "Comment card must render .btn-save-comment")
+        self.assertIn("btn-share-comment", body, "Comment card must render .btn-share-comment")
+        self.assertIn("btn-report-comment", body, "Comment card must render .btn-report-comment")
+        self.assertIn("profile-comment-link", body, "Comment card must render .profile-comment-link")
+        self.assertIn("data-comment-id", body, "Comment action buttons must have data-comment-id")
+
+        # 2. Save wiring and 401 handling
+        self.assertIn("toggleCommentSave", self.page_js, "Must define toggleCommentSave function")
+        self.assertIn("/api/comments/", self.page_js, "Must call /api/comments/ endpoint")
+        self.assertIn("/save", self.page_js, "toggleCommentSave must call /save endpoint")
+        self.assertIn("Для сохранения комментария необходимо войти", self.page_js, "Must display login toast on 401/unauthorized save")
+
+        # 3. Share wiring
+        self.assertIn("Ссылка на комментарий скопирована", self.page_js, "Must notify on comment link copied")
+
+        # 4. Report wiring and authorization check
+        self.assertIn("openCommentReport", self.page_js, "Must define openCommentReport function")
+        self.assertIn("/report", self.page_js, "openCommentReport must call /report endpoint")
+        self.assertIn("Для отправки жалобы необходимо войти", self.page_js, "Must display login toast on unauthenticated report")
+
+    # =========================================================================
+    # 7. Strict Invariants
     # =========================================================================
 
     def test_09_strict_invariants(self):
