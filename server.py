@@ -7769,7 +7769,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     )
                     is_sub = bool(cur.fetchone())
 
-            specialization = p_row["specialization"] if p_row and p_row["specialization"] else "Участник сообщества"
+            specialization = p_row["specialization"].strip() if p_row and p_row["specialization"] else ""
             company = p_row["company"] if p_row and p_row["company"] else ""
             bio = p_row["bio"] if p_row and p_row["bio"] else ""
             avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
@@ -8519,13 +8519,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         """
         GET /api/users/<user_id>/answers
         Returns author's published answers from article_comments with question title context.
-        Query params: filter ('all'|'solutions'), limit, offset.
+        Query params: filter ('all'|'solutions'), sort ('new'|'rating'|'popular'|'top'), limit, offset.
         """
         if not user_id:
             self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
             return
 
         query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        sort_by = (query.get("sort", ["new"])[0] or "new").strip().lower()
         filter_type = (query.get("filter", ["all"])[0] or "all").strip().lower()
         search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
         try:
@@ -8609,6 +8610,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
                 })
 
+            if sort_by in ("rating", "popular", "top"):
+                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            else:
+                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+
             total = len(items)
             paged_items = items[offset : offset + limit]
             has_more = (offset + limit) < total
@@ -8617,6 +8623,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": True,
                 "items": paged_items,
                 "total": total,
+                "totalCount": total,
                 "limit": limit,
                 "offset": offset,
                 "hasMore": has_more
@@ -8628,7 +8635,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         """
         GET /api/users/<user_id>/comments
         Returns author's published ordinary comments on approved materials.
-        Query params: sort ('new'|'newest'|'rating'|'popular'), q (search query), limit, offset.
+        Query params: sort ('new'|'newest'|'rating'|'popular'|'top'), q (search query), limit, offset.
         """
         if not user_id:
             self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
@@ -8738,7 +8745,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "permalink": permalink
                 })
 
-            if sort_by in ("rating", "popular"):
+            if sort_by in ("rating", "popular", "top"):
                 items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
             else:
                 items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
