@@ -1533,7 +1533,7 @@ COVER_DATA_URI_PATTERN = re.compile(
 )
 
 
-def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = None) -> CoverValidationResult:
+def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = None, require_exists: bool = False) -> CoverValidationResult:
     """
     Validates publication cover image:
     - Field is optional (None, empty string or whitespace-only is valid).
@@ -1585,8 +1585,11 @@ def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = Non
                 return CoverValidationResult(True, None, saved_url=stripped, meta=meta, image_bytes=file_bytes)
             except Exception as e:
                 return CoverValidationResult(False, f"Ошибка чтения медиафайла: {str(e)}")
-
-        return CoverValidationResult(True, None, saved_url=stripped)
+        else:
+            if require_exists:
+                return CoverValidationResult(False, "Файл изображения не найден на сервере.")
+            else:
+                return CoverValidationResult(True, None, saved_url=stripped)
 
     if stripped.startswith("data:image/"):
         if len(stripped) > MAX_COVER_BASE64_CHARS:
@@ -8937,9 +8940,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     stripped_avatar = raw_avatar.strip()
                     if not stripped_avatar:
                         avatar = None
+                    elif existing_profile and existing_profile["avatar"] and stripped_avatar == existing_profile["avatar"]:
+                        avatar = existing_profile["avatar"]
                     else:
                         media_root = getattr(self.server, "media_dir", MEDIA_DIR)
-                        res = validate_cover_image(stripped_avatar, target_media_dir=media_root)
+                        res = validate_cover_image(stripped_avatar, target_media_dir=media_root, require_exists=True)
                         if not res.is_valid:
                             self.send_json_response(400, {
                                 "success": False,
