@@ -212,7 +212,7 @@
     const commSortBtns = document.querySelectorAll('[data-comm-sort]');
     for (let i = 0; i < commSortBtns.length; i++) {
       const s = commSortBtns[i].getAttribute('data-comm-sort');
-      const isActive = (s === sort);
+      const isActive = (s === sort) || (s === 'new' && sort === 'newest') || (s === 'newest' && sort === 'new');
       commSortBtns[i].classList.toggle('is-active', isActive);
       if (commSortBtns[i].hasAttribute('aria-pressed')) {
         commSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
@@ -289,7 +289,8 @@
           sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : (activeTab === 'answers' ? ansSort : (activeTab === 'comments' ? commSort : undefined)))),
           status: (activeTab === 'questions' ? questStatus : undefined),
           filter: (activeTab === 'answers' ? ansFilter : undefined),
-          ans_sort: (activeTab === 'answers' ? ansSort : undefined)
+          ans_sort: (activeTab === 'answers' ? ansSort : undefined),
+          comm_sort: (activeTab === 'comments' ? commSort : undefined)
         };
         if (window.history.pushState) {
           window.history.pushState(stateObj, '', url.toString());
@@ -299,8 +300,8 @@
       } catch (e) {}
     }
 
-    if (currentProfile) {
-      const uid = currentProfile.id || currentProfile.userId;
+    const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+    if (uid) {
       if (activeTab === 'publications') {
         loadPublications(uid, false);
       } else if (activeTab === 'questions') {
@@ -308,6 +309,8 @@
       } else if (activeTab === 'answers') {
         loadAnswers(uid, false);
       } else if (activeTab === 'comments') {
+        commOffset = 0;
+        commItems = [];
         if (typeof loadComments === 'function') {
           loadComments(uid, false);
         }
@@ -824,6 +827,7 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      const initialTab = urlParams.get('tab') || 'overview';
       if (urlParams.get('q')) {
         currentSearchQuery = urlParams.get('q').trim();
         updateSearchInputUI(currentSearchQuery);
@@ -847,6 +851,11 @@
         ansSort = urlParams.get('ans_sort').trim();
         updateAnsSortUI(ansSort);
       }
+      const restoredCommSort = urlParams.get('comm_sort') || (initialTab === 'comments' ? urlParams.get('sort') : null) || (initialTab === 'comments' ? 'newest' : null);
+      if (restoredCommSort) {
+        commSort = restoredCommSort.trim();
+        updateCommSortUI(commSort);
+      }
       if (urlParams.get('status')) {
         questStatus = urlParams.get('status').trim();
         updateQuestStatusUI(questStatus);
@@ -855,7 +864,6 @@
         ansFilter = urlParams.get('filter').trim();
         updateAnsFilterUI(ansFilter);
       }
-      const initialTab = urlParams.get('tab') || 'overview';
       setActiveTab(initialTab, false);
     } catch (e) {
       setActiveTab('overview', false);
@@ -929,12 +937,16 @@
           else url.searchParams.delete('sort');
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'questions') {
           if (questSort !== 'newest') url.searchParams.set('sort', questSort);
           else url.searchParams.delete('sort');
           if (questStatus !== 'all') url.searchParams.set('status', questStatus);
           else url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'answers') {
           if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
           else url.searchParams.delete('filter');
@@ -946,9 +958,15 @@
             url.searchParams.delete('ans_sort');
           }
           url.searchParams.delete('status');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'comments') {
-          if (commSort !== 'new') url.searchParams.set('sort', commSort);
-          else url.searchParams.delete('sort');
+          if (commSort !== 'new' && commSort !== 'newest') {
+            url.searchParams.set('sort', commSort);
+            url.searchParams.set('comm_sort', commSort);
+          } else {
+            url.searchParams.delete('sort');
+            url.searchParams.delete('comm_sort');
+          }
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
           url.searchParams.delete('ans_sort');
@@ -957,6 +975,7 @@
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
           url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         }
 
         const stateObj = {
@@ -966,7 +985,8 @@
           sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'answers' ? ansSort : (tabName === 'comments' ? commSort : undefined)))),
           status: (tabName === 'questions' ? questStatus : undefined),
           filter: (tabName === 'answers' ? ansFilter : undefined),
-          ans_sort: (tabName === 'answers' ? ansSort : undefined)
+          ans_sort: (tabName === 'answers' ? ansSort : undefined),
+          comm_sort: (tabName === 'comments' ? commSort : undefined)
         };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
@@ -982,8 +1002,8 @@
       } catch (e) {}
     }
 
-    if (currentProfile) {
-      const uid = currentProfile.id || currentProfile.userId;
+    const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+    if (uid) {
       if (tabName === 'publications') {
         const currentParams = getCurrentTabParams('publications');
         const isUpToDate = tabLoadedState.publications && areTabParamsEqual(tabLoadedState.publications, currentParams);
@@ -2979,7 +2999,14 @@
       const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
       const rawAnsSort = (state.ans_sort !== undefined && state.ans_sort !== null)
         ? String(state.ans_sort).trim()
-        : (params.get('ans_sort') || (tab === 'answers' ? rawSort : '') || '').trim();
+        : ((tab === 'answers' && state.sort !== undefined && state.sort !== null)
+          ? String(state.sort).trim()
+          : (params.get('ans_sort') || (tab === 'answers' ? params.get('sort') : '') || '').trim());
+      const rawCommSort = (state.comm_sort !== undefined && state.comm_sort !== null)
+        ? String(state.comm_sort).trim()
+        : ((tab === 'comments' && state.sort !== undefined && state.sort !== null)
+          ? String(state.sort).trim()
+          : (params.get('comm_sort') || (tab === 'comments' ? params.get('sort') : '') || '').trim());
 
       let targetPubSort = pubSort;
       let targetQuestSort = questSort;
@@ -3008,6 +3035,11 @@
       }
       if (rawAnsSort) {
         targetAnsSort = rawAnsSort;
+      }
+      if (rawCommSort) {
+        targetCommSort = rawCommSort;
+      } else if (tab === 'comments') {
+        targetCommSort = params.get('comm_sort') || (tab === 'comments' ? params.get('sort') : null) || 'newest';
       }
 
       const targetQuestStatus = rawStatus || 'all';
@@ -3072,8 +3104,15 @@
         ansOffset = 0;
       }
 
-      if (targetCommSort !== commSort) {
+      const commSortChanged = (targetCommSort !== commSort);
+      if (commSortChanged) {
         commSort = targetCommSort;
+        tabLoadedState.comments = null;
+        commItems = [];
+        commOffset = 0;
+      }
+
+      if (tab === 'comments' && (targetQ !== currentSearchQuery || commSortChanged)) {
         tabLoadedState.comments = null;
         commItems = [];
         commOffset = 0;
@@ -3781,11 +3820,41 @@
         commSort = sort;
         for (let j = 0; j < commSortBtns.length; j++) {
           commSortBtns[j].classList.toggle('is-active', commSortBtns[j] === this);
+          if (commSortBtns[j].hasAttribute('aria-pressed')) {
+            commSortBtns[j].setAttribute('aria-pressed', commSortBtns[j] === this ? 'true' : 'false');
+          }
         }
+        tabLoadedState.comments = null;
         commOffset = 0;
         commItems = [];
-        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-          loadComments(currentProfile.id || currentProfile.userId, false);
+        if (window.history && (window.history.pushState || window.history.replaceState)) {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'comments');
+            if (commSort !== 'new' && commSort !== 'newest') {
+              url.searchParams.set('sort', commSort);
+              url.searchParams.set('comm_sort', commSort);
+            } else {
+              url.searchParams.delete('sort');
+              url.searchParams.delete('comm_sort');
+            }
+            const stateObj = {
+              tab: activeTab || 'comments',
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined,
+              sort: commSort,
+              comm_sort: commSort
+            };
+            if (window.history.pushState) {
+              window.history.pushState(stateObj, '', url.toString());
+            } else if (window.history.replaceState) {
+              window.history.replaceState(stateObj, '', url.toString());
+            }
+          } catch (e) {}
+        }
+        const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+        if (uid) {
+          loadComments(uid, false);
         }
       });
     }
@@ -3814,6 +3883,12 @@
       if (sInput) sInput.value = initialQ;
       const sClear = document.getElementById('btnProfileSearchClear');
       if (sClear) sClear.style.display = 'flex';
+    }
+    const initTab = urlParams.get('tab') || 'overview';
+    const initCommSort = urlParams.get('comm_sort') || (initTab === 'comments' ? urlParams.get('sort') : null) || (initTab === 'comments' ? 'newest' : null);
+    if (initCommSort) {
+      commSort = initCommSort.trim();
+      updateCommSortUI(commSort);
     }
 
     checkAuthStatus(function (user) {
@@ -3910,6 +3985,8 @@
     isCommentReported: isCommentReported,
     getAnsSort: function () { return ansSort; },
     setAnsSort: function (s) { ansSort = s; updateAnsSortUI(s); },
+    getCommSort: function () { return commSort; },
+    setCommSort: function (s) { commSort = s; updateCommSortUI(s); },
     getTabLoadedState: function () {
       return tabLoadedState;
     }
