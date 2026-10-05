@@ -240,18 +240,6 @@
               <span class="profile-stat-label">Рейтинг</span>
             </div>
             <div class="profile-stat-item">
-              <span class="profile-stat-value" id="profileStatPublications">0</span>
-              <span class="profile-stat-label">Публикаций</span>
-            </div>
-            <div class="profile-stat-item">
-              <span class="profile-stat-value" id="profileStatQuestions">0</span>
-              <span class="profile-stat-label">Вопросов</span>
-            </div>
-            <div class="profile-stat-item">
-              <span class="profile-stat-value" id="profileStatAnswers">0</span>
-              <span class="profile-stat-label">Ответов</span>
-            </div>
-            <div class="profile-stat-item">
               <span class="profile-stat-value" id="profileStatSolutions">0</span>
               <span class="profile-stat-label">Решений</span>
             </div>
@@ -263,7 +251,20 @@
               <span class="profile-stat-value" id="profileStatFollowing">0</span>
               <span class="profile-stat-label">Подписок</span>
             </div>
-            <div class="profile-stat-item profile-account-age" id="profileAccountAgeWrap">
+            <!-- Tab counts displayed primarily in tabs; hidden in stats bar to prevent duplication -->
+            <div class="profile-stat-item profile-stat-hidden" id="profileStatPubsWrap" style="display: none;">
+              <span class="profile-stat-value" id="profileStatPublications">0</span>
+              <span class="profile-stat-label">Публикаций</span>
+            </div>
+            <div class="profile-stat-item profile-stat-hidden" id="profileStatQuestionsWrap" style="display: none;">
+              <span class="profile-stat-value" id="profileStatQuestions">0</span>
+              <span class="profile-stat-label">Вопросов</span>
+            </div>
+            <div class="profile-stat-item profile-stat-hidden" id="profileStatAnswersWrap" style="display: none;">
+              <span class="profile-stat-value" id="profileStatAnswers">0</span>
+              <span class="profile-stat-label">Ответов</span>
+            </div>
+            <div class="profile-stat-item profile-account-age profile-stat-hidden" id="profileAccountAgeWrap" style="display: none;">
               <span class="profile-stat-label">На платформе</span>
               <span class="profile-account-age-value" id="profileAccountAge">На платформе с момента регистрации</span>
             </div>
@@ -435,7 +436,7 @@
               </div>
 
               <!-- 4. Widget Reputation -->
-              <div class="profile-widget profile-widget-reputation" id="profileWidgetReputation">
+              <div class="profile-widget profile-widget-reputation" id="profileWidgetReputation" style="display: none;">
                 <h3 class="profile-widget-title">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8l10-12h-9l1-8z"></path></svg>
                   <span>Репутационный паспорт</span>
