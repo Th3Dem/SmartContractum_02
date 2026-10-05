@@ -1220,48 +1220,67 @@
       '</div>';
   }
 
+  function isMaterialPinned(targetId) {
+    if (!targetId || !currentProfile || !currentProfile.pinnedMaterial || currentProfile.pinnedMaterial.isUnavailable) {
+      return false;
+    }
+    const currentPinnedId = currentProfile.pinnedMaterial.id || currentProfile.pinnedMaterial.targetId;
+    return Boolean(currentPinnedId && (currentPinnedId === targetId || String(currentPinnedId) === String(targetId)));
+  }
+
+  let isPinningInProgress = false;
+
   function pinMaterial(targetType, targetId) {
+    if (isPinningInProgress) return;
     if (!targetType || !targetId) return;
     if (!currentUser) {
       openAuthModal();
       return;
     }
 
-    fetch('/api/user/pinned', {
+    isPinningInProgress = true;
+    return fetch('/api/user/pinned', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({ targetType: targetType, targetId: targetId })
     })
       .then(function (res) { return res.json(); })
       .then(function (data) {
+        isPinningInProgress = false;
         if (data && data.success) {
           if (currentProfile) {
             currentProfile.pinnedMaterial = data.pinnedMaterial;
             renderPinnedMaterial(data.pinnedMaterial, true);
             renderTopContributions(currentProfile.topContributions || [], currentProfile.publications || []);
           }
-          updateCardPinButtons(targetId);
+          const activePinId = data.pinnedMaterial ? (data.pinnedMaterial.id || data.pinnedMaterial.targetId) : targetId;
+          updateCardPinButtons(activePinId);
           showToast('Материал закреплен в профиле');
         } else {
           showToast((data && data.error) || 'Не удалось закрепить материал');
         }
+        return data;
       })
       .catch(function () {
+        isPinningInProgress = false;
         showToast('Ошибка сети при закреплении материала');
       });
   }
 
   function unpinMaterial() {
+    if (isPinningInProgress) return;
     if (!currentUser) {
       openAuthModal();
       return;
     }
 
-    fetch('/api/user/pinned', {
+    isPinningInProgress = true;
+    return fetch('/api/user/pinned', {
       method: 'DELETE'
     })
       .then(function (res) { return res.json(); })
       .then(function (data) {
+        isPinningInProgress = false;
         if (data && data.success) {
           if (currentProfile) {
             currentProfile.pinnedMaterial = null;
@@ -1273,8 +1292,10 @@
         } else {
           showToast((data && data.error) || 'Не удалось открепить материал');
         }
+        return data;
       })
       .catch(function () {
+        isPinningInProgress = false;
         showToast('Ошибка сети при откреплении материала');
       });
   }
@@ -1284,10 +1305,16 @@
     for (let i = 0; i < pinBtns.length; i++) {
       const b = pinBtns[i];
       const tid = b.getAttribute('data-target-id');
-      const isPinned = Boolean(pinnedId && tid === pinnedId);
-      b.classList.toggle('is-pinned', isPinned);
-      b.textContent = isPinned ? 'Закреплено' : 'Закрепить';
-      b.title = isPinned ? 'Материал закреплен в профиле' : 'Закрепить в профиле';
+      const targetType = b.getAttribute('data-target-type');
+      const isNowPinned = Boolean(pinnedId && tid && String(tid) === String(pinnedId));
+      b.classList.toggle('is-pinned', isNowPinned);
+      b.setAttribute('data-is-pinned', isNowPinned ? 'true' : 'false');
+      b.textContent = isNowPinned ? 'Закреплено' : 'Закрепить';
+      if (targetType === 'solution') {
+        b.title = isNowPinned ? 'Решение закреплено в профиле' : 'Закрепить решение в профиле';
+      } else {
+        b.title = isNowPinned ? 'Материал закреплен в профиле' : 'Закрепить в профиле';
+      }
     }
   }
 
@@ -2206,19 +2233,18 @@
 
       const isOwn = !!(currentProfile && (currentProfile.isOwnProfile || (window.currentUser && (window.currentUser.id === currentProfile.id || window.currentUser.id === currentProfile.userId))));
       if (isOwn && item.id) {
-        const pinId = (currentProfile && currentProfile.pinnedMaterial && !currentProfile.pinnedMaterial.isUnavailable)
-          ? (currentProfile.pinnedMaterial.id || currentProfile.pinnedMaterial.targetId)
-          : null;
-        const isThisPinned = Boolean(pinId && (pinId === item.id || pinId === item.targetId));
+        const isThisPinned = isMaterialPinned(item.id);
         const pinBtn = document.createElement('button');
         pinBtn.type = 'button';
         pinBtn.className = 'btn-card-pin' + (isThisPinned ? ' is-pinned' : '');
         pinBtn.setAttribute('data-target-id', item.id);
+        pinBtn.setAttribute('data-target-type', 'publication');
+        pinBtn.setAttribute('data-is-pinned', isThisPinned ? 'true' : 'false');
         pinBtn.textContent = isThisPinned ? 'Закреплено' : 'Закрепить';
         pinBtn.title = isThisPinned ? 'Материал закреплен в профиле' : 'Закрепить в профиле';
         pinBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          if (isThisPinned) {
+          if (isMaterialPinned(item.id)) {
             unpinMaterial();
           } else {
             pinMaterial('publication', item.id);
@@ -2497,19 +2523,18 @@
 
       const isOwn = !!(currentProfile && (currentProfile.isOwnProfile || (window.currentUser && (window.currentUser.id === currentProfile.id || window.currentUser.id === currentProfile.userId))));
       if (isOwn && item.isSolution && item.id) {
-        const pinId = (currentProfile && currentProfile.pinnedMaterial && !currentProfile.pinnedMaterial.isUnavailable)
-          ? (currentProfile.pinnedMaterial.id || currentProfile.pinnedMaterial.targetId)
-          : null;
-        const isThisPinned = Boolean(pinId && (pinId === item.id || pinId === item.targetId));
+        const isThisPinned = isMaterialPinned(item.id);
         const pinBtn = document.createElement('button');
         pinBtn.type = 'button';
         pinBtn.className = 'btn-card-pin' + (isThisPinned ? ' is-pinned' : '');
         pinBtn.setAttribute('data-target-id', item.id);
+        pinBtn.setAttribute('data-target-type', 'solution');
+        pinBtn.setAttribute('data-is-pinned', isThisPinned ? 'true' : 'false');
         pinBtn.textContent = isThisPinned ? 'Закреплено' : 'Закрепить';
         pinBtn.title = isThisPinned ? 'Решение закреплено в профиле' : 'Закрепить решение в профиле';
         pinBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          if (isThisPinned) {
+          if (isMaterialPinned(item.id)) {
             unpinMaterial();
           } else {
             pinMaterial('solution', item.id);
@@ -5318,6 +5343,7 @@
     pinMaterial: pinMaterial,
     unpinMaterial: unpinMaterial,
     updateCardPinButtons: updateCardPinButtons,
+    isMaterialPinned: isMaterialPinned,
     setSearchQuery: setSearchQuery,
     triggerSearch: triggerSearch,
     getSearchQuery: function () {
