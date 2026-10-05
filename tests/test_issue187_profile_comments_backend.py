@@ -149,6 +149,38 @@ class TestIssue187ProfileCommentsBackend(unittest.TestCase):
             t_q2
         ))
 
+        # 3b. Approved question 3 by other user
+        t_q3 = (now - datetime.timedelta(days=6, hours=23)).isoformat()
+        cur.execute("""
+            INSERT INTO moderation_submissions (id, draft_id, author_id, title, article_html, status, publication_settings, snapshot_hash, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'approved', ?, 'hash_q3', ?, ?)
+        """, (
+            "art_quest_3",
+            "draft_quest_3",
+            other_id,
+            "Паттерны delegatecall и обновление логики",
+            "<p>Как изолировать переменные состояния при апгрейдах?</p>",
+            json.dumps({"materialType": "question", "topics": ["security"]}),
+            t_q3,
+            t_q3
+        ))
+
+        # 3c. Approved question 4 by other user
+        t_q4 = (now - datetime.timedelta(days=5, hours=20)).isoformat()
+        cur.execute("""
+            INSERT INTO moderation_submissions (id, draft_id, author_id, title, article_html, status, publication_settings, snapshot_hash, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'approved', ?, 'hash_q4', ?, ?)
+        """, (
+            "art_quest_4",
+            "draft_quest_4",
+            other_id,
+            "Эффективная работа с calldata в EVM",
+            "<p>Как копировать calldata в память без лишних затрат газа?</p>",
+            json.dumps({"materialType": "question", "topics": ["solidity"]}),
+            t_q4,
+            t_q4
+        ))
+
         # 4. Rejected article
         t_rej = (now - datetime.timedelta(days=6)).isoformat()
         cur.execute("""
@@ -181,7 +213,26 @@ class TestIssue187ProfileCommentsBackend(unittest.TestCase):
             t_pend
         ))
 
-        # Author's Answer on art_quest_2 (comment_type = 'answer')
+        # Author's Answers on approved questions:
+        # ans_2: on art_quest_3, 6d 22h ago, rating=5, is_solution=0
+        t_ans2 = (now - datetime.timedelta(days=6, hours=22)).isoformat()
+        cur.execute("""
+            INSERT INTO article_comments (id, article_id, user_id, author_name, content, status, comment_type, is_solution, created_at)
+            VALUES (?, ?, ?, 'Алексей Разработчик', ?, 'published', 'answer', 0, ?)
+        """, (
+            "ans_2",
+            "art_quest_3",
+            author_id,
+            "Всегда изолируйте переменные состояния при использовании delegatecall в логическом контракте.",
+            t_ans2
+        ))
+        for vi in range(5):
+            cur.execute("""
+                INSERT INTO comment_votes (comment_id, user_id, value, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, ("ans_2", f"ans_voter_b_{vi}", 1, t_ans2, t_ans2))
+
+        # ans_1: on art_quest_2, 6d 12h ago, rating=0, is_solution=1
         t_ans1 = (now - datetime.timedelta(days=6, hours=12)).isoformat()
         cur.execute("""
             INSERT INTO article_comments (id, article_id, user_id, author_name, content, status, comment_type, is_solution, created_at)
@@ -193,6 +244,42 @@ class TestIssue187ProfileCommentsBackend(unittest.TestCase):
             "Используйте slot storage collision checks и ERC-1967 стандарт.",
             t_ans1
         ))
+
+        # ans_3: on art_quest_1, 6d 0h ago, rating=10, is_solution=1
+        t_ans3 = (now - datetime.timedelta(days=6, hours=0)).isoformat()
+        cur.execute("""
+            INSERT INTO article_comments (id, article_id, user_id, author_name, content, status, comment_type, is_solution, created_at)
+            VALUES (?, ?, ?, 'Алексей Разработчик', ?, 'published', 'answer', 1, ?)
+        """, (
+            "ans_3",
+            "art_quest_1",
+            author_id,
+            "Используйте unchecked инкремент для счетчиков цикла for.",
+            t_ans3
+        ))
+        for vi in range(10):
+            cur.execute("""
+                INSERT INTO comment_votes (comment_id, user_id, value, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, ("ans_3", f"ans_voter_c_{vi}", 1, t_ans3, t_ans3))
+
+        # ans_4: on art_quest_4, 5d 18h ago, rating=10, is_solution=1
+        t_ans4 = (now - datetime.timedelta(days=5, hours=18)).isoformat()
+        cur.execute("""
+            INSERT INTO article_comments (id, article_id, user_id, author_name, content, status, comment_type, is_solution, created_at)
+            VALUES (?, ?, ?, 'Алексей Разработчик', ?, 'published', 'answer', 1, ?)
+        """, (
+            "ans_4",
+            "art_quest_4",
+            author_id,
+            "Копируйте calldata в память батчами для экономии газа.",
+            t_ans4
+        ))
+        for vi in range(10):
+            cur.execute("""
+                INSERT INTO comment_votes (comment_id, user_id, value, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, ("ans_4", f"ans_voter_d_{vi}", 1, t_ans4, t_ans4))
 
         # Author's Ordinary Comments:
         # C1: on art_pub_1, comment_type = 'comment', high rating (3 votes)
@@ -321,6 +408,9 @@ class TestIssue187ProfileCommentsBackend(unittest.TestCase):
 
         # Answers must not be present in comments endpoint
         self.assertNotIn("ans_1", item_ids)
+        self.assertNotIn("ans_2", item_ids)
+        self.assertNotIn("ans_3", item_ids)
+        self.assertNotIn("ans_4", item_ids)
 
         # Comments on unapproved materials must not leak
         self.assertNotIn("comm_rejected", item_ids)
@@ -522,6 +612,108 @@ class TestIssue187ProfileCommentsBackend(unittest.TestCase):
                 cat in ("So", "Cs") and ord(ch) > 127 and ch not in ("№", "©", "®"),
                 f"Emoji or special symbol found at pos {idx} in test file: {repr(ch)}"
             )
+
+    def test_10_user_answers_sorting_and_invariants(self):
+        """Answers endpoint supports sorting by rating (with secondary createdAt desc) and new, filter, search, and invariant counts."""
+        # 1. Sort by rating (descending rating, secondary createdAt descending):
+        # ans_4 (rating=10, 5d 18h ago) vs ans_3 (rating=10, 6d 0h ago) -> ans_4 first
+        # ans_2 (rating=5, 6d 22h ago)
+        # ans_1 (rating=0, 6d 12h ago)
+        status, data_rating = self._get_json("/api/users/user_author/answers?sort=rating")
+        self.assertEqual(status, 200)
+        self.assertTrue(data_rating.get("success"))
+        self.assertIn("total", data_rating)
+        self.assertIn("totalCount", data_rating)
+        self.assertEqual(data_rating.get("total"), 4)
+        self.assertEqual(data_rating.get("totalCount"), 4)
+
+        items_rating = data_rating.get("items", [])
+        self.assertEqual([it["id"] for it in items_rating], ["ans_4", "ans_3", "ans_2", "ans_1"])
+        self.assertEqual(items_rating[0]["rating"], 10)
+        self.assertEqual(items_rating[1]["rating"], 10)
+        self.assertGreater(items_rating[0]["createdAt"], items_rating[1]["createdAt"])
+        self.assertEqual(items_rating[2]["rating"], 5)
+        self.assertEqual(items_rating[3]["rating"], 0)
+
+        # Also verify sort aliases: sort=popular and sort=top
+        status_pop, data_pop = self._get_json("/api/users/user_author/answers?sort=popular")
+        self.assertEqual(status_pop, 200)
+        self.assertEqual([it["id"] for it in data_pop.get("items", [])], ["ans_4", "ans_3", "ans_2", "ans_1"])
+
+        status_top, data_top = self._get_json("/api/users/user_author/answers?sort=top")
+        self.assertEqual(status_top, 200)
+        self.assertEqual([it["id"] for it in data_top.get("items", [])], ["ans_4", "ans_3", "ans_2", "ans_1"])
+
+        # 2. Sort by new (createdAt descending):
+        # ans_4 (5d 18h ago), ans_3 (6d 0h ago), ans_1 (6d 12h ago), ans_2 (6d 22h ago)
+        status, data_new = self._get_json("/api/users/user_author/answers?sort=new")
+        self.assertEqual(status, 200)
+        self.assertTrue(data_new.get("success"))
+        self.assertIn("total", data_new)
+        self.assertIn("totalCount", data_new)
+        self.assertEqual(data_new.get("total"), 4)
+        self.assertEqual(data_new.get("totalCount"), 4)
+
+        items_new = data_new.get("items", [])
+        self.assertEqual([it["id"] for it in items_new], ["ans_4", "ans_3", "ans_1", "ans_2"])
+        # Verify that ans_1 is before ans_2 despite ans_2 having higher rating (5 vs 0)
+        self.assertGreater(items_new[2]["createdAt"], items_new[3]["createdAt"])
+        self.assertEqual(items_new[2]["id"], "ans_1")
+        self.assertEqual(items_new[3]["id"], "ans_2")
+
+        # Default sort without parameter is also createdAt descending
+        status_def, data_def = self._get_json("/api/users/user_author/answers")
+        self.assertEqual(status_def, 200)
+        self.assertEqual([it["id"] for it in data_def.get("items", [])], ["ans_4", "ans_3", "ans_1", "ans_2"])
+
+        # 3. Sorting together with filter=solutions:
+        # ans_2 (is_solution=0) is excluded; ans_4, ans_3, ans_1 remain
+        status_sol_rating, data_sol_rating = self._get_json("/api/users/user_author/answers?sort=rating&filter=solutions")
+        self.assertEqual(status_sol_rating, 200)
+        self.assertEqual(data_sol_rating.get("total"), 3)
+        self.assertEqual(data_sol_rating.get("totalCount"), 3)
+        self.assertEqual([it["id"] for it in data_sol_rating.get("items", [])], ["ans_4", "ans_3", "ans_1"])
+        for it in data_sol_rating.get("items", []):
+            self.assertTrue(it["isSolution"])
+
+        status_sol_new, data_sol_new = self._get_json("/api/users/user_author/answers?sort=new&filter=solutions")
+        self.assertEqual(status_sol_new, 200)
+        self.assertEqual(data_sol_new.get("total"), 3)
+        self.assertEqual(data_sol_new.get("totalCount"), 3)
+        self.assertEqual([it["id"] for it in data_sol_new.get("items", [])], ["ans_4", "ans_3", "ans_1"])
+
+        # 4. Sorting together with search q:
+        # Match question title: q=delegatecall -> ans_1 and ans_2
+        status_q_rating, data_q_rating = self._get_json("/api/users/user_author/answers?sort=rating&q=delegatecall")
+        self.assertEqual(status_q_rating, 200)
+        self.assertEqual(data_q_rating.get("total"), 2)
+        self.assertEqual(data_q_rating.get("totalCount"), 2)
+        self.assertEqual([it["id"] for it in data_q_rating.get("items", [])], ["ans_2", "ans_1"])
+
+        status_q_new, data_q_new = self._get_json("/api/users/user_author/answers?sort=new&q=delegatecall")
+        self.assertEqual(status_q_new, 200)
+        self.assertEqual(data_q_new.get("total"), 2)
+        self.assertEqual(data_q_new.get("totalCount"), 2)
+        self.assertEqual([it["id"] for it in data_q_new.get("items", [])], ["ans_1", "ans_2"])
+
+        # Combined filter=solutions + search q + sort=rating
+        status_comb, data_comb = self._get_json("/api/users/user_author/answers?sort=rating&filter=solutions&q=delegatecall")
+        self.assertEqual(status_comb, 200)
+        self.assertEqual(data_comb.get("total"), 1)
+        self.assertEqual(data_comb.get("totalCount"), 1)
+        self.assertEqual([it["id"] for it in data_comb.get("items", [])], ["ans_1"])
+
+        # Search across content: q=calldata -> only ans_4
+        status_cd, data_cd = self._get_json("/api/users/user_author/answers?sort=rating&q=calldata")
+        self.assertEqual(status_cd, 200)
+        self.assertEqual(data_cd.get("total"), 1)
+        self.assertEqual(data_cd.get("totalCount"), 1)
+        self.assertEqual([it["id"] for it in data_cd.get("items", [])], ["ans_4"])
+
+        # 5. Comments endpoint also supports sort=top
+        status_comm_top, data_comm_top = self._get_json("/api/users/user_author/comments?sort=top")
+        self.assertEqual(status_comm_top, 200)
+        self.assertEqual([it["id"] for it in data_comm_top.get("items", [])], ["comm_1", "comm_2", "comm_3"])
 
 
 if __name__ == "__main__":
