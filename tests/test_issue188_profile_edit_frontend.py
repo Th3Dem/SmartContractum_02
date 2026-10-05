@@ -49,6 +49,7 @@ Verifies:
 
 import os
 import re
+import subprocess
 import unittest
 import unicodedata
 
@@ -72,6 +73,159 @@ class TestIssue188ProfileEditFrontend(unittest.TestCase):
             cls.css = f.read()
         with open(__file__, "r", encoding="utf-8") as f:
             cls.test_py = f.read()
+
+    @classmethod
+    def _run_node_script(cls, script_body):
+        """Execute a JavaScript snippet in a Node.js vm context simulating the profile page DOM."""
+        setup = f"""
+const fs = require('fs');
+const vm = require('vm');
+
+const code = fs.readFileSync('{PAGE_JS_PATH}', 'utf8');
+
+const domElements = {{}};
+function getEl(id) {{
+  if (!domElements[id]) {{
+    const listeners = {{}};
+    domElements[id] = {{
+      id: id,
+      value: '',
+      src: '',
+      style: {{ display: 'none' }},
+      disabled: false,
+      classList: {{
+        _classes: new Set(),
+        add: function(c) {{ this._classes.add(c); }},
+        remove: function(c) {{ this._classes.delete(c); }},
+        contains: function(c) {{ return this._classes.has(c); }},
+        toggle: function(c) {{}}
+      }},
+      setAttribute: function(k, v) {{ this[k] = v; }},
+      removeAttribute: function(k) {{ delete this[k]; }},
+      getAttribute: function(k) {{ return this[k] || ''; }},
+      hasAttribute: function(k) {{ return k in this; }},
+      focus: function() {{ win.document.activeElement = this; }},
+      blur: function() {{ if (win.document.activeElement === this) win.document.activeElement = null; }},
+      addEventListener: function(t, fn) {{
+        if (!listeners[t]) listeners[t] = [];
+        listeners[t].push(fn);
+      }},
+      dispatchEvent: function(e) {{
+        const fns = listeners[e.type] || [];
+        for (const fn of fns) fn.call(this, e);
+      }},
+      querySelector: function() {{ return null; }},
+      querySelectorAll: function() {{ return []; }},
+      getContext: function() {{
+        return {{ clearRect: () => {{}}, fillRect: () => {{}}, drawImage: () => {{}} }};
+      }},
+      toDataURL: function() {{ return 'data:image/png;base64,mock'; }}
+    }};
+  }}
+  return domElements[id];
+}}
+
+const docListeners = {{}};
+let uploadResolvers = [];
+
+const win = {{
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: {{ search: '?id=user_test', href: 'http://localhost/profile.html?id=user_test' }},
+  addEventListener: () => {{}},
+  dispatchEvent: () => {{}},
+  document: {{
+    documentElement: {{ setAttribute: () => {{}}, getAttribute: () => 'dark' }},
+    activeElement: null,
+    getElementById: getEl,
+    addEventListener: (t, fn) => {{
+      if (!docListeners[t]) docListeners[t] = [];
+      docListeners[t].push(fn);
+    }},
+    createElement: (tag) => getEl('dyn_' + Math.random().toString(36).substr(2, 6)),
+    querySelectorAll: (sel) => []
+  }},
+  localStorage: {{ getItem: () => null, setItem: () => {{}} }},
+  history: {{ pushState: () => {{}}, replaceState: () => {{}} }},
+  fetch: (url, opts) => {{
+    if (url === '/api/media/upload') {{
+      return new Promise((resolve, reject) => {{
+        uploadResolvers.push({{ resolve, body: opts && opts.body ? JSON.parse(opts.body) : null }});
+      }});
+    }}
+    return Promise.resolve({{ ok: true, json: () => Promise.resolve({{ success: true, url: '/test.png' }}) }});
+  }},
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (id) => clearTimeout(id),
+  FileReader: function() {{
+    this.readAsDataURL = function(file) {{
+      setTimeout(() => {{
+        if (this.onload) this.onload({{ target: {{ result: file.dataUrl || 'data:image/png;base64,mock' }} }});
+      }}, 0);
+    }};
+  }},
+  Image: function() {{
+    this.src = '';
+    this.complete = true;
+    this.onload = () => {{}};
+  }}
+}};
+win.window = win;
+
+// Setup modal elements
+const cropModal = getEl('avatarCropModal');
+const editModal = getEl('editProfileModal');
+
+const btnCloseCrop = getEl('btnCloseAvatarCropModal');
+const zoomInput = getEl('avatarCropZoom');
+const btnCancelCrop = getEl('btnCancelAvatarCrop');
+const btnApplyCrop = getEl('btnApplyAvatarCrop');
+btnCloseCrop.style.display = 'inline-block';
+zoomInput.style.display = 'inline-block';
+btnCancelCrop.style.display = 'inline-block';
+btnApplyCrop.style.display = 'inline-block';
+
+const cropChildren = [btnCloseCrop, zoomInput, btnCancelCrop, btnApplyCrop];
+cropModal._children = cropChildren;
+cropModal.contains = (el) => cropChildren.includes(el);
+cropModal.querySelectorAll = (sel) => cropChildren;
+
+const inpName = getEl('editProfileName');
+const btnCropAvatar = getEl('btnCropAvatar');
+const btnSaveEdit = getEl('btnSaveProfile');
+inpName.style.display = 'block';
+btnCropAvatar.style.display = 'inline-block';
+btnSaveEdit.style.display = 'inline-block';
+
+const editChildren = [inpName, btnCropAvatar, btnSaveEdit];
+editModal._children = editChildren;
+editModal.contains = (el) => editChildren.includes(el);
+editModal.querySelectorAll = (sel) => editChildren;
+
+vm.createContext(win);
+vm.runInContext(code, win);
+
+const api = win.SmartContractumProfilePage;
+api.initEventListeners();
+
+function sendDocKey(key, shiftKey) {{
+  let prevented = false;
+  for (const fn of (docListeners['keydown'] || [])) {{
+    fn({{
+      key: key,
+      shiftKey: Boolean(shiftKey),
+      preventDefault: () => {{ prevented = true; }}
+    }});
+  }}
+  return prevented;
+}}
+
+(async () => {{
+  {script_body}
+}})();
+"""
+        return subprocess.run(["node", "-e", setup], capture_output=True, text=True)
 
     # =========================================================================
     # 1. profile.html Elements
@@ -306,7 +460,214 @@ class TestIssue188ProfileEditFrontend(unittest.TestCase):
         self.assertIn("panelParam === 'settings'", feed_js)
 
     # =========================================================================
-    # 7. Strict Invariants
+    # 7. Avatar Crop Focus Trap and Escape Handling (Issue #188 Round 2)
+    # =========================================================================
+
+    def test_crop_modal_escape_closes_crop_only(self):
+        """Verify opening crop modal and pressing Escape closes crop modal while edit modal stays open."""
+        # 1. Static code verification: Escape listener checks avatarCropModal first
+        escape_match = re.search(r"if\s*\(\s*e\.key\s*===\s*'Escape'\s*\)\s*\{([\s\S]*?)(?:if\s*\(\s*e\.key\s*===\s*'Tab'|\}\s*\);)", self.page_js)
+        self.assertIsNotNone(escape_match, "Escape key handler must be present in profile-page.js")
+        escape_body = escape_match.group(1)
+
+        crop_idx = escape_body.find("avatarCropModal")
+        edit_idx = escape_body.find("editProfileModal")
+        self.assertNotEqual(crop_idx, -1, "avatarCropModal must be checked in Escape handler")
+        self.assertNotEqual(edit_idx, -1, "editProfileModal must be checked in Escape handler")
+        self.assertLess(crop_idx, edit_idx, "avatarCropModal must be checked before editProfileModal in Escape handler")
+
+        self.assertIn("closeAvatarCropModal()", escape_body, "Must call closeAvatarCropModal() on Escape")
+        self.assertIn("e.preventDefault()", escape_body, "Must prevent default when Escape dismisses crop modal")
+
+        # 2. Functional Node.js vm verification
+        script_body = """
+  editModal.style.display = 'flex';
+  api.openAvatarCropModal();
+  if (cropModal.style.display !== 'flex') {
+    console.error('FAIL_CROP_NOT_OPEN');
+    process.exit(1);
+  }
+
+  const prevented = sendDocKey('Escape', false);
+  if (!prevented) {
+    console.error('FAIL_ESCAPE_NOT_PREVENTED');
+    process.exit(2);
+  }
+  if (cropModal.style.display !== 'none') {
+    console.error('FAIL_CROP_NOT_CLOSED');
+    process.exit(3);
+  }
+  if (editModal.style.display !== 'flex') {
+    console.error('FAIL_EDIT_WAS_CLOSED');
+    process.exit(4);
+  }
+  console.log('SUCCESS_ESCAPE_CLOSES_CROP_ONLY');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Escape crop test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_ESCAPE_CLOSES_CROP_ONLY", proc.stdout)
+
+    def test_crop_modal_focus_restoration_to_trigger(self):
+        """Verify closing crop modal returns focus to #btnCropAvatar (the initiator)."""
+        # 1. Static code verification
+        self.assertIn("let lastCropTriggerEl", self.page_js, "Must declare lastCropTriggerEl")
+        open_crop_match = re.search(r"function openAvatarCropModal\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(open_crop_match, "openAvatarCropModal function must be defined")
+        self.assertIn("lastCropTriggerEl", open_crop_match.group(1), "openAvatarCropModal must store lastCropTriggerEl")
+
+        close_crop_match = re.search(r"function closeAvatarCropModal\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(close_crop_match, "closeAvatarCropModal function must be defined")
+        close_body = close_crop_match.group(1)
+        self.assertIn("lastCropTriggerEl", close_body, "closeAvatarCropModal must reference lastCropTriggerEl")
+        self.assertIn(".focus()", close_body, "closeAvatarCropModal must restore focus")
+
+        apply_crop_match = re.search(r"function applyAvatarCrop\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(apply_crop_match, "applyAvatarCrop function must be defined")
+        self.assertIn("closeAvatarCropModal()", apply_crop_match.group(1), "applyAvatarCrop must call closeAvatarCropModal()")
+
+        # 2. Functional Node.js vm verification
+        script_body = """
+  btnCropAvatar.focus();
+  api.openAvatarCropModal();
+  if (cropModal.style.display !== 'flex') {
+    console.error('FAIL_CROP_NOT_OPEN');
+    process.exit(1);
+  }
+
+  // Change focus to inside the crop modal
+  zoomInput.focus();
+  if (win.document.activeElement !== zoomInput) {
+    console.error('FAIL_ZOOM_NOT_FOCUSED');
+    process.exit(2);
+  }
+
+  // Close crop modal
+  api.closeAvatarCropModal();
+  if (cropModal.style.display !== 'none') {
+    console.error('FAIL_CROP_NOT_CLOSED');
+    process.exit(3);
+  }
+  if (win.document.activeElement !== btnCropAvatar) {
+    console.error('FAIL_FOCUS_NOT_RESTORED: ' + (win.document.activeElement ? win.document.activeElement.id : 'null'));
+    process.exit(4);
+  }
+
+  console.log('SUCCESS_FOCUS_RESTORATION');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Focus restoration test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_FOCUS_RESTORATION", proc.stdout)
+
+    def test_crop_modal_tab_focus_trap(self):
+        """Verify Tab and Shift+Tab cycle focus strictly within #avatarCropModal elements without escaping to #editProfileModal."""
+        # 1. Static code verification
+        tab_match = re.search(r"if\s*\(\s*e\.key\s*===\s*'Tab'\s*\)\s*\{([\s\S]*?)\n    \}\);", self.page_js)
+        self.assertIsNotNone(tab_match, "Tab key handler must be defined in profile-page.js")
+        tab_body = tab_match.group(1)
+
+        self.assertIn("avatarCropModal", tab_body, "Tab handler must prioritize avatarCropModal")
+        self.assertIn("editProfileModal", tab_body, "Tab handler must handle editProfileModal")
+        self.assertIn("e.shiftKey", tab_body, "Tab handler must handle Shift+Tab reverse navigation")
+        self.assertIn("e.preventDefault()", tab_body, "Tab handler must prevent default on trap boundaries")
+
+        # 2. Functional Node.js vm verification
+        script_body = """
+  editModal.style.display = 'flex';
+  cropModal.style.display = 'flex';
+
+  // 1. Focus on last element of crop modal (btnApplyCrop) -> Tab wraps to first (btnCloseCrop)
+  btnApplyCrop.focus();
+  let prev = sendDocKey('Tab', false);
+  if (!prev || win.document.activeElement !== btnCloseCrop) {
+    console.error('FAIL_TAB_WRAP: ' + (win.document.activeElement ? win.document.activeElement.id : 'null') + ' prev=' + prev);
+    process.exit(1);
+  }
+
+  // 2. Focus on first element of crop modal (btnCloseCrop) -> Shift+Tab wraps to last (btnApplyCrop)
+  btnCloseCrop.focus();
+  prev = sendDocKey('Tab', true);
+  if (!prev || win.document.activeElement !== btnApplyCrop) {
+    console.error('FAIL_SHIFTTAB_WRAP: ' + (win.document.activeElement ? win.document.activeElement.id : 'null') + ' prev=' + prev);
+    process.exit(2);
+  }
+
+  // 3. Focus on element in underlying edit modal (inpName) -> Tab jumps to crop modal first element
+  inpName.focus();
+  prev = sendDocKey('Tab', false);
+  if (!prev || win.document.activeElement !== btnCloseCrop) {
+    console.error('FAIL_OUTSIDE_TAB: ' + (win.document.activeElement ? win.document.activeElement.id : 'null'));
+    process.exit(3);
+  }
+
+  // 4. Focus on element in underlying edit modal (inpName) -> Shift+Tab jumps to crop modal last element
+  inpName.focus();
+  prev = sendDocKey('Tab', true);
+  if (!prev || win.document.activeElement !== btnApplyCrop) {
+    console.error('FAIL_OUTSIDE_SHIFTTAB: ' + (win.document.activeElement ? win.document.activeElement.id : 'null'));
+    process.exit(4);
+  }
+
+  console.log('SUCCESS_TAB_FOCUS_TRAP');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Tab focus trap test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_TAB_FOCUS_TRAP", proc.stdout)
+
+    def test_rapid_avatar_change_or_removal_discards_stale_upload(self):
+        """Verify rapid selection or removal sets avatarUploadSeq and discards older upload responses."""
+        # 1. Static code verification
+        self.assertIn("avatarUploadSeq", self.page_js, "Must track avatarUploadSeq")
+        self.assertIn("seq !== avatarUploadSeq || isAvatarRemoved", self.page_js, "Must check seq and isAvatarRemoved")
+
+        # 2. Functional Node.js vm verification
+        script_body = """
+  const initialSeq = api.getAvatarUploadSeq();
+  const file1 = { name: 'avatar1.png', type: 'image/png', dataUrl: 'data:image/png;base64,avatar1' };
+  api.handleAvatarFileSelected({ target: { files: [file1] } });
+  await new Promise(r => setTimeout(r, 10));
+
+  const seq1 = api.getAvatarUploadSeq();
+  if (seq1 <= initialSeq) {
+    console.error('FAIL_SEQ_NOT_INCREMENTED_ON_SELECT');
+    process.exit(1);
+  }
+  if (uploadResolvers.length !== 1) {
+    console.error('FAIL_NO_UPLOAD_PROMISE');
+    process.exit(2);
+  }
+
+  // Rapid removal before upload resolves
+  api.handleRemoveAvatar();
+  const seq2 = api.getAvatarUploadSeq();
+  if (seq2 <= seq1) {
+    console.error('FAIL_SEQ_NOT_INCREMENTED_ON_REMOVE');
+    process.exit(3);
+  }
+  if (!api.getIsAvatarRemoved()) {
+    console.error('FAIL_IS_AVATAR_REMOVED_NOT_TRUE');
+    process.exit(4);
+  }
+
+  // Old upload resolves after removal
+  uploadResolvers[0].resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, url: '/media/avatar1_stale.png' })
+  });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getUploadedAvatarUrl() !== null) {
+    console.error('FAIL_STALE_UPLOAD_NOT_DISCARDED: ' + api.getUploadedAvatarUrl());
+    process.exit(5);
+  }
+
+  console.log('SUCCESS_RAPID_AVATAR_STALE_DISCARD');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Rapid avatar stale discard test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_RAPID_AVATAR_STALE_DISCARD", proc.stdout)
+
+    # =========================================================================
+    # 8. Strict Invariants
     # =========================================================================
 
     def test_10_strict_invariants(self):

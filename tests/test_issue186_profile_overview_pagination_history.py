@@ -421,6 +421,563 @@ api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [
         self.assertIn("SUCCESS_CONTRACT_VERIFIED", proc.stdout)
 
     # =========================================================================
+    # 4.1 Search Query Handlers, Debounce, Keydown & Popstate Behavioral Tests
+    # =========================================================================
+
+    def test_search_competing_listeners_removed_and_unified_handlers_present(self):
+        """Verify duplicate competing input listeners are removed and unified handlers are present."""
+        # 1. Competing input listener calling setSearchQuery(..., false) must be removed
+        self.assertNotIn(
+            "setSearchQuery(e.target.value, false)",
+            self.page_js,
+            "Competing input listener calling setSearchQuery(..., false) must be removed"
+        )
+
+        # 2. searchDebounceTimer and triggerSearch must exist
+        self.assertIn("searchDebounceTimer", self.page_js)
+        self.assertIn("function triggerSearch", self.page_js)
+        self.assertIn("triggerSearch: triggerSearch", self.page_js)
+        self.assertIn("getSearchQuery:", self.page_js)
+
+        # 3. Dedicated handlers for #profileSearchInput and #btnProfileSearchClear
+        self.assertIn("document.getElementById('profileSearchInput')", self.page_js)
+        self.assertIn("document.getElementById('btnProfileSearchClear')", self.page_js)
+        self.assertIn("val.trim() ? 'flex' : 'none'", self.page_js)
+        self.assertIn("e.key === 'Enter'", self.page_js)
+        self.assertIn("e.key === 'Escape'", self.page_js)
+
+        # 4. All tabs supported in setSearchQuery
+        search_match = re.search(r"function setSearchQuery\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(search_match)
+        body = search_match.group(1)
+        self.assertIn("loadPublications(uid, false)", body)
+        self.assertIn("loadQuestions(uid, false)", body)
+        self.assertIn("loadAnswers(uid, false)", body)
+        self.assertIn("loadComments(uid, false)", body)
+        self.assertIn("loadActivity(uid, false)", body)
+
+    def test_search_input_debounce_updates_url_and_history(self):
+        """Verify search input debounces by 300ms, shows clear button, and updates history via pushState."""
+        node_script = """
+const fs = require('fs');
+const code = fs.readFileSync('""" + PAGE_JS_PATH + """', 'utf8');
+const vm = require('vm');
+
+let fetchCalls = [];
+const mockFetch = (url, opts) => {
+  fetchCalls.push(url);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, items: [{ id: 'item_1' }], hasMore: false, activity: [{ id: 'act_1' }] })
+  });
+};
+
+const domElements = {};
+function getEl(id) {
+  if (!domElements[id]) {
+    const listeners = {};
+    domElements[id] = {
+      id: id,
+      value: '',
+      classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      hasAttribute: () => false,
+      getAttribute: () => '',
+      style: {},
+      innerHTML: '',
+      textContent: '',
+      addEventListener: (type, fn) => {
+        if (!listeners[type]) listeners[type] = [];
+        listeners[type].push(fn);
+      },
+      dispatchEvent: (event) => {
+        const fns = listeners[event.type] || [];
+        for (const fn of fns) {
+          fn.call(domElements[id], event);
+        }
+      },
+      querySelector: () => null,
+      querySelectorAll: () => []
+    };
+  }
+  return domElements[id];
+}
+
+const windowListeners = {};
+const historyPushes = [];
+const historyReplaces = [];
+
+const window = {
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: { search: '?id=user_test', href: 'http://localhost/profile.html?id=user_test' },
+  addEventListener: (type, fn) => {
+    if (!windowListeners[type]) windowListeners[type] = [];
+    windowListeners[type].push(fn);
+  },
+  dispatchEvent: (event) => {
+    const fns = windowListeners[event.type] || [];
+    for (const fn of fns) {
+      fn.call(window, event);
+    }
+  },
+  document: {
+    documentElement: { setAttribute: () => {}, getAttribute: () => 'dark' },
+    addEventListener: () => {},
+    getElementById: getEl,
+    querySelectorAll: (sel) => {
+      if (sel && sel.includes('profileSearchInput')) {
+        return [getEl('profileSearchInput')];
+      }
+      return [];
+    }
+  },
+  localStorage: { getItem: () => null, setItem: () => {} },
+  history: {
+    pushState: (state, title, url) => {
+      historyPushes.push({ state, title, url });
+      if (url) {
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }
+    },
+    replaceState: (state, title, url) => {
+      historyReplaces.push({ state, title, url });
+      if (url) {
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }
+    }
+  },
+  fetch: mockFetch,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
+};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [] });
+api.initEventListeners();
+
+(async () => {
+  const inputEl = getEl('profileSearchInput');
+  const clearBtn = getEl('btnProfileSearchClear');
+
+  // Initial state check
+  if (clearBtn.style.display === 'flex') {
+    console.error('FAIL_INITIAL_CLEAR_BTN_VISIBLE');
+    process.exit(1);
+  }
+
+  // Dispatch input event on #profileSearchInput
+  inputEl.value = 'security';
+  inputEl.dispatchEvent({ type: 'input' });
+
+  // Clear button should immediately become visible
+  if (clearBtn.style.display !== 'flex') {
+    console.error('FAIL_CLEAR_BTN_NOT_FLEX');
+    process.exit(2);
+  }
+
+  // Before 300ms, pushState must NOT have been called yet
+  if (historyPushes.length !== 0) {
+    console.error('FAIL_PREMATURE_PUSH_STATE');
+    process.exit(3);
+  }
+
+  // Advance timer by waiting past 300ms debounce
+  await new Promise(resolve => setTimeout(resolve, 350));
+
+  // Verify pushState called with q=security
+  if (historyPushes.length !== 1) {
+    console.error('FAIL_PUSH_STATE_NOT_CALLED');
+    process.exit(4);
+  }
+  const lastPush = historyPushes[historyPushes.length - 1];
+  if (!lastPush.url || !lastPush.url.includes('q=security')) {
+    console.error('FAIL_URL_MISSING_Q');
+    process.exit(5);
+  }
+  if (!lastPush.state || lastPush.state.q !== 'security') {
+    console.error('FAIL_STATE_MISSING_Q');
+    process.exit(6);
+  }
+  if (api.getSearchQuery() !== 'security') {
+    console.error('FAIL_ACTIVE_QUERY_MISMATCH');
+    process.exit(7);
+  }
+
+  console.log('SUCCESS_SEARCH_DEBOUNCE');
+})();
+"""
+        proc = subprocess.run(
+            ["node", "-e", node_script],
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(proc.returncode, 0, f"Search debounce test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_SEARCH_DEBOUNCE", proc.stdout)
+
+    def test_search_enter_and_escape_behavior(self):
+        """Verify Enter immediately calls pushState and Escape clears query and removes from URL."""
+        node_script = """
+const fs = require('fs');
+const code = fs.readFileSync('""" + PAGE_JS_PATH + """', 'utf8');
+const vm = require('vm');
+
+let fetchCalls = [];
+const mockFetch = (url, opts) => {
+  fetchCalls.push(url);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, items: [{ id: 'item_1' }], hasMore: false, activity: [{ id: 'act_1' }] })
+  });
+};
+
+const domElements = {};
+function getEl(id) {
+  if (!domElements[id]) {
+    const listeners = {};
+    domElements[id] = {
+      id: id,
+      value: '',
+      classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      hasAttribute: () => false,
+      getAttribute: () => '',
+      style: {},
+      innerHTML: '',
+      textContent: '',
+      addEventListener: (type, fn) => {
+        if (!listeners[type]) listeners[type] = [];
+        listeners[type].push(fn);
+      },
+      dispatchEvent: (event) => {
+        const fns = listeners[event.type] || [];
+        for (const fn of fns) {
+          fn.call(domElements[id], event);
+        }
+      },
+      querySelector: () => null,
+      querySelectorAll: () => []
+    };
+  }
+  return domElements[id];
+}
+
+const windowListeners = {};
+const historyPushes = [];
+
+const window = {
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: { search: '?id=user_test', href: 'http://localhost/profile.html?id=user_test' },
+  addEventListener: (type, fn) => {
+    if (!windowListeners[type]) windowListeners[type] = [];
+    windowListeners[type].push(fn);
+  },
+  dispatchEvent: (event) => {
+    const fns = windowListeners[event.type] || [];
+    for (const fn of fns) {
+      fn.call(window, event);
+    }
+  },
+  document: {
+    documentElement: { setAttribute: () => {}, getAttribute: () => 'dark' },
+    addEventListener: () => {},
+    getElementById: getEl,
+    querySelectorAll: (sel) => {
+      if (sel && sel.includes('profileSearchInput')) {
+        return [getEl('profileSearchInput')];
+      }
+      return [];
+    }
+  },
+  localStorage: { getItem: () => null, setItem: () => {} },
+  history: {
+    pushState: (state, title, url) => {
+      historyPushes.push({ state, title, url });
+      if (url) {
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }
+    },
+    replaceState: () => {}
+  },
+  fetch: mockFetch,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
+};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [] });
+api.initEventListeners();
+
+(async () => {
+  const inputEl = getEl('profileSearchInput');
+  const clearBtn = getEl('btnProfileSearchClear');
+
+  // Step 1: Type query and press Enter (immediate pushState without waiting 300ms)
+  let prevented = false;
+  inputEl.value = 'blockchain';
+  inputEl.dispatchEvent({
+    type: 'keydown',
+    key: 'Enter',
+    preventDefault: () => { prevented = true; }
+  });
+
+  if (!prevented) {
+    console.error('FAIL_ENTER_NOT_PREVENTED');
+    process.exit(1);
+  }
+  if (historyPushes.length !== 1) {
+    console.error('FAIL_ENTER_IMMEDIATE_PUSH_COUNT');
+    process.exit(2);
+  }
+  if (!historyPushes[0].url.includes('q=blockchain')) {
+    console.error('FAIL_ENTER_URL_PARAM');
+    process.exit(3);
+  }
+  if (api.getSearchQuery() !== 'blockchain') {
+    console.error('FAIL_ENTER_ACTIVE_QUERY');
+    process.exit(4);
+  }
+
+  // Step 2: Press Escape while value is present
+  prevented = false;
+  inputEl.dispatchEvent({
+    type: 'keydown',
+    key: 'Escape',
+    preventDefault: () => { prevented = true; }
+  });
+
+  if (!prevented) {
+    console.error('FAIL_ESCAPE_NOT_PREVENTED');
+    process.exit(5);
+  }
+  if (inputEl.value !== '') {
+    console.error('FAIL_ESCAPE_VALUE_NOT_CLEARED');
+    process.exit(6);
+  }
+  if (clearBtn.style.display !== 'none') {
+    console.error('FAIL_ESCAPE_CLEAR_BTN_NOT_HIDDEN');
+    process.exit(7);
+  }
+  if (api.getSearchQuery() !== '') {
+    console.error('FAIL_ESCAPE_ACTIVE_QUERY_NOT_CLEARED');
+    process.exit(8);
+  }
+  const lastPushAfterEscape = historyPushes[historyPushes.length - 1];
+  if (lastPushAfterEscape.url.includes('q=')) {
+    console.error('FAIL_ESCAPE_URL_CONTAINS_Q');
+    process.exit(9);
+  }
+
+  // Step 3: Clear button click handler test
+  inputEl.value = 'smartcontract';
+  inputEl.dispatchEvent({ type: 'input' });
+  if (clearBtn.style.display !== 'flex') {
+    console.error('FAIL_CLEAR_BTN_NOT_SHOWN');
+    process.exit(10);
+  }
+  clearBtn.dispatchEvent({ type: 'click' });
+  if (inputEl.value !== '') {
+    console.error('FAIL_CLEAR_CLICK_INPUT_NOT_EMPTY');
+    process.exit(11);
+  }
+  if (clearBtn.style.display !== 'none') {
+    console.error('FAIL_CLEAR_CLICK_BTN_NOT_HIDDEN');
+    process.exit(12);
+  }
+  if (api.getSearchQuery() !== '') {
+    console.error('FAIL_CLEAR_CLICK_QUERY_NOT_EMPTY');
+    process.exit(13);
+  }
+  const lastPushAfterClick = historyPushes[historyPushes.length - 1];
+  if (lastPushAfterClick.url.includes('q=')) {
+    console.error('FAIL_CLEAR_CLICK_URL_CONTAINS_Q');
+    process.exit(14);
+  }
+
+  console.log('SUCCESS_ENTER_ESCAPE');
+})();
+"""
+        proc = subprocess.run(
+            ["node", "-e", node_script],
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(proc.returncode, 0, f"Search Enter/Escape test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_ENTER_ESCAPE", proc.stdout)
+
+    def test_popstate_restores_search_query_and_ui(self):
+        """Verify popstate restores search query in state, updates search input value and clear button, and reloads active tab."""
+        node_script = """
+const fs = require('fs');
+const code = fs.readFileSync('""" + PAGE_JS_PATH + """', 'utf8');
+const vm = require('vm');
+
+let fetchCalls = [];
+const mockFetch = (url, opts) => {
+  fetchCalls.push(url);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, items: [{ id: 'item_1' }], hasMore: false, activity: [{ id: 'act_1' }] })
+  });
+};
+
+const domElements = {};
+function getEl(id) {
+  if (!domElements[id]) {
+    const listeners = {};
+    domElements[id] = {
+      id: id,
+      value: '',
+      classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      hasAttribute: () => false,
+      getAttribute: () => '',
+      style: {},
+      innerHTML: '',
+      textContent: '',
+      addEventListener: (type, fn) => {
+        if (!listeners[type]) listeners[type] = [];
+        listeners[type].push(fn);
+      },
+      dispatchEvent: (event) => {
+        const fns = listeners[event.type] || [];
+        for (const fn of fns) {
+          fn.call(domElements[id], event);
+        }
+      },
+      querySelector: () => null,
+      querySelectorAll: () => []
+    };
+  }
+  return domElements[id];
+}
+
+const windowListeners = {};
+const window = {
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: { search: '?id=user_test', href: 'http://localhost/profile.html?id=user_test' },
+  addEventListener: (type, fn) => {
+    if (!windowListeners[type]) windowListeners[type] = [];
+    windowListeners[type].push(fn);
+  },
+  dispatchEvent: (event) => {
+    const fns = windowListeners[event.type] || [];
+    for (const fn of fns) {
+      fn.call(window, event);
+    }
+  },
+  document: {
+    documentElement: { setAttribute: () => {}, getAttribute: () => 'dark' },
+    addEventListener: () => {},
+    getElementById: getEl,
+    querySelectorAll: (sel) => {
+      if (sel && sel.includes('profileSearchInput')) {
+        return [getEl('profileSearchInput')];
+      }
+      return [];
+    }
+  },
+  localStorage: { getItem: () => null, setItem: () => {} },
+  history: { pushState: () => {}, replaceState: () => {} },
+  fetch: mockFetch,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
+};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [] });
+api.initEventListeners();
+
+(async () => {
+  const inputEl = getEl('profileSearchInput');
+  const clearBtn = getEl('btnProfileSearchClear');
+  fetchCalls = [];
+
+  // Fire popstate with state { tab: 'overview', q: 'audit' }
+  window.dispatchEvent({ type: 'popstate', state: { tab: 'overview', q: 'audit' } });
+  await Promise.resolve();
+
+  // Verify search query updated
+  if (api.getSearchQuery() !== 'audit') {
+    console.error('FAIL_POPSTATE_QUERY_NOT_AUDIT: ' + api.getSearchQuery());
+    process.exit(1);
+  }
+
+  // Verify input element value updated
+  if (inputEl.value !== 'audit') {
+    console.error('FAIL_POPSTATE_INPUT_NOT_AUDIT: ' + inputEl.value);
+    process.exit(2);
+  }
+
+  // Verify clear button shown
+  if (clearBtn.style.display !== 'flex') {
+    console.error('FAIL_POPSTATE_CLEAR_BTN_NOT_FLEX');
+    process.exit(3);
+  }
+
+  // Verify active tab data reload triggered with q=audit
+  if (fetchCalls.length === 0) {
+    console.error('FAIL_POPSTATE_NO_FETCH');
+    process.exit(4);
+  }
+  const lastFetch = fetchCalls[fetchCalls.length - 1];
+  if (!lastFetch.includes('q=audit')) {
+    console.error('FAIL_POPSTATE_FETCH_MISSING_Q: ' + lastFetch);
+    process.exit(5);
+  }
+
+  // Now fire popstate clearing query
+  window.dispatchEvent({ type: 'popstate', state: { tab: 'overview', q: '' } });
+  await Promise.resolve();
+
+  if (api.getSearchQuery() !== '') {
+    console.error('FAIL_POPSTATE_QUERY_NOT_CLEARED');
+    process.exit(6);
+  }
+  if (inputEl.value !== '') {
+    console.error('FAIL_POPSTATE_INPUT_NOT_CLEARED');
+    process.exit(7);
+  }
+  if (clearBtn.style.display !== 'none') {
+    console.error('FAIL_POPSTATE_CLEAR_BTN_NOT_NONE');
+    process.exit(8);
+  }
+
+  console.log('SUCCESS_POPSTATE_RESTORES_QUERY');
+})();
+"""
+        proc = subprocess.run(
+            ["node", "-e", node_script],
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(proc.returncode, 0, f"Popstate search query restore test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_POPSTATE_RESTORES_QUERY", proc.stdout)
+
+    # =========================================================================
     # 5. In-Place Stats Update
     # =========================================================================
 

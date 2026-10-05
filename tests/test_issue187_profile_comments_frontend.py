@@ -31,6 +31,7 @@ Verifies:
 
 import os
 import re
+import subprocess
 import unittest
 import unicodedata
 
@@ -310,7 +311,233 @@ class TestIssue187ProfileCommentsFrontend(unittest.TestCase):
         self.assertIn("Для отправки жалобы необходимо войти", self.page_js, "Must display login toast on unauthenticated report")
 
     # =========================================================================
-    # 7. Strict Invariants
+    # 7. Behavioral Tests (Node VM / DOM Mock)
+    # =========================================================================
+
+    def _run_node_script(self, script_body):
+        """Helper to run Node VM test script with profile-page.js."""
+        setup = f"""
+const fs = require('fs');
+const code = fs.readFileSync('{PAGE_JS_PATH}', 'utf8');
+const vm = require('vm');
+
+let fetchCalls = [];
+const mockFetch = (url, opts) => {{
+  fetchCalls.push(url);
+  return Promise.resolve({{
+    ok: true,
+    json: () => Promise.resolve({{
+      success: true,
+      items: [{{ id: 'comm_1', body: 'Test comment', createdAt: '2026-03-01T10:00:00Z', targetType: 'article', targetTitle: 'Test Art', rating: 5 }}],
+      total: 1,
+      hasMore: false,
+      activity: []
+    }})
+  }});
+}};
+
+const domElements = {{}};
+function getEl(id) {{
+  if (!domElements[id]) {{
+    const listeners = {{}};
+    domElements[id] = {{
+      id: id,
+      value: '',
+      classList: {{
+        _classes: new Set(),
+        toggle: function(cls, force) {{
+          if (force !== undefined) {{
+            if (force) this._classes.add(cls); else this._classes.delete(cls);
+          }} else {{
+            if (this._classes.has(cls)) this._classes.delete(cls); else this._classes.add(cls);
+          }}
+        }},
+        add: function(cls) {{ this._classes.add(cls); }},
+        remove: function(cls) {{ this._classes.delete(cls); }},
+        contains: function(cls) {{ return this._classes.has(cls); }}
+      }},
+      setAttribute: () => {{}},
+      removeAttribute: () => {{}},
+      hasAttribute: () => false,
+      getAttribute: () => '',
+      style: {{}},
+      innerHTML: '',
+      textContent: '',
+      addEventListener: (type, fn) => {{
+        if (!listeners[type]) listeners[type] = [];
+        listeners[type].push(fn);
+      }},
+      dispatchEvent: (event) => {{
+        const fns = listeners[event.type] || [];
+        for (const fn of fns) {{
+          fn.call(domElements[id], event);
+        }}
+      }},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      appendChild: () => {{}}
+    }};
+  }}
+  return domElements[id];
+}}
+
+const sortCommNew = getEl('sortCommNewest');
+sortCommNew.getAttribute = (k) => (k === 'data-comm-sort' ? 'new' : '');
+sortCommNew.classList.add('is-active');
+
+const sortCommRating = getEl('sortCommRating');
+sortCommRating.getAttribute = (k) => (k === 'data-comm-sort' ? 'rating' : '');
+
+const windowListeners = {{}};
+const historyPushes = [];
+const historyReplaces = [];
+
+const window = {{
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: {{ search: '?id=user_author', href: 'http://localhost/profile.html?id=user_author' }},
+  addEventListener: (type, fn) => {{
+    if (!windowListeners[type]) windowListeners[type] = [];
+    windowListeners[type].push(fn);
+  }},
+  dispatchEvent: (event) => {{
+    const fns = windowListeners[event.type] || [];
+    for (const fn of fns) {{
+      fn.call(window, event);
+    }}
+  }},
+  document: {{
+    documentElement: {{ setAttribute: () => {{}}, getAttribute: () => 'dark' }},
+    addEventListener: () => {{}},
+    getElementById: getEl,
+    createElement: (tag) => getEl('mock_' + Math.random().toString(36).substr(2, 9)),
+    querySelectorAll: (sel) => {{
+      if (sel && sel.includes('data-comm-sort')) {{
+        return [sortCommNew, sortCommRating];
+      }}
+      if (sel && sel.includes('profileSearchInput')) {{
+        return [getEl('profileSearchInput')];
+      }}
+      return [];
+    }}
+  }},
+  localStorage: {{ getItem: () => null, setItem: () => {{}} }},
+  history: {{
+    pushState: (state, title, url) => {{
+      historyPushes.push({{ state, title, url }});
+      if (url) {{
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }}
+    }},
+    replaceState: (state, title, url) => {{
+      historyReplaces.push({{ state, title, url }});
+      if (url) {{
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }}
+    }}
+  }},
+  fetch: mockFetch,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
+}};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({{ id: 'user_author', publications: [], questions: [], answers: [] }});
+api.initEventListeners();
+api.setActiveTab('comments', false);
+
+(async () => {{
+  await new Promise(r => setTimeout(r, 10));
+  fetchCalls = [];
+  {script_body}
+}})();
+"""
+        return subprocess.run(["node", "-e", setup], capture_output=True, text=True)
+
+    def test_comments_search_input_triggers_comments_endpoint_with_query(self):
+        """With activeTab='comments', dispatches input event on #profileSearchInput, waits for debounce -> asserts fetch URL contains /api/users/.../comments and q=..., and assert /activity was NOT called."""
+        script_body = """
+  const inputEl = getEl('profileSearchInput');
+  inputEl.value = 'security';
+  inputEl.dispatchEvent({ type: 'input' });
+
+  await new Promise(r => setTimeout(r, 350));
+
+  const commCalls = fetchCalls.filter(u => u.includes('/comments') && u.includes('q=security'));
+  const actCalls = fetchCalls.filter(u => u.includes('/activity'));
+
+  if (commCalls.length === 0) {
+    console.error('FAIL_NO_COMMENTS_SEARCH: ' + JSON.stringify(fetchCalls));
+    process.exit(1);
+  }
+  if (actCalls.length > 0) {
+    console.error('FAIL_ACTIVITY_CALLED: ' + JSON.stringify(fetchCalls));
+    process.exit(2);
+  }
+  console.log('SUCCESS_SEARCH');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Comments search failed: {proc.stderr}")
+        self.assertIn("SUCCESS_SEARCH", proc.stdout)
+
+    def test_comments_sort_click_updates_url_and_reloads_comments(self):
+        """With activeTab='comments', clicks [data-comm-sort="rating"] -> asserts window.history.pushState was called with URL containing sort=rating / comm_sort=rating, and comments reloaded."""
+        script_body = """
+  sortCommRating.dispatchEvent({ type: 'click' });
+  await new Promise(r => setTimeout(r, 10));
+
+  const lastPush = historyPushes[historyPushes.length - 1];
+  if (!lastPush || !lastPush.url.includes('sort=rating') || !lastPush.url.includes('comm_sort=rating')) {
+    console.error('FAIL_PUSHSTATE: ' + JSON.stringify(lastPush));
+    process.exit(1);
+  }
+  const commReloadCalls = fetchCalls.filter(u => u.includes('/comments') && u.includes('sort=rating'));
+  if (commReloadCalls.length === 0) {
+    console.error('FAIL_NO_RELOAD: ' + JSON.stringify(fetchCalls));
+    process.exit(2);
+  }
+  console.log('SUCCESS_SORT_CLICK');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Comments sort click failed: {proc.stderr}")
+        self.assertIn("SUCCESS_SORT_CLICK", proc.stdout)
+
+    def test_comments_popstate_restores_sort_and_query(self):
+        """Fires popstate with { tab: 'comments', q: 'audit', sort: 'popular' } -> asserts commSort === 'popular', input has 'audit', and comments loaded with q=audit."""
+        script_body = """
+  window.dispatchEvent({ type: 'popstate', state: { tab: 'comments', q: 'audit', sort: 'popular' } });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCommSort() !== 'popular') {
+    console.error('FAIL_COMM_SORT: ' + api.getCommSort());
+    process.exit(1);
+  }
+  const inputEl = getEl('profileSearchInput');
+  if (inputEl.value !== 'audit') {
+    console.error('FAIL_INPUT_VAL: ' + inputEl.value);
+    process.exit(2);
+  }
+  const popCalls = fetchCalls.filter(u => u.includes('/comments') && u.includes('sort=popular') && u.includes('q=audit'));
+  if (popCalls.length === 0) {
+    console.error('FAIL_POP_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(3);
+  }
+  console.log('SUCCESS_POPSTATE');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Comments popstate failed: {proc.stderr}")
+        self.assertIn("SUCCESS_POPSTATE", proc.stdout)
+
+    # =========================================================================
+    # 8. Strict Invariants
     # =========================================================================
 
     def test_09_strict_invariants(self):
