@@ -1416,6 +1416,10 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     target_path = db_path or os.environ.get("MODERATION_DB_PATH", DEFAULT_DB_PATH)
     conn = sqlite3.connect(target_path)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.create_function("lower", 1, lambda s: s.lower() if s is not None else None)
+    except Exception:
+        pass
     return conn
 
 
@@ -2190,6 +2194,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             elif rest.endswith("/answers"):
                 user_id = rest[:-len("/answers")].strip("/")
                 self.handle_get_user_answers(user_id, parsed)
+            elif rest.endswith("/comments"):
+                user_id = rest[:-len("/comments")].strip("/")
+                self.handle_get_user_comments(user_id, parsed)
             else:
                 user_id = rest
                 if user_id.endswith("/profile"):
@@ -7674,6 +7681,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 c_stats = cur.fetchone()
 
                 cur.execute("""
+                    SELECT COUNT(DISTINCT ac.id) AS total_comments
+                    FROM article_comments ac
+                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    WHERE ac.user_id = ?
+                      AND ac.status = 'published'
+                      AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                      AND ms.status = 'approved'
+                """, (user_id,))
+                comm_stats = cur.fetchone()
+                comments_count = int(comm_stats["total_comments"] or 0) if comm_stats else 0
+
+                cur.execute("""
                     SELECT COALESCE(SUM(v.value), 0) AS pub_score
                     FROM article_votes v
                     WHERE v.article_id IN (
@@ -7894,6 +7913,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "karma": total_rating,
                 "publicationsCount": publications_count,
                 "questionsCount": questions_count,
+                "commentsCount": comments_count,
+                "comments_count": comments_count,
                 "followersCount": followers_count,
                 "followingCount": following_count,
                 "topics": topics_list,
@@ -7905,6 +7926,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "publicationsCount": publications_count,
                     "articlesCount": publications_count,
                     "questionsCount": questions_count,
+                    "commentsCount": comments_count,
+                    "comments_count": comments_count,
                     "followersCount": followers_count,
                     "followingCount": following_count,
                     "answersCount": (c_stats["total_answers"] or 0) if c_stats else 0,
@@ -8010,6 +8033,21 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 """, (user_id,))
                 answer_rows = cur.fetchall()
 
+                # 4. Published ordinary comments on approved materials
+                cur.execute("""
+                    SELECT ac.id, ac.article_id, ac.content, ac.created_at,
+                           ms.title AS parent_title,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                    FROM article_comments ac
+                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    WHERE ac.user_id = ?
+                      AND ac.status = 'published'
+                      AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                      AND ms.status = 'approved'
+                    GROUP BY ac.id
+                """, (user_id,))
+                comment_rows = cur.fetchall()
+
             activity = []
             for r in pub_rows:
                 activity.append({
@@ -8066,6 +8104,29 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
                 })
 
+            for r in comment_rows:
+                p_title = r["parent_title"] or "Материал сообщества"
+                activity.append({
+                    "type": "comment",
+                    "materialType": "comment",
+                    "material_type": "comment",
+                    "id": r["id"],
+                    "commentId": r["id"],
+                    "articleId": r["article_id"],
+                    "parentTitle": p_title,
+                    "title": p_title,
+                    "contentSnippet": make_content_snippet(r["content"]),
+                    "snippet": make_content_snippet(r["content"]),
+                    "rating": int(r["rating"] or 0),
+                    "score": int(r["rating"] or 0),
+                    "commentsCount": 0,
+                    "answersCount": 0,
+                    "isSolution": False,
+                    "createdAt": r["created_at"],
+                    "date": format_date_ru(r["created_at"]),
+                    "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
+                })
+
             activity.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
             total = len(activity)
             paged_activity = activity[offset : offset + limit]
@@ -8095,6 +8156,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
+        search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
         try:
             limit = max(1, min(100, int(query.get("limit", [20])[0])))
         except ValueError:
@@ -8170,6 +8232,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             for r in rows:
                 art_id = r["id"]
                 draft_id = r["draft_id"]
+                title_val = r["title"] or ""
+                content_val = r["article_html"] or ""
+                if search_q:
+                    text_val = extract_article_text(content_val)
+                    if search_q not in title_val.lower() and search_q not in content_val.lower() and search_q not in text_val.lower():
+                        continue
                 try:
                     pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
                 except Exception:
@@ -8270,6 +8338,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
         sort_by = (query.get("sort", ["newest"])[0] or "newest").strip().lower()
         status_filter = (query.get("status", ["all"])[0] or "all").strip().lower()
+        search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
         try:
             limit = max(1, min(100, int(query.get("limit", [20])[0])))
         except ValueError:
@@ -8352,6 +8421,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     continue
                 if status_filter == "unsolved" and is_solved:
                     continue
+
+                title_val = r["title"] or ""
+                content_val = r["article_html"] or ""
+                if search_q:
+                    text_val = extract_article_text(content_val)
+                    if search_q not in title_val.lower() and search_q not in content_val.lower() and search_q not in text_val.lower():
+                        continue
 
                 try:
                     pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
@@ -8443,14 +8519,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         """
         GET /api/users/<user_id>/answers
         Returns author's published answers from article_comments with question title context.
-        Query params: filter ('all'|'solutions'), limit, offset.
+        Query params: filter ('all'|'solutions'), sort ('new'|'rating'|'popular'|'top'), limit, offset.
         """
         if not user_id:
             self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
             return
 
         query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        sort_by = (query.get("sort", ["new"])[0] or "new").strip().lower()
         filter_type = (query.get("filter", ["all"])[0] or "all").strip().lower()
+        search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip().lower()
         try:
             limit = max(1, min(100, int(query.get("limit", [20])[0])))
         except ValueError:
@@ -8512,6 +8590,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if filter_type in ("solutions", "solution") and not is_sol:
                     continue
 
+                q_title = r["question_title"] or ""
+                content_val = r["content"] or ""
+                if search_q:
+                    text_val = extract_article_text(content_val)
+                    if search_q not in q_title.lower() and search_q not in content_val.lower() and search_q not in text_val.lower():
+                        continue
+
                 items.append({
                     "id": r["id"],
                     "questionId": r["article_id"],
@@ -8525,6 +8610,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
                 })
 
+            if sort_by in ("rating", "popular", "top"):
+                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            else:
+                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+
             total = len(items)
             paged_items = items[offset : offset + limit]
             has_more = (offset + limit) < total
@@ -8533,6 +8623,143 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "success": True,
                 "items": paged_items,
                 "total": total,
+                "totalCount": total,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": has_more
+            })
+        finally:
+            conn.close()
+
+    def handle_get_user_comments(self, user_id: str, parsed_url=None):
+        """
+        GET /api/users/<user_id>/comments
+        Returns author's published ordinary comments on approved materials.
+        Query params: sort ('new'|'newest'|'rating'|'popular'|'top'), q (search query), limit, offset.
+        """
+        if not user_id:
+            self.send_json_response(400, {"success": False, "error": "Не указан user_id"})
+            return
+
+        query = urllib.parse.parse_qs(parsed_url.query) if parsed_url else {}
+        sort_by = (query.get("sort", ["new"])[0] or "new").strip().lower()
+        search_q = (query.get("q", [""])[0] or query.get("search", [""])[0] or "").strip()
+        try:
+            limit = max(1, min(100, int(query.get("limit", [20])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            offset = max(0, int(query.get("offset", [0])[0]))
+        except ValueError:
+            offset = 0
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+                user_exists = (cur.fetchone() is not None)
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+                if not user_exists:
+                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
+                    self.send_json_response(404, {
+                        "success": False,
+                        "error": "Пользователь не найден",
+                        "code": "USER_NOT_FOUND"
+                    })
+                    return
+
+                try:
+                    conn.create_function("lower", 1, lambda s: s.lower() if s is not None else None)
+                except Exception:
+                    pass
+
+                sql = """
+                    SELECT ac.id, ac.article_id, ac.content, ac.created_at, ac.comment_type,
+                           ms.id AS material_id, ms.title AS parent_title,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                    FROM article_comments ac
+                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                    WHERE ac.user_id = ?
+                      AND ac.status = 'published'
+                      AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                      AND ms.status = 'approved'
+                """
+                params = [user_id]
+                if search_q:
+                    sql += " AND (lower(ac.content) LIKE lower(?) OR lower(ms.title) LIKE lower(?))"
+                    q_like = f"%{search_q}%"
+                    params.extend([q_like, q_like])
+
+                sql += " GROUP BY ac.id ORDER BY ac.created_at DESC"
+
+                cur.execute(sql, tuple(params))
+                rows = cur.fetchall()
+
+            items = []
+            q_lower = search_q.lower() if search_q else ""
+            for r in rows:
+                content = r["content"] or ""
+                p_title = r["parent_title"] or "Материал сообщества"
+                if q_lower:
+                    if q_lower not in content.lower() and q_lower not in p_title.lower():
+                        continue
+
+                cid = r["id"]
+                aid = r["article_id"]
+                rating_val = int(r["rating"] or 0)
+                snippet = make_content_snippet(content)
+                date_str = format_date_ru(r["created_at"])
+                permalink = f"article.html?id={urllib.parse.quote(aid)}#comment-{urllib.parse.quote(cid)}"
+
+                items.append({
+                    "id": cid,
+                    "commentId": cid,
+                    "articleId": aid,
+                    "materialId": r["material_id"] or aid,
+                    "parentTitle": p_title,
+                    "title": p_title,
+                    "content": content,
+                    "text": content,
+                    "contentSnippet": snippet,
+                    "snippet": snippet,
+                    "rating": rating_val,
+                    "score": rating_val,
+                    "createdAt": r["created_at"],
+                    "date": date_str,
+                    "commentType": r["comment_type"] or "comment",
+                    "type": "comment",
+                    "materialType": "comment",
+                    "url": permalink,
+                    "permalink": permalink
+                })
+
+            if sort_by in ("rating", "popular", "top"):
+                items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or ""), reverse=True)
+            else:
+                items.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+
+            total_count = len(items)
+            paged_items = items[offset : offset + limit]
+            has_more = (offset + limit) < total_count
+
+            self.send_json_response(200, {
+                "success": True,
+                "items": paged_items,
+                "comments": paged_items,
+                "totalCount": total_count,
+                "total": total_count,
                 "limit": limit,
                 "offset": offset,
                 "hasMore": has_more

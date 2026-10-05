@@ -38,6 +38,7 @@
   let questAbortCtrl = null;
 
   let ansFilter = 'all';
+  let ansSort = 'new';
   let ansOffset = 0;
   const ansLimit = 10;
   let ansItems = [];
@@ -45,11 +46,21 @@
   let isLoadingAns = false;
   let ansReqSeq = 0;
   let ansAbortCtrl = null;
-  let lastEditTriggerEl = null;
+
+  let commSort = 'new';
+  let commOffset = 0;
+  const commLimit = 10;
+  let commItems = [];
+  let commHasMore = false;
+  let isLoadingComm = false;
+  let commReqSeq = 0;
+  let commAbortCtrl = null;
 
   let currentSearchQuery = '';
-  let currentTopic = '';
   let searchDebounceTimer = null;
+  let lastEditTriggerEl = null;
+
+  let currentTopic = '';
   let tabLoadedState = {
     overview: null,
     publications: null,
@@ -66,13 +77,13 @@
       return { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
     }
     if (tabName === 'answers') {
-      return { q: currentSearchQuery, filter: ansFilter };
+      return { q: currentSearchQuery, filter: ansFilter, sort: ansSort };
     }
     if (tabName === 'overview') {
       return { q: currentSearchQuery };
     }
     if (tabName === 'comments') {
-      return { q: currentSearchQuery };
+      return { q: currentSearchQuery, sort: commSort };
     }
     return {};
   }
@@ -107,6 +118,8 @@
         activityItems = [];
         activityOffset = 0;
       } else if (t === 'comments') {
+        commItems = [];
+        commOffset = 0;
         if (typeof commentsItems !== 'undefined') commentsItems = [];
         if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
       }
@@ -128,6 +141,10 @@
     const clearBtn = document.getElementById('btnProfileSearchClear');
     if (clearBtn) {
       clearBtn.style.display = (val && String(val).trim()) ? 'flex' : 'none';
+    }
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+    if (searchClearBtn) {
+      searchClearBtn.style.display = q ? 'flex' : 'none';
     }
   }
 
@@ -179,6 +196,30 @@
     }
   }
 
+  function updateAnsSortUI(sort) {
+    const ansSortBtns = document.querySelectorAll('[data-ans-sort], #sortAnswersNewest, #sortAnswersRating');
+    for (let i = 0; i < ansSortBtns.length; i++) {
+      const s = ansSortBtns[i].getAttribute('data-ans-sort');
+      const isActive = (s === sort);
+      ansSortBtns[i].classList.toggle('is-active', isActive);
+      if (ansSortBtns[i].hasAttribute('aria-pressed')) {
+        ansSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateCommSortUI(sort) {
+    const commSortBtns = document.querySelectorAll('[data-comm-sort]');
+    for (let i = 0; i < commSortBtns.length; i++) {
+      const s = commSortBtns[i].getAttribute('data-comm-sort');
+      const isActive = (s === sort) || (s === 'new' && sort === 'newest') || (s === 'newest' && sort === 'new');
+      commSortBtns[i].classList.toggle('is-active', isActive);
+      if (commSortBtns[i].hasAttribute('aria-pressed')) {
+        commSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
   function updateTopicFilterUI(topic) {
     const topicPills = document.querySelectorAll('.profile-sidebar-topic-pill[data-topic-id], [data-profile-topic]');
     for (let i = 0; i < topicPills.length; i++) {
@@ -221,6 +262,8 @@
         ansItems = [];
         ansOffset = 0;
       } else if (activeTab === 'comments') {
+        commItems = [];
+        commOffset = 0;
         if (typeof commentsItems !== 'undefined') commentsItems = [];
         if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
       } else {
@@ -243,9 +286,11 @@
           tab: activeTab,
           q: currentSearchQuery || undefined,
           topic: currentTopic || undefined,
-          sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+          sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : (activeTab === 'answers' ? ansSort : (activeTab === 'comments' ? commSort : undefined)))),
           status: (activeTab === 'questions' ? questStatus : undefined),
-          filter: (activeTab === 'answers' ? ansFilter : undefined)
+          filter: (activeTab === 'answers' ? ansFilter : undefined),
+          ans_sort: (activeTab === 'answers' ? ansSort : undefined),
+          comm_sort: (activeTab === 'comments' ? commSort : undefined)
         };
         if (window.history.pushState) {
           window.history.pushState(stateObj, '', url.toString());
@@ -255,8 +300,8 @@
       } catch (e) {}
     }
 
-    if (currentProfile) {
-      const uid = currentProfile.id || currentProfile.userId;
+    const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+    if (uid) {
       if (activeTab === 'publications') {
         loadPublications(uid, false);
       } else if (activeTab === 'questions') {
@@ -264,6 +309,8 @@
       } else if (activeTab === 'answers') {
         loadAnswers(uid, false);
       } else if (activeTab === 'comments') {
+        commOffset = 0;
+        commItems = [];
         if (typeof loadComments === 'function') {
           loadComments(uid, false);
         }
@@ -541,6 +588,7 @@
             questionsCount: s.questionsCount !== undefined ? s.questionsCount : (profile.questionsCount || 0),
             answersCount: s.answersCount !== undefined ? s.answersCount : (profile.answersCount || 0),
             solutionsCount: s.solutionsCount !== undefined ? s.solutionsCount : (profile.solutionsCount || 0),
+            commentsCount: s.commentsCount !== undefined ? s.commentsCount : (s.comments_count !== undefined ? s.comments_count : (profile.commentsCount !== undefined ? profile.commentsCount : (profile.comments_count || 0))),
             followersCount: s.followersCount !== undefined ? s.followersCount : (profile.followersCount || 0),
             followingCount: s.followingCount !== undefined ? s.followingCount : (profile.followingCount || 0)
           });
@@ -579,6 +627,13 @@
       if (stats.solutionsCount !== undefined) {
         currentProfile.stats.solutionsCount = stats.solutionsCount;
         currentProfile.solutionsCount = stats.solutionsCount;
+      }
+      if (stats.commentsCount !== undefined || stats.comments_count !== undefined) {
+        const commCnt = stats.commentsCount !== undefined ? stats.commentsCount : stats.comments_count;
+        currentProfile.stats.commentsCount = commCnt;
+        currentProfile.stats.comments_count = commCnt;
+        currentProfile.commentsCount = commCnt;
+        currentProfile.comments_count = commCnt;
       }
       if (stats.followersCount !== undefined) {
         currentProfile.stats.followersCount = stats.followersCount;
@@ -623,6 +678,11 @@
       if (sEl) sEl.textContent = stats.solutionsCount;
       const ssEl = document.getElementById('sidebarReputationSolutions');
       if (ssEl) ssEl.textContent = stats.solutionsCount;
+    }
+    if (stats.commentsCount !== undefined || stats.comments_count !== undefined) {
+      const commCnt = stats.commentsCount !== undefined ? stats.commentsCount : stats.comments_count;
+      const cComm = document.getElementById('profileTabCountComments') || document.getElementById('tabCountComments');
+      if (cComm) cComm.textContent = commCnt;
     }
     if (stats.followersCount !== undefined) {
       const fEl = document.getElementById('profileStatFollowers');
@@ -722,6 +782,10 @@
       questionsCount: stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0),
       answersCount: stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0),
       solutionsCount: stats.solutionsCount !== undefined ? stats.solutionsCount : (p.solutionsCount || 0),
+      commentsCount: stats.commentsCount !== undefined ? stats.commentsCount :
+        (stats.comments_count !== undefined ? stats.comments_count :
+        (p.commentsCount !== undefined ? p.commentsCount :
+        (p.comments_count !== undefined ? p.comments_count : 0))),
       followersCount: stats.followersCount !== undefined ? stats.followersCount : (p.followersCount || 0),
       followingCount: stats.followingCount !== undefined ? stats.followingCount : (p.followingCount || 0)
     });
@@ -751,8 +815,8 @@
     // 8. Reset tab caches
     pubOffset = 0; pubItems = [];
     questOffset = 0; questItems = [];
-    ansOffset = 0; ansItems = [];
-    tabLoadedState = { overview: null, publications: null, questions: null, answers: null };
+    commOffset = 0; commItems = [];
+    tabLoadedState = { overview: null, publications: null, questions: null, answers: null, comments: null };
 
     // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
@@ -763,6 +827,7 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      const initialTab = urlParams.get('tab') || 'overview';
       if (urlParams.get('q')) {
         currentSearchQuery = urlParams.get('q').trim();
         updateSearchInputUI(currentSearchQuery);
@@ -775,8 +840,21 @@
         const s = urlParams.get('sort').trim();
         pubSort = s;
         questSort = s;
+        commSort = s;
+        ansSort = s;
         updatePubSortUI(pubSort);
         updateQuestSortUI(questSort);
+        updateCommSortUI(commSort);
+        updateAnsSortUI(ansSort);
+      }
+      if (urlParams.get('ans_sort')) {
+        ansSort = urlParams.get('ans_sort').trim();
+        updateAnsSortUI(ansSort);
+      }
+      const restoredCommSort = urlParams.get('comm_sort') || (initialTab === 'comments' ? urlParams.get('sort') : null) || (initialTab === 'comments' ? 'newest' : null);
+      if (restoredCommSort) {
+        commSort = restoredCommSort.trim();
+        updateCommSortUI(commSort);
       }
       if (urlParams.get('status')) {
         questStatus = urlParams.get('status').trim();
@@ -786,7 +864,6 @@
         ansFilter = urlParams.get('filter').trim();
         updateAnsFilterUI(ansFilter);
       }
-      const initialTab = urlParams.get('tab') || 'overview';
       setActiveTab(initialTab, false);
     } catch (e) {
       setActiveTab('overview', false);
@@ -795,7 +872,7 @@
 
   function setActiveTab(tabName, updateUrl) {
     if (updateUrl === undefined) updateUrl = true;
-    const validTabs = ['overview', 'publications', 'questions', 'answers'];
+    const validTabs = ['overview', 'publications', 'questions', 'answers', 'comments'];
     if (validTabs.indexOf(tabName) === -1) {
       tabName = 'overview';
     }
@@ -805,14 +882,16 @@
       overview: document.getElementById('tabBtnOverview'),
       publications: document.getElementById('tabBtnPublications'),
       questions: document.getElementById('tabBtnQuestions'),
-      answers: document.getElementById('tabBtnAnswers')
+      answers: document.getElementById('tabBtnAnswers'),
+      comments: document.getElementById('tabProfileComments') || document.getElementById('tabBtnComments')
     };
 
     const tabPanels = {
       overview: document.getElementById('profileTabOverview'),
       publications: document.getElementById('profileTabPublications'),
       questions: document.getElementById('profileTabQuestions'),
-      answers: document.getElementById('profileTabAnswers')
+      answers: document.getElementById('profileTabAnswers'),
+      comments: document.getElementById('profileTabComments')
     };
 
     Object.keys(tabButtons).forEach(function (key) {
@@ -858,30 +937,56 @@
           else url.searchParams.delete('sort');
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'questions') {
           if (questSort !== 'newest') url.searchParams.set('sort', questSort);
           else url.searchParams.delete('sort');
           if (questStatus !== 'all') url.searchParams.set('status', questStatus);
           else url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'answers') {
           if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
           else url.searchParams.delete('filter');
-          url.searchParams.delete('sort');
+          if (ansSort !== 'new') {
+            url.searchParams.set('sort', ansSort);
+            url.searchParams.set('ans_sort', ansSort);
+          } else {
+            url.searchParams.delete('sort');
+            url.searchParams.delete('ans_sort');
+          }
           url.searchParams.delete('status');
+          url.searchParams.delete('comm_sort');
+        } else if (tabName === 'comments') {
+          if (commSort !== 'new' && commSort !== 'newest') {
+            url.searchParams.set('sort', commSort);
+            url.searchParams.set('comm_sort', commSort);
+          } else {
+            url.searchParams.delete('sort');
+            url.searchParams.delete('comm_sort');
+          }
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
         } else {
           url.searchParams.delete('sort');
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         }
 
         const stateObj = {
           tab: tabName,
           q: currentSearchQuery || undefined,
           topic: currentTopic || undefined,
-          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : undefined)),
+          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'answers' ? ansSort : (tabName === 'comments' ? commSort : undefined)))),
           status: (tabName === 'questions' ? questStatus : undefined),
-          filter: (tabName === 'answers' ? ansFilter : undefined)
+          filter: (tabName === 'answers' ? ansFilter : undefined),
+          ans_sort: (tabName === 'answers' ? ansSort : undefined),
+          comm_sort: (tabName === 'comments' ? commSort : undefined)
         };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
@@ -897,8 +1002,8 @@
       } catch (e) {}
     }
 
-    if (currentProfile) {
-      const uid = currentProfile.id || currentProfile.userId;
+    const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+    if (uid) {
       if (tabName === 'publications') {
         const currentParams = getCurrentTabParams('publications');
         const isUpToDate = tabLoadedState.publications && areTabParamsEqual(tabLoadedState.publications, currentParams);
@@ -923,6 +1028,14 @@
           ansOffset = 0;
           loadAnswers(uid, false);
         }
+      } else if (tabName === 'comments') {
+        const currentParams = getCurrentTabParams('comments');
+        const isUpToDate = tabLoadedState.comments && areTabParamsEqual(tabLoadedState.comments, currentParams);
+        if (!isUpToDate || (commItems.length === 0 && !isLoadingComm)) {
+          commItems = [];
+          commOffset = 0;
+          loadComments(uid, false);
+        }
       } else if (tabName === 'overview') {
         const currentParams = getCurrentTabParams('overview');
         const isUpToDate = tabLoadedState.overview && areTabParamsEqual(tabLoadedState.overview, currentParams);
@@ -941,6 +1054,10 @@
     const pubVal = stats.publicationsCount !== undefined ? stats.publicationsCount : (p.publicationsCount || 0);
     const questVal = stats.questionsCount !== undefined ? stats.questionsCount : (p.questionsCount || 0);
     const ansVal = stats.answersCount !== undefined ? stats.answersCount : (p.answersCount || 0);
+    const commVal = stats.commentsCount !== undefined ? stats.commentsCount :
+      (stats.comments_count !== undefined ? stats.comments_count :
+      (p.commentsCount !== undefined ? p.commentsCount :
+      (p.comments_count !== undefined ? p.comments_count : 0)));
 
     const cPub = document.getElementById('tabCountPublications');
     if (cPub) cPub.textContent = pubVal;
@@ -950,6 +1067,22 @@
 
     const cAns = document.getElementById('tabCountAnswers');
     if (cAns) cAns.textContent = ansVal;
+
+    const cComm = document.getElementById('profileTabCountComments') || document.getElementById('tabCountComments');
+    if (cComm) cComm.textContent = commVal;
+  }
+
+  function updateSearchResultsCount(count) {
+    const infoEl = document.getElementById('profileSearchResultsInfo');
+    const countEl = document.getElementById('profileSearchResultsCount');
+    if (infoEl && countEl) {
+      if (currentSearchQuery) {
+        countEl.textContent = count !== undefined ? count : 0;
+        infoEl.style.display = 'flex';
+      } else {
+        infoEl.style.display = 'none';
+      }
+    }
   }
 
   function renderTopContributions(topList, fallbackPubs) {
@@ -1276,6 +1409,13 @@
           '<span class="activity-context-label">К вопросу:</span>' +
           '<a href="' + url + '" class="activity-card-title">' + escapeHtml(item.title) + '</a>' +
         '</div>';
+      } else if (item.type === 'comment') {
+        badgeHtml = '<span class="activity-type-badge activity-badge-comment">Комментарий</span>';
+        const parentTitle = item.parentTitle || item.title || 'Материал';
+        titleWrapHtml = '<div class="activity-card-title-wrap">' +
+          '<span class="activity-context-label">К материалу:</span>' +
+          '<a href="' + url + '" class="activity-card-title">' + escapeHtml(parentTitle) + '</a>' +
+        '</div>';
       } else if (item.type === 'question') {
         badgeHtml = '<span class="activity-type-badge activity-badge-question">Вопрос</span>';
         titleWrapHtml = '<div class="activity-card-title-wrap">' +
@@ -1305,6 +1445,14 @@
         '</span>';
       }
 
+      let commentLinkHtml = '';
+      if (item.type === 'comment' && url) {
+        commentLinkHtml = '<a href="' + url + '" class="activity-comment-permalink" title="Перейти к комментарию" style="margin-left: auto; font-size: 0.76rem; color: var(--text-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' +
+          ' <span>Перейти</span>' +
+        '</a>';
+      }
+
       return '<div class="activity-card">' +
         '<div class="activity-card-header">' +
           badgeHtml +
@@ -1318,6 +1466,7 @@
             ' <span>' + ratingDisplay + '</span>' +
           '</span>' +
           extraMeta +
+          commentLinkHtml +
         '</div>' +
       '</div>';
     }).join('');
@@ -1377,6 +1526,7 @@
         pubItems = append ? pubItems.concat(incoming) : incoming;
         pubOffset += incoming.length;
         pubHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderPublicationsTab(pubItems, append, pubHasMore, incoming);
       })
       .catch(function (err) {
@@ -1768,7 +1918,10 @@
     if (!list) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не публиковал материалы.</div>';
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не публиковал материалы.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
       if (actions) actions.style.display = 'none';
       return;
     }
@@ -1854,6 +2007,7 @@
         questItems = append ? questItems.concat(incoming) : incoming;
         questOffset += incoming.length;
         questHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderQuestionsTab(questItems, append, questHasMore, incoming);
       })
       .catch(function (err) {
@@ -1888,7 +2042,10 @@
     if (!list) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не задавал вопросы.</div>';
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не задавал вопросы.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
       if (actions) actions.style.display = 'none';
       return;
     }
@@ -1944,7 +2101,7 @@
       }
       ansOffset = 0;
       ansItems = [];
-      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter };
+      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter, sort: ansSort };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
       }
@@ -1955,6 +2112,7 @@
     const currentReqSeq = ++ansReqSeq;
     isLoadingAns = true;
     let url = '/api/users/' + encodeURIComponent(userId) + '/answers?filter=' + encodeURIComponent(ansFilter) + '&limit=' + ansLimit + '&offset=' + ansOffset;
+    url += '&sort=' + encodeURIComponent(ansSort);
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
     }
@@ -1975,6 +2133,7 @@
         ansItems = append ? ansItems.concat(incoming) : incoming;
         ansOffset += incoming.length;
         ansHasMore = Boolean(data.hasMore);
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
         renderAnswersTab(ansItems, append, ansHasMore, incoming);
       })
       .catch(function (err) {
@@ -2009,7 +2168,10 @@
     if (!list) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="profile-empty-state">Пользователь пока не публиковал ответы на вопросы.</div>';
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не публиковал ответы на вопросы.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
       if (actions) actions.style.display = 'none';
       return;
     }
@@ -2055,6 +2217,433 @@
             ' <span>' + ratingDisplay + '</span>' +
           '</span>' +
         '</div>';
+
+      list.appendChild(cardEl);
+    });
+
+    if (actions) {
+      actions.style.display = hasMore ? 'block' : 'none';
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Comments Tab: Loader & Renderer
+  // --------------------------------------------------------------------------
+  function loadComments(userId, append) {
+    if (!userId) return;
+    if (append && isLoadingComm) return;
+
+    const list = document.getElementById('profileCommentsList');
+    const actions = document.getElementById('profileCommentsActions');
+
+    if (!append) {
+      if (commAbortCtrl) {
+        try { commAbortCtrl.abort(); } catch (e) {}
+      }
+      commOffset = 0;
+      commItems = [];
+      if (list) {
+        list.innerHTML = '<div class="profile-empty-state">Загрузка комментариев...</div>';
+      }
+      if (actions) actions.style.display = 'none';
+    }
+
+    commAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const currentReqSeq = ++commReqSeq;
+    isLoadingComm = true;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/comments?sort=' + encodeURIComponent(commSort) + '&limit=' + commLimit + '&offset=' + commOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    const fetchOpts = commAbortCtrl ? { signal: commAbortCtrl.signal } : {};
+
+    fetch(url, fetchOpts)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (currentReqSeq !== commReqSeq) return;
+        isLoadingComm = false;
+        if (!data || !data.success) {
+          throw new Error((data && data.error) || 'Failed to load comments');
+        }
+        const incoming = Array.isArray(data.items) ? data.items : (Array.isArray(data.comments) ? data.comments : []);
+        commItems = append ? commItems.concat(incoming) : incoming;
+        commOffset += incoming.length;
+        commHasMore = Boolean(data.hasMore);
+        tabLoadedState.comments = { q: currentSearchQuery, sort: commSort };
+        updateSearchResultsCount(data.total !== undefined ? data.total : (data.totalCount !== undefined ? data.totalCount : incoming.length));
+        renderCommentsTab(commItems, append, commHasMore, incoming);
+      })
+      .catch(function (err) {
+        if (currentReqSeq !== commReqSeq) return;
+        if (err && err.name === 'AbortError') return;
+        isLoadingComm = false;
+        tabLoadedState.comments = null;
+        if (!append) {
+          if (list) {
+            list.innerHTML =
+              '<div class="profile-error-state">' +
+                '<p class="profile-error-text">Ошибка загрузки комментариев</p>' +
+                '<button type="button" class="btn-profile-retry" id="btnRetryComments">Повторить попытку</button>' +
+              '</div>';
+            const btn = list.querySelector('#btnRetryComments');
+            if (btn) {
+              btn.addEventListener('click', function () {
+                loadComments(userId, false);
+              });
+            }
+          }
+          if (actions) actions.style.display = 'none';
+        } else {
+          showToast('Не удалось загрузить комментарии. Попробуйте еще раз.');
+        }
+      });
+  }
+
+  // --------------------------------------------------------------------------
+  // Comment Card Actions & Interaction Helpers
+  // --------------------------------------------------------------------------
+  function getCommentBookmarks() {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
+      const data = localStorage.getItem(key) || localStorage.getItem('sc_comment_bookmarks');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCommentBookmarks(bookmarks) {
+    try {
+      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
+      localStorage.setItem(key, JSON.stringify(bookmarks));
+      localStorage.setItem('sc_comment_bookmarks', JSON.stringify(bookmarks));
+    } catch (e) {}
+  }
+
+  function isCommentBookmarked(id, item) {
+    if (!id) return false;
+    if (item && (item.isBookmarked !== undefined || item.isSaved !== undefined || item.hasSaved !== undefined)) {
+      return Boolean(item.isBookmarked || item.isSaved || item.hasSaved);
+    }
+    return getCommentBookmarks().includes(id);
+  }
+
+  function isCommentReported(id, item) {
+    if (!id) return false;
+    if (item && (item.hasReported !== undefined || item.isReported !== undefined)) {
+      return Boolean(item.hasReported || item.isReported);
+    }
+    if (window._reportedCommentIds && window._reportedCommentIds.has(id)) return true;
+    if (currentUser) {
+      try {
+        const userKey = 'sc_reported_comments_' + currentUser.id;
+        const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (stored.includes(id)) {
+          window._reportedCommentIds = window._reportedCommentIds || new Set();
+          window._reportedCommentIds.add(id);
+          return true;
+        }
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function toggleCommentSave(commentId, btn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для сохранения комментария необходимо войти');
+      return;
+    }
+
+    const wasActive = btn ? (btn.classList.contains('is-bookmarked') || btn.classList.contains('is-saved')) : false;
+    const nextActive = !wasActive;
+
+    if (btn) {
+      btn.classList.toggle('is-bookmarked', nextActive);
+      btn.classList.toggle('is-saved', nextActive);
+      const svg = btn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', nextActive ? 'currentColor' : 'none');
+      const newTooltip = nextActive ? 'Удалить из закладок' : 'Сохранить';
+      btn.title = newTooltip;
+      btn.setAttribute('aria-label', newTooltip);
+    }
+    if (item) {
+      item.isSaved = nextActive;
+      item.isBookmarked = nextActive;
+    }
+
+    const bms = getCommentBookmarks();
+    const idx = bms.indexOf(commentId);
+    if (nextActive && idx === -1) { bms.push(commentId); saveCommentBookmarks(bms); }
+    else if (!nextActive && idx !== -1) { bms.splice(idx, 1); saveCommentBookmarks(bms); }
+
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: nextActive ? 'save' : 'unsave' })
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          const finalSaved = Boolean(data.isSaved !== undefined ? data.isSaved : nextActive);
+          if (btn) {
+            btn.classList.toggle('is-bookmarked', finalSaved);
+            btn.classList.toggle('is-saved', finalSaved);
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', finalSaved ? 'currentColor' : 'none');
+          }
+          if (item) {
+            item.isSaved = finalSaved;
+            item.isBookmarked = finalSaved;
+          }
+          showToast(finalSaved ? 'Комментарий сохранен в закладки' : 'Комментарий удален из закладок');
+        } else {
+          // Rollback
+          if (btn) {
+            btn.classList.toggle('is-bookmarked', wasActive);
+            btn.classList.toggle('is-saved', wasActive);
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+            const prevTooltip = wasActive ? 'Удалить из закладок' : 'Сохранить';
+            btn.title = prevTooltip;
+            btn.setAttribute('aria-label', prevTooltip);
+          }
+          if (item) {
+            item.isSaved = wasActive;
+            item.isBookmarked = wasActive;
+          }
+          const rbBms = getCommentBookmarks();
+          const rbIdx = rbBms.indexOf(commentId);
+          if (wasActive && rbIdx === -1) { rbBms.push(commentId); saveCommentBookmarks(rbBms); }
+          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveCommentBookmarks(rbBms); }
+          showToast((data && data.error) || 'Ошибка сохранения комментария');
+        }
+      })
+      .catch(function (err) {
+        // Rollback unconditionally
+        if (btn) {
+          btn.classList.toggle('is-bookmarked', wasActive);
+          btn.classList.toggle('is-saved', wasActive);
+          const svg = btn.querySelector('svg');
+          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+          const prevTooltip = wasActive ? 'Удалить из закладок' : 'Сохранить';
+          btn.title = prevTooltip;
+          btn.setAttribute('aria-label', prevTooltip);
+        }
+        if (item) {
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+        }
+        const rbBms = getCommentBookmarks();
+        const rbIdx = rbBms.indexOf(commentId);
+        if (wasActive && rbIdx === -1) { rbBms.push(commentId); saveCommentBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveCommentBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения комментария необходимо войти');
+        } else {
+          showToast('Не удалось обновить сохранение');
+        }
+      });
+  }
+
+  function openCommentReport(commentId, triggerBtn, item) {
+    if (!currentUser) {
+      openAuthModal();
+      showToast('Для отправки жалобы необходимо войти');
+      return;
+    }
+    if (isCommentReported(commentId, item)) {
+      showToast('Жалоба уже отправлена');
+      return;
+    }
+
+    fetch('/api/comments/' + encodeURIComponent(commentId) + '/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'spam' })
+    })
+      .then(function (res) {
+        if (res.status === 401) {
+          openAuthModal();
+          throw new Error('AUTH_REQUIRED');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          if (triggerBtn) {
+            triggerBtn.classList.add('is-reported');
+            triggerBtn.title = 'Жалоба уже отправлена';
+            triggerBtn.setAttribute('aria-label', 'Жалоба уже отправлена');
+            const svg = triggerBtn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', 'currentColor');
+          }
+          if (item) {
+            item.isReported = true;
+            item.hasReported = true;
+          }
+          window._reportedCommentIds = window._reportedCommentIds || new Set();
+          window._reportedCommentIds.add(commentId);
+          if (currentUser) {
+            try {
+              const userKey = 'sc_reported_comments_' + currentUser.id;
+              const stored = JSON.parse(localStorage.getItem(userKey) || '[]');
+              if (!stored.includes(commentId)) {
+                stored.push(commentId);
+                localStorage.setItem(userKey, JSON.stringify(stored));
+              }
+            } catch (e) {}
+          }
+          showToast('Жалоба отправлена');
+        } else {
+          showToast((data && data.error) || 'Ошибка отправки жалобы');
+        }
+      })
+      .catch(function (err) {
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для отправки жалобы необходимо войти');
+        } else {
+          showToast('Не удалось отправить жалобу');
+        }
+      });
+  }
+
+  function renderCommentsTab(items, append, hasMore, newItems) {
+    const list = document.getElementById('profileCommentsList');
+    const actions = document.getElementById('profileCommentsActions');
+    if (!list) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      const emptyText = currentSearchQuery
+        ? 'По запросу «' + escapeHtml(currentSearchQuery) + '» ничего не найдено.'
+        : 'Пользователь пока не оставлял комментарии.';
+      list.innerHTML = '<div class="profile-empty-state">' + emptyText + '</div>';
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+
+    if (!append) {
+      list.innerHTML = '';
+    }
+
+    const toRender = append ? (newItems || []) : items;
+    toRender.forEach(function (item) {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'profile-comment-item profile-comment-card';
+
+      const ratingVal = item.rating !== undefined ? item.rating : (item.score || 0);
+      const ratingDisplay = ratingVal >= 0 ? '+' + ratingVal : ratingVal;
+      const dateDisplay = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
+      const parentTitle = item.parentTitle || item.title || 'Материал';
+      const articleId = item.articleId || item.materialId;
+      const commentId = item.id || item.commentId;
+      const permalink = item.permalink || item.url || ('article.html?id=' + encodeURIComponent(articleId) + '#comment-' + encodeURIComponent(commentId));
+      const parentUrl = 'article.html?id=' + encodeURIComponent(articleId);
+
+      const snippet = item.contentSnippet || item.snippet || item.content || '';
+      const snippetHtml = snippet
+        ? '<div class="profile-comment-snippet">' + escapeHtml(snippet) + '</div>'
+        : '';
+
+      const isSaved = isCommentBookmarked(commentId, item);
+      const isReported = isCommentReported(commentId, item);
+      const authorId = item.userId || item.authorId || item.author_id || (currentProfile && (currentProfile.id || currentProfile.userId));
+      const isMyComment = Boolean(currentUser && authorId && (currentUser.id === authorId));
+
+      const saveBtnHtml =
+        '<button type="button" class="btn-comment-action btn-save-comment' + (isSaved ? ' is-bookmarked is-saved' : '') + '" title="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" aria-label="' + (isSaved ? 'Удалить из закладок' : 'Сохранить') + '" data-comment-id="' + escapeHtml(commentId) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>' +
+          '</svg>' +
+        '</button>';
+
+      const shareBtnHtml =
+        '<button type="button" class="btn-comment-action btn-share-comment" title="Поделиться" aria-label="Поделиться" data-comment-id="' + escapeHtml(commentId) + '">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<circle cx="18" cy="5" r="3"></circle>' +
+            '<circle cx="6" cy="12" r="3"></circle>' +
+            '<circle cx="18" cy="19" r="3"></circle>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>' +
+            '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>' +
+          '</svg>' +
+        '</button>';
+
+      let reportBtnHtml = '';
+      if (!isMyComment) {
+        reportBtnHtml =
+          '<button type="button" class="btn-comment-action btn-report-comment' + (isReported ? ' is-reported' : '') + '" title="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" aria-label="' + (isReported ? 'Жалоба уже отправлена' : 'Пожаловаться') + '" data-comment-id="' + escapeHtml(commentId) + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (isReported ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>' +
+              '<line x1="4" y1="22" x2="4" y2="15"></line>' +
+            '</svg>' +
+          '</button>';
+      }
+
+      cardEl.innerHTML =
+        '<div class="profile-comment-header">' +
+          '<span class="profile-comment-badge">Комментарий</span>' +
+          '<div class="profile-comment-context">' +
+            '<span class="profile-comment-context-label">К материалу:</span>' +
+            '<a href="' + parentUrl + '" class="profile-comment-parent-title">' + escapeHtml(parentTitle) + '</a>' +
+          '</div>' +
+        '</div>' +
+        snippetHtml +
+        '<div class="profile-comment-footer">' +
+          '<span class="profile-comment-date">' + escapeHtml(dateDisplay) + '</span>' +
+          '<span class="profile-comment-rating" title="Рейтинг комментария">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>' +
+            ' <span>' + ratingDisplay + '</span>' +
+          '</span>' +
+          '<div class="profile-comment-actions">' +
+            saveBtnHtml +
+            shareBtnHtml +
+            reportBtnHtml +
+          '</div>' +
+          '<a href="' + permalink + '" class="profile-comment-link" title="Перейти к комментарию">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' +
+            ' <span>Перейти</span>' +
+          '</a>' +
+        '</div>';
+
+      const saveBtn = cardEl.querySelector('.btn-save-comment');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleCommentSave(commentId, saveBtn, item);
+        });
+      }
+
+      const shareBtn = cardEl.querySelector('.btn-share-comment');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+          const fullUrl = permalink.startsWith('http') ? permalink : (origin + (permalink.startsWith('/') ? '' : '/') + permalink);
+          copyTextToClipboard(fullUrl, 'Ссылка на комментарий скопирована');
+        });
+      }
+
+      const reportBtn = cardEl.querySelector('.btn-report-comment');
+      if (reportBtn) {
+        reportBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openCommentReport(commentId, reportBtn, item);
+        });
+      }
 
       list.appendChild(cardEl);
     });
@@ -2344,21 +2933,49 @@
       const rawSort = (state.sort !== undefined && state.sort !== null) ? String(state.sort).trim() : (params.get('sort') || '').trim();
       const rawStatus = (state.status !== undefined && state.status !== null) ? String(state.status).trim() : (params.get('status') || '').trim();
       const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
+      const rawAnsSort = (state.ans_sort !== undefined && state.ans_sort !== null)
+        ? String(state.ans_sort).trim()
+        : ((tab === 'answers' && state.sort !== undefined && state.sort !== null)
+          ? String(state.sort).trim()
+          : (params.get('ans_sort') || (tab === 'answers' ? params.get('sort') : '') || '').trim());
+      const rawCommSort = (state.comm_sort !== undefined && state.comm_sort !== null)
+        ? String(state.comm_sort).trim()
+        : ((tab === 'comments' && state.sort !== undefined && state.sort !== null)
+          ? String(state.sort).trim()
+          : (params.get('comm_sort') || (tab === 'comments' ? params.get('sort') : '') || '').trim());
 
       let targetPubSort = pubSort;
       let targetQuestSort = questSort;
+      let targetCommSort = commSort;
+      let targetAnsSort = ansSort;
       if (rawSort) {
         if (tab === 'publications') {
           targetPubSort = rawSort;
         } else if (tab === 'questions') {
           targetQuestSort = rawSort;
+        } else if (tab === 'comments') {
+          targetCommSort = rawSort;
+        } else if (tab === 'answers') {
+          targetAnsSort = rawSort;
         } else {
           targetPubSort = rawSort;
           targetQuestSort = rawSort;
+          targetCommSort = rawSort;
+          targetAnsSort = rawSort;
         }
       } else {
         if (tab === 'publications') targetPubSort = 'newest';
         if (tab === 'questions') targetQuestSort = 'newest';
+        if (tab === 'comments') targetCommSort = 'new';
+        if (tab === 'answers') targetAnsSort = 'new';
+      }
+      if (rawAnsSort) {
+        targetAnsSort = rawAnsSort;
+      }
+      if (rawCommSort) {
+        targetCommSort = rawCommSort;
+      } else if (tab === 'comments') {
+        targetCommSort = params.get('comm_sort') || (tab === 'comments' ? params.get('sort') : null) || 'newest';
       }
 
       const targetQuestStatus = rawStatus || 'all';
@@ -2416,12 +3033,35 @@
         ansOffset = 0;
       }
 
+      if (targetAnsSort !== ansSort) {
+        ansSort = targetAnsSort;
+        tabLoadedState.answers = null;
+        ansItems = [];
+        ansOffset = 0;
+      }
+
+      const commSortChanged = (targetCommSort !== commSort);
+      if (commSortChanged) {
+        commSort = targetCommSort;
+        tabLoadedState.comments = null;
+        commItems = [];
+        commOffset = 0;
+      }
+
+      if (tab === 'comments' && (targetQ !== currentSearchQuery || commSortChanged)) {
+        tabLoadedState.comments = null;
+        commItems = [];
+        commOffset = 0;
+      }
+
       // Restore UI controls
       updateSearchInputUI(currentSearchQuery);
       updatePubSortUI(pubSort);
       updateQuestSortUI(questSort);
       updateQuestStatusUI(questStatus);
       updateAnsFilterUI(ansFilter);
+      updateAnsSortUI(ansSort);
+      updateCommSortUI(commSort);
       updateTopicFilterUI(currentTopic);
 
       // Activate tab and reload fresh data if cache was invalidated
@@ -2878,6 +3518,9 @@
         const searchInput = document.getElementById('profileSearchInput') || profileSearchInput;
         if (searchInput) {
           searchInput.value = '';
+          if (typeof searchInput.focus === 'function') {
+            searchInput.focus();
+          }
         }
         searchClearBtn.style.display = 'none';
         if (searchDebounceTimer) {
@@ -3024,7 +3667,44 @@
       });
     }
 
-    // 15. Answers toolbar filter
+    // 15. Answers toolbar filter & sorting
+    const ansSortBtns = document.querySelectorAll('[data-ans-sort], #sortAnswersNewest, #sortAnswersRating');
+    for (let i = 0; i < ansSortBtns.length; i++) {
+      ansSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-ans-sort');
+        if (sort === ansSort) return;
+        ansSort = sort;
+        for (let j = 0; j < ansSortBtns.length; j++) {
+          ansSortBtns[j].classList.toggle('is-active', ansSortBtns[j] === this);
+        }
+        tabLoadedState.answers = null;
+        ansOffset = 0;
+        ansItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (ansSort !== 'new') {
+              url.searchParams.set('sort', ansSort);
+              url.searchParams.set('ans_sort', ansSort);
+            } else {
+              url.searchParams.delete('sort');
+              url.searchParams.delete('ans_sort');
+            }
+            window.history.pushState({
+              tab: 'answers',
+              filter: ansFilter,
+              sort: ansSort,
+              ans_sort: ansSort,
+              q: currentSearchQuery || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
+        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
+          loadAnswers(currentProfile.id || currentProfile.userId, false);
+        }
+      });
+    }
+
     const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
     for (let i = 0; i < ansFilterBtns.length; i++) {
       ansFilterBtns[i].addEventListener('click', function () {
@@ -3045,6 +3725,8 @@
             window.history.pushState({
               tab: 'answers',
               filter: ansFilter,
+              sort: ansSort,
+              ans_sort: ansSort,
               q: currentSearchQuery || undefined
             }, '', url.toString());
           } catch (e) {}
@@ -3064,11 +3746,86 @@
         }
       });
     }
+
+    // 17. Comments toolbar sorting
+    const commSortBtns = document.querySelectorAll('[data-comm-sort]');
+    for (let i = 0; i < commSortBtns.length; i++) {
+      commSortBtns[i].addEventListener('click', function () {
+        const sort = this.getAttribute('data-comm-sort');
+        if (sort === commSort) return;
+        commSort = sort;
+        for (let j = 0; j < commSortBtns.length; j++) {
+          commSortBtns[j].classList.toggle('is-active', commSortBtns[j] === this);
+          if (commSortBtns[j].hasAttribute('aria-pressed')) {
+            commSortBtns[j].setAttribute('aria-pressed', commSortBtns[j] === this ? 'true' : 'false');
+          }
+        }
+        tabLoadedState.comments = null;
+        commOffset = 0;
+        commItems = [];
+        if (window.history && (window.history.pushState || window.history.replaceState)) {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'comments');
+            if (commSort !== 'new' && commSort !== 'newest') {
+              url.searchParams.set('sort', commSort);
+              url.searchParams.set('comm_sort', commSort);
+            } else {
+              url.searchParams.delete('sort');
+              url.searchParams.delete('comm_sort');
+            }
+            const stateObj = {
+              tab: activeTab || 'comments',
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined,
+              sort: commSort,
+              comm_sort: commSort
+            };
+            if (window.history.pushState) {
+              window.history.pushState(stateObj, '', url.toString());
+            } else if (window.history.replaceState) {
+              window.history.replaceState(stateObj, '', url.toString());
+            }
+          } catch (e) {}
+        }
+        const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+        if (uid) {
+          loadComments(uid, false);
+        }
+      });
+    }
+
+    // 18. Comments Load More
+    const btnLoadMoreComm = document.getElementById('btnProfileLoadMoreComments');
+    if (btnLoadMoreComm) {
+      btnLoadMoreComm.addEventListener('click', function () {
+        if (currentProfile && (currentProfile.id || currentProfile.userId) && commHasMore && !isLoadingComm) {
+          loadComments(currentProfile.id || currentProfile.userId, true);
+        }
+      });
+    }
+
   }
 
   function init() {
     initTheme();
     initEventListeners();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialQ = urlParams.get('q') || '';
+    if (initialQ) {
+      currentSearchQuery = initialQ;
+      const sInput = document.getElementById('profileSearchInput');
+      if (sInput) sInput.value = initialQ;
+      const sClear = document.getElementById('btnProfileSearchClear');
+      if (sClear) sClear.style.display = 'flex';
+    }
+    const initTab = urlParams.get('tab') || 'overview';
+    const initCommSort = urlParams.get('comm_sort') || (initTab === 'comments' ? urlParams.get('sort') : null) || (initTab === 'comments' ? 'newest' : null);
+    if (initCommSort) {
+      commSort = initCommSort.trim();
+      updateCommSortUI(commSort);
+    }
 
     checkAuthStatus(function (user) {
       if (user) {
@@ -3104,6 +3861,10 @@
     renderQuestionsTab: renderQuestionsTab,
     loadAnswers: loadAnswers,
     renderAnswersTab: renderAnswersTab,
+    loadComments: loadComments,
+    renderCommentsTab: renderCommentsTab,
+    triggerSearch: triggerSearch,
+    getSearchQuery: function () { return currentSearchQuery; },
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
     openEditModal: openEditModal,
@@ -3126,7 +3887,8 @@
         activity: activityOffset,
         publications: pubOffset,
         questions: questOffset,
-        answers: ansOffset
+        answers: ansOffset,
+        comments: commOffset
       };
     },
     getSeqTokens: function () {
@@ -3134,7 +3896,8 @@
         activity: actReqSeq,
         publications: pubReqSeq,
         questions: questReqSeq,
-        answers: ansReqSeq
+        answers: ansReqSeq,
+        comments: commReqSeq
       };
     },
     getActiveTab: function () {
@@ -3151,6 +3914,15 @@
     setTopicFilter: setTopicFilter,
     invalidateTabCaches: invalidateTabCaches,
     initEventListeners: initEventListeners,
+    updateSearchResultsCount: updateSearchResultsCount,
+    toggleCommentSave: toggleCommentSave,
+    openCommentReport: openCommentReport,
+    isCommentBookmarked: isCommentBookmarked,
+    isCommentReported: isCommentReported,
+    getAnsSort: function () { return ansSort; },
+    setAnsSort: function (s) { ansSort = s; updateAnsSortUI(s); },
+    getCommSort: function () { return commSort; },
+    setCommSort: function (s) { commSort = s; updateCommSortUI(s); },
     getTabLoadedState: function () {
       return tabLoadedState;
     }

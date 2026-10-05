@@ -289,19 +289,42 @@
           <div class="profile-layout-columns" id="profileLayoutColumns">
             <div class="profile-main-column" id="profileMainColumn">
               <div class="profile-content-area" id="profileContentArea">
-                <div class="profile-tabs-bar" role="tablist" aria-label="Разделы профиля">
-                  <button type="button" class="profile-tab-btn is-active" id="tabBtnOverview" role="tab" aria-selected="true" aria-current="page" aria-controls="profileTabOverview" data-tab="overview">
-                    <span>Обзор</span>
-                  </button>
-                  <button type="button" class="profile-tab-btn" id="tabBtnPublications" role="tab" aria-selected="false" aria-controls="profileTabPublications" data-tab="publications">
-                    <span>Публикации</span> <span class="profile-tab-count" id="tabCountPublications"></span>
-                  </button>
-                  <button type="button" class="profile-tab-btn" id="tabBtnQuestions" role="tab" aria-selected="false" aria-controls="profileTabQuestions" data-tab="questions">
-                    <span>Вопросы</span> <span class="profile-tab-count" id="tabCountQuestions"></span>
-                  </button>
-                  <button type="button" class="profile-tab-btn" id="tabBtnAnswers" role="tab" aria-selected="false" aria-controls="profileTabAnswers" data-tab="answers">
-                    <span>Ответы</span> <span class="profile-tab-count" id="tabCountAnswers"></span>
-                  </button>
+                <div class="profile-tabs-nav-wrap">
+                  <div class="profile-tabs-bar" role="tablist" aria-label="Разделы профиля">
+                    <button type="button" class="profile-tab-btn is-active" id="tabBtnOverview" role="tab" aria-selected="true" aria-current="page" aria-controls="profileTabOverview" data-tab="overview">
+                      <span>Обзор</span>
+                    </button>
+                    <button type="button" class="profile-tab-btn" id="tabBtnPublications" role="tab" aria-selected="false" aria-controls="profileTabPublications" data-tab="publications">
+                      <span>Публикации</span> <span class="profile-tab-count" id="tabCountPublications"></span>
+                    </button>
+                    <button type="button" class="profile-tab-btn" id="tabBtnQuestions" role="tab" aria-selected="false" aria-controls="profileTabQuestions" data-tab="questions">
+                      <span>Вопросы</span> <span class="profile-tab-count" id="tabCountQuestions"></span>
+                    </button>
+                    <button type="button" class="profile-tab-btn" id="tabBtnAnswers" role="tab" aria-selected="false" aria-controls="profileTabAnswers" data-tab="answers">
+                      <span>Ответы</span> <span class="profile-tab-count" id="tabCountAnswers"></span>
+                    </button>
+                    <button type="button" class="profile-tab-btn" id="tabProfileComments" role="tab" aria-selected="false" aria-controls="profileTabComments" data-tab="comments">
+                      <span>Комментарии</span> <span class="profile-tab-count" id="profileTabCountComments"></span>
+                    </button>
+                  </div>
+                  <div class="profile-tabs-toolbar" id="profileTabsToolbar">
+                    <div class="profile-search-results-info" id="profileSearchResultsInfo" style="display: none;">
+                      <span>Найдено:</span> <strong id="profileSearchResultsCount">0</strong>
+                    </div>
+                    <div class="profile-search-wrap">
+                      <svg class="profile-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                      <input type="search" class="profile-search-input" id="profileSearchInput" placeholder="Поиск по контенту автора..." aria-label="Поиск по контенту автора" autocomplete="off">
+                      <button type="button" class="profile-search-clear" id="btnProfileSearchClear" title="Очистить поиск" aria-label="Очистить поиск" style="display: none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="profile-tab-panels" id="profileTabPanels">
@@ -380,6 +403,10 @@
                     <div class="profile-tab-header">
                       <h3 class="profile-subheading" style="margin-bottom: 0;">Ответы и решения</h3>
                       <div class="profile-tab-toolbar">
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка ответов">
+                          <button type="button" class="profile-filter-pill is-active" id="sortAnswersNewest" data-ans-sort="new">Новые</button>
+                          <button type="button" class="profile-filter-pill" id="sortAnswersRating" data-ans-sort="rating">По рейтингу</button>
+                        </div>
                         <div class="profile-filter-pills" role="radiogroup" aria-label="Фильтр ответов">
                           <button type="button" class="profile-filter-pill is-active" id="filterAnswersAll" data-ans-filter="all">Все ответы</button>
                           <button type="button" class="profile-filter-pill" id="filterAnswersSolutions" data-ans-filter="solutions">Решения</button>
@@ -391,6 +418,25 @@
                     </div>
                     <div class="profile-tab-actions" id="profileAnswersActions" style="display: none;">
                       <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreAnswers">Показать еще</button>
+                    </div>
+                  </div>
+
+                  <!-- 5. Comments Tab Panel -->
+                  <div class="profile-tab-panel" id="profileTabComments" role="tabpanel" aria-labelledby="tabProfileComments" style="display: none;">
+                    <div class="profile-tab-header">
+                      <h3 class="profile-subheading" style="margin-bottom: 0;">Комментарии автора</h3>
+                      <div class="profile-tab-toolbar">
+                        <div class="profile-filter-pills" role="radiogroup" aria-label="Сортировка комментариев">
+                          <button type="button" class="profile-filter-pill is-active" id="sortCommNewest" data-comm-sort="new">Новые</button>
+                          <button type="button" class="profile-filter-pill" id="sortCommRating" data-comm-sort="rating">По рейтингу</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-feed-list" id="profileCommentsList">
+                      <div class="profile-empty-state">Загрузка комментариев...</div>
+                    </div>
+                    <div class="profile-tab-actions" id="profileCommentsActions" style="display: none;">
+                      <button type="button" class="btn btn-secondary btn-profile-load-more" id="btnProfileLoadMoreComments">Показать еще</button>
                     </div>
                   </div>
                 </div>
