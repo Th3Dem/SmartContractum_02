@@ -59,6 +59,239 @@
   let searchDebounceTimer = null;
   let lastEditTriggerEl = null;
 
+  let currentTopic = '';
+  let tabLoadedState = {
+    overview: null,
+    publications: null,
+    questions: null,
+    answers: null,
+    comments: null
+  };
+
+  function getCurrentTabParams(tabName) {
+    if (tabName === 'publications') {
+      return { q: currentSearchQuery, sort: pubSort, topic: currentTopic };
+    }
+    if (tabName === 'questions') {
+      return { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
+    }
+    if (tabName === 'answers') {
+      return { q: currentSearchQuery, filter: ansFilter };
+    }
+    if (tabName === 'overview') {
+      return { q: currentSearchQuery };
+    }
+    if (tabName === 'comments') {
+      return { q: currentSearchQuery, sort: commSort };
+    }
+    return {};
+  }
+
+  function areTabParamsEqual(p1, p2) {
+    if (!p1 || !p2) return false;
+    const keys1 = Object.keys(p1);
+    const keys2 = Object.keys(p2);
+    if (keys1.length !== keys2.length) return false;
+    for (let i = 0; i < keys1.length; i++) {
+      const k = keys1[i];
+      if (p1[k] !== p2[k]) return false;
+    }
+    return true;
+  }
+
+  function invalidateTabCaches(tabs) {
+    const list = tabs || ['overview', 'publications', 'questions', 'answers', 'comments'];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      tabLoadedState[t] = null;
+      if (t === 'publications') {
+        pubItems = [];
+        pubOffset = 0;
+      } else if (t === 'questions') {
+        questItems = [];
+        questOffset = 0;
+      } else if (t === 'answers') {
+        ansItems = [];
+        ansOffset = 0;
+      } else if (t === 'overview') {
+        activityItems = [];
+        activityOffset = 0;
+      } else if (t === 'comments') {
+        commItems = [];
+        commOffset = 0;
+      }
+    }
+  }
+
+  function updateSearchInputUI(q) {
+    const searchInputs = document.querySelectorAll(
+      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
+    );
+    for (let i = 0; i < searchInputs.length; i++) {
+      searchInputs[i].value = q || '';
+    }
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+    if (searchClearBtn) {
+      searchClearBtn.style.display = q ? 'flex' : 'none';
+    }
+  }
+
+  function updatePubSortUI(sort) {
+    const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
+    for (let i = 0; i < pubSortBtns.length; i++) {
+      const s = pubSortBtns[i].getAttribute('data-pub-sort');
+      const isActive = (s === sort);
+      pubSortBtns[i].classList.toggle('is-active', isActive);
+      if (pubSortBtns[i].hasAttribute('aria-pressed')) {
+        pubSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateQuestSortUI(sort) {
+    const questSortBtns = document.querySelectorAll('[data-quest-sort]');
+    for (let i = 0; i < questSortBtns.length; i++) {
+      const s = questSortBtns[i].getAttribute('data-quest-sort');
+      const isActive = (s === sort);
+      questSortBtns[i].classList.toggle('is-active', isActive);
+      if (questSortBtns[i].hasAttribute('aria-pressed')) {
+        questSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateQuestStatusUI(status) {
+    const questStatusBtns = document.querySelectorAll('[data-quest-status]');
+    for (let i = 0; i < questStatusBtns.length; i++) {
+      const s = questStatusBtns[i].getAttribute('data-quest-status');
+      const isActive = (s === status);
+      questStatusBtns[i].classList.toggle('is-active', isActive);
+      if (questStatusBtns[i].hasAttribute('aria-pressed')) {
+        questStatusBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateAnsFilterUI(filter) {
+    const ansFilterBtns = document.querySelectorAll('[data-ans-filter]');
+    for (let i = 0; i < ansFilterBtns.length; i++) {
+      const f = ansFilterBtns[i].getAttribute('data-ans-filter');
+      const isActive = (f === filter);
+      ansFilterBtns[i].classList.toggle('is-active', isActive);
+      if (ansFilterBtns[i].hasAttribute('aria-pressed')) {
+        ansFilterBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateCommSortUI(sort) {
+    const commSortBtns = document.querySelectorAll('[data-comm-sort]');
+    for (let i = 0; i < commSortBtns.length; i++) {
+      const s = commSortBtns[i].getAttribute('data-comm-sort');
+      const isActive = (s === sort);
+      commSortBtns[i].classList.toggle('is-active', isActive);
+      if (commSortBtns[i].hasAttribute('aria-pressed')) {
+        commSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+  }
+
+  function updateTopicFilterUI(topic) {
+    const topicPills = document.querySelectorAll('.profile-sidebar-topic-pill[data-topic-id], [data-profile-topic]');
+    for (let i = 0; i < topicPills.length; i++) {
+      const tid = topicPills[i].getAttribute('data-topic-id') || topicPills[i].getAttribute('data-profile-topic');
+      topicPills[i].classList.toggle('is-active', Boolean(topic && tid === topic));
+    }
+  }
+
+  function setSearchQuery(q, updateUrl) {
+    if (q === undefined || q === null) q = '';
+    const normalized = String(q).trim();
+    if (normalized === currentSearchQuery) return;
+    currentSearchQuery = normalized;
+
+    invalidateTabCaches();
+    updateSearchInputUI(currentSearchQuery);
+
+    if (updateUrl && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        if (window.history.pushState) {
+          window.history.pushState({
+            tab: activeTab,
+            q: currentSearchQuery,
+            topic: currentTopic || undefined,
+            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+            status: (activeTab === 'questions' ? questStatus : undefined),
+            filter: (activeTab === 'answers' ? ansFilter : undefined)
+          }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
+      if (activeTab === 'publications') {
+        loadPublications(uid, false);
+      } else if (activeTab === 'questions') {
+        loadQuestions(uid, false);
+      } else if (activeTab === 'answers') {
+        loadAnswers(uid, false);
+      } else {
+        loadActivity(uid, false);
+      }
+    }
+  }
+
+  function setTopicFilter(topic, updateUrl) {
+    if (topic === undefined || topic === null) topic = '';
+    const normalized = String(topic).trim();
+    if (normalized === currentTopic) return;
+    currentTopic = normalized;
+
+    tabLoadedState.publications = null;
+    pubItems = [];
+    pubOffset = 0;
+    tabLoadedState.questions = null;
+    questItems = [];
+    questOffset = 0;
+    updateTopicFilterUI(currentTopic);
+
+    if (updateUrl && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        if (currentTopic) {
+          url.searchParams.set('topic', currentTopic);
+        } else {
+          url.searchParams.delete('topic');
+        }
+        if (window.history.pushState) {
+          window.history.pushState({
+            tab: activeTab,
+            q: currentSearchQuery || undefined,
+            topic: currentTopic || undefined,
+            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : undefined)),
+            status: (activeTab === 'questions' ? questStatus : undefined)
+          }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      const uid = currentProfile.id || currentProfile.userId;
+      if (activeTab === 'publications') {
+        loadPublications(uid, false);
+      } else if (activeTab === 'questions') {
+        loadQuestions(uid, false);
+      }
+    }
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -184,6 +417,47 @@
     if (userMenu && !currentUser) {
       userMenu.style.display = 'none';
     }
+  }
+
+  function loadHeaderNotifications() {
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifList = document.getElementById('notifListContainer');
+
+    if (!notifBtn) return;
+    fetch('/api/notifications')
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.success) return;
+        const count = data.unreadCount || 0;
+        if (notifBadge) {
+          if (count > 0) {
+            notifBadge.textContent = count > 99 ? '99+' : count;
+            notifBadge.style.display = 'inline-flex';
+          } else {
+            notifBadge.style.display = 'none';
+          }
+        }
+        if (notifList) {
+          const list = data.notifications || [];
+          if (list.length === 0) {
+            notifList.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
+          } else {
+            notifList.innerHTML = '';
+            list.forEach(function (n) {
+              const item = document.createElement('a');
+              item.className = 'notif-item' + (n.is_read ? ' is-read' : ' is-unread');
+              item.href = n.article_id ? ('article.html?id=' + encodeURIComponent(n.article_id) + '#comments') : '#';
+              item.innerHTML =
+                '<div class="notif-item-title">' + escapeHtml(n.title) + '</div>' +
+                '<div class="notif-item-msg">' + escapeHtml(n.message) + '</div>' +
+                '<div class="notif-item-time">' + escapeHtml(n.created_at ? n.created_at.substring(0, 16).replace('T', ' ') : '') + '</div>';
+              notifList.appendChild(item);
+            });
+          }
+        }
+      })
+      .catch(function () {});
   }
 
   function getUserIdFromUrl() {
@@ -342,6 +616,7 @@
 
   function renderProfile(p) {
     if (!p) return;
+    currentProfile = p;
 
     // Document title
     const displayName = p.name || p.id || 'Пользователь';
@@ -460,8 +735,8 @@
     // 8. Reset tab caches
     pubOffset = 0; pubItems = [];
     questOffset = 0; questItems = [];
-    ansOffset = 0; ansItems = [];
     commOffset = 0; commItems = [];
+    tabLoadedState = { overview: null, publications: null, questions: null, answers: null, comments: null };
 
     // 8. Backwards-compatible publications container
     renderPublications(p.publications || p.articles || []);
@@ -472,6 +747,31 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('q')) {
+        currentSearchQuery = urlParams.get('q').trim();
+        updateSearchInputUI(currentSearchQuery);
+      }
+      if (urlParams.get('topic')) {
+        currentTopic = urlParams.get('topic').trim();
+        updateTopicFilterUI(currentTopic);
+      }
+      if (urlParams.get('sort')) {
+        const s = urlParams.get('sort').trim();
+        pubSort = s;
+        questSort = s;
+        commSort = s;
+        updatePubSortUI(pubSort);
+        updateQuestSortUI(questSort);
+        updateCommSortUI(commSort);
+      }
+      if (urlParams.get('status')) {
+        questStatus = urlParams.get('status').trim();
+        updateQuestStatusUI(questStatus);
+      }
+      if (urlParams.get('filter')) {
+        ansFilter = urlParams.get('filter').trim();
+        updateAnsFilterUI(ansFilter);
+      }
       const initialTab = urlParams.get('tab') || 'overview';
       setActiveTab(initialTab, false);
     } catch (e) {
@@ -531,7 +831,51 @@
         } else {
           url.searchParams.set('tab', tabName);
         }
-        const stateObj = { tab: tabName, q: currentSearchQuery };
+        if (currentSearchQuery) {
+          url.searchParams.set('q', currentSearchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+        if (currentTopic) {
+          url.searchParams.set('topic', currentTopic);
+        } else {
+          url.searchParams.delete('topic');
+        }
+        if (tabName === 'publications') {
+          if (pubSort !== 'newest') url.searchParams.set('sort', pubSort);
+          else url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else if (tabName === 'questions') {
+          if (questSort !== 'newest') url.searchParams.set('sort', questSort);
+          else url.searchParams.delete('sort');
+          if (questStatus !== 'all') url.searchParams.set('status', questStatus);
+          else url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else if (tabName === 'answers') {
+          if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
+          else url.searchParams.delete('filter');
+          url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+        } else if (tabName === 'comments') {
+          if (commSort !== 'new') url.searchParams.set('sort', commSort);
+          else url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        } else {
+          url.searchParams.delete('sort');
+          url.searchParams.delete('status');
+          url.searchParams.delete('filter');
+        }
+
+        const stateObj = {
+          tab: tabName,
+          q: currentSearchQuery || undefined,
+          topic: currentTopic || undefined,
+          sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'comments' ? commSort : undefined))),
+          status: (tabName === 'questions' ? questStatus : undefined),
+          filter: (tabName === 'answers' ? ansFilter : undefined)
+        };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
             window.history.pushState(stateObj, '', url.toString());
@@ -549,20 +893,44 @@
     if (currentProfile) {
       const uid = currentProfile.id || currentProfile.userId;
       if (tabName === 'publications') {
-        if (pubItems.length === 0) {
+        const currentParams = getCurrentTabParams('publications');
+        const isUpToDate = tabLoadedState.publications && areTabParamsEqual(tabLoadedState.publications, currentParams);
+        if (!isUpToDate || (pubItems.length === 0 && !isLoadingPub)) {
+          pubItems = [];
+          pubOffset = 0;
           loadPublications(uid, false);
         }
       } else if (tabName === 'questions') {
-        if (questItems.length === 0) {
+        const currentParams = getCurrentTabParams('questions');
+        const isUpToDate = tabLoadedState.questions && areTabParamsEqual(tabLoadedState.questions, currentParams);
+        if (!isUpToDate || (questItems.length === 0 && !isLoadingQuest)) {
+          questItems = [];
+          questOffset = 0;
           loadQuestions(uid, false);
         }
       } else if (tabName === 'answers') {
-        if (ansItems.length === 0) {
+        const currentParams = getCurrentTabParams('answers');
+        const isUpToDate = tabLoadedState.answers && areTabParamsEqual(tabLoadedState.answers, currentParams);
+        if (!isUpToDate || (ansItems.length === 0 && !isLoadingAns)) {
+          ansItems = [];
+          ansOffset = 0;
           loadAnswers(uid, false);
         }
       } else if (tabName === 'comments') {
-        if (commItems.length === 0) {
+        const currentParams = getCurrentTabParams('comments');
+        const isUpToDate = tabLoadedState.comments && areTabParamsEqual(tabLoadedState.comments, currentParams);
+        if (!isUpToDate || (commItems.length === 0 && !isLoadingComm)) {
+          commItems = [];
+          commOffset = 0;
           loadComments(uid, false);
+        }
+      } else if (tabName === 'overview') {
+        const currentParams = getCurrentTabParams('overview');
+        const isUpToDate = tabLoadedState.overview && areTabParamsEqual(tabLoadedState.overview, currentParams);
+        if (!isUpToDate || (activityItems.length === 0 && !isLoadingActivity)) {
+          activityItems = [];
+          activityOffset = 0;
+          loadActivity(uid, false);
         }
       }
     }
@@ -767,6 +1135,7 @@
             countBadge +
           '</span>';
         }).join('');
+        updateTopicFilterUI(currentTopic);
       } else {
         if (isOwn) {
           if (widgetTopics) widgetTopics.style.display = 'flex';
@@ -815,6 +1184,7 @@
       }
       activityOffset = 0;
       activityItems = [];
+      tabLoadedState.overview = { q: currentSearchQuery };
       if (feedContainer) {
         feedContainer.innerHTML = '<div class="profile-empty-state">Загрузка активности...</div>';
       }
@@ -826,7 +1196,10 @@
     actAbortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const currentReqSeq = ++actReqSeq;
     isLoadingActivity = true;
-    const url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    let url = '/api/users/' + encodeURIComponent(userId) + '/activity?limit=' + activityLimit + '&offset=' + activityOffset;
+    if (currentSearchQuery) {
+      url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
     const fetchOpts = actAbortCtrl ? { signal: actAbortCtrl.signal } : {};
 
     fetch(url, fetchOpts)
@@ -859,6 +1232,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingActivity = false;
         if (!append) {
+          tabLoadedState.overview = null;
           if (feedContainer) {
             feedContainer.innerHTML =
               '<div class="profile-error-state">' +
@@ -993,6 +1367,7 @@
       }
       pubOffset = 0;
       pubItems = [];
+      tabLoadedState.publications = { q: currentSearchQuery, sort: pubSort, topic: currentTopic };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка материалов...</div>';
       }
@@ -1005,6 +1380,9 @@
     let url = '/api/users/' + encodeURIComponent(userId) + '/publications?sort=' + encodeURIComponent(pubSort) + '&limit=' + pubLimit + '&offset=' + pubOffset;
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
     }
     const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
@@ -1030,6 +1408,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingPub = false;
         if (!append) {
+          tabLoadedState.publications = null;
           if (list) {
             list.innerHTML =
               '<div class="profile-error-state">' +
@@ -1189,16 +1568,18 @@
         }
       })
       .catch(function (err) {
-        if (err.message !== 'AUTH_REQUIRED') {
-          // Rollback
-          btn.classList.toggle('is-liked', currentLiked);
-          btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
-          btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
-          if (countEl) countEl.textContent = currentCount;
-          if (item) {
-            item.hasLiked = currentLiked;
-            item.likesCount = currentCount;
-          }
+        // Rollback unconditionally
+        btn.classList.toggle('is-liked', currentLiked);
+        btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+        btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+        if (countEl) countEl.textContent = currentCount;
+        if (item) {
+          item.hasLiked = currentLiked;
+          item.likesCount = currentCount;
+        }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Войдите, чтобы поставить отметку');
+        } else {
           showToast('Не удалось обновить отметку');
         }
       });
@@ -1282,22 +1663,27 @@
         }
       })
       .catch(function (err) {
-        if (err.message !== 'AUTH_REQUIRED') {
-          // Rollback
-          btn.classList.toggle('is-bookmarked', wasActive);
-          btn.classList.toggle('is-saved', wasActive);
-          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
-          if (countEl) countEl.textContent = prevCount;
-          if (item) {
-            item.hasSaved = wasActive;
-            item.isSaved = wasActive;
-            item.isBookmarked = wasActive;
-            item.savesCount = prevCount;
-          }
-          const rbBms = getBookmarks();
-          const rbIdx = rbBms.indexOf(articleId);
-          if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
-          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        // Rollback unconditionally
+        btn.classList.toggle('is-bookmarked', wasActive);
+        btn.classList.toggle('is-saved', wasActive);
+        if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+        const prevTooltip = wasActive ? 'Убрать из сохраненного' : 'Сохранить публикацию';
+        btn.title = prevTooltip;
+        btn.setAttribute('aria-label', prevTooltip);
+        if (countEl) countEl.textContent = prevCount;
+        if (item) {
+          item.hasSaved = wasActive;
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+          item.savesCount = prevCount;
+        }
+        const rbBms = getBookmarks();
+        const rbIdx = rbBms.indexOf(articleId);
+        if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения публикации необходимо войти');
+        } else {
           showToast('Не удалось обновить сохранение');
         }
       });
@@ -1461,6 +1847,7 @@
       }
       questOffset = 0;
       questItems = [];
+      tabLoadedState.questions = { q: currentSearchQuery, sort: questSort, topic: currentTopic, status: questStatus };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка вопросов...</div>';
       }
@@ -1473,6 +1860,9 @@
     let url = '/api/users/' + encodeURIComponent(userId) + '/questions?sort=' + encodeURIComponent(questSort) + '&status=' + encodeURIComponent(questStatus) + '&limit=' + questLimit + '&offset=' + questOffset;
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
+    }
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
     }
     const fetchOpts = questAbortCtrl ? { signal: questAbortCtrl.signal } : {};
 
@@ -1498,6 +1888,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingQuest = false;
         if (!append) {
+          tabLoadedState.questions = null;
           if (list) {
             list.innerHTML =
               '<div class="profile-error-state">' +
@@ -1583,6 +1974,7 @@
       }
       ansOffset = 0;
       ansItems = [];
+      tabLoadedState.answers = { q: currentSearchQuery, filter: ansFilter };
       if (list) {
         list.innerHTML = '<div class="profile-empty-state">Загрузка ответов...</div>';
       }
@@ -1620,6 +2012,7 @@
         if (err && err.name === 'AbortError') return;
         isLoadingAns = false;
         if (!append) {
+          tabLoadedState.answers = null;
           if (list) {
             list.innerHTML =
               '<div class="profile-error-state">' +
@@ -1750,12 +2143,14 @@
         commItems = append ? commItems.concat(incoming) : incoming;
         commOffset += incoming.length;
         commHasMore = Boolean(data.hasMore);
+        tabLoadedState.comments = { q: currentSearchQuery, sort: commSort };
         renderCommentsTab(commItems, append, commHasMore, incoming);
       })
       .catch(function (err) {
         if (currentReqSeq !== commReqSeq) return;
         if (err && err.name === 'AbortError') return;
         isLoadingComm = false;
+        tabLoadedState.comments = null;
         if (!append) {
           if (list) {
             list.innerHTML =
@@ -2162,6 +2557,118 @@
     if (modal) modal.style.display = 'none';
   }
 
+  function handlePopState(e) {
+    try {
+      const state = (e && e.state) || {};
+      let params = null;
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.search !== undefined) {
+          params = new URLSearchParams(window.location.search);
+        }
+      } catch (errParams) {}
+      if (!params) {
+        params = new URLSearchParams();
+      }
+
+      // Extract all parameters: tab, q, sort, topic, status from URL and state
+      const tab = state.tab || params.get('tab') || 'overview';
+      const targetQ = (state.q !== undefined && state.q !== null) ? String(state.q).trim() : (params.get('q') || '').trim();
+      const targetTopic = (state.topic !== undefined && state.topic !== null) ? String(state.topic).trim() : (params.get('topic') || '').trim();
+      const rawSort = (state.sort !== undefined && state.sort !== null) ? String(state.sort).trim() : (params.get('sort') || '').trim();
+      const rawStatus = (state.status !== undefined && state.status !== null) ? String(state.status).trim() : (params.get('status') || '').trim();
+      const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
+
+      let targetPubSort = pubSort;
+      let targetQuestSort = questSort;
+      let targetCommSort = commSort;
+      if (rawSort) {
+        if (tab === 'publications') {
+          targetPubSort = rawSort;
+        } else if (tab === 'questions') {
+          targetQuestSort = rawSort;
+        } else if (tab === 'comments') {
+          targetCommSort = rawSort;
+        } else {
+          targetPubSort = rawSort;
+          targetQuestSort = rawSort;
+          targetCommSort = rawSort;
+        }
+      } else {
+        if (tab === 'publications') targetPubSort = 'newest';
+        if (tab === 'questions') targetQuestSort = 'newest';
+        if (tab === 'comments') targetCommSort = 'new';
+      }
+
+      const targetQuestStatus = rawStatus || 'all';
+      const targetAnsFilter = rawFilter || 'all';
+
+      // If any parameter changed, invalidate cached tab data
+      if (targetQ !== currentSearchQuery) {
+        currentSearchQuery = targetQ;
+        invalidateTabCaches();
+      }
+
+      if (targetTopic !== currentTopic) {
+        currentTopic = targetTopic;
+        tabLoadedState.publications = null;
+        pubItems = [];
+        pubOffset = 0;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetPubSort !== pubSort) {
+        pubSort = targetPubSort;
+        tabLoadedState.publications = null;
+        pubItems = [];
+        pubOffset = 0;
+      }
+
+      if (targetQuestSort !== questSort) {
+        questSort = targetQuestSort;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetQuestStatus !== questStatus) {
+        questStatus = targetQuestStatus;
+        tabLoadedState.questions = null;
+        questItems = [];
+        questOffset = 0;
+      }
+
+      if (targetAnsFilter !== ansFilter) {
+        ansFilter = targetAnsFilter;
+        tabLoadedState.answers = null;
+        ansItems = [];
+        ansOffset = 0;
+      }
+
+      if (targetCommSort !== commSort) {
+        commSort = targetCommSort;
+        tabLoadedState.comments = null;
+        commItems = [];
+        commOffset = 0;
+      }
+
+      // Restore UI controls
+      updateSearchInputUI(currentSearchQuery);
+      updatePubSortUI(pubSort);
+      updateQuestSortUI(questSort);
+      updateQuestStatusUI(questStatus);
+      updateAnsFilterUI(ansFilter);
+      updateCommSortUI(commSort);
+      updateTopicFilterUI(currentTopic);
+
+      // Activate tab and reload fresh data if cache was invalidated
+      setActiveTab(tab, false);
+    } catch (err) {
+      setActiveTab('overview', false);
+    }
+  }
+
   function initEventListeners() {
     // 1. Subscribe button
     const btnSubscribe = document.getElementById('btnProfileSubscribe');
@@ -2204,16 +2711,6 @@
       });
     }
 
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('editProfileModal');
-        if (modal && modal.style.display !== 'none') {
-          e.preventDefault();
-          closeEditModal();
-        }
-      }
-    });
-
     // 5. Header user menu and auth controls
     const btnLogin = document.getElementById('headerLoginBtn');
     const userMenu = document.getElementById('headerUserMenu');
@@ -2244,6 +2741,61 @@
       }
     });
 
+    // Header notifications controls
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifPopup = document.getElementById('headerNotifPopup');
+    const notifList = document.getElementById('notifListContainer');
+    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+    const notifWrap = document.getElementById('headerNotifWrap');
+
+    if (notifBtn && notifPopup) {
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isVisible = notifPopup.style.display !== 'none';
+        if (isVisible) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          notifPopup.style.display = 'block';
+          notifBtn.setAttribute('aria-expanded', 'true');
+          loadHeaderNotifications();
+        }
+      });
+
+      if (markAllBtn) {
+        markAllBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.success) {
+                if (notifBadge) notifBadge.style.display = 'none';
+                if (notifList) {
+                  const items = notifList.querySelectorAll('.notif-item.is-unread');
+                  items.forEach(function (el) {
+                    el.classList.remove('is-unread');
+                    el.classList.add('is-read');
+                  });
+                }
+              }
+            })
+            .catch(function () {});
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (notifWrap && !notifWrap.contains(e.target)) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
     const logoutBtn = document.getElementById('headerLogoutBtn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function (e) {
@@ -2257,6 +2809,14 @@
           .then(function (res) { return res.json(); })
           .then(function () {
             setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
             checkAuthStatus(function () {
               const uid = getUserIdFromUrl() || (currentProfile && (currentProfile.id || currentProfile.userId));
               if (uid) loadProfile(uid);
@@ -2265,6 +2825,14 @@
           })
           .catch(function () {
             setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
             showToast('Вы вышли из системы');
           });
       });
@@ -2293,6 +2861,7 @@
           if (data && data.success && data.user) {
             closeAuthModal();
             setAuthState(data.user);
+            loadHeaderNotifications();
             checkAuthStatus(function () {
               const uid = getUserIdFromUrl() || data.user.id;
               if (uid) loadProfile(uid);
@@ -2437,6 +3006,13 @@
     // 6. Keyboard dismissals (Escape)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const notifPopup = document.getElementById('headerNotifPopup');
+        if (notifPopup && notifPopup.style.display !== 'none') {
+          notifPopup.style.display = 'none';
+          const notifBtn = document.getElementById('headerNotificationsBtn');
+          if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false');
+          return;
+        }
         const sharePopover = document.getElementById('feedSharePopover');
         if (sharePopover && sharePopover.style.display !== 'none') {
           closeSharePopover();
@@ -2489,31 +3065,39 @@
     }
 
     // 10. History popstate navigation
-    function handlePopState(e) {
-      try {
-        let tab = (e && e.state && e.state.tab) || null;
-        let q = (e && e.state && e.state.q !== undefined) ? e.state.q : null;
-        const params = new URLSearchParams(window.location.search);
-        if (!tab) {
-          tab = params.get('tab') || 'overview';
-        }
-        if (q === null) {
-          q = params.get('q') || '';
-        }
-        if (q !== currentSearchQuery) {
-          currentSearchQuery = q;
-          const sInp = document.getElementById('profileSearchInput');
-          if (sInp) sInp.value = q;
-          const sClr = document.getElementById('btnProfileSearchClear');
-          if (sClr) sClr.style.display = q ? 'flex' : 'none';
-        }
-        setActiveTab(tab, false);
-      } catch (err) {
-        setActiveTab('overview', false);
-      }
-    }
     window.addEventListener('popstate', handlePopState);
-    window.onpopstate = handlePopState;
+
+    // Search input listener
+    const searchInputs = document.querySelectorAll(
+      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
+    );
+    for (let i = 0; i < searchInputs.length; i++) {
+      searchInputs[i].addEventListener('input', function (e) {
+        setSearchQuery(e.target.value, false);
+      });
+      searchInputs[i].addEventListener('change', function (e) {
+        setSearchQuery(e.target.value, true);
+      });
+    }
+
+    const searchForms = document.querySelectorAll('.header-search-form, #profileSearchForm');
+    for (let i = 0; i < searchForms.length; i++) {
+      searchForms[i].addEventListener('submit', function (e) {
+        e.preventDefault();
+        const inp = this.querySelector('input');
+        if (inp) {
+          setSearchQuery(inp.value, true);
+        }
+      });
+    }
+
+    // Sidebar topic pill click listener
+    document.addEventListener('click', function (e) {
+      const pill = e.target.closest('.profile-sidebar-topic-pill[data-topic-id]');
+      if (!pill) return;
+      const topicId = pill.getAttribute('data-topic-id') || '';
+      setTopicFilter(topicId === currentTopic ? '' : topicId, true);
+    });
 
     // 11. Publications toolbar sorting
     const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
@@ -2525,8 +3109,22 @@
         for (let j = 0; j < pubSortBtns.length; j++) {
           pubSortBtns[j].classList.toggle('is-active', pubSortBtns[j] === this);
         }
+        tabLoadedState.publications = null;
         pubOffset = 0;
         pubItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (pubSort !== 'newest') url.searchParams.set('sort', pubSort);
+            else url.searchParams.delete('sort');
+            window.history.pushState({
+              tab: 'publications',
+              sort: pubSort,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadPublications(currentProfile.id || currentProfile.userId, false);
         }
@@ -2553,8 +3151,23 @@
         for (let j = 0; j < questSortBtns.length; j++) {
           questSortBtns[j].classList.toggle('is-active', questSortBtns[j] === this);
         }
+        tabLoadedState.questions = null;
         questOffset = 0;
         questItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (questSort !== 'newest') url.searchParams.set('sort', questSort);
+            else url.searchParams.delete('sort');
+            window.history.pushState({
+              tab: 'questions',
+              sort: questSort,
+              status: questStatus,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadQuestions(currentProfile.id || currentProfile.userId, false);
         }
@@ -2570,8 +3183,23 @@
         for (let j = 0; j < questStatusBtns.length; j++) {
           questStatusBtns[j].classList.toggle('is-active', questStatusBtns[j] === this);
         }
+        tabLoadedState.questions = null;
         questOffset = 0;
         questItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (questStatus !== 'all') url.searchParams.set('status', questStatus);
+            else url.searchParams.delete('status');
+            window.history.pushState({
+              tab: 'questions',
+              sort: questSort,
+              status: questStatus,
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadQuestions(currentProfile.id || currentProfile.userId, false);
         }
@@ -2598,8 +3226,21 @@
         for (let j = 0; j < ansFilterBtns.length; j++) {
           ansFilterBtns[j].classList.toggle('is-active', ansFilterBtns[j] === this);
         }
+        tabLoadedState.answers = null;
         ansOffset = 0;
         ansItems = [];
+        if (window.history && window.history.pushState) {
+          try {
+            const url = new URL(window.location.href);
+            if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
+            else url.searchParams.delete('filter');
+            window.history.pushState({
+              tab: 'answers',
+              filter: ansFilter,
+              q: currentSearchQuery || undefined
+            }, '', url.toString());
+          } catch (e) {}
+        }
         if (currentProfile && (currentProfile.id || currentProfile.userId)) {
           loadAnswers(currentProfile.id || currentProfile.userId, false);
         }
@@ -2705,6 +3346,9 @@
     }
 
     checkAuthStatus(function (user) {
+      if (user) {
+        loadHeaderNotifications();
+      }
       let targetUserId = getUserIdFromUrl();
       if (!targetUserId && user) {
         targetUserId = user.id;
@@ -2738,7 +3382,6 @@
     loadComments: loadComments,
     renderCommentsTab: renderCommentsTab,
     triggerSearch: triggerSearch,
-    setSearchQuery: function (q) { triggerSearch(q); },
     getSearchQuery: function () { return currentSearchQuery; },
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
@@ -2756,6 +3399,7 @@
     openAuthModal: openAuthModal,
     closeAuthModal: closeAuthModal,
     setAuthState: setAuthState,
+    loadHeaderNotifications: loadHeaderNotifications,
     getOffsets: function () {
       return {
         activity: activityOffset,
@@ -2779,6 +3423,12 @@
     },
     getCurrentProfile: function () {
       return currentProfile;
+    },
+    setSearchQuery: setSearchQuery,
+    setTopicFilter: setTopicFilter,
+    invalidateTabCaches: invalidateTabCaches,
+    getTabLoadedState: function () {
+      return tabLoadedState;
     }
   };
 
