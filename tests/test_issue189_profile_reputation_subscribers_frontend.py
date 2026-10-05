@@ -40,6 +40,7 @@ Verifies:
 
 import os
 import re
+import subprocess
 import unittest
 import unicodedata
 
@@ -207,6 +208,407 @@ class TestIssue189ProfileReputationSubscribersFrontend(unittest.TestCase):
         suspicious_js = re.findall(r'(https?://[^\s"\'<>]+)', self.page_js)
         for url in suspicious_js:
             self.assertIn('www.w3.org/2000/svg', url, f"External network URL found in profile-page.js: {url}")
+
+    # =========================================================================
+    # 5. Node.js VM Behavioral Tests
+    # =========================================================================
+
+    def _run_node_script(self, script_body, initial_url="http://localhost/profile.html?id=user_author"):
+        """Run Node.js script against profile-page.js in a mock DOM environment."""
+        setup = f"""
+const fs = require('fs');
+const vm = require('vm');
+
+const jsPath = {repr(PAGE_JS_PATH)};
+const code = fs.readFileSync(jsPath, 'utf8');
+
+const domElements = {{}};
+function createMockElement(id) {{
+  const listeners = {{}};
+  const classes = new Set();
+  const attributes = {{}};
+  const el = {{
+    id: id,
+    classList: {{
+      add: (...cls) => cls.forEach(c => classes.add(c)),
+      remove: (...cls) => cls.forEach(c => classes.delete(c)),
+      toggle: (c, force) => {{
+        if (force !== undefined) {{
+          force ? classes.add(c) : classes.delete(c);
+        }} else {{
+          classes.has(c) ? classes.delete(c) : classes.add(c);
+        }}
+        return classes.has(c);
+      }},
+      contains: (c) => classes.has(c)
+    }},
+    setAttribute: (k, v) => {{ attributes[k] = String(v); }},
+    removeAttribute: (k) => {{ delete attributes[k]; }},
+    hasAttribute: (k) => k in attributes,
+    getAttribute: (k) => (k in attributes ? attributes[k] : null),
+    style: {{ display: '' }},
+    innerHTML: '',
+    textContent: '',
+    value: '',
+    disabled: false,
+    addEventListener: (type, fn) => {{
+      if (!listeners[type]) listeners[type] = [];
+      listeners[type].push(fn);
+    }},
+    dispatchEvent: (event) => {{
+      const fns = listeners[event.type] || [];
+      for (const fn of fns) {{
+        fn.call(el, event);
+      }}
+    }},
+    querySelector: (sel) => {{
+      if (sel === '.profile-topic-name') {{
+        return {{ textContent: attributes['data-topic-title'] || attributes['data-topic-id'] || '' }};
+      }}
+      return null;
+    }},
+    querySelectorAll: (sel) => [],
+    closest: (sel) => null,
+    appendChild: () => {{}}
+  }};
+  return el;
+}}
+
+function getEl(id) {{
+  if (!domElements[id]) {{
+    domElements[id] = createMockElement(id);
+  }}
+  return domElements[id];
+}}
+
+const activeTopicBar = getEl('profileActiveTopicBar');
+activeTopicBar.style.display = 'none';
+
+const activeTopicName = getEl('activeTopicName');
+activeTopicName.textContent = '';
+
+const btnClearTopic = getEl('btnClearTopicFilter');
+
+const pillSolidity = createMockElement('pill_solidity');
+pillSolidity.setAttribute('data-topic-id', 'solidity');
+pillSolidity.setAttribute('data-topic-title', 'Solidity');
+
+const pillPython = createMockElement('pill_python');
+pillPython.setAttribute('data-topic-id', 'python');
+pillPython.setAttribute('data-topic-title', 'Python');
+
+const topicPills = [pillSolidity, pillPython];
+
+const windowListeners = {{}};
+const historyPushes = [];
+let fetchCalls = [];
+
+const mockFetch = (url, opts) => {{
+  fetchCalls.push(url);
+  return Promise.resolve({{
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({{ success: true, items: [], total: 0 }})
+  }});
+}};
+
+const currentUrlObj = new URL({repr(initial_url)});
+const window = {{
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: {{
+    href: currentUrlObj.toString(),
+    search: currentUrlObj.search
+  }},
+  addEventListener: (type, fn) => {{
+    if (!windowListeners[type]) windowListeners[type] = [];
+    windowListeners[type].push(fn);
+  }},
+  dispatchEvent: (event) => {{
+    const fns = windowListeners[event.type] || [];
+    for (const fn of fns) {{
+      fn.call(window, event);
+    }}
+  }},
+  document: {{
+    documentElement: {{ setAttribute: () => {{}}, getAttribute: () => 'dark' }},
+    addEventListener: () => {{}},
+    getElementById: getEl,
+    createElement: (tag) => createMockElement('mock_' + Math.random().toString(36).substr(2, 9)),
+    querySelectorAll: (sel) => {{
+      if (sel && (sel.includes('profile-sidebar-topic-pill') || sel.includes('data-profile-topic'))) {{
+        return topicPills;
+      }}
+      return [];
+    }}
+  }},
+  localStorage: {{ getItem: () => null, setItem: () => {{}} }},
+  history: {{
+    pushState: (state, title, url) => {{
+      historyPushes.push({{ state, title, url }});
+      if (url) {{
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }}
+    }},
+    replaceState: (state, title, url) => {{
+      if (url) {{
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }}
+    }}
+  }},
+  fetch: mockFetch,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
+}};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({{ id: 'user_author', publications: [], questions: [], answers: [] }});
+api.initEventListeners();
+api.setActiveTab('publications', false);
+
+(async () => {{
+  await new Promise(r => setTimeout(r, 10));
+  fetchCalls = [];
+  {script_body}
+}})();
+"""
+        return subprocess.run(["node", "-e", setup], capture_output=True, text=True)
+
+    def test_topic_selection_and_reset_clears_server_query(self):
+        """Simulate selecting topic -> publication fetch with &topic=solidity and URL updated; click clear -> bar hidden, param removed, fetch without &topic=."""
+        script_body = """
+  // 1. Click topic pill 'solidity'
+  pillSolidity.dispatchEvent({ type: 'click' });
+  await new Promise(r => setTimeout(r, 10));
+
+  const solCalls = fetchCalls.filter(u => u.includes('/publications') && u.includes('&topic=solidity'));
+  if (solCalls.length === 0) {
+    console.error('FAIL_NO_SOLIDITY_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(1);
+  }
+
+  if (activeTopicBar.style.display !== 'inline-flex') {
+    console.error('FAIL_ACTIVE_BAR_NOT_VISIBLE: ' + activeTopicBar.style.display);
+    process.exit(2);
+  }
+  if (!activeTopicName.textContent.includes('Solidity') && !activeTopicName.textContent.includes('solidity')) {
+    console.error('FAIL_ACTIVE_TOPIC_NAME: ' + activeTopicName.textContent);
+    process.exit(3);
+  }
+  if (!window.location.search.includes('topic=solidity')) {
+    console.error('FAIL_URL_NO_TOPIC: ' + window.location.search);
+    process.exit(4);
+  }
+
+  // Clear fetchCalls to test reset
+  fetchCalls = [];
+
+  // 2. Click #btnClearTopicFilter
+  btnClearTopic.dispatchEvent({ type: 'click' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (activeTopicBar.style.display !== 'none') {
+    console.error('FAIL_ACTIVE_BAR_NOT_HIDDEN: ' + activeTopicBar.style.display);
+    process.exit(5);
+  }
+  if (activeTopicName.textContent !== '') {
+    console.error('FAIL_ACTIVE_NAME_NOT_CLEARED: ' + activeTopicName.textContent);
+    process.exit(6);
+  }
+  if (window.location.search.includes('topic=')) {
+    console.error('FAIL_URL_TOPIC_NOT_REMOVED: ' + window.location.search);
+    process.exit(7);
+  }
+
+  const cleanCalls = fetchCalls.filter(u => u.includes('/publications'));
+  if (cleanCalls.length === 0) {
+    console.error('FAIL_NO_RELOAD_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(8);
+  }
+  const staleTopicCalls = fetchCalls.filter(u => u.includes('topic='));
+  if (staleTopicCalls.length > 0) {
+    console.error('FAIL_STALE_TOPIC_PARAM: ' + JSON.stringify(fetchCalls));
+    process.exit(9);
+  }
+
+  console.log('SUCCESS_TOPIC_RESET');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Topic selection and reset failed: {proc.stderr}")
+        self.assertIn("SUCCESS_TOPIC_RESET", proc.stdout)
+
+    def test_topic_pill_toggle_off(self):
+        """Simulate selecting topic 'solidity', then clicking the same pill again -> filter is cleared and request has no &topic=."""
+        script_body = """
+  // 1. Click pill to select 'solidity'
+  pillSolidity.dispatchEvent({ type: 'click' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== 'solidity') {
+    console.error('FAIL_NOT_SELECTED: ' + api.getCurrentTopicFilter());
+    process.exit(1);
+  }
+
+  fetchCalls = [];
+
+  // 2. Click the same pill again to toggle off
+  pillSolidity.dispatchEvent({ type: 'click' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== '') {
+    console.error('FAIL_NOT_CLEARED: ' + api.getCurrentTopicFilter());
+    process.exit(2);
+  }
+  if (activeTopicBar.style.display !== 'none') {
+    console.error('FAIL_BAR_NOT_HIDDEN: ' + activeTopicBar.style.display);
+    process.exit(3);
+  }
+
+  const pubCalls = fetchCalls.filter(u => u.includes('/publications'));
+  if (pubCalls.length === 0) {
+    console.error('FAIL_NO_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(4);
+  }
+  const topicCalls = pubCalls.filter(u => u.includes('topic='));
+  if (topicCalls.length > 0) {
+    console.error('FAIL_HAS_TOPIC_QUERY: ' + JSON.stringify(pubCalls));
+    process.exit(5);
+  }
+
+  console.log('SUCCESS_PILL_TOGGLE_OFF');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Topic pill toggle off failed: {proc.stderr}")
+        self.assertIn("SUCCESS_PILL_TOGGLE_OFF", proc.stdout)
+
+    def test_topic_pill_keyboard_enter_and_space(self):
+        """Simulate Enter and Space keydown events on topic pills -> activate/deactivate filter identically to click."""
+        script_body = """
+  // 1. Enter keydown activates
+  pillSolidity.dispatchEvent({ type: 'keydown', key: 'Enter' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== 'solidity') {
+    console.error('FAIL_ENTER_ACTIVATE: ' + api.getCurrentTopicFilter());
+    process.exit(1);
+  }
+  if (!fetchCalls.some(u => u.includes('&topic=solidity'))) {
+    console.error('FAIL_ENTER_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(2);
+  }
+
+  // 2. Enter keydown again deactivates
+  fetchCalls = [];
+  pillSolidity.dispatchEvent({ type: 'keydown', key: 'Enter' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== '') {
+    console.error('FAIL_ENTER_DEACTIVATE: ' + api.getCurrentTopicFilter());
+    process.exit(3);
+  }
+  if (fetchCalls.some(u => u.includes('topic='))) {
+    console.error('FAIL_ENTER_DEACTIVATE_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(4);
+  }
+
+  // 3. Space keydown activates
+  fetchCalls = [];
+  pillSolidity.dispatchEvent({ type: 'keydown', key: ' ' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== 'solidity') {
+    console.error('FAIL_SPACE_ACTIVATE: ' + api.getCurrentTopicFilter());
+    process.exit(5);
+  }
+  if (!fetchCalls.some(u => u.includes('&topic=solidity'))) {
+    console.error('FAIL_SPACE_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(6);
+  }
+
+  // 4. Space keydown again deactivates
+  fetchCalls = [];
+  pillSolidity.dispatchEvent({ type: 'keydown', key: ' ' });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== '') {
+    console.error('FAIL_SPACE_DEACTIVATE: ' + api.getCurrentTopicFilter());
+    process.exit(7);
+  }
+  if (fetchCalls.some(u => u.includes('topic='))) {
+    console.error('FAIL_SPACE_DEACTIVATE_FETCH: ' + JSON.stringify(fetchCalls));
+    process.exit(8);
+  }
+
+  console.log('SUCCESS_KEYBOARD_NAVIGATION');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Topic pill keyboard navigation failed: {proc.stderr}")
+        self.assertIn("SUCCESS_KEYBOARD_NAVIGATION", proc.stdout)
+
+    def test_popstate_topic_synchronization(self):
+        """Simulate popstate with { topic: 'python' } and { topic: '' } -> UI and state sync."""
+        script_body = """
+  // 1. Popstate with topic: 'python'
+  window.dispatchEvent({
+    type: 'popstate',
+    state: { tab: 'publications', topic: 'python' }
+  });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== 'python') {
+    console.error('FAIL_POPSTATE_STATE: ' + api.getCurrentTopicFilter());
+    process.exit(1);
+  }
+  if (activeTopicBar.style.display !== 'inline-flex') {
+    console.error('FAIL_POPSTATE_BAR_DISPLAY: ' + activeTopicBar.style.display);
+    process.exit(2);
+  }
+  if (!activeTopicName.textContent.includes('Python') && !activeTopicName.textContent.includes('python')) {
+    console.error('FAIL_POPSTATE_NAME: ' + activeTopicName.textContent);
+    process.exit(3);
+  }
+  if (!pillPython.classList.contains('is-active')) {
+    console.error('FAIL_PILL_NOT_ACTIVE');
+    process.exit(4);
+  }
+
+  // 2. Popstate with topic: ''
+  window.dispatchEvent({
+    type: 'popstate',
+    state: { tab: 'publications', topic: '' }
+  });
+  await new Promise(r => setTimeout(r, 10));
+
+  if (api.getCurrentTopicFilter() !== '') {
+    console.error('FAIL_POPSTATE_CLEAR_STATE: ' + api.getCurrentTopicFilter());
+    process.exit(5);
+  }
+  if (activeTopicBar.style.display !== 'none') {
+    console.error('FAIL_POPSTATE_CLEAR_BAR: ' + activeTopicBar.style.display);
+    process.exit(6);
+  }
+  if (activeTopicName.textContent !== '') {
+    console.error('FAIL_POPSTATE_CLEAR_NAME: ' + activeTopicName.textContent);
+    process.exit(7);
+  }
+  if (pillPython.classList.contains('is-active')) {
+    console.error('FAIL_PILL_STILL_ACTIVE');
+    process.exit(8);
+  }
+
+  console.log('SUCCESS_POPSTATE_SYNC');
+"""
+        proc = self._run_node_script(script_body)
+        self.assertEqual(proc.returncode, 0, f"Popstate topic synchronization failed: {proc.stderr}")
+        self.assertIn("SUCCESS_POPSTATE_SYNC", proc.stdout)
 
 
 if __name__ == "__main__":

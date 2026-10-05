@@ -33,6 +33,7 @@ Verifies:
 
 import os
 import re
+import subprocess
 import unittest
 import unicodedata
 
@@ -133,10 +134,11 @@ class TestIssue190ProfilePinnedMaterialFrontend(unittest.TestCase):
         self.assertIn("pinMaterial('publication'", self.page_js, "Must call pinMaterial('publication', ...) on pub cards")
         self.assertIn("pinMaterial('solution'", self.page_js, "Must call pinMaterial('solution', ...) on solution cards")
         self.assertIn('updateCardPinButtons', self.page_js, "Must define updateCardPinButtons function")
+        self.assertIn('isMaterialPinned', self.page_js, "Must define isMaterialPinned helper")
 
     def test_08_profile_page_js_exports(self):
         """Verify pinned material functions are exported on window.SmartContractumProfilePage."""
-        exports = ['renderPinnedMaterial', 'pinMaterial', 'unpinMaterial', 'updateCardPinButtons']
+        exports = ['renderPinnedMaterial', 'pinMaterial', 'unpinMaterial', 'updateCardPinButtons', 'isMaterialPinned']
         for exp in exports:
             self.assertIn(f'{exp}: {exp}', self.page_js,
                           f"window.SmartContractumProfilePage must export '{exp}'")
@@ -177,6 +179,458 @@ class TestIssue190ProfilePinnedMaterialFrontend(unittest.TestCase):
         for url in suspicious_js:
             self.assertIn('www.w3.org/2000/svg', url, f"External network URL found in profile-page.js: {url}")
 
+    # =========================================================================
+    # 5. Node.js VM Behavioral Tests
+    # =========================================================================
+
+    def _run_node_vm_test(self, test_body):
+        """Execute a test script inside a Node.js VM context simulating profile-page.js environment."""
+        setup = f"""
+const fs = require('fs');
+const vm = require('vm');
+const assert = require('assert');
+
+const jsPath = {repr(PAGE_JS_PATH)};
+const code = fs.readFileSync(jsPath, 'utf8');
+
+function createMockEl(tag, id) {{
+  const listeners = {{}};
+  const classes = new Set();
+  const attrs = {{}};
+  const el = {{
+    tagName: (tag || 'div').toUpperCase(),
+    id: id || '',
+    style: {{ display: '' }},
+    children: [],
+    classList: {{
+      add: (...c) => c.forEach(x => classes.add(x)),
+      remove: (...c) => c.forEach(x => classes.delete(x)),
+      toggle: (c, force) => {{
+        if (force !== undefined) {{
+          force ? classes.add(c) : classes.delete(c);
+        }} else {{
+          classes.has(c) ? classes.delete(c) : classes.add(c);
+        }}
+        return classes.has(c);
+      }},
+      contains: (c) => classes.has(c)
+    }},
+    setAttribute: (k, v) => {{ attrs[k] = String(v); }},
+    getAttribute: (k) => (k in attrs ? attrs[k] : null),
+    removeAttribute: (k) => {{ delete attrs[k]; }},
+    hasAttribute: (k) => k in attrs,
+    addEventListener: (evt, fn) => {{
+      if (!listeners[evt]) listeners[evt] = [];
+      listeners[evt].push(fn);
+    }},
+    dispatchEvent: (e) => {{
+      const fns = listeners[e.type] || [];
+      for (const fn of fns) fn.call(el, e);
+    }},
+    appendChild: (child) => {{
+      el.children.push(child);
+      child.parentElement = el;
+      el.lastElementChild = child;
+      return child;
+    }},
+    querySelector: (sel) => {{
+      for (const ch of el.children) {{
+        if (sel.startsWith('.') && ch.classList.contains(sel.slice(1))) return ch;
+        if (ch.querySelector) {{
+          const res = ch.querySelector(sel);
+          if (res) return res;
+        }}
+      }}
+      return null;
+    }},
+    querySelectorAll: (sel) => {{
+      const res = [];
+      for (const ch of el.children) {{
+        if (sel.startsWith('.') && ch.classList.contains(sel.slice(1))) res.push(ch);
+        if (ch.querySelectorAll) res.push(...ch.querySelectorAll(sel));
+      }}
+      return res;
+    }},
+    innerHTML: '',
+    textContent: '',
+    title: '',
+    type: 'button'
+  }};
+  Object.defineProperty(el, 'className', {{
+    get: () => Array.from(classes).join(' '),
+    set: (val) => {{
+      classes.clear();
+      String(val || '').split(/\\s+/).filter(Boolean).forEach(c => classes.add(c));
+    }}
+  }});
+  return el;
+}}
+
+const elements = {{}};
+function getEl(id) {{
+  if (!elements[id]) elements[id] = createMockEl('div', id);
+  return elements[id];
+}}
+
+const allCreated = [];
+const fetchCalls = [];
+let fetchHandler = null;
+
+const win = {{
+  console: console,
+  location: {{ search: '?id=user_author', href: 'http://localhost/profile.html?id=user_author' }},
+  document: {{
+    documentElement: {{ setAttribute: () => {{}}, getAttribute: () => 'dark' }},
+    body: createMockEl('body', 'body'),
+    getElementById: getEl,
+    createElement: (tag) => {{
+      const el = createMockEl(tag);
+      allCreated.push(el);
+      return el;
+    }},
+    querySelectorAll: (sel) => {{
+      if (sel === '.btn-card-pin') {{
+        return allCreated.filter(e => e.classList.contains('btn-card-pin'));
+      }}
+      return [];
+    }},
+    querySelector: () => null,
+    addEventListener: () => {{}}
+  }},
+  localStorage: {{ getItem: () => null, setItem: () => {{}} }},
+  history: {{ pushState: () => {{}}, replaceState: () => {{}} }},
+  fetch: (url, opts) => {{
+    const callRecord = {{ url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null }};
+    fetchCalls.push(callRecord);
+    if (fetchHandler) return fetchHandler(url, opts, callRecord);
+    return Promise.resolve({{ ok: true, json: () => Promise.resolve({{ success: true, items: [] }}) }});
+  }},
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (t) => clearTimeout(t)
+}};
+win.window = win;
+
+vm.createContext(win);
+vm.runInContext(code, win);
+
+(async () => {{
+  try {{
+    {test_body}
+  }} catch (err) {{
+    console.error(err);
+    process.exit(1);
+  }}
+}})();
+"""
+        proc = subprocess.run(["node", "-e", setup], capture_output=True, text=True)
+        if proc.returncode != 0:
+            self.fail(f"Node VM test failed (exit {proc.returncode}):\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}")
+
+    def test_pin_unpin_repin_sequence_without_reload(self):
+        """Card A pinned -> click A sends unpin -> button A updates to 'Закрепить' -> click A sends pin A -> button A updates to 'Закреплено'."""
+        body = """
+  const api = win.SmartContractumProfilePage;
+  api.setAuthState({ id: 'user_author', name: 'Author Alice' });
+  api.renderProfile({
+    id: 'user_author',
+    isOwnProfile: true,
+    pinnedMaterial: { id: 'pub_1', targetType: 'publication', title: 'Article 1' }
+  });
+  api.renderPublicationsTab([{ id: 'pub_1', title: 'Article 1' }], false, false);
+
+  const pinBtns = win.document.querySelectorAll('.btn-card-pin');
+  assert.strictEqual(pinBtns.length, 1, 'One pin button should be rendered for pub_1');
+  const btnA = pinBtns[0];
+
+  assert.strictEqual(btnA.getAttribute('data-target-id'), 'pub_1');
+  assert.strictEqual(btnA.getAttribute('data-target-type'), 'publication');
+  assert.strictEqual(btnA.getAttribute('data-is-pinned'), 'true');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnA.textContent, 'Закреплено');
+  assert.strictEqual(btnA.title, 'Материал закреплен в профиле');
+  assert.strictEqual(api.isMaterialPinned('pub_1'), true);
+
+  fetchHandler = (url, opts) => {
+    if (url === '/api/user/pinned' && opts.method === 'DELETE') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+    }
+    if (url === '/api/user/pinned' && opts.method === 'POST') {
+      const body = opts.body ? JSON.parse(opts.body) : {};
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          pinnedMaterial: { id: body.targetId, targetType: body.targetType }
+        })
+      });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, items: [] }) });
+  };
+
+  // Click A: sends unpin
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  await new Promise(r => setTimeout(r, 20));
+
+  const unpinCalls = fetchCalls.filter(c => c.url === '/api/user/pinned' && c.opts.method === 'DELETE');
+  assert.strictEqual(unpinCalls.length, 1, 'Should send DELETE /api/user/pinned');
+  assert.strictEqual(btnA.getAttribute('data-is-pinned'), 'false');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), false);
+  assert.strictEqual(btnA.textContent, 'Закрепить');
+  assert.strictEqual(btnA.title, 'Закрепить в профиле');
+  assert.strictEqual(api.isMaterialPinned('pub_1'), false);
+
+  // Click A again: sends pin A
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  await new Promise(r => setTimeout(r, 20));
+
+  const pinCalls = fetchCalls.filter(c => c.url === '/api/user/pinned' && c.opts.method === 'POST');
+  assert.strictEqual(pinCalls.length, 1, 'Should send POST /api/user/pinned');
+  assert.strictEqual(pinCalls[0].body.targetId, 'pub_1');
+  assert.strictEqual(pinCalls[0].body.targetType, 'publication');
+  assert.strictEqual(btnA.getAttribute('data-is-pinned'), 'true');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnA.textContent, 'Закреплено');
+  assert.strictEqual(btnA.title, 'Материал закреплен в профиле');
+  assert.strictEqual(api.isMaterialPinned('pub_1'), true);
+"""
+        self._run_node_vm_test(body)
+
+    def test_pin_replacement_a_to_b_then_a(self):
+        """A pinned -> click B pins B -> button B 'Закреплено', button A 'Закрепить' -> click A pins A (does NOT unpin B)."""
+        body = """
+  const api = win.SmartContractumProfilePage;
+  api.setAuthState({ id: 'user_author', name: 'Author Alice' });
+  api.renderProfile({
+    id: 'user_author',
+    isOwnProfile: true,
+    pinnedMaterial: { id: 'pub_A', targetType: 'publication', title: 'Article A' }
+  });
+  api.renderPublicationsTab([
+    { id: 'pub_A', title: 'Article A' },
+    { id: 'pub_B', title: 'Article B' }
+  ], false, false);
+
+  const pinBtns = win.document.querySelectorAll('.btn-card-pin');
+  assert.strictEqual(pinBtns.length, 2, 'Two pin buttons should be rendered');
+  const btnA = pinBtns[0];
+  const btnB = pinBtns[1];
+
+  assert.strictEqual(btnA.textContent, 'Закреплено');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnB.textContent, 'Закрепить');
+  assert.strictEqual(btnB.classList.contains('is-pinned'), false);
+  assert.strictEqual(api.isMaterialPinned('pub_A'), true);
+  assert.strictEqual(api.isMaterialPinned('pub_B'), false);
+
+  fetchHandler = (url, opts) => {
+    if (url === '/api/user/pinned' && opts.method === 'POST') {
+      const body = opts.body ? JSON.parse(opts.body) : {};
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          pinnedMaterial: { id: body.targetId, targetType: body.targetType }
+        })
+      });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, items: [] }) });
+  };
+
+  // Click B: pins B (replaces A without explicit DELETE)
+  btnB.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  await new Promise(r => setTimeout(r, 20));
+
+  const deleteCalls = () => fetchCalls.filter(c => c.url === '/api/user/pinned' && c.opts.method === 'DELETE');
+  const postCalls = () => fetchCalls.filter(c => c.url === '/api/user/pinned' && c.opts.method === 'POST');
+
+  assert.strictEqual(deleteCalls().length, 0, 'Should NOT send DELETE request when replacing pin');
+  assert.strictEqual(postCalls().length, 1, 'Should send single POST /api/user/pinned for B');
+  assert.strictEqual(postCalls()[0].body.targetId, 'pub_B');
+
+  assert.strictEqual(btnB.textContent, 'Закреплено');
+  assert.strictEqual(btnB.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnB.getAttribute('data-is-pinned'), 'true');
+  assert.strictEqual(btnA.textContent, 'Закрепить');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), false);
+  assert.strictEqual(btnA.getAttribute('data-is-pinned'), 'false');
+  assert.strictEqual(api.isMaterialPinned('pub_B'), true);
+  assert.strictEqual(api.isMaterialPinned('pub_A'), false);
+
+  // Click A: pins A (does NOT unpin B)
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  await new Promise(r => setTimeout(r, 20));
+
+  assert.strictEqual(deleteCalls().length, 0, 'Still should NOT send DELETE request');
+  assert.strictEqual(postCalls().length, 2, 'Should send second POST for A');
+  assert.strictEqual(postCalls()[1].body.targetId, 'pub_A');
+
+  assert.strictEqual(btnA.textContent, 'Закреплено');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnA.getAttribute('data-is-pinned'), 'true');
+  assert.strictEqual(btnB.textContent, 'Закрепить');
+  assert.strictEqual(btnB.classList.contains('is-pinned'), false);
+  assert.strictEqual(btnB.getAttribute('data-is-pinned'), 'false');
+  assert.strictEqual(api.isMaterialPinned('pub_A'), true);
+  assert.strictEqual(api.isMaterialPinned('pub_B'), false);
+"""
+        self._run_node_vm_test(body)
+
+    def test_solution_pin_unpin_sequence(self):
+        """Verifies the same dynamic behavior for solution cards."""
+        body = """
+  const api = win.SmartContractumProfilePage;
+  api.setAuthState({ id: 'user_author', name: 'Author Alice' });
+  api.renderProfile({
+    id: 'user_author',
+    isOwnProfile: true,
+    pinnedMaterial: { id: 'sol_1', targetType: 'solution', isSolution: true }
+  });
+  api.renderAnswersTab([
+    { id: 'sol_1', isSolution: true, title: 'Solution 1' },
+    { id: 'sol_2', isSolution: true, title: 'Solution 2' }
+  ], false, false);
+
+  const pinBtns = win.document.querySelectorAll('.btn-card-pin');
+  assert.strictEqual(pinBtns.length, 2, 'Two pin buttons should be rendered for solution answers');
+  const btnS1 = pinBtns[0];
+  const btnS2 = pinBtns[1];
+
+  assert.strictEqual(btnS1.getAttribute('data-target-type'), 'solution');
+  assert.strictEqual(btnS2.getAttribute('data-target-type'), 'solution');
+  assert.strictEqual(btnS1.textContent, 'Закреплено');
+  assert.strictEqual(btnS1.title, 'Решение закреплено в профиле');
+  assert.strictEqual(btnS1.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnS2.textContent, 'Закрепить');
+  assert.strictEqual(btnS2.title, 'Закрепить решение в профиле');
+  assert.strictEqual(btnS2.classList.contains('is-pinned'), false);
+  assert.strictEqual(api.isMaterialPinned('sol_1'), true);
+  assert.strictEqual(api.isMaterialPinned('sol_2'), false);
+
+  fetchHandler = (url, opts) => {
+    if (url === '/api/user/pinned' && opts.method === 'DELETE') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+    }
+    if (url === '/api/user/pinned' && opts.method === 'POST') {
+      const body = opts.body ? JSON.parse(opts.body) : {};
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          pinnedMaterial: { id: body.targetId, targetType: body.targetType, isSolution: true }
+        })
+      });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, items: [] }) });
+  };
+
+  // Step 1: Click S1 to unpin
+  btnS1.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  await new Promise(r => setTimeout(r, 20));
+
+  const deleteCalls = fetchCalls.filter(c => c.url === '/api/user/pinned' && c.opts.method === 'DELETE');
+  assert.strictEqual(deleteCalls.length, 1, 'Should call DELETE for solution unpin');
+  assert.strictEqual(btnS1.textContent, 'Закрепить');
+  assert.strictEqual(btnS1.title, 'Закрепить решение в профиле');
+  assert.strictEqual(btnS1.classList.contains('is-pinned'), false);
+  assert.strictEqual(btnS1.getAttribute('data-is-pinned'), 'false');
+  assert.strictEqual(api.isMaterialPinned('sol_1'), false);
+
+  // Step 2: Click S2 to pin solution 2
+  btnS2.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  await new Promise(r => setTimeout(r, 20));
+
+  const postCalls = fetchCalls.filter(c => c.url === '/api/user/pinned' && c.opts.method === 'POST');
+  assert.strictEqual(postCalls.length, 1, 'Should call POST with targetType: solution');
+  assert.strictEqual(postCalls[0].body.targetId, 'sol_2');
+  assert.strictEqual(postCalls[0].body.targetType, 'solution');
+
+  assert.strictEqual(btnS2.textContent, 'Закреплено');
+  assert.strictEqual(btnS2.title, 'Решение закреплено в профиле');
+  assert.strictEqual(btnS2.classList.contains('is-pinned'), true);
+  assert.strictEqual(btnS2.getAttribute('data-is-pinned'), 'true');
+  assert.strictEqual(btnS1.textContent, 'Закрепить');
+  assert.strictEqual(btnS1.title, 'Закрепить решение в профиле');
+  assert.strictEqual(btnS1.classList.contains('is-pinned'), false);
+  assert.strictEqual(api.isMaterialPinned('sol_2'), true);
+  assert.strictEqual(api.isMaterialPinned('sol_1'), false);
+"""
+        self._run_node_vm_test(body)
+
+    def test_double_click_protection_and_error_handling(self):
+        """Rapid clicks while request is in flight are ignored; network failure preserves previous state."""
+        body = """
+  const api = win.SmartContractumProfilePage;
+  api.setAuthState({ id: 'user_author', name: 'Author Alice' });
+  api.renderProfile({ id: 'user_author', isOwnProfile: true, pinnedMaterial: null });
+  api.renderPublicationsTab([{ id: 'pub_1', title: 'Article 1' }], false, false);
+
+  const btnA = win.document.querySelectorAll('.btn-card-pin')[0];
+  assert.strictEqual(btnA.textContent, 'Закрепить');
+
+  let pendingResolvers = [];
+  fetchHandler = (url, opts) => {
+    if (url === '/api/user/pinned') {
+      return new Promise((resolve, reject) => {
+        pendingResolvers.push({ resolve, reject, url, opts });
+      });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, items: [] }) });
+  };
+
+  // 1. Rapid clicks while request is in flight
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+
+  const inFlightCalls = fetchCalls.filter(c => c.url === '/api/user/pinned');
+  assert.strictEqual(inFlightCalls.length, 1, 'Only first click initiates request; rapid double-clicks ignored');
+  assert.strictEqual(pendingResolvers.length, 1);
+
+  // Resolve first request successfully
+  pendingResolvers.shift().resolve({
+    ok: true,
+    json: () => Promise.resolve({
+      success: true,
+      pinnedMaterial: { id: 'pub_1', targetType: 'publication' }
+    })
+  });
+  await new Promise(r => setTimeout(r, 20));
+
+  assert.strictEqual(btnA.textContent, 'Закреплено');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), true);
+  assert.strictEqual(api.isMaterialPinned('pub_1'), true);
+
+  // 2. Network failure preserves previous state
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  assert.strictEqual(fetchCalls.filter(c => c.url === '/api/user/pinned').length, 2, 'Unpin click initiates request');
+  assert.strictEqual(pendingResolvers.length, 1);
+
+  // Simulate network rejection
+  pendingResolvers.shift().reject(new Error('Network disconnected'));
+  await new Promise(r => setTimeout(r, 20));
+
+  assert.strictEqual(btnA.textContent, 'Закреплено', 'State must remain Закреплено after network error');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), true, 'is-pinned class preserved after error');
+  assert.strictEqual(api.isMaterialPinned('pub_1'), true, 'Pinned status in profile preserved after error');
+
+  // Verify in-flight guard was reset so subsequent actions are permitted
+  btnA.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+  assert.strictEqual(fetchCalls.filter(c => c.url === '/api/user/pinned').length, 3, 'Retry unpin click sends new request');
+  assert.strictEqual(pendingResolvers.length, 1);
+
+  pendingResolvers.shift().resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true })
+  });
+  await new Promise(r => setTimeout(r, 20));
+
+  assert.strictEqual(btnA.textContent, 'Закрепить');
+  assert.strictEqual(btnA.classList.contains('is-pinned'), false);
+  assert.strictEqual(api.isMaterialPinned('pub_1'), false);
+"""
+        self._run_node_vm_test(body)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1544,7 +1544,7 @@ COVER_DATA_URI_PATTERN = re.compile(
 )
 
 
-def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = None) -> CoverValidationResult:
+def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = None, require_exists: bool = False) -> CoverValidationResult:
     """
     Validates publication cover image:
     - Field is optional (None, empty string or whitespace-only is valid).
@@ -1596,8 +1596,11 @@ def validate_cover_image(cover_image: Any, target_media_dir: Optional[str] = Non
                 return CoverValidationResult(True, None, saved_url=stripped, meta=meta, image_bytes=file_bytes)
             except Exception as e:
                 return CoverValidationResult(False, f"Ошибка чтения медиафайла: {str(e)}")
-
-        return CoverValidationResult(True, None, saved_url=stripped)
+        else:
+            if require_exists:
+                return CoverValidationResult(False, "Файл изображения не найден на сервере.")
+            else:
+                return CoverValidationResult(True, None, saved_url=stripped)
 
     if stripped.startswith("data:image/"):
         if len(stripped) > MAX_COVER_BASE64_CHARS:
@@ -8079,152 +8082,225 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     return
 
-                # 1. Approved publications (articles)
-                cur.execute("""
-                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html AS content, ms.created_at, ms.publication_settings,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count
-                    FROM moderation_submissions ms
-                    WHERE ms.author_id = ? AND ms.status = 'approved'
-                      AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
-                """, (user_id,))
-                pub_rows = cur.fetchall()
+                # Phase 1: Fast indexed total calculation
+                count_sql = """
+                    SELECT (
+                        (SELECT COUNT(*) FROM moderation_submissions ms
+                         WHERE ms.author_id = ? AND ms.status = 'approved'
+                           AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question')
+                        +
+                        (SELECT COUNT(*) FROM moderation_submissions ms
+                         WHERE ms.author_id = ? AND ms.status = 'approved'
+                           AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question')
+                        +
+                        (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
+                         JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                         WHERE ac.user_id = ? AND ac.status = 'published' AND ac.comment_type = 'answer' AND ms.status = 'approved'
+                           AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question')
+                        +
+                        (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac
+                         JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                         WHERE ac.user_id = ? AND ac.status = 'published' AND (ac.comment_type IS NULL OR ac.comment_type != 'answer') AND ms.status = 'approved')
+                    ) AS total
+                """
+                cur.execute(count_sql, (user_id, user_id, user_id, user_id))
+                total = cur.fetchone()["total"] or 0
 
-                # 2. Approved questions
-                cur.execute("""
-                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html AS content, ms.created_at, ms.publication_settings,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count
-                    FROM moderation_submissions ms
-                    WHERE ms.author_id = ? AND ms.status = 'approved'
-                      AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                """, (user_id,))
-                question_rows = cur.fetchall()
+                # Phase 2: Retrieve ordered IDs and types for the requested page using SQLite UNION ALL
+                union_sql = """
+                    SELECT item_type, item_id, act_time, tie_breaker FROM (
+                        SELECT 'publication' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
+                        UNION ALL
+                        SELECT 'question' AS item_type, ms.id AS item_id, ms.created_at AS act_time, ms.id AS tie_breaker
+                        FROM moderation_submissions ms
+                        WHERE ms.author_id = ? AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                        UNION ALL
+                        SELECT 'answer' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND ac.comment_type = 'answer'
+                          AND ms.status = 'approved'
+                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
+                        GROUP BY ac.id
+                        UNION ALL
+                        SELECT 'comment' AS item_type, ac.id AS item_id, ac.created_at AS act_time, ac.id AS tie_breaker
+                        FROM article_comments ac
+                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                        WHERE ac.user_id = ?
+                          AND ac.status = 'published'
+                          AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
+                          AND ms.status = 'approved'
+                        GROUP BY ac.id
+                    )
+                    ORDER BY act_time DESC, tie_breaker DESC
+                    LIMIT ? OFFSET ?
+                """
+                cur.execute(union_sql, (user_id, user_id, user_id, user_id, limit, offset))
+                paged_refs = cur.fetchall()
 
-                # 3. Published answers
-                cur.execute("""
-                    SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
-                           ms.title AS question_title,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
-                    FROM article_comments ac
-                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                    WHERE ac.user_id = ?
-                      AND ac.status = 'published'
-                      AND ac.comment_type = 'answer'
-                      AND ms.status = 'approved'
-                      AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                    GROUP BY ac.id
-                """, (user_id,))
-                answer_rows = cur.fetchall()
+                # Phase 3: Fetch content/details and compute snippets ONLY for items on the requested page
+                paged_activity = []
+                if paged_refs:
+                    pub_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "publication"]
+                    quest_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "question"]
+                    ans_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "answer"]
+                    comm_ids = [r["item_id"] for r in paged_refs if r["item_type"] == "comment"]
 
-                # 4. Published ordinary comments on approved materials
-                cur.execute("""
-                    SELECT ac.id, ac.article_id, ac.content, ac.created_at,
-                           ms.title AS parent_title,
-                           (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
-                    FROM article_comments ac
-                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                    WHERE ac.user_id = ?
-                      AND ac.status = 'published'
-                      AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
-                      AND ms.status = 'approved'
-                    GROUP BY ac.id
-                """, (user_id,))
-                comment_rows = cur.fetchall()
+                    pub_map = {}
+                    if pub_ids:
+                        qmarks = ",".join("?" for _ in pub_ids)
+                        cur.execute(f"""
+                            SELECT ms.id, ms.draft_id, ms.title, ms.article_html AS content, ms.created_at, ms.publication_settings,
+                                   (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                                   (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count
+                            FROM moderation_submissions ms
+                            WHERE ms.id IN ({qmarks})
+                        """, tuple(pub_ids))
+                        for row in cur.fetchall():
+                            pub_map[row["id"]] = row
 
-            activity = []
-            for r in pub_rows:
-                activity.append({
-                    "type": "publication",
-                    "materialType": "article",
-                    "material_type": "article",
-                    "id": r["id"],
-                    "title": r["title"],
-                    "contentSnippet": make_content_snippet(r["content"]),
-                    "rating": int(r["rating"] or 0),
-                    "score": int(r["rating"] or 0),
-                    "commentsCount": int(r["comments_count"] or 0),
-                    "answersCount": 0,
-                    "isSolution": False,
-                    "createdAt": r["created_at"],
-                    "date": format_date_ru(r["created_at"]),
-                    "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                    quest_map = {}
+                    if quest_ids:
+                        qmarks = ",".join("?" for _ in quest_ids)
+                        cur.execute(f"""
+                            SELECT ms.id, ms.draft_id, ms.title, ms.article_html AS content, ms.created_at, ms.publication_settings,
+                                   (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                                   (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count
+                            FROM moderation_submissions ms
+                            WHERE ms.id IN ({qmarks})
+                        """, tuple(quest_ids))
+                        for row in cur.fetchall():
+                            quest_map[row["id"]] = row
+
+                    ans_map = {}
+                    if ans_ids:
+                        qmarks = ",".join("?" for _ in ans_ids)
+                        cur.execute(f"""
+                            SELECT ac.id, ac.article_id, ac.content, ac.is_solution, ac.created_at,
+                                   ms.title AS question_title,
+                                   (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                            FROM article_comments ac
+                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                            WHERE ac.id IN ({qmarks})
+                            GROUP BY ac.id
+                        """, tuple(ans_ids))
+                        for row in cur.fetchall():
+                            ans_map[row["id"]] = row
+
+                    comm_map = {}
+                    if comm_ids:
+                        qmarks = ",".join("?" for _ in comm_ids)
+                        cur.execute(f"""
+                            SELECT ac.id, ac.article_id, ac.content, ac.created_at,
+                                   ms.title AS parent_title,
+                                   (SELECT COALESCE(SUM(v.value), 0) FROM comment_votes v WHERE v.comment_id = ac.id) AS rating
+                            FROM article_comments ac
+                            JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
+                            WHERE ac.id IN ({qmarks})
+                            GROUP BY ac.id
+                        """, tuple(comm_ids))
+                        for row in cur.fetchall():
+                            comm_map[row["id"]] = row
+
+                    for ref in paged_refs:
+                        itype = ref["item_type"]
+                        iid = ref["item_id"]
+                        if itype == "publication" and iid in pub_map:
+                            r = pub_map[iid]
+                            paged_activity.append({
+                                "type": "publication",
+                                "materialType": "article",
+                                "material_type": "article",
+                                "id": r["id"],
+                                "title": r["title"],
+                                "contentSnippet": make_content_snippet(r["content"]),
+                                "rating": int(r["rating"] or 0),
+                                "score": int(r["rating"] or 0),
+                                "commentsCount": int(r["comments_count"] or 0),
+                                "answersCount": 0,
+                                "isSolution": False,
+                                "createdAt": r["created_at"],
+                                "date": format_date_ru(r["created_at"]),
+                                "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                            })
+                        elif itype == "question" and iid in quest_map:
+                            r = quest_map[iid]
+                            paged_activity.append({
+                                "type": "question",
+                                "materialType": "question",
+                                "material_type": "question",
+                                "id": r["id"],
+                                "title": r["title"],
+                                "contentSnippet": make_content_snippet(r["content"]),
+                                "rating": int(r["rating"] or 0),
+                                "score": int(r["rating"] or 0),
+                                "commentsCount": 0,
+                                "answersCount": int(r["answers_count"] or 0),
+                                "isSolution": False,
+                                "createdAt": r["created_at"],
+                                "date": format_date_ru(r["created_at"]),
+                                "url": f"article.html?id={urllib.parse.quote(r['id'])}"
+                            })
+                        elif itype == "answer" and iid in ans_map:
+                            r = ans_map[iid]
+                            paged_activity.append({
+                                "type": "answer",
+                                "materialType": "solution" if bool(r["is_solution"] == 1) else "answer",
+                                "material_type": "solution" if bool(r["is_solution"] == 1) else "answer",
+                                "id": r["id"],
+                                "questionId": r["article_id"],
+                                "title": r["question_title"] or "Ответ на вопрос",
+                                "contentSnippet": make_content_snippet(r["content"]),
+                                "rating": int(r["rating"] or 0),
+                                "score": int(r["rating"] or 0),
+                                "commentsCount": 0,
+                                "answersCount": 0,
+                                "isSolution": bool(r["is_solution"] == 1),
+                                "createdAt": r["created_at"],
+                                "date": format_date_ru(r["created_at"]),
+                                "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
+                            })
+                        elif itype == "comment" and iid in comm_map:
+                            r = comm_map[iid]
+                            p_title = r["parent_title"] or "Материал сообщества"
+                            paged_activity.append({
+                                "type": "comment",
+                                "materialType": "comment",
+                                "material_type": "comment",
+                                "id": r["id"],
+                                "commentId": r["id"],
+                                "articleId": r["article_id"],
+                                "parentTitle": p_title,
+                                "title": p_title,
+                                "contentSnippet": make_content_snippet(r["content"]),
+                                "snippet": make_content_snippet(r["content"]),
+                                "rating": int(r["rating"] or 0),
+                                "score": int(r["rating"] or 0),
+                                "commentsCount": 0,
+                                "answersCount": 0,
+                                "isSolution": False,
+                                "createdAt": r["created_at"],
+                                "date": format_date_ru(r["created_at"]),
+                                "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
+                            })
+
+                has_more = (offset + limit) < total
+
+                self.send_json_response(200, {
+                    "success": True,
+                    "activity": paged_activity,
+                    "items": paged_activity,
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "hasMore": has_more
                 })
-
-            for r in question_rows:
-                activity.append({
-                    "type": "question",
-                    "materialType": "question",
-                    "material_type": "question",
-                    "id": r["id"],
-                    "title": r["title"],
-                    "contentSnippet": make_content_snippet(r["content"]),
-                    "rating": int(r["rating"] or 0),
-                    "score": int(r["rating"] or 0),
-                    "commentsCount": 0,
-                    "answersCount": int(r["answers_count"] or 0),
-                    "isSolution": False,
-                    "createdAt": r["created_at"],
-                    "date": format_date_ru(r["created_at"]),
-                    "url": f"article.html?id={urllib.parse.quote(r['id'])}"
-                })
-
-            for r in answer_rows:
-                activity.append({
-                    "type": "answer",
-                    "materialType": "solution" if bool(r["is_solution"] == 1) else "answer",
-                    "material_type": "solution" if bool(r["is_solution"] == 1) else "answer",
-                    "id": r["id"],
-                    "questionId": r["article_id"],
-                    "title": r["question_title"] or "Ответ на вопрос",
-                    "contentSnippet": make_content_snippet(r["content"]),
-                    "rating": int(r["rating"] or 0),
-                    "score": int(r["rating"] or 0),
-                    "commentsCount": 0,
-                    "answersCount": 0,
-                    "isSolution": bool(r["is_solution"] == 1),
-                    "createdAt": r["created_at"],
-                    "date": format_date_ru(r["created_at"]),
-                    "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
-                })
-
-            for r in comment_rows:
-                p_title = r["parent_title"] or "Материал сообщества"
-                activity.append({
-                    "type": "comment",
-                    "materialType": "comment",
-                    "material_type": "comment",
-                    "id": r["id"],
-                    "commentId": r["id"],
-                    "articleId": r["article_id"],
-                    "parentTitle": p_title,
-                    "title": p_title,
-                    "contentSnippet": make_content_snippet(r["content"]),
-                    "snippet": make_content_snippet(r["content"]),
-                    "rating": int(r["rating"] or 0),
-                    "score": int(r["rating"] or 0),
-                    "commentsCount": 0,
-                    "answersCount": 0,
-                    "isSolution": False,
-                    "createdAt": r["created_at"],
-                    "date": format_date_ru(r["created_at"]),
-                    "url": f"article.html?id={urllib.parse.quote(r['article_id'])}#comment-{urllib.parse.quote(r['id'])}"
-                })
-
-            activity.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
-            total = len(activity)
-            paged_activity = activity[offset : offset + limit]
-            has_more = (offset + limit) < total
-
-            self.send_json_response(200, {
-                "success": True,
-                "activity": paged_activity,
-                "items": paged_activity,
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "hasMore": has_more
-            })
         finally:
             conn.close()
 
@@ -8301,75 +8377,69 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (curr_user["id"],))
                     user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
 
-                total_count = None
-                if not search_q and not topic_filter:
-                    cur.execute("""
-                        SELECT COUNT(*) AS total
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
-                    """, (user_id,))
-                    total_count = cur.fetchone()["total"] or 0
+                conditions = [
+                    "ms.author_id = ?",
+                    "ms.status = 'approved'",
+                    "COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'"
+                ]
+                params = [user_id]
 
-                    order_sql = "rating DESC, ms.created_at DESC, ms.id DESC" if sort_by == "popular" else "ms.created_at DESC, ms.id DESC"
-                    cur.execute(f"""
-                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
-                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count,
-                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
-                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
-                        ORDER BY {order_sql}
-                        LIMIT ? OFFSET ?
-                    """, (user_id, limit, offset))
-                    rows = cur.fetchall()
-                else:
-                    cur.execute("""
-                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
-                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count,
-                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
-                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') != 'question'
-                    """, (user_id,))
-                    rows = cur.fetchall()
+                if search_q:
+                    conditions.append("(LOWER(ms.title) LIKE ? OR LOWER(ms.article_html) LIKE ?)")
+                    params.extend([f"%{search_q}%", f"%{search_q}%"])
+
+                if topic_filter:
+                    topic_candidates = [topic_filter]
+                    for slug, title in TOPICS_TITLE_MAP.items():
+                        if topic_filter == slug.lower() and title.lower() not in topic_candidates:
+                            topic_candidates.append(title.lower())
+                        elif topic_filter == title.lower() and slug.lower() not in topic_candidates:
+                            topic_candidates.append(slug.lower())
+
+                    topic_clauses = []
+                    topic_params = []
+                    for cand in topic_candidates:
+                        topic_clauses.append("(LOWER(json_extract(ms.publication_settings, '$.topic')) = ? OR LOWER(ms.publication_settings) LIKE ?)")
+                        topic_params.extend([cand, f"%{cand}%"])
+                    conditions.append(f"({' OR '.join(topic_clauses)})")
+                    params.extend(topic_params)
+
+                where_sql = " AND ".join(conditions)
+
+                cur.execute(f"""
+                    SELECT COUNT(*) AS total
+                    FROM moderation_submissions ms
+                    WHERE {where_sql}
+                """, tuple(params))
+                total = cur.fetchone()["total"] or 0
+
+                order_sql = "rating DESC, ms.created_at DESC, ms.id DESC" if sort_by == "popular" else "ms.created_at DESC, ms.id DESC"
+                select_params = list(params) + [limit, offset]
+                cur.execute(f"""
+                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published') AS comments_count,
+                           (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
+                           (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
+                    FROM moderation_submissions ms
+                    WHERE {where_sql}
+                    ORDER BY {order_sql}
+                    LIMIT ? OFFSET ?
+                """, tuple(select_params))
+                rows = cur.fetchall()
 
             items = []
             for r in rows:
                 art_id = r["id"]
                 draft_id = r["draft_id"]
-                title_val = r["title"] or ""
-                content_val = r["article_html"] or ""
-                if search_q:
-                    text_val = extract_article_text(content_val)
-                    if search_q not in title_val.lower() and search_q not in content_val.lower() and search_q not in text_val.lower():
-                        continue
                 try:
                     pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
                 except Exception:
                     pst = {}
+                focal_pos = resolve_cover_position(pst)
                 topics = pst.get("topics") or []
                 if isinstance(topics, str):
                     topics = [topics]
-                if topic_filter:
-                    matched = False
-                    for t in topics:
-                        t_str = str(t).strip().lower()
-                        t_title = (TOPICS_TITLE_MAP.get(t_str, "") or "").strip().lower()
-                        if topic_filter == t_str or topic_filter == t_title:
-                            matched = True
-                            break
-                    if not matched:
-                        single_top = (pst.get("topic") or "").strip().lower()
-                        single_top_title = (TOPICS_TITLE_MAP.get(single_top, "") or "").strip().lower()
-                        if topic_filter != single_top and topic_filter != single_top_title:
-                            continue
-                focal_pos = resolve_cover_position(pst)
-                topics = pst.get("topics") or []
                 cover_image = pst.get("coverImage") or None
                 snippet = make_content_snippet(r["article_html"])
                 reading_time, reading_minutes = calculate_reading_time(r["article_html"] or "")
@@ -8431,18 +8501,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(art_id)}"
                 })
 
-            if total_count is not None:
-                total = total_count
-                paged_items = items
-                has_more = (offset + limit) < total
-            else:
-                if sort_by == "popular":
-                    items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or "", x.get("id") or ""), reverse=True)
-                else:
-                    items.sort(key=lambda x: (x.get("createdAt") or "", x.get("id") or ""), reverse=True)
-                total = len(items)
-                paged_items = items[offset : offset + limit]
-                has_more = (offset + limit) < total
+            paged_items = items
+            has_more = (offset + limit) < total
 
             self.send_json_response(200, {
                 "success": True,
@@ -8529,44 +8589,62 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     cur.execute("SELECT article_id, value FROM article_votes WHERE user_id = ?", (curr_user["id"],))
                     user_votes = {r["article_id"]: r["value"] for r in cur.fetchall()}
 
-                total_count = None
-                if not search_q and not topic_filter and status_filter == "all":
-                    cur.execute("""
-                        SELECT COUNT(*) AS total
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                    """, (user_id,))
-                    total_count = cur.fetchone()["total"] or 0
+                conditions = [
+                    "ms.author_id = ?",
+                    "ms.status = 'approved'",
+                    "COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'"
+                ]
+                params = [user_id]
 
-                    order_sql = "rating DESC, ms.created_at DESC, ms.id DESC" if sort_by == "popular" else "ms.created_at DESC, ms.id DESC"
-                    cur.execute(f"""
-                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
-                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
-                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
-                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
-                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                        ORDER BY {order_sql}
-                        LIMIT ? OFFSET ?
-                    """, (user_id, limit, offset))
-                    rows = cur.fetchall()
-                else:
-                    cur.execute("""
-                        SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
-                               (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
-                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
-                               (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
-                               (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
-                               (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
-                        FROM moderation_submissions ms
-                        WHERE ms.author_id = ? AND ms.status = 'approved'
-                          AND COALESCE(json_extract(ms.publication_settings, '$.materialType'), json_extract(ms.publication_settings, '$.type'), 'publication') = 'question'
-                    """, (user_id,))
-                    rows = cur.fetchall()
+                if search_q:
+                    conditions.append("(LOWER(ms.title) LIKE ? OR LOWER(ms.article_html) LIKE ?)")
+                    params.extend([f"%{search_q}%", f"%{search_q}%"])
+
+                if topic_filter:
+                    topic_candidates = [topic_filter]
+                    for slug, title in TOPICS_TITLE_MAP.items():
+                        if topic_filter == slug.lower() and title.lower() not in topic_candidates:
+                            topic_candidates.append(title.lower())
+                        elif topic_filter == title.lower() and slug.lower() not in topic_candidates:
+                            topic_candidates.append(slug.lower())
+
+                    topic_clauses = []
+                    topic_params = []
+                    for cand in topic_candidates:
+                        topic_clauses.append("(LOWER(json_extract(ms.publication_settings, '$.topic')) = ? OR LOWER(ms.publication_settings) LIKE ?)")
+                        topic_params.extend([cand, f"%{cand}%"])
+                    conditions.append(f"({' OR '.join(topic_clauses)})")
+                    params.extend(topic_params)
+
+                if status_filter == "solved":
+                    conditions.append("EXISTS (SELECT 1 FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1)")
+                elif status_filter == "unsolved":
+                    conditions.append("NOT EXISTS (SELECT 1 FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1)")
+
+                where_sql = " AND ".join(conditions)
+
+                cur.execute(f"""
+                    SELECT COUNT(*) AS total
+                    FROM moderation_submissions ms
+                    WHERE {where_sql}
+                """, tuple(params))
+                total = cur.fetchone()["total"] or 0
+
+                order_sql = "rating DESC, ms.created_at DESC, ms.id DESC" if sort_by == "popular" else "ms.created_at DESC, ms.id DESC"
+                select_params = list(params) + [limit, offset]
+                cur.execute(f"""
+                    SELECT ms.id, ms.draft_id, ms.title, ms.article_html, ms.created_at, ms.publication_settings,
+                           (SELECT COALESCE(SUM(v.value), 0) FROM article_votes v WHERE v.article_id = ms.id OR (ms.draft_id IS NOT NULL AND v.article_id = ms.draft_id)) AS rating,
+                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer') AS answers_count,
+                           (SELECT COUNT(DISTINCT ac.id) FROM article_comments ac WHERE (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id)) AND ac.status = 'published' AND ac.comment_type = 'answer' AND ac.is_solution = 1) AS solutions_count,
+                           (SELECT COUNT(DISTINCT al.id) FROM article_likes al WHERE al.article_id = ms.id OR (ms.draft_id IS NOT NULL AND al.article_id = ms.draft_id)) AS likes_count,
+                           (SELECT COUNT(DISTINCT asv.id) FROM article_saves asv WHERE asv.article_id = ms.id OR (ms.draft_id IS NOT NULL AND asv.article_id = ms.draft_id)) AS saves_count
+                    FROM moderation_submissions ms
+                    WHERE {where_sql}
+                    ORDER BY {order_sql}
+                    LIMIT ? OFFSET ?
+                """, tuple(select_params))
+                rows = cur.fetchall()
 
             items = []
             for r in rows:
@@ -8574,40 +8652,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 draft_id = r["draft_id"]
                 sol_cnt = int(r["solutions_count"] or 0)
                 is_solved = (sol_cnt > 0)
-                if status_filter == "solved" and not is_solved:
-                    continue
-                if status_filter == "unsolved" and is_solved:
-                    continue
-
-                title_val = r["title"] or ""
-                content_val = r["article_html"] or ""
-                if search_q:
-                    text_val = extract_article_text(content_val)
-                    if search_q not in title_val.lower() and search_q not in content_val.lower() and search_q not in text_val.lower():
-                        continue
-
                 try:
                     pst = json.loads(r["publication_settings"]) if r["publication_settings"] else {}
                 except Exception:
                     pst = {}
+                focal_pos = resolve_cover_position(pst)
                 topics = pst.get("topics") or []
                 if isinstance(topics, str):
                     topics = [topics]
-                if topic_filter:
-                    matched = False
-                    for t in topics:
-                        t_str = str(t).strip().lower()
-                        t_title = (TOPICS_TITLE_MAP.get(t_str, "") or "").strip().lower()
-                        if topic_filter == t_str or topic_filter == t_title:
-                            matched = True
-                            break
-                    if not matched:
-                        single_top = (pst.get("topic") or "").strip().lower()
-                        single_top_title = (TOPICS_TITLE_MAP.get(single_top, "") or "").strip().lower()
-                        if topic_filter != single_top and topic_filter != single_top_title:
-                            continue
-                focal_pos = resolve_cover_position(pst)
-                topics = pst.get("topics") or []
                 cover_image = pst.get("coverImage") or None
                 snippet = make_content_snippet(r["article_html"])
                 date_str = format_date_ru(r["created_at"])
@@ -8668,18 +8720,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "url": f"article.html?id={urllib.parse.quote(art_id)}"
                 })
 
-            if total_count is not None:
-                total = total_count
-                paged_items = items
-                has_more = (offset + limit) < total
-            else:
-                if sort_by == "popular":
-                    items.sort(key=lambda x: (x.get("rating", 0), x.get("createdAt") or "", x.get("id") or ""), reverse=True)
-                else:
-                    items.sort(key=lambda x: (x.get("createdAt") or "", x.get("id") or ""), reverse=True)
-                total = len(items)
-                paged_items = items[offset : offset + limit]
-                has_more = (offset + limit) < total
+            paged_items = items
+            has_more = (offset + limit) < total
 
             self.send_json_response(200, {
                 "success": True,
@@ -9380,9 +9422,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     stripped_avatar = raw_avatar.strip()
                     if not stripped_avatar:
                         avatar = None
+                    elif existing_profile and existing_profile["avatar"] and stripped_avatar == existing_profile["avatar"]:
+                        avatar = existing_profile["avatar"]
                     else:
                         media_root = getattr(self.server, "media_dir", MEDIA_DIR)
-                        res = validate_cover_image(stripped_avatar, target_media_dir=media_root)
+                        res = validate_cover_image(stripped_avatar, target_media_dir=media_root, require_exists=True)
                         if not res.is_valid:
                             self.send_json_response(400, {
                                 "success": False,
