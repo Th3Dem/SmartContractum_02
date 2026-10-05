@@ -360,6 +360,246 @@ class TestIssue191ProfileOptimizationNPlus1(unittest.TestCase):
             content = f.read()
         self.assertNotIn("\u2014", content, "Em dash found in test file")
 
+    # =========================================================================
+    # 6. Archive Scaling & Elimination of Full HTML Materialization
+    # =========================================================================
+
+    def test_09_activity_does_not_transfer_full_archive_html(self):
+        """Verify activity feed does not load full article_html or content for entire archive."""
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        uid = "author_act_archive"
+        cur.execute("""
+            INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, company, bio, created_at, updated_at)
+            VALUES (?, 'Author Archive', 'Engineer', 'Labs', 'Archive test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+        """, (uid,))
+        # 30 publications with large article_html
+        for i in range(1, 31):
+            pid = f"act_art_{i:02d}"
+            cur.execute("""
+                INSERT OR IGNORE INTO moderation_submissions (id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'approved', '{"materialType": "publication"}', ?, 'hash', ?, ?)
+            """, (pid, pid, f"Archive Art {i:02d}", uid, f"<article>Large payload {i} " * 80 + "</article>", f"2026-08-{min(i, 28):02d}T10:00:00Z", f"2026-08-{min(i, 28):02d}T10:00:00Z"))
+        # 30 comments with large content
+        for i in range(1, 31):
+            cid = f"act_cmt_{i:02d}"
+            cur.execute("""
+                INSERT OR IGNORE INTO article_comments (id, article_id, user_id, author_name, content, status, comment_type, created_at, updated_at)
+                VALUES (?, 'act_art_01', ?, 'Author Archive', ?, 'published', 'comment', ?, ?)
+            """, (cid, uid, f"Comment large content {i} " * 40, f"2026-08-{min(i, 28):02d}T11:00:00Z", f"2026-08-{min(i, 28):02d}T11:00:00Z"))
+        conn.commit()
+        conn.close()
+
+        self.executed_queries.clear()
+        status, data = self._get_json(f"/api/users/{uid}/activity?limit=10&offset=0")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["total"], 60)
+        self.assertEqual(len(data["activity"]), 10)
+        self.assertTrue(data["hasMore"])
+
+        # Check queries fetching article_html or content
+        html_queries = [
+            q for q in self.executed_queries
+            if ("article_html" in q.lower() or "content" in q.lower())
+            and "user_profiles" not in q.lower()
+        ]
+        # Full archive scan queries must not be present
+        for q in html_queries:
+            q_lower = q.lower()
+            is_bounded = ("where ms.id in" in q_lower) or ("where ac.id in" in q_lower) or ("limit" in q_lower)
+            self.assertTrue(is_bounded, f"Unbounded archive query detected: {q}")
+
+        # Count total rows fetched with full article_html or content
+        # Bounded by requested limit (at most 10 items)
+        total_html_rows = 0
+        for q in html_queries:
+            q_lower = q.lower()
+            if "where ms.id in (" in q_lower:
+                part = q_lower.split("where ms.id in (")[1].split(")")[0]
+                total_html_rows += len(part.split(","))
+            elif "where ac.id in (" in q_lower:
+                part = q_lower.split("where ac.id in (")[1].split(")")[0]
+                total_html_rows += len(part.split(","))
+
+        self.assertLessEqual(total_html_rows, 10, f"Transferred full HTML for more than 10 items: {total_html_rows}")
+
+    def test_10_filtered_publications_do_not_scan_archive_html(self):
+        """Verify filtered publications query applies LIMIT ? OFFSET ? and avoids full archive scans."""
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        uid = "author_filt_archive"
+        cur.execute("""
+            INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, company, bio, created_at, updated_at)
+            VALUES (?, 'Author Filter', 'Auditor', 'Labs', 'Filter test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+        """, (uid,))
+        # 25 publications with topic solidity and keyword test
+        for i in range(1, 26):
+            pid = f"sol_art_{i:02d}"
+            cur.execute("""
+                INSERT OR IGNORE INTO moderation_submissions (id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'approved', '{"topics": ["solidity"]}', ?, 'hash', ?, ?)
+            """, (pid, pid, f"Solidity Test Article {i:02d}", uid, f"<p>Contract test content {i}</p>", f"2026-08-{min(i, 28):02d}T10:00:00Z", f"2026-08-{min(i, 28):02d}T10:00:00Z"))
+        # 15 publications with topic security and keyword test
+        for i in range(1, 16):
+            pid = f"sec_art_{i:02d}"
+            cur.execute("""
+                INSERT OR IGNORE INTO moderation_submissions (id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'approved', '{"topics": ["security"]}', ?, 'hash', ?, ?)
+            """, (pid, pid, f"Security Test Article {i:02d}", uid, f"<p>Audit test content {i}</p>", f"2026-08-{min(i, 28):02d}T11:00:00Z", f"2026-08-{min(i, 28):02d}T11:00:00Z"))
+        conn.commit()
+        conn.close()
+
+        # 1. Search query filter (?q=test&limit=10&offset=0)
+        self.executed_queries.clear()
+        status_q, data_q = self._get_json(f"/api/users/{uid}/publications?q=test&limit=10&offset=0")
+        self.assertEqual(status_q, 200)
+        self.assertEqual(data_q["total"], 40)
+        self.assertEqual(len(data_q["items"]), 10)
+        self.assertTrue(data_q["hasMore"])
+
+        # Assert SQL query applies LIMIT ? OFFSET ?
+        row_fetch_queries_q = [
+            q for q in self.executed_queries
+            if "select ms.id" in q.lower() and "article_html" in q.lower()
+        ]
+        self.assertTrue(len(row_fetch_queries_q) > 0, "Expected a query fetching article_html rows")
+        for q in row_fetch_queries_q:
+            self.assertIn("limit", q.lower(), f"Expected LIMIT in query: {q}")
+            self.assertIn("offset", q.lower(), f"Expected OFFSET in query: {q}")
+        self.assertFalse(any("select ms.id" in q.lower() and "limit" not in q.lower() for q in self.executed_queries))
+
+        # 2. Topic filter (?topic=solidity&limit=10&offset=0)
+        self.executed_queries.clear()
+        status_top, data_top = self._get_json(f"/api/users/{uid}/publications?topic=solidity&limit=10&offset=0")
+        self.assertEqual(status_top, 200)
+        self.assertEqual(data_top["total"], 25)
+        self.assertEqual(len(data_top["items"]), 10)
+        self.assertTrue(data_top["hasMore"])
+
+        row_fetch_queries_top = [
+            q for q in self.executed_queries
+            if "select ms.id" in q.lower() and "article_html" in q.lower()
+        ]
+        self.assertTrue(len(row_fetch_queries_top) > 0, "Expected a query fetching article_html rows")
+        for q in row_fetch_queries_top:
+            self.assertIn("limit", q.lower(), f"Expected LIMIT in query: {q}")
+            self.assertIn("offset", q.lower(), f"Expected OFFSET in query: {q}")
+        self.assertFalse(any("select ms.id" in q.lower() and "limit" not in q.lower() for q in self.executed_queries))
+
+    def test_11_archive_scaling_measurements_10_100_1000(self):
+        """Verify O(1) query counts, rows extracted, and HTML materialization across 10, 100, and 1000 records."""
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+
+        # Seed authors with 10, 100, and 1000 records
+        sizes = [10, 100, 1000]
+        for n in sizes:
+            uid = f"user_scale_{n}"
+            cur.execute("""
+                INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, company, bio, created_at, updated_at)
+                VALUES (?, ?, 'Researcher', 'Scaling', 'Scale test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+            """, (uid, f"Scale User {n}"))
+
+            batch = []
+            for i in range(1, n + 1):
+                pid = f"scale_{n}_pub_{i}"
+                batch.append((
+                    pid, pid, f"Scale Article {i}", uid, "approved",
+                    '{"materialType": "publication", "topics": ["scaling"]}',
+                    f"<p>Article payload {i} " * 20 + "</p>",
+                    "hash", "2026-09-01T12:00:00Z", "2026-09-01T12:00:00Z"
+                ))
+            cur.executemany("""
+                INSERT OR IGNORE INTO moderation_submissions (id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, batch)
+        conn.commit()
+        conn.close()
+
+        pub_metrics = {}
+        act_metrics = {}
+
+        for n in sizes:
+            uid = f"user_scale_{n}"
+
+            # 1. Publications page 1
+            self.executed_queries.clear()
+            s_pub, d_pub = self._get_json(f"/api/users/{uid}/publications?limit=10&offset=0")
+            self.assertEqual(s_pub, 200)
+            self.assertEqual(d_pub["total"], n)
+            self.assertEqual(len(d_pub["items"]), 10)
+            pub_queries = len(self.executed_queries)
+
+            # Measure rows extracted with article_html (must be exactly bounded to page limit: 10)
+            pub_html_queries = [
+                q for q in self.executed_queries
+                if "article_html" in q.lower() and "moderation_submissions" in q.lower()
+            ]
+            self.assertTrue(all("limit" in q.lower() for q in pub_html_queries))
+            pub_metrics[n] = {
+                "queries": pub_queries,
+                "rows_returned": len(d_pub["items"])
+            }
+
+            # 2. Activity page 1
+            self.executed_queries.clear()
+            s_act, d_act = self._get_json(f"/api/users/{uid}/activity?limit=10&offset=0")
+            self.assertEqual(s_act, 200)
+            self.assertEqual(d_act["total"], n)
+            self.assertEqual(len(d_act["activity"]), 10)
+            act_queries = len(self.executed_queries)
+
+            # Measure rows with full HTML materialization in activity
+            act_html_queries = [
+                q for q in self.executed_queries
+                if ("article_html" in q.lower() or "content" in q.lower())
+                and "user_profiles" not in q.lower()
+            ]
+            total_act_html_rows = 0
+            for q in act_html_queries:
+                q_lower = q.lower()
+                if "where ms.id in (" in q_lower:
+                    part = q_lower.split("where ms.id in (")[1].split(")")[0]
+                    total_act_html_rows += len(part.split(","))
+                elif "where ac.id in (" in q_lower:
+                    part = q_lower.split("where ac.id in (")[1].split(")")[0]
+                    total_act_html_rows += len(part.split(","))
+
+            self.assertLessEqual(total_act_html_rows, 10)
+            act_metrics[n] = {
+                "queries": act_queries,
+                "rows_returned": len(d_act["activity"]),
+                "html_rows": total_act_html_rows
+            }
+
+        # Assertions proving O(1) query count and row extraction across 10, 100, 1000 archive sizes
+        for n in sizes:
+            self.assertEqual(pub_metrics[n]["rows_returned"], 10)
+            self.assertEqual(act_metrics[n]["rows_returned"], 10)
+            self.assertEqual(act_metrics[n]["html_rows"], 10)
+
+        # Query counts must be bounded and identical across 10, 100, and 1000 items
+        self.assertEqual(
+            pub_metrics[10]["queries"],
+            pub_metrics[100]["queries"],
+            f"Publications query count mismatch: 10->{pub_metrics[10]['queries']}, 100->{pub_metrics[100]['queries']}"
+        )
+        self.assertEqual(
+            pub_metrics[100]["queries"],
+            pub_metrics[1000]["queries"],
+            f"Publications query count mismatch: 100->{pub_metrics[100]['queries']}, 1000->{pub_metrics[1000]['queries']}"
+        )
+        self.assertEqual(
+            act_metrics[10]["queries"],
+            act_metrics[100]["queries"],
+            f"Activity query count mismatch: 10->{act_metrics[10]['queries']}, 100->{act_metrics[100]['queries']}"
+        )
+        self.assertEqual(
+            act_metrics[100]["queries"],
+            act_metrics[1000]["queries"],
+            f"Activity query count mismatch: 100->{act_metrics[100]['queries']}, 1000->{act_metrics[1000]['queries']}"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
