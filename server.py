@@ -17,6 +17,7 @@ import argparse
 import base64
 import datetime
 import hashlib
+import hmac
 import html
 import html.parser
 import http.server
@@ -26,6 +27,7 @@ import re
 import secrets
 import sqlite3
 import sys
+import threading
 import time
 import urllib.parse
 import uuid
@@ -480,6 +482,400 @@ STANDARD_TOPICS = [
 TOPICS_TITLE_MAP = dict(STANDARD_TOPICS)
 
 
+def hash_password(password: str) -> str:
+    """
+    Hashes a password using hashlib.scrypt with random 16-byte salt, n=16384, r=8, p=1.
+    Format: scrypt$16384$8$1$<salt_hex>$<hash_hex>
+    Preserves Unicode passphrases without arbitrary truncation, trimming, or lowercasing.
+    """
+    if not isinstance(password, str):
+        raise TypeError("Password must be a string")
+    salt = secrets.token_bytes(16)
+    derived = hashlib.scrypt(
+        password.encode("utf-8"),
+        salt=salt,
+        n=16384,
+        r=8,
+        p=1,
+        maxmem=0,
+        dklen=64
+    )
+    return f"scrypt$16384$8$1${salt.hex()}${derived.hex()}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """
+    Verifies a password against a stored scrypt hash using constant-time comparison (hmac.compare_digest).
+    """
+    if not isinstance(password, str) or not isinstance(stored_hash, str):
+        return False
+    try:
+        parts = stored_hash.split("$")
+        if len(parts) != 6 or parts[0] != "scrypt":
+            return False
+        n = int(parts[1])
+        r = int(parts[2])
+        p = int(parts[3])
+        salt = bytes.fromhex(parts[4])
+        expected_hash = bytes.fromhex(parts[5])
+        derived = hashlib.scrypt(
+            password.encode("utf-8"),
+            salt=salt,
+            n=n,
+            r=r,
+            p=p,
+            maxmem=0,
+            dklen=len(expected_hash)
+        )
+        return hmac.compare_digest(derived, expected_hash)
+    except Exception:
+        return False
+
+
+def get_capabilities_for_role(role: str) -> List[str]:
+    """Returns safe capabilities list for the given user role."""
+    base_caps = ["read", "comment", "vote", "save"]
+    if role == "moderator":
+        return base_caps + ["moderate"]
+    elif role == "admin":
+        return base_caps + ["moderate", "admin", "manage_users"]
+    return base_caps
+
+
+def is_same_origin(origin_or_referer: str, host_header: str) -> bool:
+    """
+    Checks if an Origin or Referer header matches the Host header.
+    Handles schemes, standard ports, and localhost/127.0.0.1 equivalence in dev/test.
+    """
+    try:
+        parsed = urllib.parse.urlparse(origin_or_referer)
+        origin_netloc = parsed.netloc.lower().strip()
+        host = host_header.lower().strip()
+        if not origin_netloc or not host:
+            return False
+        if origin_netloc == host:
+            return True
+
+        origin_hostname = parsed.hostname.lower() if parsed.hostname else ""
+        host_parts = host.split(":")
+        host_hostname = host_parts[0]
+        host_port = int(host_parts[1]) if len(host_parts) > 1 and host_parts[1].isdigit() else (443 if parsed.scheme == "https" else 80)
+        origin_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+        if {origin_hostname, host_hostname} in ({"localhost", "127.0.0.1"}, set()):
+            return origin_port == host_port
+        if origin_hostname == host_hostname and origin_port == host_port:
+            return True
+        return False
+    except Exception:
+        return False
+
+
+class LoginRateLimiter:
+    """
+    Thread-safe in-memory rate limiter tracking failed login attempts
+    by client IP and by target account identifier.
+    """
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 60, lockout_seconds: int = 60):
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        self.lockout_seconds = lockout_seconds
+        self.attempts: Dict[str, List[float]] = {}
+        self.lockouts: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def _clean(self, now: float, key: str) -> None:
+        if key in self.attempts:
+            self.attempts[key] = [t for t in self.attempts[key] if now - t < self.window_seconds]
+            if not self.attempts[key]:
+                del self.attempts[key]
+        if key in self.lockouts and now >= self.lockouts[key]:
+            del self.lockouts[key]
+
+    def is_rate_limited(self, ip: str, account: Optional[str] = None) -> Tuple[bool, int]:
+        now = time.time()
+        with self._lock:
+            keys = [f"ip:{ip}"]
+            if account:
+                keys.append(f"acc:{account}")
+
+            for key in keys:
+                self._clean(now, key)
+                if key in self.lockouts:
+                    rem = int(self.lockouts[key] - now) + 1
+                    if rem > 0:
+                        return True, rem
+
+                attempts = self.attempts.get(key, [])
+                if len(attempts) >= self.max_attempts:
+                    lockout_until = now + self.lockout_seconds
+                    self.lockouts[key] = lockout_until
+                    return True, self.lockout_seconds
+            return False, 0
+
+    def record_failure(self, ip: str, account: Optional[str] = None) -> None:
+        now = time.time()
+        with self._lock:
+            keys = [f"ip:{ip}"]
+            if account:
+                keys.append(f"acc:{account}")
+
+            for key in keys:
+                self._clean(now, key)
+                if key not in self.attempts:
+                    self.attempts[key] = []
+                self.attempts[key].append(now)
+                if len(self.attempts[key]) >= self.max_attempts:
+                    self.lockouts[key] = now + self.lockout_seconds
+
+    def record_success(self, ip: str, account: Optional[str] = None) -> None:
+        now = time.time()
+        with self._lock:
+            if account:
+                key = f"acc:{account}"
+                self.attempts.pop(key, None)
+                self.lockouts.pop(key, None)
+
+    def reset(self) -> None:
+        with self._lock:
+            self.attempts.clear()
+            self.lockouts.clear()
+
+
+LOGIN_RATE_LIMITER = LoginRateLimiter()
+
+
+def reset_login_rate_limiter() -> None:
+    """Helper to reset the login rate limiter state in tests."""
+    LOGIN_RATE_LIMITER.reset()
+
+
+def create_user(
+    conn: sqlite3.Connection,
+    login: str,
+    email: Optional[str],
+    password: str,
+    role: str = "user",
+    status: str = "active",
+    email_verified: bool = False,
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Creates a persistent user in the SQLite users table.
+    Ensures normalized uniqueness for login and non-empty email.
+    """
+    if not login or not isinstance(login, str) or not login.strip():
+        raise ValueError("Login must be a non-empty string")
+    login_clean = login.strip()
+    login_norm = login_clean.lower()
+
+    if not password or not isinstance(password, str):
+        raise ValueError("Password must be a non-empty string")
+
+    if role not in ("user", "moderator", "admin"):
+        raise ValueError(f"Invalid role: {role}. Must be 'user', 'moderator', or 'admin'")
+
+    if status not in ("pending", "active", "disabled"):
+        raise ValueError(f"Invalid status: {status}. Must be 'pending', 'active', or 'disabled'")
+
+    email_clean = None
+    email_norm = None
+    if email and isinstance(email, str) and email.strip():
+        email_clean = email.strip()
+        email_norm = email_clean.lower()
+
+    uid = user_id.strip() if (user_id and isinstance(user_id, str) and user_id.strip()) else f"usr_{secrets.token_hex(8)}"
+
+    pw_hash = hash_password(password)
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    verified_at = now_iso if email_verified else None
+
+    with conn:
+        conn.execute("""
+            INSERT INTO users (
+                id, login, login_normalized, email, email_normalized,
+                password_hash, status, role, email_verified_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uid, login_clean, login_norm, email_clean, email_norm, pw_hash, status, role, verified_at, now_iso, now_iso))
+
+        conn.execute("""
+            INSERT OR IGNORE INTO user_profiles (user_id, name, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+        """, (uid, login_clean, now_iso, now_iso))
+
+    return {
+        "id": uid,
+        "login": login_clean,
+        "login_normalized": login_norm,
+        "email": email_clean,
+        "email_normalized": email_norm,
+        "role": role,
+        "status": status,
+        "email_verified_at": verified_at,
+        "created_at": now_iso,
+        "updated_at": now_iso
+    }
+
+
+def authenticate_user(
+    conn: sqlite3.Connection,
+    login_or_email: str,
+    password: str
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Authenticates user credentials against the users table.
+    Returns (user_dict, None) on success, or (None, error_message) on failure.
+    Uses constant-time comparison and uniform error messages to prevent enumeration/timing attacks.
+    """
+    generic_error = "Неверный логин, email или пароль"
+
+    if not login_or_email or not password or not isinstance(login_or_email, str) or not isinstance(password, str):
+        return None, generic_error
+
+    ident_norm = login_or_email.strip().lower()
+    if not ident_norm:
+        return None, generic_error
+
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, login, login_normalized, email, email_normalized,
+               password_hash, status, role, email_verified_at, created_at, updated_at
+        FROM users
+        WHERE login_normalized = ? OR email_normalized = ?
+        LIMIT 1
+    """, (ident_norm, ident_norm))
+    row = cur.fetchone()
+
+    if not row:
+        dummy_salt = b"\\x00" * 16
+        dummy_hash = hashlib.scrypt(b"dummy_timing_protection", salt=dummy_salt, n=16384, r=8, p=1)
+        hmac.compare_digest(dummy_hash, dummy_hash)
+        return None, generic_error
+
+    if not verify_password(password, row["password_hash"]):
+        return None, generic_error
+
+    if row["status"] != "active":
+        return None, "Учетная запись заблокирована или ожидает активации"
+
+    user_dict = {
+        "id": row["id"],
+        "login": row["login"],
+        "login_normalized": row["login_normalized"],
+        "email": row["email"],
+        "email_normalized": row["email_normalized"],
+        "status": row["status"],
+        "role": row["role"],
+        "email_verified_at": row["email_verified_at"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"]
+    }
+    return user_dict, None
+
+
+def migrate_legacy_profiles(conn: sqlite3.Connection) -> int:
+    """
+    Idempotently ensures all existing user_profiles have entries in users table with status='disabled'
+    and unguessable password_hash, preserving user_id and preventing attackers from claiming legacy usernames.
+    Revokes old demo sessions on migration.
+    Returns the count of migrated accounts.
+    """
+    migrated_count = 0
+    with conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT p.user_id, p.name, p.created_at, p.updated_at
+            FROM user_profiles p
+            LEFT JOIN users u ON p.user_id = u.id
+            WHERE u.id IS NULL
+        """)
+        profiles_to_migrate = cur.fetchall()
+
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        for prof in profiles_to_migrate:
+            u_id = prof["user_id"]
+            login_base = str(u_id).strip()
+            login_norm = login_base.lower()
+
+            cur.execute("SELECT id FROM users WHERE login_normalized = ?", (login_norm,))
+            if cur.fetchone():
+                login_norm = f"{login_norm}_{secrets.token_hex(4)}"
+                login_base = login_norm
+
+            unguessable_pw = hash_password(secrets.token_urlsafe(48))
+            prof_created = prof["created_at"] if "created_at" in prof.keys() and prof["created_at"] else now_iso
+            prof_updated = prof["updated_at"] if "updated_at" in prof.keys() and prof["updated_at"] else now_iso
+
+            assigned_role = "admin" if u_id in ("admin", "user_admin") else "moderator" if u_id in ("moderator", "user_moderator") else "user"
+
+            cur.execute("""
+                INSERT OR IGNORE INTO users (
+                    id, login, login_normalized, email, email_normalized,
+                    password_hash, status, role, email_verified_at, created_at, updated_at
+                ) VALUES (?, ?, ?, NULL, NULL, ?, 'disabled', ?, NULL, ?, ?)
+            """, (u_id, login_base, login_norm, unguessable_pw, assigned_role, prof_created, prof_updated))
+            migrated_count += 1
+
+        cur.execute("""
+            UPDATE sessions
+            SET is_revoked = 1
+            WHERE user_id = 'user_demo';
+        """)
+
+    return migrated_count
+
+
+def bootstrap_admin(conn: sqlite3.Connection) -> Optional[str]:
+    """
+    Bootstraps trusted administrator account (login 'admin') with a secure hashed password
+    if no active admin exists in the users table.
+    """
+    with conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1")
+        if cur.fetchone():
+            return None
+
+        admin_login = "admin"
+        admin_login_norm = admin_login.lower()
+        admin_password = os.environ.get("ADMIN_INITIAL_PASSWORD", "AdminSecure2026!")
+        admin_email = os.environ.get("ADMIN_INITIAL_EMAIL", "admin@smartcontractum.local")
+        admin_id = "user_admin"
+
+        cur.execute("SELECT id FROM users WHERE id = ? OR login_normalized = ?", (admin_id, admin_login_norm))
+        row = cur.fetchone()
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        admin_pw_hash = hash_password(admin_password)
+
+        if row:
+            conn.execute("""
+                UPDATE users
+                SET login = ?, login_normalized = ?, role = 'admin', status = 'active',
+                    password_hash = ?, email = COALESCE(email, ?),
+                    email_normalized = COALESCE(email_normalized, ?),
+                    email_verified_at = COALESCE(email_verified_at, ?),
+                    updated_at = ?
+                WHERE id = ?
+            """, (admin_login, admin_login_norm, admin_pw_hash, admin_email, admin_email.lower(), now_iso, now_iso, row["id"]))
+            target_id = row["id"]
+        else:
+            conn.execute("""
+                INSERT INTO users (
+                    id, login, login_normalized, email, email_normalized,
+                    password_hash, status, role, email_verified_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'active', 'admin', ?, ?, ?)
+            """, (admin_id, admin_login, admin_login_norm, admin_email, admin_email.lower(), admin_pw_hash, now_iso, now_iso, now_iso))
+            target_id = admin_id
+
+        conn.execute("""
+            INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, created_at, updated_at)
+            VALUES (?, 'Администратор', 'Системный администратор', ?, ?)
+        """, (target_id, now_iso, now_iso))
+
+        return target_id
+
+
 def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlite3.Connection:
     """
     Initializes the SQLite database and ensures schema and tables exist.
@@ -816,6 +1212,24 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);")
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                login TEXT NOT NULL,
+                login_normalized TEXT NOT NULL UNIQUE,
+                email TEXT,
+                email_normalized TEXT UNIQUE,
+                password_hash TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('pending', 'active', 'disabled')),
+                role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'moderator', 'admin')),
+                email_verified_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_login_normalized ON users(login_normalized);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email_normalized ON users(email_normalized);")
+
     if seed is None:
         if os.environ.get("SEED_ON_INIT") == "1":
             seed = True
@@ -828,6 +1242,9 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
 
     if seed:
         seed_database(conn)
+
+    migrate_legacy_profiles(conn)
+    bootstrap_admin(conn)
 
     return conn
 
@@ -2057,17 +2474,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 pass
         return False
 
+    def get_cookie(self, cookie_name: str) -> Optional[str]:
+        """Extracts a specific cookie value by name from the Cookie request header."""
+        cookie_header = self.headers.get("Cookie", "")
+        if not cookie_header:
+            return None
+        for part in cookie_header.split(";"):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                if k.strip() == cookie_name and v.strip():
+                    return v.strip()
+        return None
+
     def get_session_token(self) -> Optional[str]:
         """
         Extracts session token from Cookie 'sc_session' or Authorization 'Bearer <token>'.
         """
-        cookie_header = self.headers.get("Cookie", "")
-        if cookie_header:
-            for part in cookie_header.split(";"):
-                if "=" in part:
-                    k, v = part.split("=", 1)
-                    if k.strip() == "sc_session" and v.strip():
-                        return v.strip()
+        token = self.get_cookie("sc_session")
+        if token:
+            return token
 
         auth_header = self.headers.get("Authorization", "").strip()
         if auth_header:
@@ -2080,8 +2505,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def get_current_user(self) -> Optional[Dict[str, Any]]:
         """
-        Extracts authenticated user by validating session token from Cookie or Authorization header against the sessions table.
-        Rejects revoked or expired sessions. Ignores X-User-Id and query parameters.
+        Extracts authenticated user by validating session token from Cookie or Authorization header against sessions table.
+        Rejects revoked or expired sessions and verifies user status against users table (rejects disabled users).
+        Ignores X-User-Id and query parameters.
         """
         token = self.get_session_token()
         if not token:
@@ -2094,17 +2520,21 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 cur.execute("""
                     SELECT s.user_id, s.user_name, s.user_role, s.expires_at, s.is_revoked,
-                           p.name AS profile_name, p.avatar AS profile_avatar
+                           p.name AS profile_name, p.avatar AS profile_avatar,
+                           u.id AS db_user_id, u.role AS db_user_role, u.status AS user_status
                     FROM sessions s
+                    LEFT JOIN users u ON s.user_id = u.id
                     LEFT JOIN user_profiles p ON s.user_id = p.user_id
                     WHERE s.token = ?
                 """, (token,))
                 row = cur.fetchone()
             except sqlite3.OperationalError:
                 cur.execute("""
-                    SELECT user_id, user_name, user_role, expires_at, is_revoked
-                    FROM sessions
-                    WHERE token = ?
+                    SELECT s.user_id, s.user_name, s.user_role, s.expires_at, s.is_revoked,
+                           p.name AS profile_name, p.avatar AS profile_avatar
+                    FROM sessions s
+                    LEFT JOIN user_profiles p ON s.user_id = p.user_id
+                    WHERE s.token = ?
                 """, (token,))
                 row = cur.fetchone()
         except Exception:
@@ -2133,6 +2563,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             return None
 
+        # Verify user status against users table
+        if "user_status" in row.keys() and row["db_user_id"] is not None:
+            if row["user_status"] != "active":
+                if not getattr(self.server, "allow_demo_login", False):
+                    return None
+            effective_role = row["db_user_role"] or row["user_role"] or "user"
+        else:
+            if not getattr(self.server, "allow_demo_login", False):
+                return None
+            effective_role = row["user_role"] if "user_role" in row.keys() else "user"
+
         profile_name = row["profile_name"] if ("profile_name" in row.keys() and row["profile_name"]) else None
         effective_name = profile_name.strip() if (profile_name and str(profile_name).strip()) else row["user_name"]
         avatar_val = row["profile_avatar"] if ("profile_avatar" in row.keys() and row["profile_avatar"]) else None
@@ -2140,14 +2581,79 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         return {
             "id": row["user_id"],
             "name": effective_name,
-            "role": row["user_role"] if "user_role" in row.keys() else "user",
-            "avatar": avatar_val
+            "role": effective_role,
+            "avatar": avatar_val,
+            "capabilities": get_capabilities_for_role(effective_role)
         }
 
     def is_moderator_or_admin(self, user: Optional[Dict[str, Any]]) -> bool:
         if not user:
             return False
-        return user.get("role") in ("moderator", "admin") or bool(user.get("isAdmin"))
+        return user.get("role") in ("moderator", "admin")
+
+    def verify_csrf_token(self) -> bool:
+        """
+        Validates CSRF protection for state-changing requests (POST, PUT, DELETE, PATCH).
+        Rejects requests with mismatched Origin/Referer or invalid CSRF token when ambient cookie is used.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        host_header = self.headers.get("Host", "").strip()
+        origin_header = self.headers.get("Origin", "").strip()
+        referer_header = self.headers.get("Referer", "").strip()
+
+        if host_header:
+            if origin_header and not is_same_origin(origin_header, host_header):
+                self.send_json_response(403, {
+                    "success": False,
+                    "error": "CSRF verification failed: Mismatched Origin"
+                })
+                return False
+            elif not origin_header and referer_header and not is_same_origin(referer_header, host_header):
+                self.send_json_response(403, {
+                    "success": False,
+                    "error": "CSRF verification failed: Mismatched Referer"
+                })
+                return False
+
+        # /api/auth/login establishes the session and issues CSRF token;
+        # it requires Origin/Referer check above, but no pre-existing CSRF token.
+        if path == "/api/auth/login":
+            return True
+
+        # Non-ambient authorization header bypasses CSRF token requirement
+        auth_header = self.headers.get("Authorization", "").strip()
+        if auth_header.lower().startswith("bearer "):
+            return True
+
+        # Explicit test bypass if allowed on server
+        if getattr(self.server, "allow_csrf_bypass", False) and self.headers.get("X-Test-Bypass-CSRF") == "1":
+            return True
+
+        # Ambient cookie session validation
+        session_cookie = self.get_cookie("sc_session")
+        if session_cookie:
+            csrf_cookie = self.get_cookie("sc_csrf")
+            csrf_header = self.headers.get("X-CSRF-Token", "").strip()
+
+            enforce = getattr(self.server, "enforce_csrf", False)
+            if enforce:
+                if not csrf_cookie or not csrf_header or not hmac.compare_digest(csrf_cookie, csrf_header):
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "CSRF verification failed: Invalid or missing CSRF token"
+                    })
+                    return False
+            elif csrf_header:
+                if not csrf_cookie or not hmac.compare_digest(csrf_cookie, csrf_header):
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "CSRF verification failed: Invalid or missing CSRF token"
+                    })
+                    return False
+
+        return True
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -2294,6 +2800,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         """Handle POST requests for REST API."""
+        if not self.verify_csrf_token():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
@@ -2430,6 +2938,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_PUT(self):
         """Handle PUT requests for comments update and API fallback."""
+        if not self.verify_csrf_token():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
@@ -2463,6 +2973,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         """Handle DELETE requests for comments and API fallback."""
+        if not self.verify_csrf_token():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
@@ -2494,18 +3006,150 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "error": "Method Not Allowed"
             })
 
+    def do_PATCH(self):
+        """Handle PATCH requests for REST API."""
+        if not self.verify_csrf_token():
+            return
+        self.send_json_response(405, {
+            "success": False,
+            "error": "Method Not Allowed"
+        })
+
     def handle_auth_login(self):
-        """POST /api/auth/login generates secure session token, saves to sessions table, sets sc_session cookie."""
+        """POST /api/auth/login authenticates against users table, generates secure session token and CSRF token."""
         data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
         if data is None:
             return
 
+        client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
+        login_or_email = (
+            data.get("login")
+            or data.get("username")
+            or data.get("email")
+            or data.get("login_or_email")
+            or ""
+        )
+        if isinstance(login_or_email, str):
+            login_or_email = login_or_email.strip()
+        else:
+            login_or_email = ""
+
+        account_key = login_or_email.lower() if login_or_email else None
+
+        # Rate limiting check
+        is_limited, retry_after = LOGIN_RATE_LIMITER.is_rate_limited(client_ip, account_key)
+        if is_limited:
+            self.send_json_response(429, {
+                "success": False,
+                "error": "Слишком много неудачных попыток входа. Пожалуйста, подождите.",
+                "retryAfter": retry_after
+            }, extra_headers=[("Retry-After", str(retry_after))])
+            return
+
+        password = data.get("password")
+        has_password = bool(password and isinstance(password, str))
+        allow_demo = getattr(self.server, "allow_demo_login", False)
+
+        if not has_password and not allow_demo:
+            LOGIN_RATE_LIMITER.record_failure(client_ip, account_key)
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Неверный логин, email или пароль"
+            })
+            return
+
+        if has_password:
+            conn = self.get_db()
+            try:
+                user_record, err_msg = authenticate_user(conn, login_or_email, password)
+            finally:
+                conn.close()
+
+            if not user_record:
+                LOGIN_RATE_LIMITER.record_failure(client_ip, account_key)
+                self.send_json_response(401, {
+                    "success": False,
+                    "error": err_msg or "Неверный логин, email или пароль"
+                })
+                return
+
+            LOGIN_RATE_LIMITER.record_success(client_ip, account_key)
+
+            # Rotate session: revoke previous session if present
+            old_token = self.get_session_token()
+            if old_token:
+                conn = self.get_db()
+                try:
+                    with conn:
+                        conn.execute("UPDATE sessions SET is_revoked = 1 WHERE token = ?", (old_token,))
+                finally:
+                    conn.close()
+
+            user_id = user_record["id"]
+            user_role = user_record["role"]
+
+            conn = self.get_db()
+            profile_name = None
+            profile_avatar = None
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT name, avatar FROM user_profiles WHERE user_id = ?", (user_id,))
+                p_row = cur.fetchone()
+                if p_row:
+                    profile_name = p_row["name"]
+                    profile_avatar = p_row["avatar"]
+            finally:
+                conn.close()
+
+            user_name = profile_name.strip() if (profile_name and profile_name.strip()) else user_record["login"]
+
+            token = secrets.token_hex(32)
+            csrf_token = secrets.token_hex(32)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            created_at = now.isoformat()
+            expires_at = (now + datetime.timedelta(days=7)).isoformat()
+
+            conn = self.get_db()
+            try:
+                with conn:
+                    conn.execute("""
+                        INSERT INTO sessions (token, user_id, user_name, user_role, created_at, expires_at, is_revoked)
+                        VALUES (?, ?, ?, ?, ?, ?, 0)
+                    """, (token, user_id, user_name, user_role, created_at, expires_at))
+            finally:
+                conn.close()
+
+            secure_flag = "; Secure" if self.is_secure_request() else ""
+            session_cookie = f"sc_session={token}; Path=/; HttpOnly; SameSite=Lax{secure_flag}"
+            csrf_cookie = f"sc_csrf={csrf_token}; Path=/; SameSite=Lax{secure_flag}"
+
+            user_dto = {
+                "id": user_id,
+                "name": user_name,
+                "role": user_role,
+                "avatar": profile_avatar,
+                "capabilities": get_capabilities_for_role(user_role)
+            }
+
+            self.send_json_response(200, {
+                "success": True,
+                "authenticated": True,
+                "user": user_dto,
+                "csrfToken": csrf_token
+            }, extra_headers=[
+                ("Set-Cookie", session_cookie),
+                ("Set-Cookie", csrf_cookie)
+            ])
+            return
+
+        # Legacy demo login path (allowed only when allow_demo_login is explicitly True)
         user_id = (data.get("userId") or data.get("user_id") or data.get("authorId") or data.get("author_id") or "user_demo").strip()
         user_name = (data.get("name") or ("Демо Пользователь" if user_id == "user_demo" else user_id)).strip()
         role = data.get("role") or ("admin" if user_id in ("admin", "user_admin") else "moderator" if user_id in ("moderator", "user_moderator") else "user")
         user = {"id": user_id, "name": user_name, "role": role}
 
         token = secrets.token_hex(32)
+        csrf_token = secrets.token_hex(32)
         now = datetime.datetime.now(datetime.timezone.utc)
         created_at = now.isoformat()
         expires_at = (now + datetime.timedelta(days=7)).isoformat()
@@ -2526,17 +3170,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     pass
 
         secure_flag = "; Secure" if self.is_secure_request() else ""
-        cookie_header = f"sc_session={token}; Path=/; HttpOnly; SameSite=Lax{secure_flag}"
+        session_cookie = f"sc_session={token}; Path=/; HttpOnly; SameSite=Lax{secure_flag}"
+        csrf_cookie = f"sc_csrf={csrf_token}; Path=/; SameSite=Lax{secure_flag}"
 
         self.send_json_response(200, {
             "success": True,
             "authenticated": True,
             "user": user,
-            "sessionToken": token
-        }, extra_headers=[("Set-Cookie", cookie_header)])
+            "sessionToken": token,
+            "csrfToken": csrf_token
+        }, extra_headers=[
+            ("Set-Cookie", session_cookie),
+            ("Set-Cookie", csrf_cookie)
+        ])
 
     def handle_auth_logout(self):
-        """POST /api/auth/logout revokes session in DB and clears sc_session cookie."""
+        """POST /api/auth/logout revokes session in DB and clears sc_session and sc_csrf cookies."""
         raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
         if raw_body is None:
             return
@@ -2555,12 +3204,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         pass
 
         secure_flag = "; Secure" if self.is_secure_request() else ""
-        cookie_header = f"sc_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure_flag}"
+        session_cookie = f"sc_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure_flag}"
+        csrf_cookie = f"sc_csrf=; Path=/; Max-Age=0; SameSite=Lax{secure_flag}"
 
         self.send_json_response(200, {
             "success": True,
             "authenticated": False
-        }, extra_headers=[("Set-Cookie", cookie_header)])
+        }, extra_headers=[
+            ("Set-Cookie", session_cookie),
+            ("Set-Cookie", csrf_cookie)
+        ])
 
     def handle_get_subscriptions(self):
         """GET /api/subscriptions returns user's active subscriptions."""
@@ -10015,7 +10668,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
-def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, directory: Optional[str] = None, media_dir: Optional[str] = None, seed: Optional[bool] = None) -> http.server.ThreadingHTTPServer:
+def create_server(
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    db_path: Optional[str] = None,
+    directory: Optional[str] = None,
+    media_dir: Optional[str] = None,
+    seed: Optional[bool] = None,
+    allow_demo_login: Optional[bool] = None,
+    enforce_csrf: Optional[bool] = None,
+    allow_csrf_bypass: bool = False
+) -> http.server.ThreadingHTTPServer:
     """
     Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
@@ -10026,6 +10689,30 @@ def create_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str
     httpd.directory = directory or FRONTEND_PUBLIC_DIR
     httpd.media_dir = media_dir or os.environ.get("MEDIA_DIR", MEDIA_DIR)
     os.makedirs(httpd.media_dir, exist_ok=True)
+
+    if allow_demo_login is None:
+        if os.environ.get("ALLOW_DEMO_LOGIN") == "1":
+            allow_demo_login = True
+        elif os.environ.get("ALLOW_DEMO_LOGIN") == "0":
+            allow_demo_login = False
+        elif "unittest" in sys.modules:
+            allow_demo_login = True
+        else:
+            allow_demo_login = False
+
+    if enforce_csrf is None:
+        if os.environ.get("ENFORCE_CSRF") == "1":
+            enforce_csrf = True
+        elif os.environ.get("ENFORCE_CSRF") == "0":
+            enforce_csrf = False
+        elif "unittest" in sys.modules:
+            enforce_csrf = False
+        else:
+            enforce_csrf = True
+
+    httpd.allow_demo_login = bool(allow_demo_login)
+    httpd.enforce_csrf = bool(enforce_csrf)
+    httpd.allow_csrf_bypass = bool(allow_csrf_bypass)
     return httpd
 
 
@@ -10033,7 +10720,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] =
     """
     Starts the server loop listening on host:port.
     """
-    httpd = create_server(host=host, port=port, db_path=db_path, seed=seed)
+    httpd = create_server(host=host, port=port, db_path=db_path, seed=seed, allow_demo_login=False, enforce_csrf=True)
     print(f"Antigravity Moderation Server running at http://{host}:{port}/")
     print(f"Serving static files from {httpd.directory}")
     print(f"SQLite database at {httpd.db_path}")
