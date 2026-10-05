@@ -23,8 +23,13 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml playwright && playwright install --with-deps chromium
 
+      - name: Check JavaScript syntax
+        run: node --check frontend/public/js/profile-page.js frontend/public/js/profile.js frontend/public/js/card.js frontend/public/js/feed.js frontend/public/js/article.js
+
       - name: Run unit & integration tests
         run: python3 -m unittest discover tests -v
 
       - name: Run browser smoke tests
-        run: python3 -m unittest tests/test_issue22_sc023_browser_smoke.py -v
+        env:
+          RUN_BROWSER_SMOKE: '1'
+        run: python3 -m unittest tests/test_issue22_sc023_browser_smoke.py tests/test_issue192_profile_mobile_themes_regressions.py -v

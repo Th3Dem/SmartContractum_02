@@ -42,6 +42,7 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -561,9 +562,13 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
                 headless=True,
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
             )
+            js_errors = []
             for vp in viewports:
                 context = browser.new_context(viewport=vp)
                 page = context.new_page()
+
+                page.on("pageerror", lambda err, vp=vp: js_errors.append(f"Page error ({vp}): {err}"))
+                page.on("console", lambda msg, vp=vp: js_errors.append(f"Console error ({vp}): {msg.text}") if msg.type == "error" else None)
 
                 # Open profile page
                 page.goto(f"{self.base_url}/profile.html?id=author_192", wait_until="domcontentloaded")
@@ -605,6 +610,8 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
 
                 context.close()
             browser.close()
+
+            self.assertEqual(js_errors, [], f"JavaScript runtime errors occurred during page load or theme toggle: {js_errors}")
 
 
 class TestProjectInvariants(unittest.TestCase):
@@ -660,6 +667,18 @@ class TestProjectInvariants(unittest.TestCase):
                     content = f.read()
                 for host in forbidden_hosts:
                     self.assertNotIn(host, content, f"External network reference to {host} found in {path}")
+
+    def test_24_profile_page_js_syntax_via_node(self):
+        """Verify profile-page.js passes node --check without syntax errors."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            fallback = os.path.expanduser("~/.local/bin/node")
+            if os.path.exists(fallback):
+                node_bin = fallback
+        if not node_bin:
+            self.skipTest("node binary not found on system")
+        res = subprocess.run([node_bin, "--check", PROFILE_PAGE_JS_PATH], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"node --check failed on profile-page.js:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
 
 
 if __name__ == "__main__":

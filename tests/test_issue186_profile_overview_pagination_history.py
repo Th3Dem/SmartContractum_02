@@ -20,7 +20,7 @@ Verifies:
    - Load more errors preserve offset for subsequent retry.
 4. History and tab navigation:
    - pushState on explicit tab clicks.
-   - popstate handler (window.onpopstate and addEventListener) activates tab without duplicating history.
+   - popstate handler (addEventListener) activates tab without duplicating history.
 5. In-place stats update:
    - updateProfileStats updates stats, tab counts, and sidebar in-place.
    - Silent refresh does not wipe loaded tabs, reset scroll, or re-trigger feed loaders.
@@ -237,7 +237,6 @@ class TestIssue186ProfileOverviewPaginationHistory(unittest.TestCase):
     def test_popstate_handler_handles_navigation_without_duplication(self):
         """Verify popstate handler activates tab without pushing duplicate history entries."""
         self.assertIn("function handlePopState", self.page_js, "handlePopState must be defined")
-        self.assertIn("window.onpopstate = handlePopState", self.page_js, "window.onpopstate must be assigned")
         self.assertIn("window.addEventListener('popstate', handlePopState)", self.page_js, "popstate event listener must be registered")
 
         # Verify handlePopState invokes setActiveTab(tab, false)

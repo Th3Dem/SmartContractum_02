@@ -72,6 +72,8 @@
   let currentSubscriptionsData = null;
   let lastSocialTriggerEl = null;
   let lastAuthTriggerEl = null;
+  let isInitialized = false;
+  let handlePopState;
 
   function trapModalFocus(e, modalEl) {
     if (!modalEl || modalEl.style.display === 'none' || e.key !== 'Tab') return;
@@ -2127,7 +2129,6 @@
       const dateDisplay = item.date || (item.createdAt ? formatRegistrationDateRu(item.createdAt) : '');
       const parentTitle = item.parentTitle || item.title || 'Материал';
       const articleId = item.articleId || item.materialId;
-      const commentId = item.id || item.commentId;
       const permalink = item.permalink || item.url || ('article.html?id=' + encodeURIComponent(articleId) + '#comment-' + encodeURIComponent(commentId));
       const parentUrl = 'article.html?id=' + encodeURIComponent(articleId);
 
@@ -3101,6 +3102,30 @@
     lastSocialTriggerEl = null;
   }
 
+  handlePopState = function handlePopState(e) {
+    try {
+      let tab = (e && e.state && e.state.tab) || null;
+      let q = (e && e.state && e.state.q !== undefined) ? e.state.q : null;
+      const params = new URLSearchParams(window.location.search);
+      if (!tab) {
+        tab = params.get('tab') || 'overview';
+      }
+      if (q === null) {
+        q = params.get('q') || '';
+      }
+      if (q !== currentSearchQuery) {
+        currentSearchQuery = q;
+        const sInp = document.getElementById('profileSearchInput');
+        if (sInp) sInp.value = q;
+        const sClr = document.getElementById('btnProfileSearchClear');
+        if (sClr) sClr.style.display = q ? 'flex' : 'none';
+      }
+      setActiveTab(tab, false);
+    } catch (err) {
+      setActiveTab('overview', false);
+    }
+  };
+
   function initEventListeners() {
     // 1. Subscribe button
     const btnSubscribe = document.getElementById('btnProfileSubscribe');
@@ -3515,31 +3540,7 @@
     }
 
     // 10. History popstate navigation
-    function handlePopState(e) {
-      try {
-        let tab = (e && e.state && e.state.tab) || null;
-        let q = (e && e.state && e.state.q !== undefined) ? e.state.q : null;
-        const params = new URLSearchParams(window.location.search);
-        if (!tab) {
-          tab = params.get('tab') || 'overview';
-        }
-        if (q === null) {
-          q = params.get('q') || '';
-        }
-        if (q !== currentSearchQuery) {
-          currentSearchQuery = q;
-          const sInp = document.getElementById('profileSearchInput');
-          if (sInp) sInp.value = q;
-          const sClr = document.getElementById('btnProfileSearchClear');
-          if (sClr) sClr.style.display = q ? 'flex' : 'none';
-        }
-        setActiveTab(tab, false);
-      } catch (err) {
-        setActiveTab('overview', false);
-      }
-    }
     window.addEventListener('popstate', handlePopState);
-    window.onpopstate = handlePopState;
 
     // 11. Publications toolbar sorting
     const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
@@ -3817,6 +3818,8 @@
           loadSubscribers(currentProfile.id || currentProfile.userId, true);
         }
       });
+    }
+
     // 23. Pinned material controls
     const btnUnpin = document.getElementById('btnProfileUnpin');
     if (btnUnpin) {
@@ -3827,6 +3830,9 @@
   }
 
   function init() {
+    if (isInitialized) return;
+    isInitialized = true;
+
     initTheme();
     initEventListeners();
 
