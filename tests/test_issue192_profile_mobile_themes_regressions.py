@@ -281,6 +281,452 @@ class BaseProfileTestCase(unittest.TestCase):
             ("peer_192", "author", "author_192", "Alice Engineer", now)
         )
 
+        # Seed test users and materials for Round 3 review acceptance regressions
+
+        # 1. user_r3_isolation: Draft with approved and rejected snapshots
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO user_profiles (user_id, name, bio, specialization, company, website, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("user_r3_isolation", "Isolation Tester", "Bio", "Spec", "", "", "", now, now)
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "sub_q_iso_rej",
+                "draft_q_iso",
+                "Rejected Question Parent Title",
+                "user_r3_isolation",
+                "rejected",
+                json.dumps({"materialType": "question", "topics": ["solidity"]}),
+                "<p>Rejected question snapshot</p>",
+                "hash_q_iso_rej",
+                "2026-10-01T09:00:00Z",
+                "2026-10-01T09:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "sub_q_iso_app",
+                "draft_q_iso",
+                "Approved Question Parent Title",
+                "user_r3_isolation",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["solidity"]}),
+                "<p>Approved question snapshot</p>",
+                "hash_q_iso_app",
+                "2026-10-01T10:00:00Z",
+                "2026-10-01T10:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "sub_art_iso_rej",
+                "draft_art_iso",
+                "Rejected Article Parent Title",
+                "user_r3_isolation",
+                "rejected",
+                json.dumps({"materialType": "article", "topics": ["security"]}),
+                "<p>Rejected article snapshot</p>",
+                "hash_art_iso_rej",
+                "2026-10-01T09:30:00Z",
+                "2026-10-01T09:30:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "sub_art_iso_app",
+                "draft_art_iso",
+                "Approved Article Parent Title",
+                "user_r3_isolation",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["security"]}),
+                "<p>Approved article snapshot</p>",
+                "hash_art_iso_app",
+                "2026-10-01T10:30:00Z",
+                "2026-10-01T10:30:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO article_comments (
+                id, article_id, user_id, author_name, content, status, comment_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "ans_iso_1",
+                "draft_q_iso",
+                "user_r3_isolation",
+                "Isolation Tester",
+                "Detailed answer to the question",
+                "published",
+                "answer",
+                "2026-10-02T12:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO article_comments (
+                id, article_id, user_id, author_name, content, status, comment_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "comm_iso_1",
+                "draft_art_iso",
+                "user_r3_isolation",
+                "Isolation Tester",
+                "Thoughtful comment on the article",
+                "published",
+                "comment",
+                "2026-10-02T12:30:00Z"
+            )
+        )
+
+        # 2. user_r3_topics: Exact topic matching vs false positives
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO user_profiles (user_id, name, bio, specialization, company, website, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("user_r3_topics", "Topic Tester", "Bio", "Spec", "", "", "", now, now)
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_topic_match",
+                "draft_top_match_p",
+                "Exact Solidity Article",
+                "user_r3_topics",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["solidity"]}),
+                "<p>Solidity content</p>",
+                "hash_top_match_p",
+                "2026-10-02T10:00:00Z",
+                "2026-10-02T10:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_topic_fp_desc",
+                "draft_top_fp_desc_p",
+                "Security Article with Solidity in Description",
+                "user_r3_topics",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["security"], "description": "solidity"}),
+                "<p>Security content</p>",
+                "hash_top_fp_desc_p",
+                "2026-10-02T11:00:00Z",
+                "2026-10-02T11:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_topic_fp_extra",
+                "draft_top_fp_extra_p",
+                "Solidity Extra Article",
+                "user_r3_topics",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["solidity-extra"]}),
+                "<p>Solidity extra content</p>",
+                "hash_top_fp_extra_p",
+                "2026-10-02T12:00:00Z",
+                "2026-10-02T12:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "quest_topic_match",
+                "draft_top_match_q",
+                "Exact Solidity Question",
+                "user_r3_topics",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["solidity"]}),
+                "<p>Solidity question content</p>",
+                "hash_top_match_q",
+                "2026-10-02T13:00:00Z",
+                "2026-10-02T13:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "quest_topic_fp_desc",
+                "draft_top_fp_desc_q",
+                "Security Question with Solidity in Description",
+                "user_r3_topics",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["security"], "description": "solidity"}),
+                "<p>Security question content</p>",
+                "hash_top_fp_desc_q",
+                "2026-10-02T14:00:00Z",
+                "2026-10-02T14:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "quest_topic_fp_extra",
+                "draft_top_fp_extra_q",
+                "Solidity Extra Question",
+                "user_r3_topics",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["solidity-extra"]}),
+                "<p>Solidity extra question content</p>",
+                "hash_top_fp_extra_q",
+                "2026-10-02T15:00:00Z",
+                "2026-10-02T15:00:00Z"
+            )
+        )
+
+        # 3. user_r3_semantic: HTML text search semantic matching
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO user_profiles (user_id, name, bio, specialization, company, website, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("user_r3_semantic", "Semantic Tester", "Bio", "Spec", "", "", "", now, now)
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_sem_match",
+                "draft_sem_pub",
+                "EVM Execution Internals",
+                "user_r3_semantic",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["evm"]}),
+                "<p>smart <strong>contract</strong></p>",
+                "hash_sem_pub",
+                "2026-10-02T16:00:00Z",
+                "2026-10-02T16:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "quest_sem_match",
+                "draft_sem_quest",
+                "Bytecode Verification Steps",
+                "user_r3_semantic",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["evm"]}),
+                "<p>smart <strong>contract</strong></p>",
+                "hash_sem_quest",
+                "2026-10-02T17:00:00Z",
+                "2026-10-02T17:00:00Z"
+            )
+        )
+
+        # 4. user_r3_activity: Overview activity search and pagination
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO user_profiles (user_id, name, bio, specialization, company, website, avatar, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("user_r3_activity", "Activity Tester", "Bio", "Spec", "", "", "", now, now)
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_act_1",
+                "draft_act_p1",
+                "Compiler Pipeline Fundamentals",
+                "user_r3_activity",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["compilers"]}),
+                "<p>Understanding compilation stages.</p>",
+                "hash_act_p1",
+                "2026-10-03T10:00:00Z",
+                "2026-10-03T10:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_act_2",
+                "draft_act_p2",
+                "Code Optimization Strategies",
+                "user_r3_activity",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["compilers"]}),
+                "<p>Techniques inside the compiler optimizer.</p>",
+                "hash_act_p2",
+                "2026-10-03T11:00:00Z",
+                "2026-10-03T11:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "quest_act_1",
+                "draft_act_q1",
+                "How does compiler generate AST nodes?",
+                "user_r3_activity",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["compilers"]}),
+                "<p>Details on the AST construction.</p>",
+                "hash_act_q1",
+                "2026-10-03T12:00:00Z",
+                "2026-10-03T12:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO article_comments (
+                id, article_id, user_id, author_name, content, status, comment_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "ans_act_1",
+                "draft_act_q1",
+                "user_r3_activity",
+                "Activity Tester",
+                "The compiler constructs AST during semantic analysis.",
+                "published",
+                "answer",
+                "2026-10-03T13:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO article_comments (
+                id, article_id, user_id, author_name, content, status, comment_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "comm_act_1",
+                "draft_act_p1",
+                "user_r3_activity",
+                "Activity Tester",
+                "Useful reference for compiler developers.",
+                "published",
+                "comment",
+                "2026-10-03T14:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pub_act_other",
+                "draft_act_p_other",
+                "Decentralized Network Protocol",
+                "user_r3_activity",
+                "approved",
+                json.dumps({"materialType": "article", "topics": ["networking"]}),
+                "<p>Peer discovery protocols.</p>",
+                "hash_act_other",
+                "2026-10-03T08:00:00Z",
+                "2026-10-03T08:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO moderation_submissions (
+                id, draft_id, title, author_id, status, publication_settings, article_html, snapshot_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "quest_act_other",
+                "draft_act_q_other",
+                "Consensus Fault Tolerance",
+                "user_r3_activity",
+                "approved",
+                json.dumps({"materialType": "question", "topics": ["consensus"]}),
+                "<p>Byzantine fault tolerance basics.</p>",
+                "hash_act_q_other",
+                "2026-10-03T09:00:00Z",
+                "2026-10-03T09:00:00Z"
+            )
+        )
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO article_comments (
+                id, article_id, user_id, author_name, content, status, comment_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "comm_act_other",
+                "draft_act_p_other",
+                "user_r3_activity",
+                "Activity Tester",
+                "Interesting points on gossip routing.",
+                "published",
+                "comment",
+                "2026-10-03T09:30:00Z"
+            )
+        )
+
         conn.commit()
 
     def get_json(self, path: str, cookie: Optional[str] = None) -> Dict[str, Any]:
@@ -681,6 +1127,136 @@ class TestProjectInvariants(unittest.TestCase):
             js_path = os.path.join(FRONTEND_DIR, "js", js_file)
             res = subprocess.run([node_bin, "--check", js_path], capture_output=True, text=True)
             self.assertEqual(res.returncode, 0, f"node --check failed on {js_file}:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+
+
+class TestRound3ReviewAcceptanceRegressions(BaseProfileTestCase):
+    """Validates Round 3 review acceptance criteria: frontend triggerSearch, approval isolation, topic isolation, HTML search, activity pagination."""
+
+    def test_25_acceptance_single_trigger_search_definition_in_frontend(self):
+        """Verify that exactly 1 definition of function triggerSearch exists in frontend/public/js/profile-page.js."""
+        with open(PROFILE_PAGE_JS_PATH, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        function_defs = re.findall(r"\bfunction\s+triggerSearch\b", code)
+        self.assertEqual(len(function_defs), 1, f"Expected exactly 1 definition of function triggerSearch, found {len(function_defs)}")
+
+        assign_defs = re.findall(r"\b(?:const|let|var)\s+triggerSearch\s*=", code)
+        self.assertEqual(len(assign_defs), 0, f"Unexpected triggerSearch assignment definitions: {assign_defs}")
+
+    def test_26_acceptance_guest_activity_parent_approval_isolation(self):
+        """Verify guest activity request returns approved parent title and isolates rejected snapshots."""
+        res = self.get_json("/api/users/user_r3_isolation/activity")
+        self.assertTrue(res.get("success"), f"Request failed: {res}")
+        items = res.get("items") or res.get("activity", [])
+        self.assertGreater(len(items), 0, "Expected non-empty activity items list")
+
+        answers = [item for item in items if item.get("type") == "answer" and item.get("id") == "ans_iso_1"]
+        self.assertEqual(len(answers), 1, "Expected exactly 1 answer in activity")
+        ans = answers[0]
+        self.assertEqual(ans.get("title"), "Approved Question Parent Title")
+        self.assertNotEqual(ans.get("title"), "Rejected Question Parent Title")
+
+        comments = [item for item in items if item.get("type") == "comment" and item.get("id") == "comm_iso_1"]
+        self.assertEqual(len(comments), 1, "Expected exactly 1 comment in activity")
+        comm = comments[0]
+        self.assertEqual(comm.get("title"), "Approved Article Parent Title")
+        self.assertEqual(comm.get("parentTitle"), "Approved Article Parent Title")
+        self.assertNotEqual(comm.get("title"), "Rejected Article Parent Title")
+        self.assertNotEqual(comm.get("parentTitle"), "Rejected Article Parent Title")
+
+        # Ensure rejected titles never appear anywhere in the response payload
+        res_json = json.dumps(res)
+        self.assertNotIn("Rejected Question Parent Title", res_json)
+        self.assertNotIn("Rejected Article Parent Title", res_json)
+
+    def test_27_acceptance_exact_topic_isolation_no_false_positives(self):
+        """Verify topic=solidity filter strictly isolates exact topic without false positives."""
+        pub_res = self.get_json("/api/users/user_r3_topics/publications?topic=solidity")
+        self.assertTrue(pub_res.get("success"), f"Publications request failed: {pub_res}")
+        pub_items = pub_res.get("items") or pub_res.get("publications", [])
+        pub_ids = [item.get("id") for item in pub_items]
+
+        self.assertIn("pub_topic_match", pub_ids, "Exact topic match must be included")
+        self.assertNotIn("pub_topic_fp_desc", pub_ids, "Item with topic security and description solidity must not match")
+        self.assertNotIn("pub_topic_fp_extra", pub_ids, "Item with topic solidity-extra must not match topic solidity")
+        self.assertEqual(len(pub_items), 1, f"Expected exactly 1 publication matching topic solidity, got {len(pub_items)}")
+
+        quest_res = self.get_json("/api/users/user_r3_topics/questions?topic=solidity")
+        self.assertTrue(quest_res.get("success"), f"Questions request failed: {quest_res}")
+        quest_items = quest_res.get("items") or quest_res.get("questions", [])
+        quest_ids = [item.get("id") for item in quest_items]
+
+        self.assertIn("quest_topic_match", quest_ids, "Exact topic match must be included")
+        self.assertNotIn("quest_topic_fp_desc", quest_ids, "Question with topic security and description solidity must not match")
+        self.assertNotIn("quest_topic_fp_extra", quest_ids, "Question with topic solidity-extra must not match topic solidity")
+        self.assertEqual(len(quest_items), 1, f"Expected exactly 1 question matching topic solidity, got {len(quest_items)}")
+
+    def test_28_acceptance_html_text_search_semantic_matching(self):
+        """Verify search q=smart contract semantically matches HTML content across publications and questions."""
+        pub_res = self.get_json("/api/users/user_r3_semantic/publications?q=smart%20contract")
+        self.assertTrue(pub_res.get("success"), f"Publications search failed: {pub_res}")
+        pub_items = pub_res.get("items") or pub_res.get("publications", [])
+        pub_ids = [item.get("id") for item in pub_items]
+        self.assertIn("pub_sem_match", pub_ids, "Publication containing HTML smart contract must match q=smart contract")
+        self.assertEqual(len(pub_items), 1)
+
+        quest_res = self.get_json("/api/users/user_r3_semantic/questions?q=smart%20contract")
+        self.assertTrue(quest_res.get("success"), f"Questions search failed: {quest_res}")
+        quest_items = quest_res.get("items") or quest_res.get("questions", [])
+        quest_ids = [item.get("id") for item in quest_items]
+        self.assertIn("quest_sem_match", quest_ids, "Question containing HTML smart contract must match q=smart contract")
+        self.assertEqual(len(quest_items), 1)
+
+        # Negative search check: unrelated query must not match
+        neg_res = self.get_json("/api/users/user_r3_semantic/publications?q=unrelated_nonexistent_token")
+        self.assertTrue(neg_res.get("success"))
+        neg_items = neg_res.get("items") or neg_res.get("publications", [])
+        self.assertEqual(len(neg_items), 0, "Unrelated search query must return 0 items")
+
+    def test_29_acceptance_overview_activity_search_and_pagination(self):
+        """Verify activity search with q parameter returns exact total and accurate hasMore across pages."""
+        # Page 1: limit 2, offset 0 -> items 0..1 out of 5
+        res_p1 = self.get_json("/api/users/user_r3_activity/activity?q=compiler&limit=2&offset=0")
+        self.assertTrue(res_p1.get("success"))
+        self.assertEqual(res_p1.get("total"), 5, "Total matching items must equal 5")
+        items_p1 = res_p1.get("items") or res_p1.get("activity", [])
+        self.assertEqual(len(items_p1), 2, "Page 1 must contain exactly 2 items")
+        self.assertTrue(res_p1.get("hasMore"), "Page 1 hasMore must be True")
+
+        # Page 2: limit 2, offset 2 -> items 2..3 out of 5
+        res_p2 = self.get_json("/api/users/user_r3_activity/activity?q=compiler&limit=2&offset=2")
+        self.assertTrue(res_p2.get("success"))
+        self.assertEqual(res_p2.get("total"), 5, "Total matching items must remain 5")
+        items_p2 = res_p2.get("items") or res_p2.get("activity", [])
+        self.assertEqual(len(items_p2), 2, "Page 2 must contain exactly 2 items")
+        self.assertTrue(res_p2.get("hasMore"), "Page 2 hasMore must be True")
+
+        # Page 3: limit 2, offset 4 -> item 4 out of 5
+        res_p3 = self.get_json("/api/users/user_r3_activity/activity?q=compiler&limit=2&offset=4")
+        self.assertTrue(res_p3.get("success"))
+        self.assertEqual(res_p3.get("total"), 5, "Total matching items must remain 5")
+        items_p3 = res_p3.get("items") or res_p3.get("activity", [])
+        self.assertEqual(len(items_p3), 1, "Page 3 must contain exactly 1 remaining item")
+        self.assertFalse(res_p3.get("hasMore"), "Page 3 hasMore must be False")
+
+        # Page 4: limit 2, offset 6 -> out of bounds
+        res_p4 = self.get_json("/api/users/user_r3_activity/activity?q=compiler&limit=2&offset=6")
+        self.assertTrue(res_p4.get("success"))
+        self.assertEqual(res_p4.get("total"), 5, "Total matching items must remain 5")
+        items_p4 = res_p4.get("items") or res_p4.get("activity", [])
+        self.assertEqual(len(items_p4), 0, "Page 4 must contain 0 items")
+        self.assertFalse(res_p4.get("hasMore"), "Page 4 hasMore must be False")
+
+        # Verify items returned across pages are disjoint and cover all expected items
+        all_paged_ids = [item.get("id") for item in items_p1] + [item.get("id") for item in items_p2] + [item.get("id") for item in items_p3]
+        self.assertEqual(len(all_paged_ids), 5)
+        self.assertEqual(len(set(all_paged_ids)), 5, "Items across pages must be disjoint")
+        expected_ids = {"pub_act_1", "pub_act_2", "quest_act_1", "ans_act_1", "comm_act_1"}
+        self.assertEqual(set(all_paged_ids), expected_ids)
+
+        # Verify non-matching items are never present in any paged results
+        unwanted_ids = {"pub_act_other", "quest_act_other", "comm_act_other"}
+        self.assertTrue(unwanted_ids.isdisjoint(set(all_paged_ids)), "Unwanted items must not appear in search results")
 
 
 if __name__ == "__main__":
