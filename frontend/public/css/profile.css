@@ -555,7 +555,7 @@
   cursor: pointer;
   border: 1px solid var(--accent-color);
   background: var(--accent-color);
-  color: #ffffff !important;
+  color: #ffffff;
   transition: all 150ms ease;
   white-space: nowrap;
 }
@@ -572,10 +572,22 @@
   color: var(--text-secondary);
 }
 
-.btn-profile-subscribe.is-subscribed:hover {
+[data-theme="light"] .btn-profile-subscribe.is-subscribed {
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.btn-profile-subscribe.is-subscribed:hover,
+[data-theme="light"] .btn-profile-subscribe.is-subscribed:hover {
   border-color: #ef4444;
   color: #ef4444;
   background: var(--danger-subtle, rgba(239, 68, 68, 0.1));
+}
+
+.btn-profile-subscribe:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .btn-profile-edit {
