@@ -581,23 +581,25 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         """
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        # 1. feed.js
+        # 1. profile.js (shared modal module)
+        profile_js_path = os.path.join(repo_root, "frontend", "public", "js", "profile.js")
+        with open(profile_js_path, "r", encoding="utf-8") as f:
+            profile_js = f.read()
+
+        self.assertIn("user-profile-rating-num", profile_js)
+        self.assertIn("Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются", profile_js)
+        self.assertIn("Рейтинг", profile_js)
+
+        # 2. feed.js and article.js delegation
         feed_js_path = os.path.join(repo_root, "frontend", "public", "js", "feed.js")
         with open(feed_js_path, "r", encoding="utf-8") as f:
             feed_js = f.read()
+        self.assertIn("SmartContractumProfile", feed_js)
 
-        self.assertIn("user-profile-rating-num", feed_js)
-        self.assertIn("Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются", feed_js)
-        self.assertIn("Рейтинг", feed_js)
-
-        # 2. article.js
         article_js_path = os.path.join(repo_root, "frontend", "public", "js", "article.js")
         with open(article_js_path, "r", encoding="utf-8") as f:
             article_js = f.read()
-
-        self.assertIn("user-profile-rating-num", article_js)
-        self.assertIn("Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются", article_js)
-        self.assertIn("Рейтинг", article_js)
+        self.assertIn("SmartContractumProfile", article_js)
 
         # 3. HTML modals
         feed_html_path = os.path.join(repo_root, "frontend", "public", "feed.html")
@@ -1054,7 +1056,7 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         self.assertEqual(len(closed_voted_tasks), 0, "smartcontractum:voted must do nothing when modal is closed")
 
         # --- SCENARIO 7: Source Code Architectural Conformity ---
-        for js_filename in ["feed.js", "article.js"]:
+        for js_filename in ["profile.js"]:
             js_path = os.path.join(repo_root, "frontend", "public", "js", js_filename)
             with open(js_path, "r", encoding="utf-8") as f:
                 js_content = f.read()
@@ -1082,6 +1084,16 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
             self.assertIn("e.key === 'Escape'", js_content)
             self.assertIn(".btn-author-profile", js_content)
             self.assertIn("smartcontractum:voted", js_content)
+
+        # In feed.js and article.js, verify wrapper functions delegate to profile.js
+        for caller_js in ["feed.js", "article.js"]:
+            c_path = os.path.join(repo_root, "frontend", "public", "js", caller_js)
+            with open(c_path, "r", encoding="utf-8") as f:
+                c_content = f.read()
+            self.assertIn("function initUserProfileModal", c_content)
+            self.assertIn("function openUserProfileModal", c_content)
+            self.assertIn("function closeUserProfileModal", c_content)
+            self.assertIn("SmartContractumProfile", c_content)
 
 
 if __name__ == "__main__":
