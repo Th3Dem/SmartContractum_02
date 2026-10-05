@@ -439,6 +439,14 @@ api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [
         self.assertIn("triggerSearch: triggerSearch", self.page_js)
         self.assertIn("getSearchQuery:", self.page_js)
 
+        # Exactly 1 function triggerSearch definition (no duplicate definition)
+        trigger_search_matches = re.findall(r"function\s+triggerSearch\b", self.page_js)
+        self.assertEqual(
+            len(trigger_search_matches),
+            1,
+            f"Expected exactly 1 triggerSearch function definition, found {len(trigger_search_matches)}"
+        )
+
         # 3. Dedicated handlers for #profileSearchInput and #btnProfileSearchClear
         self.assertIn("document.getElementById('profileSearchInput')", self.page_js)
         self.assertIn("document.getElementById('btnProfileSearchClear')", self.page_js)
@@ -455,6 +463,136 @@ api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [
         self.assertIn("loadAnswers(uid, false)", body)
         self.assertIn("loadComments(uid, false)", body)
         self.assertIn("loadActivity(uid, false)", body)
+
+    def test_trigger_search_dispatches_through_set_search_query(self):
+        """Verify triggerSearch dispatches through setSearchQuery and clears debounce timer."""
+        # 1. Exactly 1 triggerSearch definition
+        trigger_defs = re.findall(r"function\s+triggerSearch\b", self.page_js)
+        self.assertEqual(
+            len(trigger_defs),
+            1,
+            f"Expected exactly 1 triggerSearch definition, found {len(trigger_defs)}"
+        )
+
+        # 2. Static verification that triggerSearch clears debounce and calls setSearchQuery
+        ts_match = re.search(r"function triggerSearch\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(ts_match, "triggerSearch function must be defined in profile-page.js")
+        ts_body = ts_match.group(1)
+        self.assertIn("clearTimeout(searchDebounceTimer)", ts_body)
+        self.assertIn("setSearchQuery(", ts_body, "triggerSearch must dispatch through setSearchQuery")
+
+        # 3. Functional Node.js execution verifying triggerSearch dispatches through setSearchQuery
+        node_script = """
+const fs = require('fs');
+const code = fs.readFileSync('""" + PAGE_JS_PATH + """', 'utf8');
+const vm = require('vm');
+
+let fetchCalls = [];
+const mockFetch = (url, opts) => {
+  fetchCalls.push(url);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, items: [], hasMore: false, activity: [] })
+  });
+};
+
+const domElements = {};
+function getEl(id) {
+  if (!domElements[id]) {
+    const listeners = {};
+    domElements[id] = {
+      id: id,
+      value: '',
+      classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      hasAttribute: () => false,
+      getAttribute: () => '',
+      style: {},
+      innerHTML: '',
+      textContent: '',
+      addEventListener: (type, fn) => {
+        if (!listeners[type]) listeners[type] = [];
+        listeners[type].push(fn);
+      },
+      dispatchEvent: (event) => {
+        const fns = listeners[event.type] || [];
+        for (const fn of fns) fn.call(domElements[id], event);
+      },
+      querySelector: () => null,
+      querySelectorAll: () => []
+    };
+  }
+  return domElements[id];
+}
+
+const window = {
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: { search: '?id=user_test', href: 'http://localhost/profile.html?id=user_test' },
+  addEventListener: () => {},
+  document: {
+    documentElement: { setAttribute: () => {}, getAttribute: () => 'dark' },
+    addEventListener: () => {},
+    getElementById: getEl,
+    querySelectorAll: (sel) => {
+      if (sel && sel.includes('profileSearchInput')) return [getEl('profileSearchInput')];
+      return [];
+    }
+  },
+  localStorage: { getItem: () => null, setItem: () => {} },
+  history: {
+    pushState: (state, title, url) => {
+      if (url) {
+        window.location.href = url;
+        const qIdx = url.indexOf('?');
+        window.location.search = qIdx !== -1 ? url.substring(qIdx) : '';
+      }
+    },
+    replaceState: () => {}
+  },
+  fetch: mockFetch,
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout
+};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [] });
+
+// Call triggerSearch directly
+api.triggerSearch('audit_query');
+
+if (api.getSearchQuery() !== 'audit_query') {
+  console.error('FAIL_QUERY_NOT_SET: ' + api.getSearchQuery());
+  process.exit(1);
+}
+
+const inputEl = getEl('profileSearchInput');
+if (inputEl.value !== 'audit_query') {
+  console.error('FAIL_INPUT_VALUE_NOT_SYNCED: ' + inputEl.value);
+  process.exit(2);
+}
+
+const clearBtn = getEl('btnProfileSearchClear');
+if (clearBtn.style.display !== 'flex') {
+  console.error('FAIL_CLEAR_BTN_NOT_FLEX');
+  process.exit(3);
+}
+
+if (!fetchCalls.some(u => u.includes('q=audit_query'))) {
+  console.error('FAIL_FETCH_CALL_MISSING_Q: ' + JSON.stringify(fetchCalls));
+  process.exit(4);
+}
+
+console.log('SUCCESS_TRIGGER_SEARCH_DISPATCHES');
+"""
+        proc = subprocess.run(["node", "-e", node_script], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, f"triggerSearch test failed: {proc.stderr}")
+        self.assertIn("SUCCESS_TRIGGER_SEARCH_DISPATCHES", proc.stdout)
 
     def test_search_input_debounce_updates_url_and_history(self):
         """Verify search input debounces by 300ms, shows clear button, and updates history via pushState."""
