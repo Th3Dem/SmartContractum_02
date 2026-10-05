@@ -720,6 +720,20 @@
   padding-bottom: 4px;
 }
 
+.profile-search-results-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.profile-search-results-info strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .profile-search-wrap {
   position: relative;
   display: inline-flex;
@@ -1441,8 +1455,14 @@
   color: var(--text-secondary);
 }
 
-.profile-comment-link {
+.profile-comment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+}
+
+.profile-comment-link {
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.78rem;

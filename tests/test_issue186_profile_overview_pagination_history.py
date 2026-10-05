@@ -35,6 +35,7 @@ Verifies:
 
 import os
 import re
+import subprocess
 import unittest
 import unicodedata
 
@@ -237,7 +238,7 @@ class TestIssue186ProfileOverviewPaginationHistory(unittest.TestCase):
     def test_popstate_handler_handles_navigation_without_duplication(self):
         """Verify popstate handler activates tab without pushing duplicate history entries."""
         self.assertIn("function handlePopState", self.page_js, "handlePopState must be defined")
-        self.assertIn("window.onpopstate = handlePopState", self.page_js, "window.onpopstate must be assigned")
+        self.assertNotIn("window.onpopstate", self.page_js, "Redundant window.onpopstate must be removed")
         self.assertIn("window.addEventListener('popstate', handlePopState)", self.page_js, "popstate event listener must be registered")
 
         # Verify handlePopState invokes setActiveTab(tab, false)
@@ -245,6 +246,179 @@ class TestIssue186ProfileOverviewPaginationHistory(unittest.TestCase):
         self.assertIsNotNone(popstate_match)
         pop_body = popstate_match.group(1)
         self.assertIn("setActiveTab(tab, false)", pop_body, "handlePopState must call setActiveTab with updateUrl=false")
+
+    def test_tab_switching_with_different_params_invalidates_cache_and_triggers_fresh_load(self):
+        """Verify switching between tabs with different query/filter parameters triggers fresh loads."""
+        # 1. State variable tabLoadedState defined in profile-page.js
+        self.assertIn("tabLoadedState", self.page_js, "tabLoadedState must be defined to track tab parameters")
+        self.assertIn("areTabParamsEqual", self.page_js, "areTabParamsEqual helper must exist")
+        self.assertIn("getCurrentTabParams", self.page_js, "getCurrentTabParams helper must exist")
+
+        # 2. setActiveTab invalidates and reloads when parameters do not match
+        set_tab_match = re.search(r"function setActiveTab\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(set_tab_match, "setActiveTab must exist")
+        body = set_tab_match.group(1)
+        self.assertIn("tabLoadedState.publications", body, "setActiveTab must check publications loaded parameters")
+        self.assertIn("tabLoadedState.questions", body, "setActiveTab must check questions loaded parameters")
+        self.assertIn("tabLoadedState.answers", body, "setActiveTab must check answers loaded parameters")
+        self.assertIn("tabLoadedState.overview", body, "setActiveTab must check overview loaded parameters")
+
+        # 3. handlePopState extracts all parameters and invalidates caches when changed
+        popstate_match = re.search(r"function handlePopState\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(popstate_match, "handlePopState must exist")
+        pop_body = popstate_match.group(1)
+        self.assertIn("params.get('tab')", pop_body)
+        self.assertIn("params.get('q')", pop_body)
+        self.assertIn("params.get('sort')", pop_body)
+        self.assertIn("params.get('topic')", pop_body)
+        self.assertIn("params.get('status')", pop_body)
+        self.assertIn("updateSearchInputUI", pop_body)
+        self.assertIn("updatePubSortUI", pop_body)
+        self.assertIn("updateQuestSortUI", pop_body)
+        self.assertIn("updateQuestStatusUI", pop_body)
+        self.assertIn("updateAnsFilterUI", pop_body)
+        self.assertIn("updateTopicFilterUI", pop_body)
+
+        # 4. Search query changes invalidate all tab caches
+        self.assertIn("invalidateTabCaches", self.page_js, "invalidateTabCaches helper must exist")
+        search_match = re.search(r"function setSearchQuery\s*\([^\)]*\)\s*\{([\s\S]*?)\n  \}", self.page_js)
+        self.assertIsNotNone(search_match, "setSearchQuery function must exist")
+        self.assertIn("invalidateTabCaches", search_match.group(1), "Changing search query must invalidate all tab caches")
+
+        # 5. Dynamic Node.js contract test proving cache reuse vs fresh load
+        node_script = """
+const fs = require('fs');
+const code = fs.readFileSync('""" + PAGE_JS_PATH + """', 'utf8');
+const vm = require('vm');
+
+let fetchCalls = [];
+const mockFetch = (url, opts) => {
+  fetchCalls.push(url);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, items: [{ id: 'item_1' }], hasMore: false, activity: [{ id: 'act_1' }] })
+  });
+};
+
+const domElements = {};
+function getEl(id) {
+  if (!domElements[id]) {
+    domElements[id] = {
+      id: id,
+      classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      hasAttribute: () => false,
+      getAttribute: () => '',
+      style: {},
+      innerHTML: '',
+      textContent: '',
+      addEventListener: () => {},
+      querySelector: () => null
+    };
+  }
+  return domElements[id];
+}
+
+const window = {
+  console: console,
+  URLSearchParams: URLSearchParams,
+  URL: URL,
+  location: { search: '?id=user_test', href: 'http://localhost/profile.html?id=user_test' },
+  addEventListener: () => {},
+  document: {
+    documentElement: { setAttribute: () => {}, getAttribute: () => 'dark' },
+    addEventListener: () => {},
+    getElementById: getEl,
+    querySelectorAll: () => []
+  },
+  localStorage: { getItem: () => null, setItem: () => {} },
+  history: { pushState: () => {}, replaceState: () => {} },
+  fetch: mockFetch
+};
+window.window = window;
+vm.createContext(window);
+vm.runInContext(code, window);
+
+const api = window.SmartContractumProfilePage;
+api.renderProfile({ id: 'user_test', publications: [], questions: [], answers: [] });
+
+(async () => {
+  await Promise.resolve();
+  fetchCalls = [];
+
+  // Step 1: Initial switch to publications
+  api.setActiveTab('publications', false);
+  await Promise.resolve();
+  if (fetchCalls.length !== 1) {
+    console.error('FAIL_STEP_1');
+    process.exit(1);
+  }
+
+  // Step 2: Switch to questions
+  api.setActiveTab('questions', false);
+  await Promise.resolve();
+  if (fetchCalls.length !== 2) {
+    console.error('FAIL_STEP_2');
+    process.exit(2);
+  }
+
+  // Step 3: Switch back to publications with unchanged parameters (cache hit, no fresh fetch)
+  const countBeforeCached = fetchCalls.length;
+  api.setActiveTab('publications', false);
+  await Promise.resolve();
+  if (fetchCalls.length !== countBeforeCached) {
+    console.error('FAIL_STEP_3_CACHE_NOT_USED');
+    process.exit(3);
+  }
+
+  // Step 4: Change sort via popstate to popular -> must trigger fresh load
+  window.location.search = '?id=user_test&tab=publications&sort=popular';
+  api.handlePopState({ state: { tab: 'publications', sort: 'popular' } });
+  await Promise.resolve();
+  if (fetchCalls.length !== countBeforeCached + 1) {
+    console.error('FAIL_STEP_4_FRESH_LOAD_NOT_TRIGGERED');
+    process.exit(4);
+  }
+  const lastUrl = fetchCalls[fetchCalls.length - 1];
+  if (!lastUrl.includes('sort=popular')) {
+    console.error('FAIL_STEP_4_URL_PARAM');
+    process.exit(5);
+  }
+
+  // Step 5: Change search query -> must invalidate all tab caches and reload
+  const countBeforeQuery = fetchCalls.length;
+  api.setSearchQuery('audit', false);
+  await Promise.resolve();
+  if (fetchCalls.length !== countBeforeQuery + 1) {
+    console.error('FAIL_STEP_5_QUERY_RELOAD');
+    process.exit(6);
+  }
+
+  // Step 6: Switching to questions under new query must trigger fresh load with q=audit
+  const countBeforeQuest = fetchCalls.length;
+  api.setActiveTab('questions', false);
+  await Promise.resolve();
+  if (fetchCalls.length !== countBeforeQuest + 1) {
+    console.error('FAIL_STEP_6_STALE_QUESTIONS_CACHE');
+    process.exit(7);
+  }
+  const questUrl = fetchCalls[fetchCalls.length - 1];
+  if (!questUrl.includes('q=audit')) {
+    console.error('FAIL_STEP_6_QUERY_NOT_IN_URL');
+    process.exit(8);
+  }
+
+  console.log('SUCCESS_CONTRACT_VERIFIED');
+})();
+"""
+        proc = subprocess.run(
+            ["node", "-e", node_script],
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(proc.returncode, 0, f"Node contract execution failed: {proc.stderr}")
+        self.assertIn("SUCCESS_CONTRACT_VERIFIED", proc.stdout)
 
     # =========================================================================
     # 5. In-Place Stats Update
