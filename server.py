@@ -650,6 +650,230 @@ def reset_login_rate_limiter() -> None:
     LOGIN_RATE_LIMITER.reset()
 
 
+EMAIL_VERIFICATION_SECRET = os.environ.get(
+    "EMAIL_VERIFICATION_SECRET",
+    "sc_email_verification_secret_pepper_2026_antigravity"
+)
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+LOGIN_REGEX = re.compile(r"^[a-zA-Z0-9_-]{3,30}$")
+
+
+def mask_email(email: str) -> str:
+    """Masks email address for safe responses without exposing full address."""
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        masked_local = local[0] + "***"
+    else:
+        masked_local = local[0] + "***" + local[-1]
+    return f"{masked_local}@{domain}"
+
+
+def hash_verification_code(code: str) -> str:
+    """Hashes 6-digit verification code with server pepper using HMAC-SHA256."""
+    secret_bytes = EMAIL_VERIFICATION_SECRET.encode("utf-8")
+    code_bytes = code.strip().encode("utf-8")
+    return hmac.new(secret_bytes, code_bytes, hashlib.sha256).hexdigest()
+
+
+def verify_verification_code(code: str, stored_hash: str) -> bool:
+    """Constant-time verification of code against stored HMAC-SHA256 hash."""
+    if not code or not stored_hash:
+        return False
+    computed = hash_verification_code(code)
+    return hmac.compare_digest(stored_hash, computed)
+
+
+class EmailService:
+    """Mail adapter supporting real SMTP and offline-first fake outbox."""
+
+    def __init__(self):
+        self.simulate_failure = False
+        self.sent_emails: List[Dict[str, Any]] = []
+        self._lock = threading.Lock()
+
+    def is_configured(self) -> bool:
+        host = os.environ.get("SMTP_HOST", "").strip()
+        adapter = os.environ.get("MAIL_ADAPTER", "fake").strip().lower()
+        return bool(host) and adapter != "fake"
+
+    def set_simulate_failure(self, fail: bool) -> None:
+        self.simulate_failure = fail
+
+    def clear_sent_emails(self) -> None:
+        with self._lock:
+            self.sent_emails.clear()
+
+    def get_sent_emails(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            return list(self.sent_emails)
+
+    def send_verification_email(
+        self,
+        conn: sqlite3.Connection,
+        recipient: str,
+        code: str,
+        login: str
+    ) -> Tuple[bool, Optional[str]]:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        outbox_id = f"outbox_{secrets.token_hex(16)}"
+        subject = "Код подтверждения регистрации SmartContractum"
+        body_text = (
+            f"Здравствуйте, {login}!\n\n"
+            f"Ваш код подтверждения для завершения регистрации на платформе SmartContractum: {code}\n\n"
+            f"Код действителен в течение 10 минут.\n"
+            f"Если вы не запрашивали регистрацию, проигнорируйте это письмо.\n"
+        )
+
+        # Check for simulated delivery failure
+        if self.simulate_failure or os.environ.get("FAIL_MAIL_DELIVERY") == "1":
+            err_msg = "Ошибка отправки письма: Simulated SMTP delivery failure"
+            try:
+                with conn:
+                    conn.execute("""
+                        INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
+                        VALUES (?, ?, ?, ?, 'failed', ?, ?, NULL)
+                    """, (outbox_id, recipient, subject, body_text, err_msg, now_iso))
+            except Exception:
+                pass
+            return False, err_msg
+
+        if self.is_configured():
+            try:
+                import smtplib
+                from email.mime.text import MIMEText
+                msg = MIMEText(body_text, "plain", "utf-8")
+                msg["Subject"] = subject
+                msg["From"] = os.environ.get("SMTP_FROM_EMAIL", "noreply@smartcontractum.local")
+                msg["To"] = recipient
+
+                host = os.environ.get("SMTP_HOST", "127.0.0.1")
+                port = int(os.environ.get("SMTP_PORT", "587"))
+                user = os.environ.get("SMTP_USER", "")
+                password = os.environ.get("SMTP_PASSWORD", "")
+                use_tls = os.environ.get("SMTP_USE_TLS", "1").lower() in ("1", "true", "yes")
+
+                server = smtplib.SMTP(host, port, timeout=10)
+                try:
+                    if use_tls:
+                        server.starttls()
+                    if user and password:
+                        server.login(user, password)
+                    server.sendmail(msg["From"], [recipient], msg.as_string())
+                finally:
+                    try:
+                        server.quit()
+                    except Exception:
+                        pass
+
+                with conn:
+                    conn.execute("""
+                        INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
+                        VALUES (?, ?, ?, ?, 'sent', NULL, ?, ?)
+                    """, (outbox_id, recipient, subject, body_text, now_iso, now_iso))
+
+                email_record = {
+                    "id": outbox_id,
+                    "recipient": recipient,
+                    "subject": subject,
+                    "body_text": body_text,
+                    "code": code,
+                    "login": login,
+                    "status": "sent",
+                    "created_at": now_iso
+                }
+                with self._lock:
+                    self.sent_emails.append(email_record)
+
+                return True, None
+            except Exception as e:
+                err_msg = f"Ошибка отправки письма: {e}"
+                try:
+                    with conn:
+                        conn.execute("""
+                            INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
+                            VALUES (?, ?, ?, ?, 'failed', ?, ?, NULL)
+                        """, (outbox_id, recipient, subject, body_text, err_msg, now_iso))
+                except Exception:
+                    pass
+                return False, err_msg
+        else:
+            # Fake adapter (100% offline-first durable outbox)
+            with conn:
+                conn.execute("""
+                    INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
+                    VALUES (?, ?, ?, ?, 'sent', NULL, ?, ?)
+                """, (outbox_id, recipient, subject, body_text, now_iso, now_iso))
+
+            email_record = {
+                "id": outbox_id,
+                "recipient": recipient,
+                "subject": subject,
+                "body_text": body_text,
+                "code": code,
+                "login": login,
+                "status": "sent",
+                "created_at": now_iso
+            }
+            with self._lock:
+                self.sent_emails.append(email_record)
+
+            return True, None
+
+
+EMAIL_SERVICE = EmailService()
+
+
+def send_verification_email(
+    conn: sqlite3.Connection,
+    recipient: str,
+    code: str,
+    login: str
+) -> Tuple[bool, Optional[str]]:
+    return EMAIL_SERVICE.send_verification_email(conn, recipient, code, login)
+
+
+class RegistrationRateLimiter:
+    """Tracks registration attempts per IP/key in rolling 1-hour window."""
+
+    def __init__(self, max_per_hour: int = 5):
+        self.max_per_hour = max_per_hour
+        self._lock = threading.Lock()
+        self._history: Dict[str, List[float]] = {}
+
+    def is_rate_limited(self, key: str) -> Tuple[bool, int]:
+        with self._lock:
+            now = time.time()
+            cutoff = now - 3600.0
+            timestamps = [t for t in self._history.get(key, []) if t > cutoff]
+            self._history[key] = timestamps
+            if len(timestamps) >= self.max_per_hour:
+                oldest = timestamps[0]
+                retry_after = max(1, int(3600.0 - (now - oldest)))
+                return True, retry_after
+            return False, 0
+
+    def record(self, key: str) -> None:
+        with self._lock:
+            now = time.time()
+            cutoff = now - 3600.0
+            timestamps = [t for t in self._history.get(key, []) if t > cutoff]
+            timestamps.append(now)
+            self._history[key] = timestamps
+
+    def reset(self) -> None:
+        with self._lock:
+            self._history.clear()
+
+
+REGISTRATION_RATE_LIMITER = RegistrationRateLimiter(max_per_hour=5)
+
+
+def reset_registration_rate_limiter() -> None:
+    REGISTRATION_RATE_LIMITER.reset()
+
+
 def create_user(
     conn: sqlite3.Connection,
     login: str,
@@ -756,6 +980,8 @@ def authenticate_user(
         return None, generic_error
 
     if row["status"] != "active":
+        if row["status"] == "pending":
+            return None, "PENDING_VERIFICATION"
         return None, "Учетная запись заблокирована или ожидает активации"
 
     user_dict = {
@@ -1229,6 +1455,38 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_login_normalized ON users(login_normalized);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email_normalized ON users(email_normalized);")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS email_verifications (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id),
+                email TEXT NOT NULL,
+                purpose TEXT NOT NULL DEFAULT 'email_verification',
+                code_hash TEXT NOT NULL,
+                attempts_left INTEGER NOT NULL DEFAULT 5,
+                expires_at TEXT NOT NULL,
+                resend_available_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'consumed', 'invalidated')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_email_verif_user_purpose ON email_verifications(user_id, purpose, status);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email, purpose, status);")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS email_outbox (
+                id TEXT PRIMARY KEY,
+                recipient TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body_text TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'sent' CHECK(status IN ('pending', 'sent', 'failed')),
+                error_message TEXT,
+                created_at TEXT NOT NULL,
+                sent_at TEXT
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_email_outbox_recipient ON email_outbox(recipient, created_at);")
 
     if seed is None:
         if os.environ.get("SEED_ON_INIT") == "1":
@@ -2565,6 +2823,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # Verify user status against users table
         if "user_status" in row.keys() and row["db_user_id"] is not None:
+            if row["user_status"] == "pending":
+                return None
             if row["user_status"] != "active":
                 if not getattr(self.server, "allow_demo_login", False):
                     return None
@@ -2618,8 +2878,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return False
 
         # /api/auth/login establishes the session and issues CSRF token;
-        # it requires Origin/Referer check above, but no pre-existing CSRF token.
-        if path == "/api/auth/login":
+        # Registration and verification are unauthenticated onboarding endpoints
+        # requiring Origin/Referer check above, but no pre-existing CSRF token.
+        if path in ("/api/auth/login", "/api/auth/register", "/api/auth/verify-email", "/api/auth/resend-code"):
             return True
 
         # Non-ambient authorization header bypasses CSRF token requirement
@@ -2809,6 +3070,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_auth_login()
         elif path == "/api/auth/logout":
             self.handle_auth_logout()
+        elif path == "/api/auth/register":
+            self.handle_auth_register()
+        elif path == "/api/auth/verify-email":
+            self.handle_auth_verify_email()
+        elif path == "/api/auth/resend-code":
+            self.handle_auth_resend_code()
         elif path == "/api/user/feed-settings":
             self.handle_post_feed_settings()
         elif path == "/api/clubs":
@@ -3066,6 +3333,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 conn.close()
 
             if not user_record:
+                if err_msg == "PENDING_VERIFICATION":
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "Email не подтвержден. Пожалуйста, подтвердите ваш адрес электронной почты.",
+                        "requiresEmailVerification": True
+                    })
+                    return
                 LOGIN_RATE_LIMITER.record_failure(client_ip, account_key)
                 self.send_json_response(401, {
                     "success": False,
@@ -3144,6 +3418,21 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # Legacy demo login path (allowed only when allow_demo_login is explicitly True)
         user_id = (data.get("userId") or data.get("user_id") or data.get("authorId") or data.get("author_id") or "user_demo").strip()
+        conn_check = self.get_db()
+        try:
+            cur_check = conn_check.cursor()
+            cur_check.execute("SELECT status FROM users WHERE id = ? OR login_normalized = ? LIMIT 1", (user_id, user_id.lower()))
+            u_check = cur_check.fetchone()
+            if u_check and u_check["status"] == "pending":
+                self.send_json_response(403, {
+                    "success": False,
+                    "error": "Email не подтвержден. Пожалуйста, подтвердите ваш адрес электронной почты.",
+                    "requiresEmailVerification": True
+                })
+                return
+        finally:
+            conn_check.close()
+
         user_name = (data.get("name") or ("Демо Пользователь" if user_id == "user_demo" else user_id)).strip()
         role = data.get("role") or ("admin" if user_id in ("admin", "user_admin") else "moderator" if user_id in ("moderator", "user_moderator") else "user")
         user = {"id": user_id, "name": user_name, "role": role}
@@ -3214,6 +3503,527 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             ("Set-Cookie", session_cookie),
             ("Set-Cookie", csrf_cookie)
         ])
+
+    def handle_auth_register(self):
+        """POST /api/auth/register creates pending user and issues email verification challenge."""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None:
+            return
+
+        client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
+
+        # Rate limiting by IP
+        is_limited, retry_after = REGISTRATION_RATE_LIMITER.is_rate_limited(client_ip)
+        if is_limited:
+            self.send_json_response(429, {
+                "success": False,
+                "error": "Слишком много попыток регистрации. Пожалуйста, подождите.",
+                "retryAfter": retry_after
+            }, extra_headers=[("Retry-After", str(retry_after))])
+            return
+
+        raw_login = data.get("login") or ""
+        raw_email = data.get("email") or ""
+        raw_password = data.get("password") or ""
+        raw_name = data.get("name") or ""
+
+        if not isinstance(raw_login, str) or not raw_login.strip():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Логин обязателен"
+            })
+            return
+        login_clean = raw_login.strip()
+        if not LOGIN_REGEX.match(login_clean):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Логин должен содержать от 3 до 30 символов (буквы, цифры, дефис, подчеркивание)"
+            })
+            return
+        login_norm = login_clean.lower()
+
+        if not isinstance(raw_email, str) or not raw_email.strip():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Email обязателен"
+            })
+            return
+        email_clean = raw_email.strip()
+        if not EMAIL_REGEX.match(email_clean) or len(email_clean) > 254:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Некорректный email адрес"
+            })
+            return
+        email_norm = email_clean.lower()
+
+        # Rate limiting by email
+        is_email_limited, email_retry_after = REGISTRATION_RATE_LIMITER.is_rate_limited(email_norm)
+        if is_email_limited:
+            self.send_json_response(429, {
+                "success": False,
+                "error": "Слишком много попыток регистрации с этого адреса. Пожалуйста, подождите.",
+                "retryAfter": email_retry_after
+            }, extra_headers=[("Retry-After", str(email_retry_after))])
+            return
+
+        if not isinstance(raw_password, str) or len(raw_password) < 8:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Пароль должен содержать не менее 8 символов"
+            })
+            return
+
+        name_clean = raw_name.strip() if (isinstance(raw_name, str) and raw_name.strip()) else login_clean
+
+        conn = self.get_db()
+        try:
+            cur = conn.cursor()
+
+            # Check existing email
+            cur.execute("SELECT id, login, status FROM users WHERE email_normalized = ? LIMIT 1", (email_norm,))
+            existing_email_user = cur.fetchone()
+
+            # Check existing login
+            cur.execute("SELECT id, status FROM users WHERE login_normalized = ? LIMIT 1", (login_norm,))
+            existing_login_user = cur.fetchone()
+
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            now_iso = now_dt.isoformat()
+
+            if existing_email_user:
+                if existing_email_user["status"] == "active":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Email уже зарегистрирован"
+                    })
+                    return
+                elif existing_email_user["status"] == "disabled":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Учетная запись заблокирована"
+                    })
+                    return
+
+                # Existing pending user with same email
+                if existing_login_user and existing_login_user["id"] != existing_email_user["id"]:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Логин уже занят"
+                    })
+                    return
+
+                user_id = existing_email_user["id"]
+                pw_hash = hash_password(raw_password)
+                with conn:
+                    conn.execute("""
+                        UPDATE users
+                        SET login = ?, login_normalized = ?, password_hash = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (login_clean, login_norm, pw_hash, now_iso, user_id))
+                    conn.execute("""
+                        UPDATE user_profiles
+                        SET name = ?, updated_at = ?
+                        WHERE user_id = ?
+                    """, (name_clean, now_iso, user_id))
+            else:
+                # New email: check if login is taken
+                if existing_login_user:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Логин уже занят"
+                    })
+                    return
+
+                user_id = f"usr_{secrets.token_hex(12)}"
+                pw_hash = hash_password(raw_password)
+                with conn:
+                    conn.execute("""
+                        INSERT INTO users (
+                            id, login, login_normalized, email, email_normalized,
+                            password_hash, status, role, email_verified_at, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', 'user', NULL, ?, ?)
+                    """, (user_id, login_clean, login_norm, email_clean, email_norm, pw_hash, now_iso, now_iso))
+                    conn.execute("""
+                        INSERT OR REPLACE INTO user_profiles (user_id, name, created_at, updated_at)
+                        VALUES (?, ?, ?, ?)
+                    """, (user_id, name_clean, now_iso, now_iso))
+
+            # Invalidate any existing pending challenges for this user/email
+            with conn:
+                conn.execute("""
+                    UPDATE email_verifications
+                    SET status = 'invalidated', updated_at = ?
+                    WHERE (user_id = ? OR email = ?) AND purpose = 'email_verification' AND status = 'pending'
+                """, (now_iso, user_id, email_clean))
+
+            # Generate 6-digit challenge code
+            code = f"{secrets.randbelow(1000000):06d}"
+            code_hash = hash_verification_code(code)
+            challenge_id = f"verif_{secrets.token_hex(16)}"
+            expires_at = (now_dt + datetime.timedelta(seconds=600)).isoformat()
+            resend_available_at = (now_dt + datetime.timedelta(seconds=60)).isoformat()
+
+            with conn:
+                conn.execute("""
+                    INSERT INTO email_verifications (
+                        id, user_id, email, purpose, code_hash,
+                        attempts_left, expires_at, resend_available_at,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, 'email_verification', ?, 5, ?, ?, 'pending', ?, ?)
+                """, (challenge_id, user_id, email_clean, code_hash, expires_at, resend_available_at, now_iso, now_iso))
+
+            # Send email
+            sent, err_msg = send_verification_email(conn, email_clean, code, login_clean)
+            if not sent:
+                self.send_json_response(500, {
+                    "success": False,
+                    "error": err_msg or "Не удалось отправить письмо с кодом подтверждения"
+                })
+                return
+
+            REGISTRATION_RATE_LIMITER.record(client_ip)
+            REGISTRATION_RATE_LIMITER.record(email_norm)
+
+            self.send_json_response(201, {
+                "success": True,
+                "message": "Код подтверждения отправлен на указанный email",
+                "email": mask_email(email_clean)
+            })
+        finally:
+            conn.close()
+
+    def handle_auth_verify_email(self):
+        """POST /api/auth/verify-email validates code, activates user account."""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None:
+            return
+
+        ident = (
+            data.get("email")
+            or data.get("login")
+            or data.get("identifier")
+            or ""
+        )
+        if isinstance(ident, str):
+            ident = ident.strip()
+        else:
+            ident = ""
+
+        code = data.get("code")
+        if isinstance(code, str):
+            code = code.strip()
+        else:
+            code = ""
+
+        if not ident:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Укажите email или логин"
+            })
+            return
+
+        if not code:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Код подтверждения обязателен"
+            })
+            return
+
+        if len(code) != 6 or not code.isdigit():
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Неверный формат кода подтверждения"
+            })
+            return
+
+        ident_norm = ident.lower()
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        now_iso = now_dt.isoformat()
+
+        conn = self.get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, login, email, status FROM users
+                WHERE email_normalized = ? OR login_normalized = ?
+                LIMIT 1
+            """, (ident_norm, ident_norm))
+            user = cur.fetchone()
+
+            if not user:
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Пользователь не найден"
+                })
+                return
+
+            if user["status"] == "disabled":
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Учетная запись заблокирована"
+                })
+                return
+
+            user_id = user["id"]
+
+            # Locate latest pending challenge
+            cur.execute("""
+                SELECT id, code_hash, attempts_left, expires_at, status
+                FROM email_verifications
+                WHERE user_id = ? AND purpose = 'email_verification' AND status = 'pending'
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (user_id,))
+            challenge = cur.fetchone()
+
+            if not challenge:
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Код подтверждения не найден или устарел"
+                })
+                return
+
+            challenge_id = challenge["id"]
+
+            # Check expiration
+            try:
+                exp_dt = datetime.datetime.fromisoformat(challenge["expires_at"].replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=datetime.timezone.utc)
+            except Exception:
+                exp_dt = now_dt
+
+            if now_dt >= exp_dt:
+                with conn:
+                    conn.execute("""
+                        UPDATE email_verifications
+                        SET status = 'invalidated', updated_at = ?
+                        WHERE id = ?
+                    """, (now_iso, challenge_id))
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Срок действия кода истек"
+                })
+                return
+
+            attempts_left = challenge["attempts_left"]
+            if attempts_left <= 0:
+                with conn:
+                    conn.execute("""
+                        UPDATE email_verifications
+                        SET status = 'invalidated', updated_at = ?
+                        WHERE id = ?
+                    """, (now_iso, challenge_id))
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Превышено максимальное число попыток ввода кода"
+                })
+                return
+
+            # Verify code hash
+            is_valid = verify_verification_code(code, challenge["code_hash"])
+
+            if not is_valid:
+                new_attempts = attempts_left - 1
+                new_status = "invalidated" if new_attempts <= 0 else "pending"
+                with conn:
+                    conn.execute("""
+                        UPDATE email_verifications
+                        SET attempts_left = ?, status = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (new_attempts, new_status, now_iso, challenge_id))
+
+                if new_attempts <= 0:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Превышено максимальное число попыток. Код заблокирован",
+                        "attemptsLeft": 0
+                    })
+                else:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": f"Неверный код подтверждения. Осталось попыток: {new_attempts}",
+                        "attemptsLeft": new_attempts
+                    })
+                return
+
+            # Atomic consumption to prevent race condition
+            with conn:
+                cur.execute("""
+                    UPDATE email_verifications
+                    SET status = 'consumed', updated_at = ?
+                    WHERE id = ? AND status = 'pending' AND attempts_left > 0
+                """, (now_iso, challenge_id))
+                if cur.rowcount == 0:
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Код подтверждения уже был использован или устарел"
+                    })
+                    return
+
+                # Invalidate any other pending challenges for this user
+                conn.execute("""
+                    UPDATE email_verifications
+                    SET status = 'invalidated', updated_at = ?
+                    WHERE user_id = ? AND purpose = 'email_verification' AND status = 'pending' AND id != ?
+                """, (now_iso, user_id, challenge_id))
+
+                # Activate user
+                conn.execute("""
+                    UPDATE users
+                    SET status = 'active', email_verified_at = ?, updated_at = ?
+                    WHERE id = ?
+                """, (now_iso, now_iso, user_id))
+
+            self.send_json_response(200, {
+                "success": True,
+                "message": "Email успешно подтвержден"
+            })
+        finally:
+            conn.close()
+
+    def handle_auth_resend_code(self):
+        """POST /api/auth/resend-code generates and sends a new code with cooldown and rate limits."""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None:
+            return
+
+        ident = (
+            data.get("email")
+            or data.get("login")
+            or data.get("identifier")
+            or ""
+        )
+        if isinstance(ident, str):
+            ident = ident.strip()
+        else:
+            ident = ""
+
+        if not ident:
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Укажите email или логин"
+            })
+            return
+
+        ident_norm = ident.lower()
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+        now_iso = now_dt.isoformat()
+
+        conn = self.get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, login, email, status FROM users
+                WHERE email_normalized = ? OR login_normalized = ?
+                LIMIT 1
+            """, (ident_norm, ident_norm))
+            user = cur.fetchone()
+
+            if not user:
+                self.send_json_response(404, {
+                    "success": False,
+                    "error": "Пользователь не найден"
+                })
+                return
+
+            if user["status"] == "active":
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Email уже подтвержден"
+                })
+                return
+
+            if user["status"] == "disabled":
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Учетная запись заблокирована"
+                })
+                return
+
+            user_id = user["id"]
+            user_email = user["email"]
+            user_login = user["login"]
+
+            # Check latest challenge cooldown
+            cur.execute("""
+                SELECT resend_available_at FROM email_verifications
+                WHERE user_id = ? AND purpose = 'email_verification'
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (user_id,))
+            last_ch = cur.fetchone()
+            if last_ch and last_ch["resend_available_at"]:
+                try:
+                    resend_at = datetime.datetime.fromisoformat(last_ch["resend_available_at"].replace("Z", "+00:00"))
+                    if resend_at.tzinfo is None:
+                        resend_at = resend_at.replace(tzinfo=datetime.timezone.utc)
+                    if now_dt < resend_at:
+                        diff_sec = max(1, int((resend_at - now_dt).total_seconds()) + 1)
+                        self.send_json_response(429, {
+                            "success": False,
+                            "error": f"Повторная отправка возможна через {diff_sec} сек.",
+                            "retryAfter": diff_sec
+                        }, extra_headers=[("Retry-After", str(diff_sec))])
+                        return
+                except Exception:
+                    pass
+
+            # Hourly rate limit (max 5 per hour per user/email)
+            one_hour_ago = (now_dt - datetime.timedelta(hours=1)).isoformat()
+            cur.execute("""
+                SELECT COUNT(*) AS cnt FROM email_verifications
+                WHERE (user_id = ? OR email = ?) AND created_at > ?
+            """, (user_id, user_email, one_hour_ago))
+            cnt = cur.fetchone()["cnt"]
+            if cnt >= 5:
+                self.send_json_response(429, {
+                    "success": False,
+                    "error": "Превышен лимит отправки кодов в час. Пожалуйста, подождите.",
+                    "retryAfter": 3600
+                }, extra_headers=[("Retry-After", "3600")])
+                return
+
+            # Invalidate previous pending challenge
+            with conn:
+                conn.execute("""
+                    UPDATE email_verifications
+                    SET status = 'invalidated', updated_at = ?
+                    WHERE user_id = ? AND purpose = 'email_verification' AND status = 'pending'
+                """, (now_iso, user_id))
+
+            # Generate new code
+            code = f"{secrets.randbelow(1000000):06d}"
+            code_hash = hash_verification_code(code)
+            challenge_id = f"verif_{secrets.token_hex(16)}"
+            expires_at = (now_dt + datetime.timedelta(seconds=600)).isoformat()
+            resend_available_at = (now_dt + datetime.timedelta(seconds=60)).isoformat()
+
+            with conn:
+                conn.execute("""
+                    INSERT INTO email_verifications (
+                        id, user_id, email, purpose, code_hash,
+                        attempts_left, expires_at, resend_available_at,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, 'email_verification', ?, 5, ?, ?, 'pending', ?, ?)
+                """, (challenge_id, user_id, user_email, code_hash, expires_at, resend_available_at, now_iso, now_iso))
+
+            sent, err_msg = send_verification_email(conn, user_email, code, user_login)
+            if not sent:
+                self.send_json_response(500, {
+                    "success": False,
+                    "error": err_msg or "Не удалось отправить письмо с кодом подтверждения"
+                })
+                return
+
+            self.send_json_response(200, {
+                "success": True,
+                "message": "Новый код подтверждения отправлен",
+                "email": mask_email(user_email)
+            })
+        finally:
+            conn.close()
 
     def handle_get_subscriptions(self):
         """GET /api/subscriptions returns user's active subscriptions."""
