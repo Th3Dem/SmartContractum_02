@@ -669,7 +669,7 @@ class TestProjectInvariants(unittest.TestCase):
                     self.assertNotIn(host, content, f"External network reference to {host} found in {path}")
 
     def test_24_profile_page_js_syntax_via_node(self):
-        """Verify profile-page.js passes node --check without syntax errors."""
+        """Verify frontend JS files pass node --check without syntax errors."""
         node_bin = shutil.which("node")
         if not node_bin:
             fallback = os.path.expanduser("~/.local/bin/node")
@@ -677,8 +677,10 @@ class TestProjectInvariants(unittest.TestCase):
                 node_bin = fallback
         if not node_bin:
             self.skipTest("node binary not found on system")
-        res = subprocess.run([node_bin, "--check", PROFILE_PAGE_JS_PATH], capture_output=True, text=True)
-        self.assertEqual(res.returncode, 0, f"node --check failed on profile-page.js:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+        for js_file in ("profile-page.js", "profile.js", "card.js", "feed.js", "article.js"):
+            js_path = os.path.join(FRONTEND_DIR, "js", js_file)
+            res = subprocess.run([node_bin, "--check", js_path], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"node --check failed on {js_file}:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
 
 
 if __name__ == "__main__":
