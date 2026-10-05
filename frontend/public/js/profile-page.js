@@ -174,6 +174,47 @@
     }
   }
 
+  function loadHeaderNotifications() {
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifList = document.getElementById('notifListContainer');
+
+    if (!notifBtn) return;
+    fetch('/api/notifications')
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.success) return;
+        const count = data.unreadCount || 0;
+        if (notifBadge) {
+          if (count > 0) {
+            notifBadge.textContent = count > 99 ? '99+' : count;
+            notifBadge.style.display = 'inline-flex';
+          } else {
+            notifBadge.style.display = 'none';
+          }
+        }
+        if (notifList) {
+          const list = data.notifications || [];
+          if (list.length === 0) {
+            notifList.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
+          } else {
+            notifList.innerHTML = '';
+            list.forEach(function (n) {
+              const item = document.createElement('a');
+              item.className = 'notif-item' + (n.is_read ? ' is-read' : ' is-unread');
+              item.href = n.article_id ? ('article.html?id=' + encodeURIComponent(n.article_id) + '#comments') : '#';
+              item.innerHTML =
+                '<div class="notif-item-title">' + escapeHtml(n.title) + '</div>' +
+                '<div class="notif-item-msg">' + escapeHtml(n.message) + '</div>' +
+                '<div class="notif-item-time">' + escapeHtml(n.created_at ? n.created_at.substring(0, 16).replace('T', ' ') : '') + '</div>';
+              notifList.appendChild(item);
+            });
+          }
+        }
+      })
+      .catch(function () {});
+  }
+
   function getUserIdFromUrl() {
     const params = new URLSearchParams(window.location.search);
     let userId = params.get('id') || params.get('userId') || params.get('user');
@@ -1127,16 +1168,18 @@
         }
       })
       .catch(function (err) {
-        if (err.message !== 'AUTH_REQUIRED') {
-          // Rollback
-          btn.classList.toggle('is-liked', currentLiked);
-          btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
-          btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
-          if (countEl) countEl.textContent = currentCount;
-          if (item) {
-            item.hasLiked = currentLiked;
-            item.likesCount = currentCount;
-          }
+        // Rollback unconditionally
+        btn.classList.toggle('is-liked', currentLiked);
+        btn.setAttribute('aria-pressed', currentLiked ? 'true' : 'false');
+        btn.title = currentLiked ? 'Больше не нравится' : 'Нравится';
+        if (countEl) countEl.textContent = currentCount;
+        if (item) {
+          item.hasLiked = currentLiked;
+          item.likesCount = currentCount;
+        }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Войдите, чтобы поставить отметку');
+        } else {
           showToast('Не удалось обновить отметку');
         }
       });
@@ -1220,22 +1263,27 @@
         }
       })
       .catch(function (err) {
-        if (err.message !== 'AUTH_REQUIRED') {
-          // Rollback
-          btn.classList.toggle('is-bookmarked', wasActive);
-          btn.classList.toggle('is-saved', wasActive);
-          if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
-          if (countEl) countEl.textContent = prevCount;
-          if (item) {
-            item.hasSaved = wasActive;
-            item.isSaved = wasActive;
-            item.isBookmarked = wasActive;
-            item.savesCount = prevCount;
-          }
-          const rbBms = getBookmarks();
-          const rbIdx = rbBms.indexOf(articleId);
-          if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
-          else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        // Rollback unconditionally
+        btn.classList.toggle('is-bookmarked', wasActive);
+        btn.classList.toggle('is-saved', wasActive);
+        if (svg) svg.setAttribute('fill', wasActive ? 'currentColor' : 'none');
+        const prevTooltip = wasActive ? 'Убрать из сохраненного' : 'Сохранить публикацию';
+        btn.title = prevTooltip;
+        btn.setAttribute('aria-label', prevTooltip);
+        if (countEl) countEl.textContent = prevCount;
+        if (item) {
+          item.hasSaved = wasActive;
+          item.isSaved = wasActive;
+          item.isBookmarked = wasActive;
+          item.savesCount = prevCount;
+        }
+        const rbBms = getBookmarks();
+        const rbIdx = rbBms.indexOf(articleId);
+        if (wasActive && rbIdx === -1) { rbBms.push(articleId); saveBookmarks(rbBms); }
+        else if (!wasActive && rbIdx !== -1) { rbBms.splice(rbIdx, 1); saveBookmarks(rbBms); }
+        if (err && err.message === 'AUTH_REQUIRED') {
+          showToast('Для сохранения публикации необходимо войти');
+        } else {
           showToast('Не удалось обновить сохранение');
         }
       });
@@ -1929,16 +1977,6 @@
       });
     }
 
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('editProfileModal');
-        if (modal && modal.style.display !== 'none') {
-          e.preventDefault();
-          closeEditModal();
-        }
-      }
-    });
-
     // 5. Header user menu and auth controls
     const btnLogin = document.getElementById('headerLoginBtn');
     const userMenu = document.getElementById('headerUserMenu');
@@ -1969,6 +2007,61 @@
       }
     });
 
+    // Header notifications controls
+    const notifBtn = document.getElementById('headerNotificationsBtn');
+    const notifBadge = document.getElementById('headerNotifBadge');
+    const notifPopup = document.getElementById('headerNotifPopup');
+    const notifList = document.getElementById('notifListContainer');
+    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+    const notifWrap = document.getElementById('headerNotifWrap');
+
+    if (notifBtn && notifPopup) {
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isVisible = notifPopup.style.display !== 'none';
+        if (isVisible) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          notifPopup.style.display = 'block';
+          notifBtn.setAttribute('aria-expanded', 'true');
+          loadHeaderNotifications();
+        }
+      });
+
+      if (markAllBtn) {
+        markAllBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.success) {
+                if (notifBadge) notifBadge.style.display = 'none';
+                if (notifList) {
+                  const items = notifList.querySelectorAll('.notif-item.is-unread');
+                  items.forEach(function (el) {
+                    el.classList.remove('is-unread');
+                    el.classList.add('is-read');
+                  });
+                }
+              }
+            })
+            .catch(function () {});
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (notifWrap && !notifWrap.contains(e.target)) {
+          notifPopup.style.display = 'none';
+          notifBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
     const logoutBtn = document.getElementById('headerLogoutBtn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function (e) {
@@ -1982,6 +2075,14 @@
           .then(function (res) { return res.json(); })
           .then(function () {
             setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
             checkAuthStatus(function () {
               const uid = getUserIdFromUrl() || (currentProfile && (currentProfile.id || currentProfile.userId));
               if (uid) loadProfile(uid);
@@ -1990,6 +2091,14 @@
           })
           .catch(function () {
             setAuthState(null);
+            const nBadge = document.getElementById('headerNotifBadge');
+            if (nBadge) nBadge.style.display = 'none';
+            const nPopup = document.getElementById('headerNotifPopup');
+            if (nPopup) {
+              nPopup.style.display = 'none';
+              const nBtn = document.getElementById('headerNotificationsBtn');
+              if (nBtn) nBtn.setAttribute('aria-expanded', 'false');
+            }
             showToast('Вы вышли из системы');
           });
       });
@@ -2018,6 +2127,7 @@
           if (data && data.success && data.user) {
             closeAuthModal();
             setAuthState(data.user);
+            loadHeaderNotifications();
             checkAuthStatus(function () {
               const uid = getUserIdFromUrl() || data.user.id;
               if (uid) loadProfile(uid);
@@ -2162,6 +2272,13 @@
     // 6. Keyboard dismissals (Escape)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const notifPopup = document.getElementById('headerNotifPopup');
+        if (notifPopup && notifPopup.style.display !== 'none') {
+          notifPopup.style.display = 'none';
+          const notifBtn = document.getElementById('headerNotificationsBtn');
+          if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false');
+          return;
+        }
         const sharePopover = document.getElementById('feedSharePopover');
         if (sharePopover && sharePopover.style.display !== 'none') {
           closeSharePopover();
@@ -2336,6 +2453,9 @@
     initEventListeners();
 
     checkAuthStatus(function (user) {
+      if (user) {
+        loadHeaderNotifications();
+      }
       let targetUserId = getUserIdFromUrl();
       if (!targetUserId && user) {
         targetUserId = user.id;
@@ -2382,6 +2502,7 @@
     openAuthModal: openAuthModal,
     closeAuthModal: closeAuthModal,
     setAuthState: setAuthState,
+    loadHeaderNotifications: loadHeaderNotifications,
     getOffsets: function () {
       return {
         activity: activityOffset,

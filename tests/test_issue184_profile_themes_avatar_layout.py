@@ -16,9 +16,21 @@ Verifies:
 8. Invariants: zero emojis, zero em dashes (\u2014), offline-first architecture.
 """
 
+import datetime
+import json
 import os
 import re
+import shutil
+import sqlite3
+import tempfile
+import threading
+import time
 import unittest
+import urllib.parse
+import urllib.request
+
+import server
+from server import create_server, init_db
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -44,6 +56,76 @@ class TestIssue184ProfileThemesAvatarLayout(unittest.TestCase):
             cls.profile_js = f.read()
         with open(THEME_CSS_PATH, "r", encoding="utf-8") as f:
             cls.theme_css = f.read()
+
+        cls.orig_db_path = server.DEFAULT_DB_PATH
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.db_path = os.path.join(cls.temp_dir, "test_issue184.db")
+        server.DEFAULT_DB_PATH = cls.db_path
+
+        conn = init_db(cls.db_path, seed=False)
+        cls._seed_test_data(conn)
+        conn.close()
+
+        cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR, seed=False)
+        cls.port = cls.httpd.server_address[1]
+        cls.server_thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
+        cls.server_thread.start()
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+        time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.httpd.shutdown()
+            cls.httpd.server_close()
+        except Exception:
+            pass
+        server.DEFAULT_DB_PATH = cls.orig_db_path
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
+    @classmethod
+    def _seed_test_data(cls, conn):
+        cur = conn.cursor()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        # User 1: Profile exists, specialization is NULL
+        cur.execute("""
+            INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
+            VALUES ('user_no_spec_null', 'Алиса Без Спецификации', NULL, 'OpenOrg', 'Тестовая биография', '', NULL, ?, ?)
+        """, (now, now))
+
+        # User 2: Profile exists, specialization is empty string
+        cur.execute("""
+            INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
+            VALUES ('user_no_spec_empty', 'Борис Пустая Спецификация', '', 'OpenOrg', 'Тестовая биография', '', NULL, ?, ?)
+        """, (now, now))
+
+        # User 3: Profile exists, specialization is whitespace only
+        cur.execute("""
+            INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
+            VALUES ('user_no_spec_whitespace', 'Виктор Пробелы', '   ', 'OpenOrg', 'Тестовая биография', '', NULL, ?, ?)
+        """, (now, now))
+
+        # User 4: User has no row in user_profiles, exists via session
+        cur.execute("""
+            INSERT OR REPLACE INTO sessions (token, user_id, user_name, user_role, expires_at, created_at)
+            VALUES ('sess_user_no_profile', 'user_no_profile_row', 'Дмитрий Без Профиля', 'user', '2030-01-01', ?)
+        """, (now,))
+
+        # User 5: User with actual specialization
+        cur.execute("""
+            INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
+            VALUES ('user_with_spec', 'Елена Эксперт', 'Senior Smart Contract Auditor', 'SecurityLab', 'Биография эксперта', '', NULL, ?, ?)
+        """, (now, now))
+
+        conn.commit()
+
+    def _get_json(self, path: str):
+        url = f"{self.base_url}{path}"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req) as resp:
+            data = resp.read().decode("utf-8")
+            return resp.status, json.loads(data) if data else {}
 
     # =========================================================================
     # 1. Theme Variables & Color Token Integrity
@@ -238,6 +320,51 @@ class TestIssue184ProfileThemesAvatarLayout(unittest.TestCase):
         """Verify renderSidebar hides expertise and topics widgets when empty for visitors."""
         self.assertIn("if (widgetExp) widgetExp.style.display = 'none'", self.page_js)
         self.assertIn("if (widgetTopics) widgetTopics.style.display = 'none'", self.page_js)
+
+    def test_get_user_profile_without_specialization_returns_empty_string(self):
+        """Verify GET /api/users/<id> for a user without specialization returns specialization='' and not 'Участник сообщества'."""
+        test_cases = [
+            ("user_no_spec_null", "User with NULL specialization"),
+            ("user_no_spec_empty", "User with empty string specialization"),
+            ("user_no_spec_whitespace", "User with whitespace-only specialization"),
+            ("user_no_profile_row", "User without user_profiles row"),
+        ]
+
+        for uid, desc in test_cases:
+            with self.subTest(user_id=uid, description=desc):
+                status, data = self._get_json(f"/api/users/{uid}")
+                self.assertEqual(status, 200)
+                self.assertTrue(data.get("success", False))
+
+                profile = data.get("profile", {})
+                self.assertEqual(
+                    profile.get("specialization"),
+                    "",
+                    f"Profile specialization must be empty string for {desc}"
+                )
+                self.assertNotEqual(
+                    profile.get("specialization"),
+                    "Участник сообщества",
+                    f"Profile specialization must not be 'Участник сообщества' for {desc}"
+                )
+
+                user = data.get("user", {})
+                self.assertEqual(
+                    user.get("specialization"),
+                    "",
+                    f"User specialization must be empty string for {desc}"
+                )
+                self.assertNotEqual(
+                    user.get("specialization"),
+                    "Участник сообщества",
+                    f"User specialization must not be 'Участник сообщества' for {desc}"
+                )
+
+        # Also verify user with genuine specialization is preserved
+        status, data = self._get_json("/api/users/user_with_spec")
+        self.assertEqual(status, 200)
+        self.assertEqual(data.get("profile", {}).get("specialization"), "Senior Smart Contract Auditor")
+
 
     # =========================================================================
     # 7. Zero Horizontal Overflow & Word Wrapping
