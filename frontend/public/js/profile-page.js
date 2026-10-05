@@ -59,6 +59,7 @@
   let currentSearchQuery = '';
   let searchDebounceTimer = null;
   let lastEditTriggerEl = null;
+  let lastCropTriggerEl = null;
   let pendingAvatarData = null;
   let uploadedAvatarUrl = null;
   let isAvatarRemoved = false;
@@ -131,16 +132,27 @@
       } else if (t === 'comments') {
         commItems = [];
         commOffset = 0;
+        if (typeof commentsItems !== 'undefined') commentsItems = [];
+        if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
       }
     }
   }
 
   function updateSearchInputUI(q) {
+    const val = q || '';
+    const profInput = document.getElementById('profileSearchInput');
+    if (profInput) {
+      profInput.value = val;
+    }
     const searchInputs = document.querySelectorAll(
       '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
     );
     for (let i = 0; i < searchInputs.length; i++) {
-      searchInputs[i].value = q || '';
+      searchInputs[i].value = val;
+    }
+    const clearBtn = document.getElementById('btnProfileSearchClear');
+    if (clearBtn) {
+      clearBtn.style.display = (val && String(val).trim()) ? 'flex' : 'none';
     }
     const searchClearBtn = document.getElementById('btnProfileSearchClear');
     if (searchClearBtn) {
@@ -212,7 +224,7 @@
     const commSortBtns = document.querySelectorAll('[data-comm-sort]');
     for (let i = 0; i < commSortBtns.length; i++) {
       const s = commSortBtns[i].getAttribute('data-comm-sort');
-      const isActive = (s === sort);
+      const isActive = (s === sort) || (s === 'new' && sort === 'newest') || (s === 'newest' && sort === 'new');
       commSortBtns[i].classList.toggle('is-active', isActive);
       if (commSortBtns[i].hasAttribute('aria-pressed')) {
         commSortBtns[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
@@ -222,19 +234,81 @@
 
   function updateTopicFilterUI(topic) {
     const topicPills = document.querySelectorAll('.profile-sidebar-topic-pill[data-topic-id], [data-profile-topic]');
+    let resolvedTitle = '';
     for (let i = 0; i < topicPills.length; i++) {
       const tid = topicPills[i].getAttribute('data-topic-id') || topicPills[i].getAttribute('data-profile-topic');
-      topicPills[i].classList.toggle('is-active', Boolean(topic && tid === topic));
+      const isActive = Boolean(topic && tid === topic);
+      topicPills[i].classList.toggle('is-active', isActive);
+      if (isActive && !resolvedTitle) {
+        const nameEl = topicPills[i].querySelector ? topicPills[i].querySelector('.profile-topic-name') : null;
+        if (nameEl && nameEl.textContent) {
+          resolvedTitle = nameEl.textContent.trim();
+        }
+      }
+    }
+    const activeTopicBar = document.getElementById('profileActiveTopicBar');
+    const activeTopicName = document.getElementById('activeTopicName');
+    if (topic) {
+      if (activeTopicBar) {
+        activeTopicBar.style.display = 'inline-flex';
+      }
+      if (activeTopicName) {
+        activeTopicName.textContent = resolvedTitle || topic;
+      }
+    } else {
+      if (activeTopicBar) {
+        activeTopicBar.style.display = 'none';
+      }
+      if (activeTopicName) {
+        activeTopicName.textContent = '';
+      }
     }
   }
 
   function setSearchQuery(q, updateUrl) {
     if (q === undefined || q === null) q = '';
     const normalized = String(q).trim();
-    if (normalized === currentSearchQuery) return;
+
+    let urlMatches = false;
+    if (typeof window !== 'undefined' && window.location && window.location.search !== undefined) {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const urlQ = (searchParams.get('q') || '').trim();
+        urlMatches = (urlQ === normalized);
+      } catch (e) {}
+    }
+
+    if (normalized === currentSearchQuery) {
+      if (!updateUrl || urlMatches) {
+        return;
+      }
+    }
+
+    const queryChanged = (normalized !== currentSearchQuery);
     currentSearchQuery = normalized;
 
-    invalidateTabCaches();
+    if (queryChanged) {
+      invalidateTabCaches();
+      if (activeTab === 'publications') {
+        pubItems = [];
+        pubOffset = 0;
+      } else if (activeTab === 'questions') {
+        questItems = [];
+        questOffset = 0;
+      } else if (activeTab === 'answers') {
+        ansItems = [];
+        ansOffset = 0;
+      } else if (activeTab === 'comments') {
+        commItems = [];
+        commOffset = 0;
+        if (typeof commentsItems !== 'undefined') commentsItems = [];
+        if (typeof commentsOffset !== 'undefined') commentsOffset = 0;
+      } else {
+        activityItems = [];
+        activityOffset = 0;
+      }
+    }
+
     updateSearchInputUI(currentSearchQuery);
 
     if (updateUrl && window.history) {
@@ -245,39 +319,56 @@
         } else {
           url.searchParams.delete('q');
         }
+        const stateObj = {
+          tab: activeTab,
+          q: currentSearchQuery || undefined,
+          topic: currentTopic || undefined,
+          sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : (activeTab === 'answers' ? ansSort : (activeTab === 'comments' ? commSort : undefined)))),
+          status: (activeTab === 'questions' ? questStatus : undefined),
+          filter: (activeTab === 'answers' ? ansFilter : undefined),
+          ans_sort: (activeTab === 'answers' ? ansSort : undefined),
+          comm_sort: (activeTab === 'comments' ? commSort : undefined)
+        };
         if (window.history.pushState) {
-          window.history.pushState({
-            tab: activeTab,
-            q: currentSearchQuery,
-            topic: currentTopic || undefined,
-            sort: (activeTab === 'publications' ? pubSort : (activeTab === 'questions' ? questSort : (activeTab === 'answers' ? ansSort : (activeTab === 'comments' ? commSort : undefined)))),
-            status: (activeTab === 'questions' ? questStatus : undefined),
-            filter: (activeTab === 'answers' ? ansFilter : undefined),
-            ans_sort: (activeTab === 'answers' ? ansSort : undefined)
-          }, '', url.toString());
+          window.history.pushState(stateObj, '', url.toString());
+        } else if (window.history.replaceState) {
+          window.history.replaceState(stateObj, '', url.toString());
         }
       } catch (e) {}
     }
 
-    if (currentProfile) {
-      const uid = currentProfile.id || currentProfile.userId;
+    const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+    if (uid) {
       if (activeTab === 'publications') {
         loadPublications(uid, false);
       } else if (activeTab === 'questions') {
         loadQuestions(uid, false);
       } else if (activeTab === 'answers') {
         loadAnswers(uid, false);
+      } else if (activeTab === 'comments') {
+        commOffset = 0;
+        commItems = [];
+        if (typeof loadComments === 'function') {
+          loadComments(uid, false);
+        }
       } else {
         loadActivity(uid, false);
       }
     }
   }
 
+  function triggerSearch(val) {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+    setSearchQuery(val, true);
+  }
+
   function setTopicFilter(topic, updateUrl) {
-    if (topic === undefined || topic === null) topic = '';
-    const normalized = String(topic).trim();
-    if (normalized === currentTopic) return;
+    const normalized = String(topic || '').trim();
     currentTopic = normalized;
+    updateTopicFilterUI(currentTopic);
 
     tabLoadedState.publications = null;
     pubItems = [];
@@ -285,7 +376,6 @@
     tabLoadedState.questions = null;
     questItems = [];
     questOffset = 0;
-    updateTopicFilterUI(currentTopic);
 
     if (updateUrl && window.history) {
       try {
@@ -316,8 +406,6 @@
       }
     }
   }
-
-  let currentTopicFilter = null;
   let socialModalMode = null;
   let socialSubTab = 'authors';
   let subscribersOffset = 0;
@@ -824,6 +912,7 @@
     // 10. Activate initial tab from URL
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      const initialTab = urlParams.get('tab') || 'overview';
       if (urlParams.get('q')) {
         currentSearchQuery = urlParams.get('q').trim();
         updateSearchInputUI(currentSearchQuery);
@@ -847,6 +936,11 @@
         ansSort = urlParams.get('ans_sort').trim();
         updateAnsSortUI(ansSort);
       }
+      const restoredCommSort = urlParams.get('comm_sort') || (initialTab === 'comments' ? urlParams.get('sort') : null) || (initialTab === 'comments' ? 'newest' : null);
+      if (restoredCommSort) {
+        commSort = restoredCommSort.trim();
+        updateCommSortUI(commSort);
+      }
       if (urlParams.get('status')) {
         questStatus = urlParams.get('status').trim();
         updateQuestStatusUI(questStatus);
@@ -855,7 +949,6 @@
         ansFilter = urlParams.get('filter').trim();
         updateAnsFilterUI(ansFilter);
       }
-      const initialTab = urlParams.get('tab') || 'overview';
       setActiveTab(initialTab, false);
     } catch (e) {
       setActiveTab('overview', false);
@@ -929,12 +1022,16 @@
           else url.searchParams.delete('sort');
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'questions') {
           if (questSort !== 'newest') url.searchParams.set('sort', questSort);
           else url.searchParams.delete('sort');
           if (questStatus !== 'all') url.searchParams.set('status', questStatus);
           else url.searchParams.delete('status');
           url.searchParams.delete('filter');
+          url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'answers') {
           if (ansFilter !== 'all') url.searchParams.set('filter', ansFilter);
           else url.searchParams.delete('filter');
@@ -946,9 +1043,15 @@
             url.searchParams.delete('ans_sort');
           }
           url.searchParams.delete('status');
+          url.searchParams.delete('comm_sort');
         } else if (tabName === 'comments') {
-          if (commSort !== 'new') url.searchParams.set('sort', commSort);
-          else url.searchParams.delete('sort');
+          if (commSort !== 'new' && commSort !== 'newest') {
+            url.searchParams.set('sort', commSort);
+            url.searchParams.set('comm_sort', commSort);
+          } else {
+            url.searchParams.delete('sort');
+            url.searchParams.delete('comm_sort');
+          }
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
           url.searchParams.delete('ans_sort');
@@ -957,6 +1060,7 @@
           url.searchParams.delete('status');
           url.searchParams.delete('filter');
           url.searchParams.delete('ans_sort');
+          url.searchParams.delete('comm_sort');
         }
 
         const stateObj = {
@@ -966,7 +1070,8 @@
           sort: (tabName === 'publications' ? pubSort : (tabName === 'questions' ? questSort : (tabName === 'answers' ? ansSort : (tabName === 'comments' ? commSort : undefined)))),
           status: (tabName === 'questions' ? questStatus : undefined),
           filter: (tabName === 'answers' ? ansFilter : undefined),
-          ans_sort: (tabName === 'answers' ? ansSort : undefined)
+          ans_sort: (tabName === 'answers' ? ansSort : undefined),
+          comm_sort: (tabName === 'comments' ? commSort : undefined)
         };
         if (updateUrl === true || updateUrl === 'push') {
           if (window.history.pushState) {
@@ -982,8 +1087,8 @@
       } catch (e) {}
     }
 
-    if (currentProfile) {
-      const uid = currentProfile.id || currentProfile.userId;
+    const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+    if (uid) {
       if (tabName === 'publications') {
         const currentParams = getCurrentTabParams('publications');
         const isUpToDate = tabLoadedState.publications && areTabParamsEqual(tabLoadedState.publications, currentParams);
@@ -1383,7 +1488,7 @@
           const cnt = item.count !== undefined ? item.count : '';
           const countBadge = cnt ? (' <span class="profile-topic-count">' + cnt + '</span>') : '';
           const topicId = item.id || item.title;
-          const isActive = (currentTopicFilter === topicId);
+          const isActive = (currentTopic === topicId);
           return '<span class="profile-sidebar-topic-pill' + (isActive ? ' is-active' : '') + '" data-topic-id="' + escapeHtml(topicId) + '" role="button" tabindex="0" title="Фильтровать публикации по теме ' + escapeHtml(title) + '">' +
             '<span class="profile-topic-name">' + escapeHtml(title) + '</span>' +
             countBadge +
@@ -1392,6 +1497,8 @@
         const topicPills = topicsContainer.querySelectorAll('.profile-sidebar-topic-pill');
         for (let i = 0; i < topicPills.length; i++) {
           const pill = topicPills[i];
+          if (pill._topicHandlerAttached) continue;
+          pill._topicHandlerAttached = true;
           const tId = pill.getAttribute('data-topic-id');
           const nameEl = pill.querySelector('.profile-topic-name');
           const tTitle = nameEl ? nameEl.textContent : tId;
@@ -1401,12 +1508,12 @@
           pill.addEventListener('click', handler);
           pill.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
+              if (e.preventDefault) e.preventDefault();
               handler();
             }
           });
         }
-        updateTopicFilterUI(currentTopic || currentTopicFilter);
+        updateTopicFilterUI(currentTopic);
       } else {
         if (isOwn) {
           if (widgetTopics) widgetTopics.style.display = 'flex';
@@ -1652,9 +1759,8 @@
     if (currentSearchQuery) {
       url += '&q=' + encodeURIComponent(currentSearchQuery);
     }
-    const activeTopicVal = currentTopicFilter || currentTopic;
-    if (activeTopicVal) {
-      url += '&topic=' + encodeURIComponent(activeTopicVal);
+    if (currentTopic) {
+      url += '&topic=' + encodeURIComponent(currentTopic);
     }
     const fetchOpts = pubAbortCtrl ? { signal: pubAbortCtrl.signal } : {};
 
@@ -3239,6 +3345,7 @@
   }
 
   function openAvatarCropModal() {
+    lastCropTriggerEl = document.activeElement || document.getElementById('btnCropAvatar');
     if (!rawSelectedImage) {
       const previewImg = document.getElementById('editAvatarPreviewImg');
       if (previewImg && previewImg.src && previewImg.style.display !== 'none') {
@@ -3249,9 +3356,12 @@
           initAvatarCropper();
         };
         img.src = previewImg.src;
+        if (img.complete) {
+          rawSelectedImage = img;
+          initAvatarCropper();
+        }
         return;
       }
-      return;
     }
     initAvatarCropper();
   }
@@ -3266,11 +3376,22 @@
     if (zoomInput) zoomInput.value = '1';
     modal.style.display = 'flex';
     drawAvatarCropCanvas();
+    const initialFocusEl = document.getElementById('avatarCropZoom') ||
+                           document.getElementById('btnApplyAvatarCrop') ||
+                           document.getElementById('btnCloseAvatarCropModal');
+    if (initialFocusEl && typeof initialFocusEl.focus === 'function') {
+      setTimeout(function () {
+        try { initialFocusEl.focus(); } catch (err) {}
+      }, 40);
+    }
   }
 
-  function closeAvatarCropModal() {
+  function closeAvatarCropModal(restoreFocus) {
     const modal = document.getElementById('avatarCropModal');
     if (modal) modal.style.display = 'none';
+    if (restoreFocus !== false && lastCropTriggerEl && typeof lastCropTriggerEl.focus === 'function') {
+      try { lastCropTriggerEl.focus(); } catch (err) {}
+    }
   }
 
   function drawAvatarCropCanvas() {
@@ -3415,7 +3536,7 @@
   function closeEditModal() {
     const modal = document.getElementById('editProfileModal');
     if (modal) modal.style.display = 'none';
-    closeAvatarCropModal();
+    closeAvatarCropModal(false);
     clearEditError();
     avatarUploadSeq++;
     pendingAvatarData = null;
@@ -3595,54 +3716,24 @@
 
   function applyTopicFilter(topicId, topicTitle) {
     if (!topicId) return;
-    if (currentTopicFilter === topicId) {
+    if (currentTopic === topicId) {
       clearTopicFilter();
       return;
     }
-    currentTopicFilter = topicId;
-    const activeTopicBar = document.getElementById('profileActiveTopicBar');
-    const activeTopicName = document.getElementById('activeTopicName');
-    if (activeTopicName) {
-      activeTopicName.textContent = topicTitle || topicId;
-    }
-    if (activeTopicBar) {
-      activeTopicBar.style.display = 'inline-flex';
-    }
-
-    const pills = document.querySelectorAll('.profile-sidebar-topic-pill');
-    for (let i = 0; i < pills.length; i++) {
-      const pId = pills[i].getAttribute('data-topic-id');
-      pills[i].classList.toggle('is-active', pId === topicId);
-    }
-
     if (activeTab !== 'publications') {
       setActiveTab('publications', true);
     }
-
-    if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-      pubOffset = 0;
-      pubItems = [];
-      loadPublications(currentProfile.id || currentProfile.userId, false);
+    setTopicFilter(topicId, true);
+    if (topicTitle) {
+      const activeTopicName = document.getElementById('activeTopicName');
+      if (activeTopicName) {
+        activeTopicName.textContent = topicTitle;
+      }
     }
   }
 
   function clearTopicFilter() {
-    currentTopicFilter = null;
-    const activeTopicBar = document.getElementById('profileActiveTopicBar');
-    if (activeTopicBar) {
-      activeTopicBar.style.display = 'none';
-    }
-
-    const pills = document.querySelectorAll('.profile-sidebar-topic-pill');
-    for (let i = 0; i < pills.length; i++) {
-      pills[i].classList.remove('is-active');
-    }
-
-    if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-      pubOffset = 0;
-      pubItems = [];
-      loadPublications(currentProfile.id || currentProfile.userId, false);
-    }
+    setTopicFilter('', true);
   }
 
   function switchToSolutions() {
@@ -3936,7 +4027,14 @@
       const rawFilter = (state.filter !== undefined && state.filter !== null) ? String(state.filter).trim() : (params.get('filter') || '').trim();
       const rawAnsSort = (state.ans_sort !== undefined && state.ans_sort !== null)
         ? String(state.ans_sort).trim()
-        : (params.get('ans_sort') || (tab === 'answers' ? rawSort : '') || '').trim();
+        : ((tab === 'answers' && state.sort !== undefined && state.sort !== null)
+          ? String(state.sort).trim()
+          : (params.get('ans_sort') || (tab === 'answers' ? params.get('sort') : '') || '').trim());
+      const rawCommSort = (state.comm_sort !== undefined && state.comm_sort !== null)
+        ? String(state.comm_sort).trim()
+        : ((tab === 'comments' && state.sort !== undefined && state.sort !== null)
+          ? String(state.sort).trim()
+          : (params.get('comm_sort') || (tab === 'comments' ? params.get('sort') : '') || '').trim());
 
       let targetPubSort = pubSort;
       let targetQuestSort = questSort;
@@ -3966,6 +4064,11 @@
       if (rawAnsSort) {
         targetAnsSort = rawAnsSort;
       }
+      if (rawCommSort) {
+        targetCommSort = rawCommSort;
+      } else if (tab === 'comments') {
+        targetCommSort = params.get('comm_sort') || (tab === 'comments' ? params.get('sort') : null) || 'newest';
+      }
 
       const targetQuestStatus = rawStatus || 'all';
       const targetAnsFilter = rawFilter || 'all';
@@ -3973,6 +4076,14 @@
       // If any parameter changed, invalidate cached tab data
       if (targetQ !== currentSearchQuery) {
         currentSearchQuery = targetQ;
+        const profileSearchInput = document.getElementById('profileSearchInput');
+        if (profileSearchInput) {
+          profileSearchInput.value = currentSearchQuery;
+        }
+        const searchClearBtn = document.getElementById('btnProfileSearchClear');
+        if (searchClearBtn) {
+          searchClearBtn.style.display = currentSearchQuery ? 'flex' : 'none';
+        }
         invalidateTabCaches();
       }
 
@@ -4021,8 +4132,15 @@
         ansOffset = 0;
       }
 
-      if (targetCommSort !== commSort) {
+      const commSortChanged = (targetCommSort !== commSort);
+      if (commSortChanged) {
         commSort = targetCommSort;
+        tabLoadedState.comments = null;
+        commItems = [];
+        commOffset = 0;
+      }
+
+      if (tab === 'comments' && (targetQ !== currentSearchQuery || commSortChanged)) {
         tabLoadedState.comments = null;
         commItems = [];
         commOffset = 0;
@@ -4480,9 +4598,15 @@
       }
     });
 
-    // 6. Keyboard dismissals (Escape)
+    // 6. Keyboard dismissals (Escape) and focus trap (Tab)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        const cropModal = document.getElementById('avatarCropModal');
+        if (cropModal && cropModal.style.display !== 'none') {
+          e.preventDefault();
+          closeAvatarCropModal();
+          return;
+        }
         const notifPopup = document.getElementById('headerNotifPopup');
         if (notifPopup && notifPopup.style.display !== 'none') {
           notifPopup.style.display = 'none';
@@ -4519,6 +4643,54 @@
           return;
         }
       }
+
+      if (e.key === 'Tab') {
+        let activeModal = null;
+        const cropModal = document.getElementById('avatarCropModal');
+        const editModal = document.getElementById('editProfileModal');
+        const authModal = document.getElementById('authModal');
+        const reportModal = document.getElementById('articleReportModal');
+
+        if (cropModal && cropModal.style.display !== 'none') {
+          activeModal = cropModal;
+        } else if (editModal && editModal.style.display !== 'none') {
+          activeModal = editModal;
+        } else if (authModal && authModal.style.display !== 'none') {
+          activeModal = authModal;
+        } else if (reportModal && reportModal.style.display !== 'none') {
+          activeModal = reportModal;
+        }
+
+        if (!activeModal) return;
+
+        const focusables = Array.from(activeModal.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(function (el) {
+          if (el.disabled) return false;
+          if (el.getAttribute && el.getAttribute('tabindex') === '-1') return false;
+          if (el.style && el.style.display === 'none') return false;
+          if (el.offsetParent === null && typeof el.offsetWidth === 'number' && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+          return true;
+        });
+
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const isInside = (typeof activeModal.contains === 'function') ? activeModal.contains(document.activeElement) : false;
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || !isInside) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !isInside) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     });
 
     // 7. Silent refresh on votes
@@ -4550,16 +4722,65 @@
     // 10. History popstate navigation
     window.addEventListener('popstate', handlePopState);
 
-    // Search input listener
-    const searchInputs = document.querySelectorAll(
-      '#profileSearchInput, .header-search-input, .feed-toolbar-search-input, input[type="search"]'
-    );
-    for (let i = 0; i < searchInputs.length; i++) {
-      searchInputs[i].addEventListener('input', function (e) {
-        setSearchQuery(e.target.value, false);
+    // Search input (#profileSearchInput) and clear button (#btnProfileSearchClear)
+    const profileSearchInput = document.getElementById('profileSearchInput');
+    const searchClearBtn = document.getElementById('btnProfileSearchClear');
+
+    if (profileSearchInput) {
+      profileSearchInput.addEventListener('input', function (e) {
+        const val = this.value || '';
+        if (searchClearBtn) {
+          searchClearBtn.style.display = val.trim() ? 'flex' : 'none';
+        }
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+        searchDebounceTimer = setTimeout(function () {
+          setSearchQuery(val, true);
+        }, 300);
       });
-      searchInputs[i].addEventListener('change', function (e) {
-        setSearchQuery(e.target.value, true);
+
+      profileSearchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+          }
+          setSearchQuery(this.value || '', true);
+        } else if (e.key === 'Escape') {
+          if (this.value) {
+            e.preventDefault();
+            this.value = '';
+            if (searchClearBtn) {
+              searchClearBtn.style.display = 'none';
+            }
+            if (searchDebounceTimer) {
+              clearTimeout(searchDebounceTimer);
+              searchDebounceTimer = null;
+            }
+            setSearchQuery('', true);
+          }
+        }
+      });
+    }
+
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function () {
+        const searchInput = document.getElementById('profileSearchInput') || profileSearchInput;
+        if (searchInput) {
+          searchInput.value = '';
+          if (typeof searchInput.focus === 'function') {
+            searchInput.focus();
+          }
+        }
+        searchClearBtn.style.display = 'none';
+        if (searchDebounceTimer) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = null;
+        }
+        setSearchQuery('', true);
       });
     }
 
@@ -4574,13 +4795,26 @@
       });
     }
 
-    // Sidebar topic pill click listener
-    document.addEventListener('click', function (e) {
-      const pill = e.target.closest('.profile-sidebar-topic-pill[data-topic-id]');
-      if (!pill) return;
-      const topicId = pill.getAttribute('data-topic-id') || '';
-      setTopicFilter(topicId === currentTopic ? '' : topicId, true);
-    });
+    // Sidebar topic pill listeners
+    const initialTopicPills = document.querySelectorAll('.profile-sidebar-topic-pill');
+    for (let i = 0; i < initialTopicPills.length; i++) {
+      const pill = initialTopicPills[i];
+      if (pill._topicHandlerAttached) continue;
+      pill._topicHandlerAttached = true;
+      const tId = pill.getAttribute('data-topic-id');
+      const nameEl = pill.querySelector ? pill.querySelector('.profile-topic-name') : null;
+      const tTitle = nameEl ? nameEl.textContent : tId;
+      const handler = function () {
+        applyTopicFilter(tId, tTitle);
+      };
+      pill.addEventListener('click', handler);
+      pill.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.preventDefault) e.preventDefault();
+          handler();
+        }
+      });
+    }
 
     // 11. Publications toolbar sorting
     const pubSortBtns = document.querySelectorAll('[data-pub-sort]');
@@ -4788,11 +5022,41 @@
         commSort = sort;
         for (let j = 0; j < commSortBtns.length; j++) {
           commSortBtns[j].classList.toggle('is-active', commSortBtns[j] === this);
+          if (commSortBtns[j].hasAttribute('aria-pressed')) {
+            commSortBtns[j].setAttribute('aria-pressed', commSortBtns[j] === this ? 'true' : 'false');
+          }
         }
+        tabLoadedState.comments = null;
         commOffset = 0;
         commItems = [];
-        if (currentProfile && (currentProfile.id || currentProfile.userId)) {
-          loadComments(currentProfile.id || currentProfile.userId, false);
+        if (window.history && (window.history.pushState || window.history.replaceState)) {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'comments');
+            if (commSort !== 'new' && commSort !== 'newest') {
+              url.searchParams.set('sort', commSort);
+              url.searchParams.set('comm_sort', commSort);
+            } else {
+              url.searchParams.delete('sort');
+              url.searchParams.delete('comm_sort');
+            }
+            const stateObj = {
+              tab: activeTab || 'comments',
+              q: currentSearchQuery || undefined,
+              topic: currentTopic || undefined,
+              sort: commSort,
+              comm_sort: commSort
+            };
+            if (window.history.pushState) {
+              window.history.pushState(stateObj, '', url.toString());
+            } else if (window.history.replaceState) {
+              window.history.replaceState(stateObj, '', url.toString());
+            }
+          } catch (e) {}
+        }
+        const uid = (currentProfile && (currentProfile.id || currentProfile.userId)) || getUserIdFromUrl();
+        if (uid) {
+          loadComments(uid, false);
         }
       });
     }
@@ -4807,52 +5071,7 @@
       });
     }
 
-    // 19. Profile tabs toolbar search input
-    const searchInput = document.getElementById('profileSearchInput');
-    const searchClearBtn = document.getElementById('btnProfileSearchClear');
-
-    if (searchInput) {
-      searchInput.addEventListener('input', function () {
-        const val = this.value;
-        if (searchClearBtn) {
-          searchClearBtn.style.display = val ? 'flex' : 'none';
-        }
-        clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(function () {
-          triggerSearch(val);
-        }, 300);
-      });
-
-      searchInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          clearTimeout(searchDebounceTimer);
-          triggerSearch(this.value);
-        } else if (e.key === 'Escape') {
-          if (this.value) {
-            e.preventDefault();
-            this.value = '';
-            if (searchClearBtn) searchClearBtn.style.display = 'none';
-            clearTimeout(searchDebounceTimer);
-            triggerSearch('');
-          }
-        }
-      });
-    }
-
-    if (searchClearBtn) {
-      searchClearBtn.addEventListener('click', function () {
-        if (searchInput) {
-          searchInput.value = '';
-          searchInput.focus();
-        }
-        searchClearBtn.style.display = 'none';
-        clearTimeout(searchDebounceTimer);
-        triggerSearch('');
-      });
-    }
-
-    // 20. Stats bar interactive items
+    // 19. Stats bar interactive items
     const statRatingWrap = document.getElementById('profileStatRatingWrap');
     if (statRatingWrap) {
       const showRatingTooltip = function () {
@@ -4912,13 +5131,13 @@
       });
     }
 
-    // 21. Topic active bar reset
+    // 20. Topic active bar reset
     const btnClearTopic = document.getElementById('btnClearTopicFilter');
     if (btnClearTopic) {
       btnClearTopic.addEventListener('click', clearTopicFilter);
     }
 
-    // 22. Social modal controls
+    // 21. Social modal controls
     const btnCloseSocial = document.getElementById('btnProfileSocialModalClose');
     if (btnCloseSocial) {
       btnCloseSocial.addEventListener('click', closeSocialModal);
@@ -4978,6 +5197,12 @@
       const sClear = document.getElementById('btnProfileSearchClear');
       if (sClear) sClear.style.display = 'flex';
     }
+    const initTab = urlParams.get('tab') || 'overview';
+    const initCommSort = urlParams.get('comm_sort') || (initTab === 'comments' ? urlParams.get('sort') : null) || (initTab === 'comments' ? 'newest' : null);
+    if (initCommSort) {
+      commSort = initCommSort.trim();
+      updateCommSortUI(commSort);
+    }
 
     checkAuthStatus(function (user) {
       if (user) {
@@ -5034,6 +5259,7 @@
     openAvatarCropModal: openAvatarCropModal,
     closeAvatarCropModal: closeAvatarCropModal,
     applyAvatarCrop: applyAvatarCrop,
+    getLastCropTriggerEl: function () { return lastCropTriggerEl; },
     getAvatarUploadSeq: function () { return avatarUploadSeq; },
     toggleArticleLike: toggleArticleLike,
     toggleArticleBookmark: toggleArticleBookmark,
@@ -5074,7 +5300,7 @@
     applyTopicFilter: applyTopicFilter,
     clearTopicFilter: clearTopicFilter,
     getCurrentTopicFilter: function () {
-      return currentTopicFilter;
+      return currentTopic;
     },
     switchToSolutions: switchToSolutions,
     openSubscribersModal: openSubscribersModal,
@@ -5093,8 +5319,13 @@
     unpinMaterial: unpinMaterial,
     updateCardPinButtons: updateCardPinButtons,
     setSearchQuery: setSearchQuery,
+    triggerSearch: triggerSearch,
+    getSearchQuery: function () {
+      return currentSearchQuery;
+    },
     setTopicFilter: setTopicFilter,
     invalidateTabCaches: invalidateTabCaches,
+    initEventListeners: initEventListeners,
     updateSearchResultsCount: updateSearchResultsCount,
     toggleCommentSave: toggleCommentSave,
     openCommentReport: openCommentReport,
@@ -5102,6 +5333,8 @@
     isCommentReported: isCommentReported,
     getAnsSort: function () { return ansSort; },
     setAnsSort: function (s) { ansSort = s; updateAnsSortUI(s); },
+    getCommSort: function () { return commSort; },
+    setCommSort: function (s) { commSort = s; updateCommSortUI(s); },
     getTabLoadedState: function () {
       return tabLoadedState;
     }

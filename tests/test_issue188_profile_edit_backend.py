@@ -18,6 +18,7 @@ Automated test suite for Issue #188 backend requirements:
 5. Invariants: zero emojis, zero em dashes, 100% offline-first.
 """
 
+import base64
 import datetime
 import json
 import os
@@ -47,11 +48,29 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
         cls.db_path = os.path.join(cls.temp_dir, "test_issue188.db")
         server.DEFAULT_DB_PATH = cls.db_path
 
+        cls.media_dir = os.path.join(cls.temp_dir, "media")
+        avatars_dir = os.path.join(cls.media_dir, "avatars")
+        os.makedirs(avatars_dir, exist_ok=True)
+
+        tiny_png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        )
+        for avatar_filename in [
+            "bob_original.png",
+            "bob_new.png",
+            "bob_preserved.png",
+            "bob_to_remove.png",
+            "bob_to_clear.png",
+            "bob_to_clear_whitespace.png"
+        ]:
+            with open(os.path.join(avatars_dir, avatar_filename), "wb") as f:
+                f.write(tiny_png_bytes)
+
         conn = init_db(cls.db_path, seed=False)
         cls._seed_test_data(conn)
         conn.close()
 
-        cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR, seed=False)
+        cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR, media_dir=cls.media_dir, seed=False)
         cls.port = cls.httpd.server_address[1]
         cls.server_thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
         cls.server_thread.start()
@@ -498,7 +517,7 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
                 self.assertEqual(row["avatar"], "/media/avatars/bob_original.png")
 
     def test_18_invalid_avatar_formats_and_sizes_rejected_400(self):
-        """Invalid avatar string, corrupted data URI, path traversal or oversized file must return 400."""
+        """Invalid avatar string, corrupted data URI, path traversal, nonexistent file, corrupted file, or oversized file must return 400."""
         # 1. Arbitrary non-image string
         status, data = self._api_post("/api/user/profile", {"avatar": "not-an-image"}, session_token="sess_bob")
         self.assertEqual(status, 400)
@@ -514,7 +533,42 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertFalse(data.get("success"))
 
-        # 4. Valid tiny 1x1 PNG data URI accepted and converted to stored media url
+        # 4. Nonexistent media file returns 400
+        status, data = self._api_post("/api/user/profile", {"avatar": "/media/nonexistent-review-file.png"}, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+        self.assertIn("Файл изображения не найден на сервере", data.get("error", ""))
+
+        # 5. Corrupted media file on disk returns 400
+        corrupted_path = os.path.join(self.media_dir, "corrupted.png")
+        with open(corrupted_path, "wb") as f:
+            f.write(b"CORRUPTED_PNG_DATA_NOT_AN_IMAGE")
+        status, data = self._api_post("/api/user/profile", {"avatar": "/media/corrupted.png"}, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+        # 6. Updating bio with unchanged avatar (/media/avatars/bob_original.png) returns 200 and preserves avatar
+        status, _ = self._api_post("/api/user/profile", {
+            "name": "Боб Исходный",
+            "avatar": "/media/avatars/bob_original.png"
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+
+        status, data = self._api_post("/api/user/profile", {
+            "bio": "Обновленная биография с сохраненным аватаром",
+            "avatar": "/media/avatars/bob_original.png"
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data["profile"]["avatar"], "/media/avatars/bob_original.png")
+        self.assertEqual(data["profile"]["bio"], "Обновленная биография с сохраненным аватаром")
+
+        # Verify DB reflects the preserved avatar and updated bio
+        row = self._get_db_profile("user_bob")
+        self.assertEqual(row["avatar"], "/media/avatars/bob_original.png")
+        self.assertEqual(row["bio"], "Обновленная биография с сохраненным аватаром")
+
+        # 7. Valid tiny 1x1 PNG data URI accepted and converted to stored media url
         tiny_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         status, data = self._api_post("/api/user/profile", {"avatar": tiny_png}, session_token="sess_bob")
         self.assertEqual(status, 200)
