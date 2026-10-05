@@ -221,8 +221,111 @@
 
     getComplexityById(id) {
       return COMPLEXITIES.find(c => c.id === id) || null;
-    }
+    },
+
+    getCookie,
+    getCsrfToken,
+    isSameOriginUrl
   };
+
+  function getCookie(name) {
+    if (typeof document === 'undefined' || !document.cookie) {
+      return '';
+    }
+    const prefix = name + '=';
+    const parts = document.cookie.split(';');
+    for (let i = 0; i < parts.length; i++) {
+      const trimmed = parts[i].trim();
+      if (trimmed.indexOf(prefix) === 0) {
+        return decodeURIComponent(trimmed.substring(prefix.length));
+      }
+    }
+    return '';
+  }
+
+  function getCsrfToken() {
+    return getCookie('sc_csrf');
+  }
+
+  function isSameOriginUrl(targetUrl) {
+    if (typeof window === 'undefined' || !window.location) {
+      return false;
+    }
+    try {
+      const parsed = new URL(targetUrl, window.location.href);
+      return parsed.origin === window.location.origin;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function installCsrfInterceptor() {
+    if (typeof window === 'undefined' || typeof window.fetch !== 'function') {
+      return;
+    }
+    if (window.__sc_csrf_interceptor_installed) {
+      return;
+    }
+    window.__sc_csrf_interceptor_installed = true;
+
+    const originalFetch = window.fetch;
+    const mutatingMethods = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
+
+    window.fetch = function (input, init) {
+      try {
+        const url = (typeof input === 'string' || (typeof URL !== 'undefined' && input instanceof URL))
+          ? input.toString()
+          : (input && input.url ? input.url : '');
+        const method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+
+        if (mutatingMethods.has(method) && isSameOriginUrl(url)) {
+          const csrfToken = getCsrfToken();
+          if (csrfToken) {
+            init = init ? Object.assign({}, init) : {};
+            let hasCsrfHeader = false;
+            if (init.headers) {
+              if (typeof Headers !== 'undefined' && init.headers instanceof Headers) {
+                hasCsrfHeader = init.headers.has('X-CSRF-Token');
+                if (!hasCsrfHeader) {
+                  init.headers.set('X-CSRF-Token', csrfToken);
+                }
+              } else if (Array.isArray(init.headers)) {
+                hasCsrfHeader = init.headers.some(function (pair) {
+                  return pair[0] && pair[0].toLowerCase() === 'x-csrf-token';
+                });
+                if (!hasCsrfHeader) {
+                  init.headers = init.headers.concat([['X-CSRF-Token', csrfToken]]);
+                }
+              } else if (typeof init.headers === 'object') {
+                for (var key in init.headers) {
+                  if (Object.prototype.hasOwnProperty.call(init.headers, key) && key.toLowerCase() === 'x-csrf-token') {
+                    hasCsrfHeader = true;
+                    break;
+                  }
+                }
+                if (!hasCsrfHeader) {
+                  init.headers = Object.assign({}, init.headers, { 'X-CSRF-Token': csrfToken });
+                }
+              }
+            } else if (typeof Request !== 'undefined' && input instanceof Request) {
+              if (!input.headers.has('X-CSRF-Token')) {
+                var newHeaders = new Headers(input.headers);
+                newHeaders.set('X-CSRF-Token', csrfToken);
+                init.headers = newHeaders;
+              }
+            } else {
+              init.headers = { 'X-CSRF-Token': csrfToken };
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback silently and proceed to original fetch
+      }
+      return originalFetch.call(this, input, init);
+    };
+  }
+
+  installCsrfInterceptor();
 
   window.PublicationConfig = PublicationConfig;
   window.MATERIAL_TYPES = MATERIAL_TYPES;

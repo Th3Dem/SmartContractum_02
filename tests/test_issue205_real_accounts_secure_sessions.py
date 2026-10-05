@@ -632,6 +632,40 @@ class TestIssue205RealAccountsSecureSessions(unittest.TestCase):
         st_get, data_get, _, _, _ = self._request("GET", "/api/auth/status", cookie=cookie_hdr)
         self.assertEqual(st_get, 200)
 
+        # 9. Server mode with enforce_csrf=False
+        try:
+            self.httpd.enforce_csrf = False
+            # When enforce_csrf is False, missing CSRF token is allowed
+            st_no_enforce, data_no_enforce, _, _, _ = self._request(
+                "POST", "/api/user/feed-settings",
+                payload={"materialTypes": ["publication"]},
+                cookie=cookie_hdr
+            )
+            self.assertEqual(st_no_enforce, 200)
+            self.assertTrue(data_no_enforce.get("success"))
+
+            # When enforce_csrf is False, provided matching CSRF token is allowed
+            st_match_enforce, data_match_enforce, _, _, _ = self._request(
+                "POST", "/api/user/feed-settings",
+                payload={"materialTypes": ["publication"]},
+                headers=headers_valid_csrf,
+                cookie=cookie_hdr
+            )
+            self.assertEqual(st_match_enforce, 200)
+            self.assertTrue(data_match_enforce.get("success"))
+
+            # When enforce_csrf is False, provided mismatched CSRF token is rejected
+            st_mismatch, data_mismatch, _, _, _ = self._request(
+                "POST", "/api/user/feed-settings",
+                payload={"materialTypes": ["publication"]},
+                headers=headers_wrong_csrf,
+                cookie=cookie_hdr
+            )
+            self.assertEqual(st_mismatch, 403)
+            self.assertIn("Invalid or missing CSRF token", data_mismatch.get("error", ""))
+        finally:
+            self.httpd.enforce_csrf = True
+
     def test_09_login_rate_limiter_throttles_brute_force(self):
         """Rate limiter throttles repeated failed login attempts with 429 and Retry-After header."""
         reset_login_rate_limiter()

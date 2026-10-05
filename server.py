@@ -2637,9 +2637,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             csrf_cookie = self.get_cookie("sc_csrf")
             csrf_header = self.headers.get("X-CSRF-Token", "").strip()
 
-            enforce = getattr(self.server, "enforce_csrf", False) or bool(csrf_cookie) or bool(csrf_header)
+            enforce = getattr(self.server, "enforce_csrf", False)
             if enforce:
                 if not csrf_cookie or not csrf_header or not hmac.compare_digest(csrf_cookie, csrf_header):
+                    self.send_json_response(403, {
+                        "success": False,
+                        "error": "CSRF verification failed: Invalid or missing CSRF token"
+                    })
+                    return False
+            elif csrf_header:
+                if not csrf_cookie or not hmac.compare_digest(csrf_cookie, csrf_header):
                     self.send_json_response(403, {
                         "success": False,
                         "error": "CSRF verification failed: Invalid or missing CSRF token"
