@@ -95,6 +95,12 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
             VALUES (?, ?, ?, 'user', ?, ?, 0)
         """, ("sess_bob", "user_bob", "Боб Тестовый", t_exp, t_created))
 
+        # Secondary active session for User 1 to test cross-session identity sync
+        cur.execute("""
+            INSERT OR REPLACE INTO sessions (token, user_id, user_name, user_role, expires_at, created_at, is_revoked)
+            VALUES (?, ?, ?, 'user', ?, ?, 0)
+        """, ("sess_bob_2", "user_bob", "Боб Тестовый", t_exp, t_created))
+
         # Test User 2: Minimal user without avatar
         cur.execute("""
             INSERT OR REPLACE INTO user_profiles (user_id, name, specialization, company, bio, website, avatar, created_at, updated_at)
@@ -117,6 +123,25 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
         """, ("sess_alice", "user_alice", "Алиса Инженер", t_exp, t_created))
 
         conn.commit()
+
+    def _api_get(self, path, session_token=None):
+        url = f"{self.base_url}{path}"
+        req = urllib.request.Request(url, method="GET")
+        if session_token:
+            req.add_header("Cookie", f"sc_session={session_token}")
+            req.add_header("Authorization", f"Bearer {session_token}")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                status = resp.status
+                body = resp.read().decode("utf-8")
+                return status, json.loads(body)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8")
+            try:
+                data = json.loads(body)
+            except Exception:
+                data = {"raw": body}
+            return e.code, data
 
     def _api_post(self, path, payload, session_token=None):
         url = f"{self.base_url}{path}"
@@ -431,6 +456,141 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
 
         row = self._get_db_profile("user_bob")
         self.assertIsNone(row["avatar"])
+
+    def test_17_non_string_types_rejected_400_without_partial_save(self):
+        """Objects, arrays, or numbers instead of string fields must return 400 without partial save."""
+        # Initial known profile
+        self._api_post("/api/user/profile", {
+            "name": "Боб Исходный",
+            "specialization": "Auditor",
+            "company": "ChainCo",
+            "bio": "Исходное био",
+            "website": "https://chainco.example.com",
+            "avatar": "/media/avatars/bob_original.png"
+        }, session_token="sess_bob")
+
+        bad_payloads = [
+            ({"name": {"bad": "type"}}, "name object"),
+            ({"name": ["bad", "type"]}, "name array"),
+            ({"specialization": []}, "specialization array"),
+            ({"specialization": {"title": "dev"}}, "specialization dict"),
+            ({"company": [1, 2, 3]}, "company array"),
+            ({"bio": {"text": "hello"}}, "bio dict"),
+            ({"website": ["https://example.com"]}, "website array"),
+            ({"avatar": {"url": "http://bad"}}, "avatar dict"),
+            ({"avatar": ["bad"]}, "avatar array"),
+            ({"avatar": 12345}, "avatar int")
+        ]
+
+        for payload, desc in bad_payloads:
+            with self.subTest(case=desc):
+                status, data = self._api_post("/api/user/profile", payload, session_token="sess_bob")
+                self.assertEqual(status, 400, f"Expected 400 for {desc}, got {status}")
+                self.assertFalse(data.get("success"))
+
+                # Invariant: verify no partial save occurred in DB
+                row = self._get_db_profile("user_bob")
+                self.assertEqual(row["name"], "Боб Исходный")
+                self.assertEqual(row["specialization"], "Auditor")
+                self.assertEqual(row["company"], "ChainCo")
+                self.assertEqual(row["bio"], "Исходное био")
+                self.assertEqual(row["website"], "https://chainco.example.com")
+                self.assertEqual(row["avatar"], "/media/avatars/bob_original.png")
+
+    def test_18_invalid_avatar_formats_and_sizes_rejected_400(self):
+        """Invalid avatar string, corrupted data URI, path traversal or oversized file must return 400."""
+        # 1. Arbitrary non-image string
+        status, data = self._api_post("/api/user/profile", {"avatar": "not-an-image"}, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+        # 2. Corrupted base64 data URI
+        status, data = self._api_post("/api/user/profile", {"avatar": "data:image/png;base64,invalid-base64-content!"}, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+        # 3. Path traversal media path
+        status, data = self._api_post("/api/user/profile", {"avatar": "/media/../../etc/passwd"}, session_token="sess_bob")
+        self.assertEqual(status, 400)
+        self.assertFalse(data.get("success"))
+
+        # 4. Valid tiny 1x1 PNG data URI accepted and converted to stored media url
+        tiny_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        status, data = self._api_post("/api/user/profile", {"avatar": tiny_png}, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        self.assertTrue(data.get("success"))
+        saved_avatar = data["profile"]["avatar"]
+        self.assertIsNotNone(saved_avatar)
+        self.assertTrue(saved_avatar.startswith("/media/"))
+
+    def test_19_identity_synchronization_across_sessions_and_auth_status(self):
+        """Profile name and avatar changes must be reflected in /api/auth/status for all active sessions."""
+        # Update profile for user_bob
+        tiny_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб Синхронизированный",
+            "avatar": tiny_png
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+        expected_avatar = data["profile"]["avatar"]
+        self.assertTrue(expected_avatar.startswith("/media/"))
+
+        # 1. Primary session /api/auth/status reflects new identity
+        st1, auth1 = self._api_get("/api/auth/status", session_token="sess_bob")
+        self.assertEqual(st1, 200)
+        self.assertTrue(auth1.get("authenticated"))
+        self.assertEqual(auth1["user"]["id"], "user_bob")
+        self.assertEqual(auth1["user"]["name"], "Боб Синхронизированный")
+        self.assertEqual(auth1["user"]["avatar"], expected_avatar)
+        self.assertEqual(auth1["user"]["role"], "user")
+
+        # 2. Secondary session /api/auth/status of the SAME user reflects new identity
+        st2, auth2 = self._api_get("/api/auth/status", session_token="sess_bob_2")
+        self.assertEqual(st2, 200)
+        self.assertTrue(auth2.get("authenticated"))
+        self.assertEqual(auth2["user"]["id"], "user_bob")
+        self.assertEqual(auth2["user"]["name"], "Боб Синхронизированный")
+        self.assertEqual(auth2["user"]["avatar"], expected_avatar)
+        self.assertEqual(auth2["user"]["role"], "user")
+
+        # 3. Public profile endpoint reflects new identity
+        st_pub, pub_data = self._api_get("/api/users/user_bob")
+        self.assertEqual(st_pub, 200)
+        p_user = pub_data.get("profile") or pub_data.get("user") or pub_data
+        self.assertEqual(p_user["name"], "Боб Синхронизированный")
+        self.assertEqual(p_user["avatar"], expected_avatar)
+
+        # 4. Another user session remains isolated and unaltered
+        st3, auth3 = self._api_get("/api/auth/status", session_token="sess_alice")
+        self.assertEqual(st3, 200)
+        self.assertEqual(auth3["user"]["id"], "user_alice")
+        self.assertEqual(auth3["user"]["name"], "Алиса Инженер")
+        self.assertIsNone(auth3["user"]["avatar"])
+
+    def test_20_identity_update_preserves_role_and_privileges(self):
+        """Updating profile identity must never alter user role or allow privilege escalation."""
+        status, data = self._api_post("/api/user/profile", {
+            "name": "Боб Без Эскалации",
+            "role": "admin",
+            "isAdmin": True
+        }, session_token="sess_bob")
+        self.assertEqual(status, 200)
+
+        # Verify role in auth status is still user
+        st, auth = self._api_get("/api/auth/status", session_token="sess_bob")
+        self.assertEqual(st, 200)
+        self.assertEqual(auth["user"]["role"], "user")
+
+        # Verify DB session role
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT user_role FROM sessions WHERE user_id = ?", ("user_bob",))
+            for row in cur.fetchall():
+                self.assertEqual(row["user_role"], "user")
+        finally:
+            conn.close()
 
     # =========================================================================
     # 5. Code and Formatting Invariants

@@ -2065,12 +2065,22 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             conn = self.get_db()
             cur = conn.cursor()
-            cur.execute("""
-                SELECT user_id, user_name, user_role, expires_at, is_revoked
-                FROM sessions
-                WHERE token = ?
-            """, (token,))
-            row = cur.fetchone()
+            try:
+                cur.execute("""
+                    SELECT s.user_id, s.user_name, s.user_role, s.expires_at, s.is_revoked,
+                           p.name AS profile_name, p.avatar AS profile_avatar
+                    FROM sessions s
+                    LEFT JOIN user_profiles p ON s.user_id = p.user_id
+                    WHERE s.token = ?
+                """, (token,))
+                row = cur.fetchone()
+            except sqlite3.OperationalError:
+                cur.execute("""
+                    SELECT user_id, user_name, user_role, expires_at, is_revoked
+                    FROM sessions
+                    WHERE token = ?
+                """, (token,))
+                row = cur.fetchone()
         except Exception:
             return None
         finally:
@@ -2097,10 +2107,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             return None
 
+        profile_name = row["profile_name"] if ("profile_name" in row.keys() and row["profile_name"]) else None
+        effective_name = profile_name.strip() if (profile_name and str(profile_name).strip()) else row["user_name"]
+        avatar_val = row["profile_avatar"] if ("profile_avatar" in row.keys() and row["profile_avatar"]) else None
+
         return {
             "id": row["user_id"],
-            "name": row["user_name"],
-            "role": row["user_role"] if "user_role" in row.keys() else "user"
+            "name": effective_name,
+            "role": row["user_role"] if "user_role" in row.keys() else "user",
+            "avatar": avatar_val
         }
 
     def is_moderator_or_admin(self, user: Optional[Dict[str, Any]]) -> bool:
@@ -8788,6 +8803,13 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         if payload is None:
             return
 
+        if not isinstance(payload, dict):
+            self.send_json_response(400, {
+                "success": False,
+                "error": "Тело запроса должно быть JSON-объектом"
+            })
+            return
+
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {
@@ -8796,6 +8818,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "requireAuth": True
             })
             return
+
+        # Validate input types before conversion
+        for field in ("name", "specialization", "company", "bio", "website", "avatar"):
+            if field in payload and payload[field] is not None and not isinstance(payload[field], str):
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": f"Поле {field} должно быть строкой"
+                })
+                return
 
         conn = self.get_db()
         try:
@@ -8811,7 +8842,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # 1. Validate name: 1..100 characters. Return 400 if empty.
                 if "name" in payload:
                     raw_name = payload["name"]
-                    name = str(raw_name).strip() if raw_name is not None else ""
+                    name = raw_name.strip() if raw_name is not None else ""
                 else:
                     name = (existing_profile["name"] if existing_profile and existing_profile["name"] else user.get("name") or "").strip()
 
@@ -8825,7 +8856,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # 2. Validate specialization: max 120 characters
                 if "specialization" in payload:
                     raw_spec = payload["specialization"]
-                    specialization = str(raw_spec).strip() if raw_spec is not None else ""
+                    specialization = raw_spec.strip() if raw_spec is not None else ""
                 else:
                     specialization = (existing_profile["specialization"] if existing_profile and existing_profile["specialization"] else "").strip()
 
@@ -8839,7 +8870,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # 3. Validate company: max 120 characters
                 if "company" in payload:
                     raw_comp = payload["company"]
-                    company = str(raw_comp).strip() if raw_comp is not None else ""
+                    company = raw_comp.strip() if raw_comp is not None else ""
                 else:
                     company = (existing_profile["company"] if existing_profile and existing_profile["company"] else "").strip()
 
@@ -8853,7 +8884,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # 4. Validate bio: max 1000 characters
                 if "bio" in payload:
                     raw_bio = payload["bio"]
-                    bio = str(raw_bio).strip() if raw_bio is not None else ""
+                    bio = raw_bio.strip() if raw_bio is not None else ""
                 else:
                     bio = (existing_profile["bio"] if existing_profile and existing_profile["bio"] else "").strip()
 
@@ -8867,7 +8898,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # 5. Validate website: max 300 characters, strictly http or https
                 if "website" in payload:
                     raw_site = payload["website"]
-                    website = str(raw_site).strip() if raw_site is not None else ""
+                    website = raw_site.strip() if raw_site is not None else ""
                 else:
                     existing_website = ""
                     if existing_profile:
@@ -8895,7 +8926,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 # 6. Avatar handling:
                 # - Check if removeAvatar is true or avatar is empty string: set avatar to None in db.
-                # - If avatar is provided in payload (non-empty string): update avatar with the provided value.
+                # - If avatar is provided in payload (non-empty string): validate image format/parameters and update avatar.
                 # - If avatar is omitted/None and removeAvatar is not true: preserve the existing avatar from user_profiles.
                 remove_avatar = payload.get("removeAvatar") in (True, "true", "True", 1)
                 raw_avatar = payload.get("avatar")
@@ -8903,14 +8934,19 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if remove_avatar:
                     avatar = None
                 elif "avatar" in payload and raw_avatar is not None:
-                    if isinstance(raw_avatar, str):
-                        stripped_avatar = raw_avatar.strip()
-                        if not stripped_avatar:
-                            avatar = None
-                        else:
-                            avatar = stripped_avatar
-                    else:
+                    stripped_avatar = raw_avatar.strip()
+                    if not stripped_avatar:
                         avatar = None
+                    else:
+                        media_root = getattr(self.server, "media_dir", MEDIA_DIR)
+                        res = validate_cover_image(stripped_avatar, target_media_dir=media_root)
+                        if not res.is_valid:
+                            self.send_json_response(400, {
+                                "success": False,
+                                "error": res.error_msg or "Аватар должен быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
+                            })
+                            return
+                        avatar = res.saved_url
                 else:
                     avatar = existing_profile["avatar"] if existing_profile and existing_profile["avatar"] else None
 
@@ -8942,6 +8978,9 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             avatar = excluded.avatar,
                             updated_at = excluded.updated_at
                     """, (user["id"], name, specialization, company, bio, avatar, created_at_val, now_iso))
+
+                # Synchronize user_name in sessions table across all active sessions of this user
+                cur.execute("UPDATE sessions SET user_name = ? WHERE user_id = ?", (name, user["id"]))
 
             initials = "".join([part[0].upper() for part in str(name).split()[:2]]) if name else "SC"
             profile_dto = {

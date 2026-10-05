@@ -468,6 +468,14 @@
     renderActiveChips();
     updateFilterBadge();
     ensureToolbarPlacement();
+
+    const panelParam = (params.get('panel') || '').toLowerCase();
+    const settingsParam = params.get('settings');
+    if (panelParam === 'settings' || settingsParam === '1' || settingsParam === 'true') {
+      setTimeout(function () {
+        openFeedSettingsPanel();
+      }, 50);
+    }
   }
 
   const SORT_LABELS = {
