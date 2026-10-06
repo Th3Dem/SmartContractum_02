@@ -6984,6 +6984,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             author_avatar = user.get("avatar") or None
 
             material_type = "article"
+            art_settings = {}
             try:
                 art_settings = json.loads(art_row["publication_settings"]) if art_row["publication_settings"] else {}
                 material_type = (art_settings.get("materialType") or art_settings.get("type") or "article").strip().lower()
@@ -7008,7 +7009,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     return
 
-                notification_recipient_id = art_author_id
+                recipients_set = {art_author_id}
                 notification_type = "new_answer"
                 notification_title = "Новый ответ на ваш вопрос"
                 notification_message = f"Пользователь {author_name} ответил на ваш вопрос «{art_title[:60]}»"
@@ -7077,7 +7078,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             break
                         curr_anc_id = anc_r["parent_comment_id"]
 
-                    notification_recipient_id = p_comm_row["user_id"]
+                    recipients_set = {p_comm_row["user_id"]}
                     notification_type = "new_reply"
                     notification_title = "Новый ответ в обсуждении"
                     notification_message = f"Пользователь {author_name} ответил на ваш комментарий к «{art_title[:60]}»"
@@ -7096,13 +7097,20 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         })
                         return
 
-                    notification_recipient_id = p_ans_row["user_id"]
+                    recipients_set = {p_ans_row["user_id"]}
                     notification_type = "new_reply"
                     notification_title = "Новый ответ в обсуждении"
                     notification_message = f"Пользователь {author_name} ответил на ваш ответ к «{art_title[:60]}»"
                 else:
                     # Root comment on article or question
-                    notification_recipient_id = art_author_id
+                    recipients_set = {art_author_id}
+                    company_id = art_settings.get("companyId") or art_settings.get("company_id")
+                    if company_id:
+                        cur.execute("SELECT owner_id FROM companies WHERE id = ?", (company_id,))
+                        comp_row = cur.fetchone()
+                        if comp_row and comp_row["owner_id"]:
+                            recipients_set.add(comp_row["owner_id"])
+
                     notification_type = "new_reply"
                     notification_title = "Новый комментарий"
                     notification_message = f"Пользователь {author_name} оставил комментарий к «{art_title[:60]}»"
@@ -7266,16 +7274,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             discussion_count = comments_count + answers_count
 
             # Notification is sent only if recipient exists and is not the actor
-            if notification_recipient_id and notification_recipient_id != user_id:
-                notif_id = f"notif_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
-                cur.execute("""
-                    INSERT INTO user_notifications (
-                        id, user_id, actor_id, actor_name, article_id, comment_id, type, title, message, is_read, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-                """, (
-                    notif_id, notification_recipient_id, user_id, author_name, real_id, comment_id,
-                    notification_type, notification_title, notification_message, now_iso
-                ))
+            for recipient_id in recipients_set:
+                if recipient_id and recipient_id != user_id:
+                    notif_id = f"notif_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
+                    cur.execute("""
+                        INSERT INTO user_notifications (
+                            id, user_id, actor_id, actor_name, article_id, comment_id, type, title, message, is_read, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    """, (
+                        notif_id, recipient_id, user_id, author_name, real_id, comment_id,
+                        notification_type, notification_title, notification_message, now_iso
+                    ))
 
         comment_data = {
             "id": comment_id,
@@ -9177,6 +9186,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             with conn:
                 cur = conn.cursor()
                 if notif_id:
+                    cur.execute("SELECT id, user_id FROM user_notifications WHERE id = ?", (notif_id,))
+                    row = cur.fetchone()
+                    if not row:
+                        self.send_json_response(404, {"success": False, "error": "Уведомление не найдено"})
+                        return
+                    if row["user_id"] != user["id"]:
+                        self.send_json_response(403, {"success": False, "error": "Отказано в доступе"})
+                        return
                     cur.execute("UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND id = ?", (user["id"], notif_id))
                 else:
                     cur.execute("UPDATE user_notifications SET is_read = 1 WHERE user_id = ?", (user["id"],))

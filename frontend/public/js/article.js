@@ -6076,6 +6076,7 @@
   }
 
   function initHeaderNotifications() {
+    if (window.SCNotifications) return;
     const notifBtn = document.getElementById('headerNotificationsBtn');
     const notifBadge = document.getElementById('headerNotifBadge');
     const notifPopup = document.getElementById('headerNotifPopup');

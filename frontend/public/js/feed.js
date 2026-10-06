@@ -7166,7 +7166,9 @@
     }
 
     // 6. Header Notifications
-    const notifBtn = document.getElementById('headerNotificationsBtn');
+    (function() {
+      if (window.SCNotifications) return;
+      const notifBtn = document.getElementById('headerNotificationsBtn');
     const notifBadge = document.getElementById('headerNotifBadge');
     const notifPopup = document.getElementById('headerNotifPopup');
     const notifList = document.getElementById('notifListContainer');
@@ -7258,6 +7260,7 @@
 
       loadHeaderNotifications();
     }
+    })();
 
     // 7. User Profile Modal (delegated to profile.js)
     initUserProfileModal();
