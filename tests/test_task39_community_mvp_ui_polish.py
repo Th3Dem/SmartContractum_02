@@ -20,7 +20,7 @@ import sqlite3
 import server
 from server import create_server, init_db
 import seed_data
-from backend_source import BACKEND_FILES, backend_source_file
+from tests.backend_source import BACKEND_FILES, backend_source_file
 
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
