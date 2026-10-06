@@ -4,7 +4,8 @@ import re
 
 class TestIssue207AuthModal(unittest.TestCase):
     def setUp(self):
-        self.base_dir = '/home/dem/Projects_02/frontend/public'
+        REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.base_dir = os.path.join(REPO_ROOT, 'frontend', 'public')
         self.html_files = [
             'index.html',
             'feed.html',
@@ -18,11 +19,6 @@ class TestIssue207AuthModal(unittest.TestCase):
 
     def test_files_exist(self):
         self.assertTrue(os.path.exists(self.auth_js_path), "auth.js must exist")
-        # create dummy css if it doesn't exist for test to pass or at least check if it's referenced
-        if not os.path.exists(self.auth_css_path):
-            os.makedirs(os.path.dirname(self.auth_css_path), exist_ok=True)
-            with open(self.auth_css_path, 'w') as f:
-                f.write("/* 320px 375px 768px 1440px */")
         self.assertTrue(os.path.exists(self.auth_css_path), "auth.css must exist")
 
     def test_html_inclusions(self):
