@@ -42,9 +42,10 @@ class DummyHandler(server.ModerationRequestHandler):
         conn.row_factory = sqlite3.Row
         return conn
         
-    def send_json_response(self, status, payload):
+    def send_json_response(self, status, payload, extra_headers=None):
         self._status = status
         self._payload = payload
+        self._extra_headers = extra_headers or []
 
 class TestIssue208(unittest.TestCase):
     def setUp(self):

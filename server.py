@@ -716,8 +716,6 @@ class EmailService:
         code: str,
         login: str
     ) -> Tuple[bool, Optional[str]]:
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        outbox_id = f"outbox_{secrets.token_hex(16)}"
         subject = "Код подтверждения регистрации SmartContractum"
         body_text = (
             f"Здравствуйте, {login}!\n\n"
@@ -725,16 +723,32 @@ class EmailService:
             f"Код действителен в течение 10 минут.\n"
             f"Если вы не запрашивали регистрацию, проигнорируйте это письмо.\n"
         )
+        return self.send_email(conn, recipient, subject, body_text, extra={"code": code, "login": login})
 
-        # Check for simulated delivery failure
+    def send_email(
+        self,
+        conn: sqlite3.Connection,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        extra: Optional[Dict[str, Any]] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """Delivers one message via SMTP (or the fake adapter) and records it in the durable outbox."""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        outbox_id = f"outbox_{secrets.token_hex(16)}"
+
+        def record_outbox(status: str, error_message: Optional[str]) -> None:
+            sent_at = now_iso if status == "sent" else None
+            with conn:
+                conn.execute("""
+                    INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (outbox_id, recipient, subject, body_text, status, error_message, now_iso, sent_at))
+
         if self.simulate_failure or os.environ.get("FAIL_MAIL_DELIVERY") == "1":
             err_msg = "Ошибка отправки письма: Simulated SMTP delivery failure"
             try:
-                with conn:
-                    conn.execute("""
-                        INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
-                        VALUES (?, ?, ?, ?, 'failed', ?, ?, NULL)
-                    """, (outbox_id, recipient, subject, body_text, err_msg, now_iso))
+                record_outbox("failed", err_msg)
             except Exception:
                 pass
             return False, err_msg
@@ -754,72 +768,40 @@ class EmailService:
                 password = os.environ.get("SMTP_PASSWORD", "")
                 use_tls = os.environ.get("SMTP_USE_TLS", "1").lower() in ("1", "true", "yes")
 
-                server = smtplib.SMTP(host, port, timeout=10)
+                smtp = smtplib.SMTP(host, port, timeout=10)
                 try:
                     if use_tls:
-                        server.starttls()
+                        smtp.starttls()
                     if user and password:
-                        server.login(user, password)
-                    server.sendmail(msg["From"], [recipient], msg.as_string())
+                        smtp.login(user, password)
+                    smtp.sendmail(msg["From"], [recipient], msg.as_string())
                 finally:
                     try:
-                        server.quit()
+                        smtp.quit()
                     except Exception:
                         pass
-
-                with conn:
-                    conn.execute("""
-                        INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
-                        VALUES (?, ?, ?, ?, 'sent', NULL, ?, ?)
-                    """, (outbox_id, recipient, subject, body_text, now_iso, now_iso))
-
-                email_record = {
-                    "id": outbox_id,
-                    "recipient": recipient,
-                    "subject": subject,
-                    "body_text": body_text,
-                    "code": code,
-                    "login": login,
-                    "status": "sent",
-                    "created_at": now_iso
-                }
-                with self._lock:
-                    self.sent_emails.append(email_record)
-
-                return True, None
             except Exception as e:
                 err_msg = f"Ошибка отправки письма: {e}"
                 try:
-                    with conn:
-                        conn.execute("""
-                            INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
-                            VALUES (?, ?, ?, ?, 'failed', ?, ?, NULL)
-                        """, (outbox_id, recipient, subject, body_text, err_msg, now_iso))
+                    record_outbox("failed", err_msg)
                 except Exception:
                     pass
                 return False, err_msg
-        else:
-            # Fake adapter (100% offline-first durable outbox)
-            with conn:
-                conn.execute("""
-                    INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
-                    VALUES (?, ?, ?, ?, 'sent', NULL, ?, ?)
-                """, (outbox_id, recipient, subject, body_text, now_iso, now_iso))
 
-            email_record = {
-                "id": outbox_id,
-                "recipient": recipient,
-                "subject": subject,
-                "body_text": body_text,
-                "code": code,
-                "login": login,
-                "status": "sent",
-                "created_at": now_iso
-            }
-            with self._lock:
-                self.sent_emails.append(email_record)
-
-            return True, None
+        # Fake adapter (offline-first) records the message as delivered to the outbox
+        record_outbox("sent", None)
+        email_record = {
+            "id": outbox_id,
+            "recipient": recipient,
+            "subject": subject,
+            "body_text": body_text,
+            "status": "sent",
+            "created_at": now_iso
+        }
+        email_record.update(extra or {})
+        with self._lock:
+            self.sent_emails.append(email_record)
+        return True, None
 
 
 EMAIL_SERVICE = EmailService()
@@ -872,6 +854,26 @@ REGISTRATION_RATE_LIMITER = RegistrationRateLimiter(max_per_hour=5)
 
 def reset_registration_rate_limiter() -> None:
     REGISTRATION_RATE_LIMITER.reset()
+
+
+# Password recovery and email change requests: per client IP and per target account/address
+RECOVERY_RATE_LIMITER = RegistrationRateLimiter(max_per_hour=5)
+# Failed password reset attempts per client IP, across all accounts
+RESET_ATTEMPT_LIMITER = RegistrationRateLimiter(max_per_hour=20)
+
+
+def reset_recovery_rate_limiter() -> None:
+    RECOVERY_RATE_LIMITER.reset()
+    RESET_ATTEMPT_LIMITER.reset()
+
+
+def generate_verification_code() -> str:
+    """Returns a cryptographically random 6-digit one-time code."""
+    return f"{secrets.randbelow(1000000):06d}"
+
+
+def validate_email_format(email: str) -> bool:
+    return isinstance(email, str) and len(email) <= 254 and bool(EMAIL_REGEX.match(email))
 
 
 def create_user(
@@ -1471,6 +1473,11 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             pass
         try:
             conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT;")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            # SHA-256 of the secret handed to the browser that registered; email verification must present it
+            conn.execute("ALTER TABLE users ADD COLUMN registration_token_hash TEXT;")
         except sqlite3.OperationalError:
             pass
 
@@ -2779,6 +2786,31 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     return v.strip()
         return None
 
+    def create_session(self, conn: sqlite3.Connection, user_id: str, user_name: str, user_role: str) -> Tuple[str, str]:
+        """Inserts a new 7-day server session and returns (session_token, csrf_token). Caller commits."""
+        token = secrets.token_hex(32)
+        csrf_token = secrets.token_hex(32)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        conn.execute("""
+            INSERT INTO sessions (token, user_id, user_name, user_role, created_at, expires_at, is_revoked)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+        """, (token, user_id, user_name, user_role, now.isoformat(), (now + datetime.timedelta(days=7)).isoformat()))
+        return token, csrf_token
+
+    def session_cookie_headers(self, token: str, csrf_token: str) -> List[Tuple[str, str]]:
+        secure_flag = "; Secure" if self.is_secure_request() else ""
+        return [
+            ("Set-Cookie", f"sc_session={token}; Path=/; HttpOnly; SameSite=Lax{secure_flag}"),
+            ("Set-Cookie", f"sc_csrf={csrf_token}; Path=/; SameSite=Lax{secure_flag}"),
+        ]
+
+    def cleared_session_cookie_headers(self) -> List[Tuple[str, str]]:
+        secure_flag = "; Secure" if self.is_secure_request() else ""
+        return [
+            ("Set-Cookie", f"sc_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure_flag}"),
+            ("Set-Cookie", f"sc_csrf=; Path=/; Max-Age=0; SameSite=Lax{secure_flag}"),
+        ]
+
     def get_session_token(self) -> Optional[str]:
         """
         Extracts session token from Cookie 'sc_session' or Authorization 'Bearer <token>'.
@@ -3445,25 +3477,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             user_name = profile_name.strip() if (profile_name and profile_name.strip()) else user_record["login"]
 
-            token = secrets.token_hex(32)
-            csrf_token = secrets.token_hex(32)
-            now = datetime.datetime.now(datetime.timezone.utc)
-            created_at = now.isoformat()
-            expires_at = (now + datetime.timedelta(days=7)).isoformat()
-
             conn = self.get_db()
             try:
                 with conn:
-                    conn.execute("""
-                        INSERT INTO sessions (token, user_id, user_name, user_role, created_at, expires_at, is_revoked)
-                        VALUES (?, ?, ?, ?, ?, ?, 0)
-                    """, (token, user_id, user_name, user_role, created_at, expires_at))
+                    token, csrf_token = self.create_session(conn, user_id, user_name, user_role)
             finally:
                 conn.close()
-
-            secure_flag = "; Secure" if self.is_secure_request() else ""
-            session_cookie = f"sc_session={token}; Path=/; HttpOnly; SameSite=Lax{secure_flag}"
-            csrf_cookie = f"sc_csrf={csrf_token}; Path=/; SameSite=Lax{secure_flag}"
 
             user_dto = {
                 "id": user_id,
@@ -3478,10 +3497,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "authenticated": True,
                 "user": user_dto,
                 "csrfToken": csrf_token
-            }, extra_headers=[
-                ("Set-Cookie", session_cookie),
-                ("Set-Cookie", csrf_cookie)
-            ])
+            }, extra_headers=self.session_cookie_headers(token, csrf_token))
             return
 
         # Legacy demo login path (allowed only when allow_demo_login is explicitly True)
@@ -3560,17 +3576,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                     except Exception:
                         pass
 
-        secure_flag = "; Secure" if self.is_secure_request() else ""
-        session_cookie = f"sc_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure_flag}"
-        csrf_cookie = f"sc_csrf=; Path=/; Max-Age=0; SameSite=Lax{secure_flag}"
-
         self.send_json_response(200, {
             "success": True,
             "authenticated": False
-        }, extra_headers=[
-            ("Set-Cookie", session_cookie),
-            ("Set-Cookie", csrf_cookie)
-        ])
+        }, extra_headers=self.cleared_session_cookie_headers())
 
     def handle_auth_register(self):
         """POST /api/auth/register creates pending user and issues email verification challenge."""
@@ -3659,7 +3668,35 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             now_dt = datetime.datetime.now(datetime.timezone.utc)
             now_iso = now_dt.isoformat()
 
+            def has_live_challenge(uid: str) -> bool:
+                cur.execute("""
+                    SELECT 1 FROM email_verifications
+                    WHERE user_id = ? AND purpose = 'email_verification' AND status = 'pending' AND expires_at > ?
+                    LIMIT 1
+                """, (uid, now_iso))
+                return cur.fetchone() is not None
+
+            # A pending registration whose code has expired no longer reserves its login
+            if (
+                existing_login_user
+                and existing_login_user["status"] == "pending"
+                and not has_live_challenge(existing_login_user["id"])
+                and not (existing_email_user and existing_email_user["id"] == existing_login_user["id"])
+            ):
+                with conn:
+                    conn.execute("DELETE FROM user_profiles WHERE user_id = ?", (existing_login_user["id"],))
+                    conn.execute("DELETE FROM users WHERE id = ? AND status = 'pending'", (existing_login_user["id"],))
+                existing_login_user = None
+
             if existing_email_user:
+                if existing_email_user["status"] == "pending" and has_live_challenge(existing_email_user["id"]):
+                    # Never let a second registrant replace the credentials of a registration
+                    # that is still waiting for its code: the email owner would activate them.
+                    self.send_json_response(409, {
+                        "success": False,
+                        "error": "Регистрация с этим email уже ожидает подтверждения. Введите код из письма или повторите попытку через 10 минут."
+                    })
+                    return
                 if existing_email_user["status"] == "active":
                     self.send_json_response(400, {
                         "success": False,
@@ -3717,6 +3754,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         VALUES (?, ?, ?, ?)
                     """, (user_id, name_clean, now_iso, now_iso))
 
+            # Only the browser holding this token can complete the registration with the emailed code
+            registration_token = secrets.token_urlsafe(32)
+            with conn:
+                conn.execute(
+                    "UPDATE users SET registration_token_hash = ? WHERE id = ?",
+                    (hashlib.sha256(registration_token.encode("utf-8")).hexdigest(), user_id)
+                )
+
             # Invalidate any existing pending challenges for this user/email
             with conn:
                 conn.execute("""
@@ -3744,6 +3789,12 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Send email
             sent, err_msg = send_verification_email(conn, email_clean, code, login_clean)
             if not sent:
+                # An undelivered code must not block a retry of the same registration
+                with conn:
+                    conn.execute(
+                        "UPDATE email_verifications SET status = 'invalidated', updated_at = ? WHERE id = ?",
+                        (now_iso, challenge_id)
+                    )
                 self.send_json_response(500, {
                     "success": False,
                     "error": err_msg or "Не удалось отправить письмо с кодом подтверждения"
@@ -3753,11 +3804,16 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             REGISTRATION_RATE_LIMITER.record(client_ip)
             REGISTRATION_RATE_LIMITER.record(email_norm)
 
+            secure_flag = "; Secure" if self.is_secure_request() else ""
             self.send_json_response(201, {
                 "success": True,
                 "message": "Код подтверждения отправлен на указанный email",
-                "email": mask_email(email_clean)
-            })
+                "email": mask_email(email_clean),
+                "registrationToken": registration_token
+            }, extra_headers=[(
+                "Set-Cookie",
+                f"sc_reg={registration_token}; Path=/api/auth; Max-Age=86400; HttpOnly; SameSite=Strict{secure_flag}"
+            )])
         finally:
             conn.close()
 
@@ -3813,7 +3869,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, login, email, status FROM users
+                SELECT id, login, email, status, registration_token_hash FROM users
                 WHERE email_normalized = ? OR login_normalized = ?
                 LIMIT 1
             """, (ident_norm, ident_norm))
@@ -3830,6 +3886,23 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(400, {
                     "success": False,
                     "error": "Учетная запись заблокирована"
+                })
+                return
+
+            # The code proves control of the mailbox; the registration token proves this browser
+            # submitted these credentials. Without both, the email owner could activate an account
+            # whose password was chosen by someone else.
+            reg_token = data.get("registrationToken") or self.get_cookie("sc_reg") or ""
+            expected_hash = user["registration_token_hash"]
+            if (
+                not isinstance(reg_token, str)
+                or not reg_token
+                or not expected_hash
+                or not hmac.compare_digest(hashlib.sha256(reg_token.encode("utf-8")).hexdigest(), expected_hash)
+            ):
+                self.send_json_response(400, {
+                    "success": False,
+                    "error": "Подтвердите email в том же браузере, где проходили регистрацию, или зарегистрируйтесь заново"
                 })
                 return
 
@@ -3940,14 +4013,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Activate user
                 conn.execute("""
                     UPDATE users
-                    SET status = 'active', email_verified_at = ?, updated_at = ?
+                    SET status = 'active', email_verified_at = ?, updated_at = ?, registration_token_hash = NULL
                     WHERE id = ?
                 """, (now_iso, now_iso, user_id))
 
             self.send_json_response(200, {
                 "success": True,
                 "message": "Email успешно подтвержден"
-            })
+            }, extra_headers=[("Set-Cookie", "sc_reg=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Strict")])
         finally:
             conn.close()
 
@@ -11713,314 +11786,376 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
 
+    def mailer(self) -> "EmailService":
+        return getattr(self.server, "email_service", None) or EMAIL_SERVICE
+
     def handle_auth_change_password(self):
-        """POST /api/auth/change-password"""
+        """POST /api/auth/change-password: verifies the current password, revokes every session and issues a new one for this device."""
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
             return
-            
+
         data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
-        if data is None: return
-        
+        if data is None:
+            return
+
         current_password = data.get("currentPassword", "")
         new_password = data.get("newPassword", "")
-        
-        if len(new_password) < 8:
+        if not isinstance(new_password, str) or len(new_password) < 8:
             self.send_json_response(400, {"success": False, "error": "Новый пароль должен содержать минимум 8 символов"})
             return
-            
+
         conn = self.get_db()
         try:
+            cur = conn.cursor()
+            cur.execute("SELECT password_hash FROM users WHERE id = ?", (user["id"],))
+            row = cur.fetchone()
+            if not row or not verify_password(current_password, row["password_hash"]):
+                self.send_json_response(400, {"success": False, "error": "Неверный текущий пароль"})
+                return
+
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
             with conn:
-                cur = conn.cursor()
-                cur.execute("SELECT password_hash FROM users WHERE id = ?", (user["id"],))
-                row = cur.fetchone()
-                if not row or not verify_password(current_password, row["password_hash"]):
-                    self.send_json_response(400, {"success": False, "error": "Неверный текущий пароль"})
-                    return
-                
-                new_hash = hash_password(new_password)
-                cur.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", 
-                            (new_hash, datetime.datetime.now(datetime.timezone.utc).isoformat(), user["id"]))
-                
-                # Revoke all sessions
-                cur.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user["id"],))
-                
-            self.clear_cookie("sc_session")
-            self.clear_cookie("sc_csrf")
-            self.send_json_response(200, {"success": True, "message": "Пароль успешно изменен"})
+                conn.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+                             (hash_password(new_password), now_iso, user["id"]))
+                conn.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user["id"],))
+                token, csrf_token = self.create_session(conn, user["id"], user["name"], user["role"])
         finally:
             conn.close()
 
+        self.send_json_response(200, {
+            "success": True,
+            "message": "Пароль изменен. Остальные устройства отключены от аккаунта.",
+            "csrfToken": csrf_token
+        }, extra_headers=self.session_cookie_headers(token, csrf_token))
+
     def handle_auth_change_email(self):
-        """POST /api/auth/change-email"""
+        """POST /api/auth/change-email: re-checks the password and sends a code to the new address; the old address stays active until the code is confirmed."""
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
             return
-            
+
         data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
-        if data is None: return
-        
+        if data is None:
+            return
+
         password = data.get("password", "")
-        new_email = data.get("newEmail", "").strip()
-        
+        new_email = data.get("newEmail", "")
+        new_email = new_email.strip() if isinstance(new_email, str) else ""
         if not validate_email_format(new_email):
             self.send_json_response(400, {"success": False, "error": "Некорректный формат нового email"})
             return
-            
+
+        limit_key = f"email-change:{user['id']}"
+        is_limited, retry_after = RECOVERY_RATE_LIMITER.is_rate_limited(limit_key)
+        if is_limited:
+            self.send_json_response(429, {
+                "success": False,
+                "error": "Слишком много запросов на смену email. Пожалуйста, подождите.",
+                "retryAfter": retry_after
+            }, extra_headers=[("Retry-After", str(retry_after))])
+            return
+
         conn = self.get_db()
         try:
+            cur = conn.cursor()
+            cur.execute("SELECT password_hash, email, email_normalized FROM users WHERE id = ?", (user["id"],))
+            row = cur.fetchone()
+            if not row or not verify_password(password, row["password_hash"]):
+                self.send_json_response(400, {"success": False, "error": "Неверный пароль"})
+                return
+            if row["email_normalized"] == new_email.lower():
+                self.send_json_response(400, {"success": False, "error": "Это ваш текущий email"})
+                return
+            cur.execute("SELECT 1 FROM users WHERE email_normalized = ?", (new_email.lower(),))
+            if cur.fetchone():
+                self.send_json_response(400, {"success": False, "error": "Указанный email уже используется"})
+                return
+
+            code = generate_verification_code()
+            now = datetime.datetime.now(datetime.timezone.utc)
+            now_iso = now.isoformat()
+            challenge_id = str(uuid.uuid4())
             with conn:
-                cur = conn.cursor()
-                cur.execute("SELECT password_hash, email FROM users WHERE id = ?", (user["id"],))
-                row = cur.fetchone()
-                if not row or not verify_password(password, row["password_hash"]):
-                    self.send_json_response(400, {"success": False, "error": "Неверный пароль"})
-                    return
-                
-                cur.execute("SELECT id FROM users WHERE email_normalized = ? AND status != 'disabled'", (new_email.lower(),))
-                if cur.fetchone():
-                    self.send_json_response(400, {"success": False, "error": "Указанный email уже используется"})
-                    return
-                
-                code = generate_verification_code()
-                code_hash = hash_verification_code(code)
-                now = datetime.datetime.now(datetime.timezone.utc)
-                expires_at = (now + datetime.timedelta(minutes=10)).isoformat()
-                resend_available_at = (now + datetime.timedelta(minutes=1)).isoformat()
-                now_iso = now.isoformat()
-                
-                cur.execute("""
+                conn.execute("""
                     UPDATE email_verifications SET status = 'invalidated', updated_at = ?
                     WHERE user_id = ? AND purpose = 'email_change' AND status = 'pending'
                 """, (now_iso, user["id"]))
-                
-                challenge_id = str(uuid.uuid4())
-                cur.execute("""
+                conn.execute("""
                     INSERT INTO email_verifications
                     (id, user_id, email, purpose, code_hash, expires_at, resend_available_at, created_at, updated_at)
                     VALUES (?, ?, ?, 'email_change', ?, ?, ?, ?, ?)
-                """, (challenge_id, user["id"], new_email, code_hash, expires_at, resend_available_at, now_iso, now_iso))
-                
-                email_service = getattr(self.server, "email_service", None)
-                if email_service:
-                    email_service.send_email(
-                        new_email,
-                        "Подтверждение смены email",
-                        f"Код для подтверждения смены email: {code}"
-                    )
-                    if row["email"]:
-                        email_service.send_email(
-                            row["email"],
-                            "Запрос на смену email",
-                            "Был запрошен процесс смены email. Если это не вы, срочно смените пароль."
-                        )
-                
-            self.send_json_response(200, {"success": True, "message": "Код подтверждения отправлен на новый email"})
+                """, (challenge_id, user["id"], new_email, hash_verification_code(code),
+                      (now + datetime.timedelta(minutes=10)).isoformat(),
+                      (now + datetime.timedelta(minutes=1)).isoformat(), now_iso, now_iso))
+            RECOVERY_RATE_LIMITER.record(limit_key)
+
+            sent, err_msg = self.mailer().send_email(
+                conn, new_email, "Подтверждение смены email SmartContractum",
+                f"Код для подтверждения нового адреса: {code}\n\nКод действителен 10 минут.\n"
+            )
+            if not sent:
+                with conn:
+                    conn.execute("UPDATE email_verifications SET status = 'invalidated', updated_at = ? WHERE id = ?",
+                                 (now_iso, challenge_id))
+                self.send_json_response(502, {
+                    "success": False,
+                    "error": "Не удалось отправить письмо на новый адрес. Текущий email не изменен."
+                })
+                return
+            if row["email"]:
+                self.mailer().send_email(
+                    conn, row["email"], "Запрос на смену email SmartContractum",
+                    "Для вашего аккаунта запрошена смена email. Если это были не вы, срочно смените пароль.\n"
+                )
         finally:
             conn.close()
+
+        self.send_json_response(200, {"success": True, "message": "Код подтверждения отправлен на новый email"})
+
     def handle_auth_verify_change_email(self):
-        """POST /api/auth/verify-change-email"""
+        """POST /api/auth/verify-change-email: confirms the new address with the emailed code."""
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
             return
-            
+
         data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
-        if data is None: return
+        if data is None:
+            return
         code = data.get("code", "")
-        
+        code = code.strip() if isinstance(code, str) else ""
         if not code:
             self.send_json_response(400, {"success": False, "error": "Код подтверждения обязателен"})
             return
-            
+
         conn = self.get_db()
         try:
-            with conn:
-                cur = conn.cursor()
-                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                cur.execute("""
-                    SELECT id, email, code_hash, expires_at, attempts_left 
-                    FROM email_verifications 
-                    WHERE user_id = ? AND purpose = 'email_change' AND status = 'pending'
-                    ORDER BY created_at DESC LIMIT 1
-                """, (user["id"],))
-                challenge = cur.fetchone()
-                
-                if not challenge or challenge["expires_at"] < now_iso:
-                    self.send_json_response(400, {"success": False, "error": "Код недействителен или просрочен"})
-                    return
-                
-                if not verify_verification_code(code, challenge["code_hash"]):
-                    new_attempts = challenge["attempts_left"] - 1
-                    new_status = "invalidated" if new_attempts <= 0 else "pending"
-                    cur.execute("""
+            cur = conn.cursor()
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            cur.execute("""
+                SELECT id, email, code_hash, expires_at, attempts_left
+                FROM email_verifications
+                WHERE user_id = ? AND purpose = 'email_change' AND status = 'pending'
+                ORDER BY created_at DESC LIMIT 1
+            """, (user["id"],))
+            challenge = cur.fetchone()
+            if not challenge or challenge["expires_at"] < now_iso:
+                self.send_json_response(400, {"success": False, "error": "Код недействителен или просрочен"})
+                return
+
+            if not verify_verification_code(code, challenge["code_hash"]):
+                new_attempts = challenge["attempts_left"] - 1
+                with conn:
+                    conn.execute("""
                         UPDATE email_verifications SET attempts_left = ?, status = ?, updated_at = ? WHERE id = ?
-                    """, (new_attempts, new_status, now_iso, challenge["id"]))
-                    self.send_json_response(400, {"success": False, "error": "Неверный код"})
-                    return
-                
-                cur.execute("""
-                    UPDATE email_verifications SET status = 'consumed', updated_at = ? WHERE id = ?
-                """, (now_iso, challenge["id"]))
-                
-                new_email = challenge["email"]
-                cur.execute("""
-                    UPDATE users 
-                    SET email = ?, email_normalized = ?, email_verified_at = ?, updated_at = ? 
-                    WHERE id = ?
-                """, (new_email, new_email.lower(), now_iso, now_iso, user["id"]))
-                
-            self.send_json_response(200, {"success": True, "message": "Email успешно изменен"})
+                    """, (new_attempts, "invalidated" if new_attempts <= 0 else "pending", now_iso, challenge["id"]))
+                self.send_json_response(400, {"success": False, "error": "Неверный код"})
+                return
+
+            new_email = challenge["email"]
+            try:
+                with conn:
+                    consumed = conn.execute("""
+                        UPDATE email_verifications SET status = 'consumed', updated_at = ?
+                        WHERE id = ? AND status = 'pending'
+                    """, (now_iso, challenge["id"])).rowcount
+                    if consumed == 0:
+                        raise sqlite3.IntegrityError("challenge already consumed")
+                    conn.execute("""
+                        UPDATE users
+                        SET email = ?, email_normalized = ?, email_verified_at = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (new_email, new_email.lower(), now_iso, now_iso, user["id"]))
+            except sqlite3.IntegrityError:
+                # The address was taken by another account after the code was sent, or the code raced
+                self.send_json_response(400, {"success": False, "error": "Не удалось сменить email: адрес уже используется или код уже применен"})
+                return
         finally:
             conn.close()
 
+        self.send_json_response(200, {"success": True, "message": "Email успешно изменен"})
+
     def handle_auth_forgot_password(self):
-        """POST /api/auth/forgot-password"""
+        """POST /api/auth/forgot-password: always answers neutrally; sends a one-time code only to a verified address."""
         data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
-        if data is None: return
-        
-        identifier = (data.get("identifier") or "").strip().lower()
+        if data is None:
+            return
+
+        identifier = data.get("identifier") or ""
+        identifier = identifier.strip().lower() if isinstance(identifier, str) else ""
         if not identifier:
             self.send_json_response(400, {"success": False, "error": "Не указан email или логин"})
             return
-            
-        conn = self.get_db()
-        try:
-            with conn:
-                cur = conn.cursor()
-                cur.execute("""
-                    SELECT id, email, email_verified_at 
-                    FROM users 
-                    WHERE (login_normalized = ? OR email_normalized = ?) AND status != 'disabled'
-                """, (identifier, identifier))
-                row = cur.fetchone()
-                
-                if row and row["email"] and row["email_verified_at"]:
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    code = generate_verification_code()
-                    code_hash = hash_verification_code(code)
-                    expires_at = (now + datetime.timedelta(minutes=10)).isoformat()
-                    resend_available_at = (now + datetime.timedelta(minutes=1)).isoformat()
-                    now_iso = now.isoformat()
-                    
-                    cur.execute("""
-                        UPDATE email_verifications SET status = 'invalidated', updated_at = ?
-                        WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
-                    """, (now_iso, row["id"]))
-                    
-                    challenge_id = str(uuid.uuid4())
-                    cur.execute("""
-                        INSERT INTO email_verifications
-                        (id, user_id, email, purpose, code_hash, expires_at, resend_available_at, created_at, updated_at)
-                        VALUES (?, ?, ?, 'password_reset', ?, ?, ?, ?, ?)
-                    """, (challenge_id, row["id"], row["email"], code_hash, expires_at, resend_available_at, now_iso, now_iso))
-                    
-                    email_service = getattr(self.server, "email_service", None)
-                    if email_service:
-                        email_service.send_email(
-                            row["email"],
-                            "Восстановление пароля",
-                            f"Код для сброса пароля: {code}"
-                        )
-            
-            # Neutral response
-            self.send_json_response(200, {"success": True, "message": "Если учетная запись существует, инструкции по сбросу отправлены на привязанный email"})
-        finally:
-            conn.close()
-    def handle_auth_reset_password(self):
-        """POST /api/auth/reset-password"""
-        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
-        if data is None: return
-        
-        identifier = (data.get("identifier") or "").strip().lower()
-        code = data.get("code", "")
-        new_password = data.get("newPassword", "")
-        
-        if len(new_password) < 8:
-            self.send_json_response(400, {"success": False, "error": "Новый пароль должен содержать минимум 8 символов"})
+
+        neutral = {"success": True, "message": "Если учетная запись существует, код для сброса пароля отправлен на привязанный email"}
+        client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
+        ip_key = f"forgot-ip:{client_ip}"
+        is_limited, retry_after = RECOVERY_RATE_LIMITER.is_rate_limited(ip_key)
+        if is_limited:
+            self.send_json_response(429, {
+                "success": False,
+                "error": "Слишком много запросов на восстановление. Пожалуйста, подождите.",
+                "retryAfter": retry_after
+            }, extra_headers=[("Retry-After", str(retry_after))])
             return
-            
+        RECOVERY_RATE_LIMITER.record(ip_key)
+
+        # The per-account limit is applied silently so the response never depends on whether the account exists
+        account_key = f"forgot-account:{identifier}"
+        account_limited, _ = RECOVERY_RATE_LIMITER.is_rate_limited(account_key)
+        RECOVERY_RATE_LIMITER.record(account_key)
+        if account_limited:
+            self.send_json_response(200, neutral)
+            return
+
         conn = self.get_db()
         try:
-            with conn:
-                cur = conn.cursor()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, email FROM users
+                WHERE (login_normalized = ? OR email_normalized = ?)
+                  AND status = 'active' AND email IS NOT NULL AND email_verified_at IS NOT NULL
+            """, (identifier, identifier))
+            row = cur.fetchone()
+            if row:
+                now = datetime.datetime.now(datetime.timezone.utc)
+                now_iso = now.isoformat()
                 cur.execute("""
-                    SELECT id FROM users 
-                    WHERE (login_normalized = ? OR email_normalized = ?) AND status != 'disabled'
-                """, (identifier, identifier))
-                user_row = cur.fetchone()
-                if not user_row:
-                    self.send_json_response(400, {"success": False, "error": "Неверный код или пользователь не найден"})
-                    return
-                
-                user_id = user_row["id"]
-                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                
-                cur.execute("""
-                    SELECT id, code_hash, expires_at, attempts_left 
-                    FROM email_verifications 
-                    WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
-                    ORDER BY created_at DESC LIMIT 1
-                """, (user_id,))
-                challenge = cur.fetchone()
-                
-                if not challenge or challenge["expires_at"] < now_iso:
-                    self.send_json_response(400, {"success": False, "error": "Код недействителен или просрочен"})
-                    return
-                    
-                if not verify_verification_code(code, challenge["code_hash"]):
-                    new_attempts = challenge["attempts_left"] - 1
-                    new_status = "invalidated" if new_attempts <= 0 else "pending"
-                    cur.execute("""
-                        UPDATE email_verifications SET attempts_left = ?, status = ?, updated_at = ? WHERE id = ?
-                    """, (new_attempts, new_status, now_iso, challenge["id"]))
-                    self.send_json_response(400, {"success": False, "error": "Неверный код"})
-                    return
-                    
-                cur.execute("""
-                    UPDATE email_verifications SET status = 'consumed', updated_at = ? WHERE id = ?
-                """, (now_iso, challenge["id"]))
-                
-                cur.execute("""
-                    UPDATE email_verifications SET status = 'invalidated', updated_at = ?
-                    WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
-                """, (now_iso, user_id))
-                
-                new_hash = hash_password(new_password)
-                cur.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", 
-                            (new_hash, now_iso, user_id))
-                
-                cur.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
-                
-            self.clear_cookie("sc_session")
-            self.clear_cookie("sc_csrf")
-            self.send_json_response(200, {"success": True, "message": "Пароль успешно сброшен. Пожалуйста, выполните вход."})
+                    SELECT 1 FROM email_verifications
+                    WHERE user_id = ? AND purpose = 'password_reset' AND resend_available_at > ?
+                    LIMIT 1
+                """, (row["id"], now_iso))
+                in_cooldown = cur.fetchone() is not None
+                if not in_cooldown:
+                    code = generate_verification_code()
+                    with conn:
+                        conn.execute("""
+                            UPDATE email_verifications SET status = 'invalidated', updated_at = ?
+                            WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
+                        """, (now_iso, row["id"]))
+                        conn.execute("""
+                            INSERT INTO email_verifications
+                            (id, user_id, email, purpose, code_hash, expires_at, resend_available_at, created_at, updated_at)
+                            VALUES (?, ?, ?, 'password_reset', ?, ?, ?, ?, ?)
+                        """, (str(uuid.uuid4()), row["id"], row["email"], hash_verification_code(code),
+                              (now + datetime.timedelta(minutes=10)).isoformat(),
+                              (now + datetime.timedelta(minutes=1)).isoformat(), now_iso, now_iso))
+                    self.mailer().send_email(
+                        conn, row["email"], "Восстановление пароля SmartContractum",
+                        f"Код для сброса пароля: {code}\n\nКод действителен 10 минут. "
+                        f"Если вы не запрашивали сброс, проигнорируйте это письмо.\n"
+                    )
         finally:
             conn.close()
 
+        self.send_json_response(200, neutral)
+
+    def handle_auth_reset_password(self):
+        """POST /api/auth/reset-password: consumes the one-time code, sets the new password and revokes every session."""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None:
+            return
+
+        identifier = data.get("identifier") or ""
+        identifier = identifier.strip().lower() if isinstance(identifier, str) else ""
+        code = data.get("code", "")
+        code = code.strip() if isinstance(code, str) else ""
+        new_password = data.get("newPassword", "")
+        if not isinstance(new_password, str) or len(new_password) < 8:
+            self.send_json_response(400, {"success": False, "error": "Новый пароль должен содержать минимум 8 символов"})
+            return
+
+        client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
+        ip_key = f"reset-ip:{client_ip}"
+        is_limited, retry_after = RESET_ATTEMPT_LIMITER.is_rate_limited(ip_key)
+        if is_limited:
+            self.send_json_response(429, {
+                "success": False,
+                "error": "Слишком много попыток. Пожалуйста, подождите.",
+                "retryAfter": retry_after
+            }, extra_headers=[("Retry-After", str(retry_after))])
+            return
+
+        # One message for every failure, so the endpoint does not reveal which accounts exist
+        invalid = {"success": False, "error": "Неверный или просроченный код"}
+        conn = self.get_db()
+        try:
+            cur = conn.cursor()
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            cur.execute("""
+                SELECT id FROM users
+                WHERE (login_normalized = ? OR email_normalized = ?) AND status = 'active'
+            """, (identifier, identifier))
+            user_row = cur.fetchone()
+            challenge = None
+            if user_row:
+                cur.execute("""
+                    SELECT id, code_hash, expires_at, attempts_left
+                    FROM email_verifications
+                    WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
+                    ORDER BY created_at DESC LIMIT 1
+                """, (user_row["id"],))
+                challenge = cur.fetchone()
+
+            if not challenge or challenge["expires_at"] < now_iso or not code:
+                RESET_ATTEMPT_LIMITER.record(ip_key)
+                self.send_json_response(400, invalid)
+                return
+
+            if not verify_verification_code(code, challenge["code_hash"]):
+                RESET_ATTEMPT_LIMITER.record(ip_key)
+                new_attempts = challenge["attempts_left"] - 1
+                with conn:
+                    conn.execute("""
+                        UPDATE email_verifications SET attempts_left = ?, status = ?, updated_at = ? WHERE id = ?
+                    """, (new_attempts, "invalidated" if new_attempts <= 0 else "pending", now_iso, challenge["id"]))
+                self.send_json_response(400, invalid)
+                return
+
+            user_id = user_row["id"]
+            with conn:
+                consumed = conn.execute("""
+                    UPDATE email_verifications SET status = 'consumed', updated_at = ?
+                    WHERE id = ? AND status = 'pending'
+                """, (now_iso, challenge["id"])).rowcount
+                if consumed == 1:
+                    conn.execute("""
+                        UPDATE email_verifications SET status = 'invalidated', updated_at = ?
+                        WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
+                    """, (now_iso, user_id))
+                    conn.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+                                 (hash_password(new_password), now_iso, user_id))
+                    conn.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
+            if consumed != 1:
+                self.send_json_response(400, invalid)
+                return
+        finally:
+            conn.close()
+
+        self.send_json_response(200, {
+            "success": True,
+            "message": "Пароль успешно сброшен. Пожалуйста, выполните вход."
+        }, extra_headers=self.cleared_session_cookie_headers())
+
     def handle_auth_logout_all(self):
-        """POST /api/auth/logout-all"""
+        """POST /api/auth/logout-all: revokes every session of the current user, including this one."""
         user = self.get_current_user()
         if not user:
             self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
             return
-            
+
         conn = self.get_db()
         try:
             with conn:
-                cur = conn.cursor()
-                cur.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user["id"],))
-                
-            self.clear_cookie("sc_session")
-            self.clear_cookie("sc_csrf")
-            self.send_json_response(200, {"success": True, "authenticated": False})
+                conn.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user["id"],))
         finally:
             conn.close()
 
-
+        self.send_json_response(200, {"success": True, "authenticated": False},
+                                extra_headers=self.cleared_session_cookie_headers())
 
     def handle_get_drafts(self, parsed):
         """GET /api/drafts?type=...&limit=20&offset=0"""

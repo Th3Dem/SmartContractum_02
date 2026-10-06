@@ -286,6 +286,7 @@
         if (res.status === 201) {
           localStorage.setItem('sc_auth_sync_event', Date.now().toString());
           this.pendingEmailOrLogin = email || login;
+          this.pendingRegistrationToken = data.registrationToken || '';
           this.switchTab('verify');
         } else {
           this.showError(data.error || 'Register error');
@@ -307,7 +308,11 @@
         const res = await fetch('/api/auth/verify-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: this.pendingEmailOrLogin, code: verifyCode })
+          body: JSON.stringify({
+            identifier: this.pendingEmailOrLogin,
+            code: verifyCode,
+            registrationToken: this.pendingRegistrationToken || undefined
+          })
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 200) {
