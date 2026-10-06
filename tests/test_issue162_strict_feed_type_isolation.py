@@ -32,6 +32,7 @@ from typing import Any, Dict
 
 import server
 from server import create_server, init_db
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -518,7 +519,7 @@ class TestIssue162StrictFeedTypeIsolation(unittest.TestCase):
         self.assertNotIn(em_dash, test_content, "Em dash found in test file")
 
         # Check server.py changes
-        with open(os.path.join(PROJECT_ROOT, "server.py"), "r", encoding="utf-8") as f:
+        with backend_source_file() as f:
             server_content = f.read()
         self.assertIn("is_publications_tab = tab in", server_content)
         self.assertIn("is_questions_tab = (tab == \"questions\")", server_content)

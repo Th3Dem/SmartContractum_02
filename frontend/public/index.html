@@ -112,6 +112,8 @@
       line-height: 1.55;
     }
   </style>
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/notifications.css">
 </head>
 <body class="app-body">
   <div class="app-container">
@@ -206,7 +208,7 @@
               </svg>
               <span id="headerNotifBadge" class="header-notif-badge" style="display: none;">0</span>
             </button>
-            <div id="headerNotifPopup" class="header-notif-popup" style="display: none;" role="region" aria-label="Список уведомлений">
+            <div id="headerNotifPopup" class="header-notif-popup" role="region" aria-label="Список уведомлений">
               <div class="notif-popup-header">
                 <span class="notif-popup-title">Уведомления</span>
                 <button type="button" id="notifMarkAllReadBtn" class="notif-mark-read-btn">Прочитать все</button>
@@ -346,5 +348,7 @@
       });
     }
   </script>
+  <script src="js/auth.js"></script>
+  <script src="js/notifications.js"></script>
 </body>
 </html>

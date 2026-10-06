@@ -20,6 +20,7 @@ import sqlite3
 import server
 from server import create_server, init_db
 import seed_data
+from backend_source import BACKEND_FILES, backend_source_file
 
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -56,7 +57,7 @@ class TestTask39CommunityMVP(unittest.TestCase):
             cls.feed_js = f.read()
         with open(os.path.join(FRONTEND_DIR, "js", "article.js"), "r", encoding="utf-8") as f:
             cls.article_js = f.read()
-        with open(os.path.join(PROJECT_ROOT, "server.py"), "r", encoding="utf-8") as f:
+        with backend_source_file() as f:
             cls.server_py = f.read()
 
     @classmethod

@@ -86,23 +86,26 @@
     }
 
     // Notifications bell dummy handler
-    const notifBtn = document.getElementById('headerNotificationsBtn');
-    const notifPopup = document.getElementById('headerNotifPopup');
-    if (notifBtn && notifPopup) {
-      notifBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const isOpen = notifPopup.style.display === 'block';
-        notifPopup.style.display = isOpen ? 'none' : 'block';
-        notifBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-      });
+    (function() {
+      if (window.SCNotifications) return;
+      const notifBtn = document.getElementById('headerNotificationsBtn');
+      const notifPopup = document.getElementById('headerNotifPopup');
+      if (notifBtn && notifPopup) {
+        notifBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const isOpen = notifPopup.style.display === 'block';
+          notifPopup.style.display = isOpen ? 'none' : 'block';
+          notifBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        });
 
-      document.addEventListener('click', function (e) {
-        if (!notifBtn.contains(e.target) && !notifPopup.contains(e.target)) {
-          notifPopup.style.display = 'none';
-          notifBtn.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
+        document.addEventListener('click', function (e) {
+          if (!notifBtn.contains(e.target) && !notifPopup.contains(e.target)) {
+            notifPopup.style.display = 'none';
+            notifBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+    })();
   }
 
   /* ==========================================================================
@@ -153,9 +156,12 @@
   }
 
   function initAuthControls() {
+  if (window.SCAuth && window.SCAuth._initialized) return;
+
     const loginBtn = document.getElementById('headerLoginBtn');
     if (loginBtn) {
       loginBtn.addEventListener('click', function (e) {
+    if (window.SCAuth && window.SCAuth._initialized) return;
         e.preventDefault();
         if (state.currentUser) {
           if (confirm('Вы вошли как «' + state.currentUser.name + '». Выйти из профиля?')) {

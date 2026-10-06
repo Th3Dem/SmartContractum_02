@@ -27,6 +27,7 @@ import urllib.request
 
 import server
 from server import create_server, init_db
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -364,7 +365,7 @@ class TestIssue172FullProfileSidebar(unittest.TestCase):
         """Verifies ZERO emojis in all files modified or created for Issue #172."""
         emoji_pattern = re.compile(r'[\U00010000-\U0010ffff]')
         files_to_check = [
-            os.path.join(PROJECT_ROOT, "server.py"),
+            *BACKEND_FILES,
             os.path.join(FRONTEND_DIR, "profile.html"),
             os.path.join(FRONTEND_DIR, "js", "profile.js"),
             os.path.join(FRONTEND_DIR, "js", "profile-page.js"),

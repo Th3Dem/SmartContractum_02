@@ -28,6 +28,7 @@ import urllib.request
 
 import server
 from server import create_server, init_db
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -596,9 +597,7 @@ class TestIssue187ProfileCommentsBackend(unittest.TestCase):
         test_file_path = os.path.abspath(__file__)
         with open(test_file_path, "r", encoding="utf-8") as f:
             test_content = f.read()
-
-        server_file_path = os.path.join(PROJECT_ROOT, "server.py")
-        with open(server_file_path, "r", encoding="utf-8") as f:
+        with backend_source_file() as f:
             server_content = f.read()
 
         # Check for em dashes (Unicode U+2014)

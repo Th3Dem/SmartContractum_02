@@ -23,7 +23,9 @@
       this.options = options || {};
 
       this.materialType = this.options.materialType || 'publication';
-      this.activeDraftKey = this.options.activeDraftKey || (this.materialType === 'question' ? 'ag_active_question_draft_id' : 'ag_active_draft_id');
+      this.baseActiveDraftKey = this.options.activeDraftKey || (this.materialType === 'question' ? 'ag_active_question_draft_id' : 'ag_active_draft_id');
+      this.userId = window.SCAuth && window.SCAuth.currentUser ? window.SCAuth.currentUser.id : null;
+      this.activeDraftKey = this.userId ? `${this.baseActiveDraftKey}_${this.userId}` : this.baseActiveDraftKey;
       this.tagsGetter = this.options.tagsGetter || this.options.getTags || null;
       this.tagsSetter = this.options.tagsSetter || this.options.setTags || null;
       this.onDraftLoaded = this.options.onDraftLoaded || null;
@@ -134,6 +136,56 @@
             this.draftsModal.classList.remove('show');
           }
         });
+      }
+
+      window.addEventListener('auth:change', async (e) => {
+        const { authenticated, user } = e.detail;
+        if (!authenticated) {
+          if (this.saveDebounceTimer) clearTimeout(this.saveDebounceTimer);
+          this.userId = null;
+          this.activeDraftKey = this.baseActiveDraftKey;
+          this.currentDraftId = 'draft_' + Date.now();
+          this.currentDraft = null;
+          await this.createNewDraft();
+        } else if (user) {
+          this.userId = user.id;
+          this.activeDraftKey = `${this.baseActiveDraftKey}_${this.userId}`;
+          await this.importGuestDrafts(user.id);
+          await this.autoRestore();
+          await this.updateBadge();
+        }
+      });
+    }
+
+    async importGuestDrafts(userId) {
+      const guestKey = this.baseActiveDraftKey;
+      let guestDrafts = [];
+      if (this.db) {
+        guestDrafts = await new Promise((resolve) => {
+          const tx = this.db.transaction([STORE_NAME], 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAll();
+          req.onsuccess = () => resolve((req.result || []).filter(d => !d.userId));
+          req.onerror = () => resolve([]);
+        });
+      } else {
+        const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
+        guestDrafts = Object.values(drafts).filter(d => !d.userId);
+      }
+      
+      if (guestDrafts.length > 0) {
+        const doImport = confirm('У вас есть локальные черновики. Хотите импортировать их в свой аккаунт?');
+        if (doImport) {
+          for (const d of guestDrafts) {
+            d.userId = userId;
+            d.id = d.id + '_' + userId;
+            if (this.db) {
+              await this.putToDB(d);
+            } else {
+              this.putToLocalStorage(d);
+            }
+          }
+        }
       }
     }
 
@@ -312,7 +364,8 @@
           topics: ['smart-contracts-development'],
           description: snippet
         } : null),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        userId: this.userId || null
       };
 
       try {
@@ -322,12 +375,68 @@
           this.putToLocalStorage(draft);
         }
 
+        let syncConflict = false;
+        if (this.userId && navigator.onLine) {
+          try {
+            const method = this.currentRevision > 1 ? 'PUT' : 'POST';
+            const url = this.currentRevision > 1 ? `/api/drafts/${this.currentDraftId}` : '/api/drafts';
+            const res = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: this.currentDraftId,
+                materialType: this.materialType,
+                title: title,
+                content: text,
+                revision: this.currentRevision,
+                publicationSettings: draft.publicationSettings
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.draft && data.draft.revision) {
+                newRevision = data.draft.revision;
+                draft.revision = newRevision;
+              }
+              if (this.statusEl) {
+                this.statusEl.classList.add('status-saved');
+                this.statusTextEl.textContent = 'Сохранено в аккаунте';
+              }
+            } else if (res.status === 409) {
+              syncConflict = true;
+              if (this.statusEl) {
+                this.statusEl.classList.add('status-error');
+                this.statusTextEl.textContent = 'Конфликт синхронизации';
+              }
+              const saveCopy = confirm('Конфликт синхронизации. Сохранить как копию?');
+              if (saveCopy) {
+                this.currentDraftId = 'draft_' + Date.now();
+                draft.id = this.currentDraftId;
+                draft.revision = 1;
+                if (this.db) await this.putToDB(draft);
+                else this.putToLocalStorage(draft);
+              }
+            } else {
+              if (this.statusEl) {
+                this.statusEl.classList.add('status-saved');
+                this.statusTextEl.textContent = 'Сохранено на устройстве';
+              }
+            }
+          } catch (e) {
+            if (this.statusEl) {
+              this.statusEl.classList.add('status-saved');
+              this.statusTextEl.textContent = 'Сохранено на устройстве';
+            }
+          }
+        }
+
         this.currentRevision = newRevision;
         this.lastSavedFingerprint = currentFingerprint;
         this.currentDraft = draft;
         localStorage.setItem(this.activeDraftKey, this.currentDraftId);
-        this.setStatus('saved');
-        this.isDirty = false;
+        if (!syncConflict) {
+          this.isDirty = false;
+        }
         await this.updateBadge();
 
         if (this.onDraftSaved && typeof this.onDraftSaved === 'function') {
@@ -445,6 +554,30 @@
         });
       }
 
+      list = list.filter(d => (d.userId || null) === this.userId);
+      
+      if (this.userId && navigator.onLine) {
+        try {
+          const res = await fetch(`/api/drafts?material_type=${this.materialType}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.drafts) {
+              const serverDrafts = data.drafts;
+              serverDrafts.forEach(sd => {
+                const existing = list.find(ld => ld.id === sd.id);
+                if (!existing || sd.revision > existing.revision) {
+                  const merged = { ...existing, ...sd, userId: this.userId };
+                  if (!existing) list.push(merged);
+                  else Object.assign(existing, merged);
+                  if (this.db) this.putToDB(merged);
+                  else this.putToLocalStorage(merged);
+                }
+              });
+            }
+          }
+        } catch (e) {}
+      }
+      
       list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       return list;
     }
@@ -823,6 +956,12 @@
         const drafts = JSON.parse(localStorage.getItem('ag_drafts_fallback') || '{}');
         delete drafts[id];
         localStorage.setItem('ag_drafts_fallback', JSON.stringify(drafts));
+      }
+
+      if (this.userId && navigator.onLine) {
+        try {
+          await fetch(`/api/drafts/${id}`, { method: 'DELETE' });
+        } catch (e) {}
       }
 
       if (this.currentDraftId === id) {
