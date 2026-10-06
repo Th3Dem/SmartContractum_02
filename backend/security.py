@@ -271,3 +271,13 @@ def generate_verification_code() -> str:
 
 def validate_email_format(email: str) -> bool:
     return isinstance(email, str) and len(email) <= 254 and bool(EMAIL_REGEX.match(email))
+
+
+# Media uploads: per signed-in user and per client IP, counted on successful saves
+MEDIA_UPLOAD_USER_LIMITER = RegistrationRateLimiter(max_per_hour=60)
+MEDIA_UPLOAD_IP_LIMITER = RegistrationRateLimiter(max_per_hour=120)
+
+
+def reset_media_upload_limiters() -> None:
+    MEDIA_UPLOAD_USER_LIMITER.reset()
+    MEDIA_UPLOAD_IP_LIMITER.reset()

@@ -1,5 +1,4 @@
 """Media upload and serving."""
-import image_decoder
 import json
 import os
 import re
@@ -8,6 +7,7 @@ import image_decoder
 
 from backend import config
 from backend.config import MAX_MEDIA_BODY_BYTES
+from backend.security import MEDIA_UPLOAD_IP_LIMITER, MEDIA_UPLOAD_USER_LIMITER
 from backend.storage import save_media_file
 from backend.submissions import validate_cover_image
 
@@ -69,7 +69,38 @@ class MediaHandlers:
           - Raw binary image bytes
         Validates via image_decoder and saves to data/media/<hash>.<ext>.
         Returns { success: True, url: "/media/...", meta: { ... } }
+        Only signed-in users with a confirmed email may upload; uploads are rate limited.
         """
+        user = self.get_current_user()
+        if not user:
+            # Do not stream a large anonymous body into memory just to reject it
+            try:
+                declared = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                declared = 0
+            if 0 < declared <= 1024 * 1024:
+                self.read_request_body(MAX_MEDIA_BODY_BYTES)
+            else:
+                self.close_connection = True
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Войдите, чтобы загружать изображения",
+                "requireAuth": True
+            }, extra_headers=[("Connection", "close")] if self.close_connection else None)
+            return
+
+        client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
+        for limiter, key in ((MEDIA_UPLOAD_USER_LIMITER, f"user:{user['id']}"), (MEDIA_UPLOAD_IP_LIMITER, f"ip:{client_ip}")):
+            limited, retry_after = limiter.is_rate_limited(key)
+            if limited:
+                self.close_connection = True
+                self.send_json_response(429, {
+                    "success": False,
+                    "error": "Слишком много загрузок. Попробуйте позже.",
+                    "retryAfter": retry_after
+                }, extra_headers=[("Retry-After", str(retry_after)), ("Connection", "close")])
+                return
+
         raw_body = self.read_request_body(MAX_MEDIA_BODY_BYTES)
         if raw_body is None:
             return
@@ -103,6 +134,7 @@ class MediaHandlers:
             if not res.is_valid:
                 self.send_json_response(400, {"success": False, "error": res.error_msg})
                 return
+            self.record_media_upload(user)
             self.send_json_response(200, {
                 "success": True,
                 "url": res.saved_url,
@@ -118,13 +150,19 @@ class MediaHandlers:
                 file_bytes = None
                 for part in parts:
                     if b'filename=' in part:
+                        # Strip exactly the line break that precedes the next boundary: image bytes
+                        # may legitimately end with CR, LF or "-" and must not be trimmed
                         header_end = part.find(b'\r\n\r\n')
                         if header_end != -1:
-                            file_bytes = part[header_end + 4:].rstrip(b'\r\n-')
+                            file_bytes = part[header_end + 4:]
+                            if file_bytes.endswith(b'\r\n'):
+                                file_bytes = file_bytes[:-2]
                             break
                         header_end = part.find(b'\n\n')
                         if header_end != -1:
-                            file_bytes = part[header_end + 2:].rstrip(b'\r\n-')
+                            file_bytes = part[header_end + 2:]
+                            if file_bytes.endswith(b'\n'):
+                                file_bytes = file_bytes[:-1]
                             break
                 if file_bytes:
                     raw_body = file_bytes
@@ -137,8 +175,14 @@ class MediaHandlers:
 
         ext = meta.get("format", "jpg")
         saved_url = save_media_file(raw_body, ext, media_dir=media_root)
+        self.record_media_upload(user)
         self.send_json_response(200, {
             "success": True,
             "url": saved_url,
             "meta": meta
         })
+
+    def record_media_upload(self, user):
+        client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
+        MEDIA_UPLOAD_USER_LIMITER.record(f"user:{user['id']}")
+        MEDIA_UPLOAD_IP_LIMITER.record(f"ip:{client_ip}")

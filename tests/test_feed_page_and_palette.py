@@ -46,7 +46,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import server
 import image_decoder
-from backend_source import BACKEND_FILES, backend_source_file
+from tests.backend_source import BACKEND_FILES, backend_source_file
+from tests.auth_helpers import upload_auth_headers
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'public')
@@ -2383,7 +2384,7 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
         upload_req = urllib.request.Request(
             f"{self.base_url}/api/media/upload",
             data=json.dumps({"image": b64_uri}).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
+            headers={**upload_auth_headers(self.db_path), "Content-Type": "application/json"}
         )
         with urllib.request.urlopen(upload_req) as resp:
             data = json.loads(resp.read().decode("utf-8"))

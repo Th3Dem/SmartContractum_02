@@ -28,6 +28,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 
 import server
+from tests.auth_helpers import upload_auth_headers
 
 # Minimal valid 1x1 PNG bytes for image upload tests
 TINY_PNG_BYTES = (
@@ -83,7 +84,7 @@ class TestIssue64SC029QuestionEditor(unittest.TestCase):
         req = urllib.request.Request(
             f"{self.base_url}{path}",
             data=data_bytes,
-            headers={"Content-Type": "application/json; charset=utf-8"}
+            headers={"Content-Type": "application/json; charset=utf-8", **(upload_auth_headers(self.db_path) if "upload" in path else {})}
         )
         if cookie:
             req.add_header("Cookie", cookie)
@@ -102,7 +103,7 @@ class TestIssue64SC029QuestionEditor(unittest.TestCase):
         req = urllib.request.Request(
             f"{self.base_url}{path}",
             data=data,
-            headers={"Content-Type": content_type}
+            headers={"Content-Type": content_type, **upload_auth_headers(self.db_path)}
         )
         try:
             with urllib.request.urlopen(req) as resp:
