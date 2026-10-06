@@ -95,6 +95,7 @@ class TestIssue206RegistrationAndEmailVerification(unittest.TestCase):
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
     def setUp(self):
+        self._reg_tokens: Dict[str, str] = {}
         reset_login_rate_limiter()
         reset_registration_rate_limiter()
         EMAIL_SERVICE.clear_sent_emails()
@@ -134,6 +135,13 @@ class TestIssue206RegistrationAndEmailVerification(unittest.TestCase):
         if cookie:
             req_headers["Cookie"] = cookie
 
+        # Verification only succeeds from the browser that registered: replay its registration token
+        if path == "/api/auth/verify-email" and payload is not None and "registrationToken" not in payload:
+            ident = str(payload.get("email") or payload.get("login") or payload.get("identifier") or "").lower()
+            token = self._reg_tokens.get(ident)
+            if token:
+                payload = dict(payload, registrationToken=token)
+
         data_bytes = None
         if payload is not None:
             data_bytes = json.dumps(payload).encode("utf-8")
@@ -146,6 +154,10 @@ class TestIssue206RegistrationAndEmailVerification(unittest.TestCase):
                 raw = resp.read().decode("utf-8")
                 data = json.loads(raw) if raw else {}
                 cookie_dict, cookie_hdr = self._parse_cookies(resp.headers)
+                if path == "/api/auth/register" and data.get("registrationToken") and payload:
+                    for key in ("email", "login"):
+                        if payload.get(key):
+                            self._reg_tokens[str(payload[key]).strip().lower()] = data["registrationToken"]
                 return resp.status, data, resp.headers, cookie_dict, cookie_hdr
         except urllib.error.HTTPError as e:
             try:

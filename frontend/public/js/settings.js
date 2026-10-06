@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json().catch(()=>({}));
       if (res.ok) {
-        showAlert(elements.passwordAlert, 'Пароль успешно изменен', 'success');
+        showAlert(elements.passwordAlert, data.message || 'Пароль успешно изменен', 'success');
         elements.changePasswordForm.reset();
       } else {
         showAlert(elements.passwordAlert, data.error || 'Ошибка', 'error');
@@ -297,12 +297,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleLogoutAll() {
-    if (!confirm('Вы уверены, что хотите завершить сессии на всех других устройствах?')) return;
+    if (!confirm('Завершить сессии на всех устройствах, включая это? Потребуется войти заново.')) return;
     elements.btnLogoutAll.disabled = true;
     try {
       const res = await fetch('/api/auth/logout-all', { method: 'POST' });
       if (res.ok) {
-        alert('Сессии завершены');
+        window.location.href = '/';
+        return;
       } else {
         const data = await res.json().catch(()=>({}));
         alert(data.error || 'Ошибка');

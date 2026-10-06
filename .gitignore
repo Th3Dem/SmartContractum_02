@@ -1,0 +1,18 @@
+# Local secrets and settings
+.env
+.env.*
+!.env.example
+
+# Local data: SQLite databases and uploaded media
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+
+# Agent working artifacts (must never reach the public repository)
+tasks/
+docs/
