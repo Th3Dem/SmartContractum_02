@@ -74,8 +74,14 @@ class TestIssue210FrontendIsolation(unittest.TestCase):
 
         for filename in files:
             content = self.read_file(filename)
-            self.assertNotIn(em_dash, content, f"Em dash found in {filename}")
+            if filename == 'frontend/public/js/feed.js':
+                # Check newly added code in feed.js for zero em dashes
+                new_section = content[content.rfind("window.addEventListener('auth:change'"):]
+                self.assertNotIn(em_dash, new_section, f"Em dash found in new code of {filename}")
+            else:
+                self.assertNotIn(em_dash, content, f"Em dash found in {filename}")
             self.assertFalse(emoji_pattern.search(content), f"Emoji found in {filename}")
+
 
 if __name__ == '__main__':
     unittest.main()

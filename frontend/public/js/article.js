@@ -6225,17 +6225,18 @@
   }
 })();
 
-window.addEventListener('auth:change', function(e) {
-  if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('auth:change', function(e) {
     if (e.detail && e.detail.user) {
       window.currentUser = e.detail.user;
     } else {
       window.currentUser = null;
     }
-  }
-  if (window._reportedArticleIds) window._reportedArticleIds.clear();
-  if (window._reportedCommentIds) window._reportedCommentIds.clear();
-  if (typeof loadUserCommentSubscriptions === 'function') {
-    loadUserCommentSubscriptions();
-  }
-});
+    if (window._reportedArticleIds) window._reportedArticleIds.clear();
+    if (window._reportedCommentIds) window._reportedCommentIds.clear();
+    if (typeof loadUserCommentSubscriptions === 'function') {
+      loadUserCommentSubscriptions();
+    }
+  });
+}
+
