@@ -13,6 +13,7 @@ from backend.companies import (
 )
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import TOPICS_TITLE_MAP
+from backend.media_library import focal_dict
 
 
 class CompanyProfileHandlers:
@@ -68,6 +69,8 @@ class CompanyProfileHandlers:
             "specialization": row["specialization"],
             "website": row["website"] or "",
             "logo": row["logo"],
+            "cover": row["cover"] if "cover" in row.keys() else None,
+            "coverFocal": focal_dict(row["cover_focal"]) if "cover_focal" in row.keys() else None,
             "directions": parse_directions(row["directions"]),
             "isVerified": bool(row["is_verified"]),
             "owner": {"id": owner["id"], "name": owner["name"], "avatar": owner["avatar"]} if owner else None,

@@ -7,6 +7,7 @@ import image_decoder
 
 from backend import config
 from backend.config import MAX_MEDIA_BODY_BYTES
+from backend.media_library import record_upload
 from backend.security import MEDIA_UPLOAD_IP_LIMITER, MEDIA_UPLOAD_USER_LIMITER
 from backend.storage import save_media_file
 from backend.submissions import validate_cover_image
@@ -134,7 +135,7 @@ class MediaHandlers:
             if not res.is_valid:
                 self.send_json_response(400, {"success": False, "error": res.error_msg})
                 return
-            self.record_media_upload(user)
+            self.record_media_upload(user, res.saved_url, res.meta)
             self.send_json_response(200, {
                 "success": True,
                 "url": res.saved_url,
@@ -175,14 +176,20 @@ class MediaHandlers:
 
         ext = meta.get("format", "jpg")
         saved_url = save_media_file(raw_body, ext, media_dir=media_root)
-        self.record_media_upload(user)
+        self.record_media_upload(user, saved_url, meta)
         self.send_json_response(200, {
             "success": True,
             "url": saved_url,
             "meta": meta
         })
 
-    def record_media_upload(self, user):
+    def record_media_upload(self, user, url, meta):
+        """Counts the upload against the limits and remembers its owner for later assignment checks."""
         client_ip = self.client_address[0] if self.client_address else "127.0.0.1"
         MEDIA_UPLOAD_USER_LIMITER.record(f"user:{user['id']}")
         MEDIA_UPLOAD_IP_LIMITER.record(f"ip:{client_ip}")
+        conn = self.get_db()
+        try:
+            record_upload(conn, url, user["id"], meta)
+        finally:
+            conn.close()

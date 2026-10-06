@@ -103,6 +103,12 @@
       ? `<img src="${escapeHtml(c.logo)}" alt="" onerror="this.remove()">`
       : '';
     logo.dataset.initials = initials(c.name);
+
+    const cover = $('companyCover');
+    cover.classList.toggle('media-has-image', Boolean(c.cover));
+    cover.style.backgroundImage = c.cover ? `url("${encodeURI(c.cover)}")` : '';
+    cover.style.backgroundPosition = 'center';
+    renderMediaControls(c);
     $('companyName').textContent = c.name;
     $('companyVerified').hidden = !c.isVerified;
     $('companySpecialization').textContent = c.specialization || '';
@@ -149,6 +155,44 @@
     const dirs = c.directions || [];
     $('companyDirectionsCard').hidden = !dirs.length;
     $('companyDirections').innerHTML = dirs.map(d => `<span class="co-chip">${escapeHtml(state.directions[d] || d)}</span>`).join('');
+  }
+
+  /* ---------------------------------------------------------------- logo and cover */
+
+  const ICON_IMAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>';
+  const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const ICON_PEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+  function renderMediaControls(c) {
+    document.querySelectorAll('.co-media-control').forEach(n => n.remove());
+    if (!c.canEdit || !window.SCMediaCrop) return;
+    $('companyCover').style.position = 'relative';
+    $('companyCover').insertAdjacentHTML('beforeend', `
+      <div class="media-edit-bar co-media-control">
+        <button type="button" class="media-edit-btn" data-media="cover">${ICON_IMAGE}<span>${c.cover ? 'Изменить обложку' : 'Добавить обложку'}</span></button>
+        ${c.cover ? `<button type="button" class="media-edit-btn" data-media-remove="cover" aria-label="Удалить обложку">${ICON_TRASH}</button>` : ''}
+      </div>`);
+    document.querySelector('.co-hero-body').insertAdjacentHTML('beforeend', `
+      <button type="button" class="media-logo-edit co-media-control co-logo-edit" data-media="logo" aria-label="${c.logo ? 'Изменить логотип' : 'Добавить логотип'}" title="${c.logo ? 'Изменить логотип' : 'Добавить логотип'}">${ICON_PEN}</button>
+      ${c.logo ? `<button type="button" class="co-media-control co-logo-remove" data-media-remove="logo">Удалить логотип</button>` : ''}`);
+  }
+
+  async function editMedia(kind) {
+    const picked = await window.SCMediaCrop.open(kind === 'logo'
+      ? { title: 'Логотип компании', aspect: 1, outputWidth: 400, outputHeight: 400, minWidth: 64, minHeight: 64 }
+      : { title: 'Обложка компании', aspect: 3, outputWidth: 1500, outputHeight: 500, minWidth: 600, minHeight: 200 });
+    if (!picked) return;
+    await saveMedia({ kind, url: picked.url, focal: picked.focal });
+  }
+
+  async function saveMedia(payload) {
+    const { ok, data } = await api('POST', `/api/companies/${encodeURIComponent(companyId)}/media`, payload);
+    if (!ok) return toast(data.error || 'Не удалось сохранить изображение', true);
+    state.company.logo = data.logo;
+    state.company.cover = data.cover;
+    state.company.coverFocal = data.coverFocal;
+    render();
+    toast(payload.remove ? 'Изображение удалено' : 'Изображение сохранено');
   }
 
   /* ---------------------------------------------------------------- tabs */
@@ -362,6 +406,10 @@
       return;
     }
     if (e.target.closest('#subsMore')) return loadSubscribers(false);
+    const media = e.target.closest('[data-media]');
+    if (media) return editMedia(media.dataset.media);
+    const removeMedia = e.target.closest('[data-media-remove]');
+    if (removeMedia) return saveMedia({ kind: removeMedia.dataset.mediaRemove, remove: true });
     const tab = e.target.closest('.co-tab');
     if (tab) return setTab(tab.dataset.tab);
     const add = e.target.closest('[data-follow-type]');

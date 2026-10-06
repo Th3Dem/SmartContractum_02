@@ -77,6 +77,27 @@
   padding: 0 var(--space-6) var(--space-6);
 }
 
+.co-logo-edit {
+  top: 50px;
+  left: calc(var(--space-6) + 76px);
+  right: auto;
+  bottom: auto;
+}
+
+.co-logo-remove {
+  position: absolute;
+  top: 62px;
+  left: calc(var(--space-6) + 112px);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--danger-color);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .co-logo {
   position: relative;
   width: 96px;
