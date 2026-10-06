@@ -319,7 +319,7 @@
     }
   };
 
-  let currentUser = null;
+  let currentUser = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
   let pendingTabAfterAuth = null;
   let feedAbortController = null;
 
@@ -1481,20 +1481,20 @@
   function updateFeedTitleUI() {
     const titleEl = document.querySelector('.feed-compact-title');
     const titles = {
-      all: 'Публикации — SmartContractum',
-      questions: 'Вопросы — SmartContractum',
-      focus: 'Публикации — SmartContractum',
-      top: 'Топ публикаций — SmartContractum',
-      new: 'Новые публикации — SmartContractum',
-      subscriptions: 'Мои подписки — SmartContractum',
-      my: 'Мои подписки — SmartContractum',
-      clubs: 'Клубы и сообщества — SmartContractum',
+      all: 'Публикации - SmartContractum',
+      questions: 'Вопросы - SmartContractum',
+      focus: 'Публикации - SmartContractum',
+      top: 'Топ публикаций - SmartContractum',
+      new: 'Новые публикации - SmartContractum',
+      subscriptions: 'Мои подписки - SmartContractum',
+      my: 'Мои подписки - SmartContractum',
+      clubs: 'Клубы и сообщества - SmartContractum',
       companies: 'Блоги - SmartContractum',
       blogs: 'Блоги - SmartContractum',
-      directions: 'Темы — SmartContractum',
-      saved: 'Сохраненные — SmartContractum'
+      directions: 'Темы - SmartContractum',
+      saved: 'Сохраненные - SmartContractum'
     };
-    const t = titles[state.tab] || 'Лента публикаций — SmartContractum';
+    const t = titles[state.tab] || 'Лента публикаций - SmartContractum';
     document.title = t;
     if (titleEl) {
       titleEl.textContent = t.split(' - ')[0].replace(/ \S+ SmartContractum$/, '');
@@ -7376,3 +7376,32 @@
   }
 
 })();
+
+window.addEventListener('auth:change', function(e) {
+  if (typeof window !== 'undefined') {
+    if (e.detail && e.detail.user) {
+      window.currentUser = e.detail.user;
+    } else {
+      window.currentUser = null;
+    }
+  }
+  const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
+  if (window._reportedArticleIds) window._reportedArticleIds.clear();
+  
+  if (user) {
+    fetch('/api/subscriptions')
+      .then(res => { if (res.ok) return res.json(); throw new Error(); })
+      .then(data => {
+        if (data && data.subscriptions) {
+          window._activeSubscriptions = data.subscriptions;
+        }
+      })
+      .catch(() => { window._activeSubscriptions = []; });
+  } else {
+    window._activeSubscriptions = [];
+  }
+  
+  if (typeof updateSavedCounter === 'function') {
+    updateSavedCounter();
+  }
+});

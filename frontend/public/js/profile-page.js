@@ -2683,22 +2683,20 @@
   // Comment Card Actions & Interaction Helpers
   // --------------------------------------------------------------------------
   function getCommentBookmarks() {
+    const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
+    const bKey = (user && user.id) ? ('sc_comment_bookmarks_' + user.id) : 'sc_comment_bookmarks_guest';
     try {
-      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
-      const data = localStorage.getItem(key) || localStorage.getItem('sc_comment_bookmarks');
-      if (data) {
-        const parsed = JSON.parse(data);
-        if (Array.isArray(parsed)) return parsed;
-      }
+      const data = localStorage.getItem(bKey);
+      if (data) return JSON.parse(data) || [];
     } catch (e) {}
     return [];
   }
 
   function saveCommentBookmarks(bookmarks) {
+    const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
+    const bKey = (user && user.id) ? ('sc_comment_bookmarks_' + user.id) : 'sc_comment_bookmarks_guest';
     try {
-      const key = (currentUser && currentUser.id) ? ('sc_comment_bookmarks_' + currentUser.id) : 'sc_comment_bookmarks_guest';
-      localStorage.setItem(key, JSON.stringify(bookmarks));
-      localStorage.setItem('sc_comment_bookmarks', JSON.stringify(bookmarks));
+      localStorage.setItem(bKey, JSON.stringify(bookmarks));
     } catch (e) {}
   }
 
@@ -5469,3 +5467,15 @@
   }
 
 })(window);
+
+window.addEventListener('auth:change', function(e) {
+  if (typeof window !== 'undefined') {
+    if (e.detail && e.detail.user) {
+      window.currentUser = e.detail.user;
+    } else {
+      window.currentUser = null;
+    }
+  }
+  if (window._reportedArticleIds) window._reportedArticleIds.clear();
+  if (window._reportedCommentIds) window._reportedCommentIds.clear();
+});

@@ -1451,6 +1451,8 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
                 id TEXT PRIMARY KEY,
                 login TEXT NOT NULL,
                 login_normalized TEXT NOT NULL UNIQUE,
+                name TEXT,
+                avatar TEXT,
                 email TEXT,
                 email_normalized TEXT UNIQUE,
                 password_hash TEXT NOT NULL,
@@ -1463,6 +1465,15 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_login_normalized ON users(login_normalized);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email_normalized ON users(email_normalized);")
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN name TEXT;")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT;")
+        except sqlite3.OperationalError:
+            pass
+
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS email_verifications (
@@ -4176,6 +4187,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         target_type = (data.get("targetType") or data.get("target_type") or "").strip().lower()
         raw_id = (data.get("targetId") or data.get("target_id") or "").strip()
         raw_title = (data.get("targetTitle") or data.get("target_title") or "").strip()
+        action = data.get("action", "toggle")
 
         if target_type not in ("author", "topic", "tag", "club", "company"):
             self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', 'tag', 'club', or 'company'"})
@@ -4210,21 +4222,39 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             """, (user["id"], target_type, normalized_id))
             row = cur.fetchone()
 
-            if row:
-                cur.execute("DELETE FROM user_subscriptions WHERE id = ?", (row["id"],))
+            if action == "subscribe":
+                if row:
+                    subscribed = True
+                else:
+                    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute("""
+                        INSERT OR IGNORE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (user["id"], target_type, normalized_id, title, now_str))
+                    cur.execute("""
+                        DELETE FROM user_feed_exceptions
+                        WHERE user_id = ? AND target_type = ? AND target_id = ?
+                    """, (user["id"], target_type, normalized_id))
+                    subscribed = True
+            elif action == "unsubscribe":
+                if row:
+                    cur.execute("DELETE FROM user_subscriptions WHERE id = ?", (row["id"],))
                 subscribed = False
             else:
-                now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                cur.execute("""
-                    INSERT INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (user["id"], target_type, normalized_id, title, now_str))
-                # Remove from exceptions if present (mutual exclusion)
-                cur.execute("""
-                    DELETE FROM user_feed_exceptions
-                    WHERE user_id = ? AND target_type = ? AND target_id = ?
-                """, (user["id"], target_type, normalized_id))
-                subscribed = True
+                if row:
+                    cur.execute("DELETE FROM user_subscriptions WHERE id = ?", (row["id"],))
+                    subscribed = False
+                else:
+                    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute("""
+                        INSERT OR IGNORE INTO user_subscriptions (user_id, target_type, target_id, target_title, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (user["id"], target_type, normalized_id, title, now_str))
+                    cur.execute("""
+                        DELETE FROM user_feed_exceptions
+                        WHERE user_id = ? AND target_type = ? AND target_id = ?
+                    """, (user["id"], target_type, normalized_id))
+                    subscribed = True
 
         followers_count = None
         if target_type == "author":
@@ -4261,6 +4291,7 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         target_type = (data.get("targetType") or data.get("target_type") or "").strip().lower()
         raw_id = (data.get("targetId") or data.get("target_id") or "").strip()
         raw_title = (data.get("targetTitle") or data.get("target_title") or "").strip()
+        action = data.get("action", "toggle")
 
         if target_type not in ("author", "topic", "tag", "club", "company"):
             self.send_json_response(400, {"success": False, "error": "targetType must be 'author', 'topic', 'tag', 'club', or 'company'"})
@@ -4287,21 +4318,40 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             """, (user["id"], target_type, normalized_id))
             row = cur.fetchone()
 
-            if row:
-                cur.execute("DELETE FROM user_feed_exceptions WHERE id = ?", (row["id"],))
+            if action == "exclude":
+                if row:
+                    excluded = True
+                else:
+                    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute("""
+                        INSERT OR IGNORE INTO user_feed_exceptions (user_id, target_type, target_id, target_title, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (user["id"], target_type, normalized_id, title, now_str))
+                    cur.execute("""
+                        DELETE FROM user_subscriptions
+                        WHERE user_id = ? AND target_type = ? AND target_id = ?
+                    """, (user["id"], target_type, normalized_id))
+                    excluded = True
+            elif action == "remove":
+                if row:
+                    cur.execute("DELETE FROM user_feed_exceptions WHERE id = ?", (row["id"],))
                 excluded = False
             else:
-                now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                cur.execute("""
-                    INSERT INTO user_feed_exceptions (user_id, target_type, target_id, target_title, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (user["id"], target_type, normalized_id, title, now_str))
-                # Remove from subscriptions if present (mutual exclusion)
-                cur.execute("""
-                    DELETE FROM user_subscriptions
-                    WHERE user_id = ? AND target_type = ? AND target_id = ?
-                """, (user["id"], target_type, normalized_id))
-                excluded = True
+                if row:
+                    cur.execute("DELETE FROM user_feed_exceptions WHERE id = ?", (row["id"],))
+                    excluded = False
+                else:
+                    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute("""
+                        INSERT OR IGNORE INTO user_feed_exceptions (user_id, target_type, target_id, target_title, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (user["id"], target_type, normalized_id, title, now_str))
+                    # Remove from subscriptions if present (mutual exclusion)
+                    cur.execute("""
+                        DELETE FROM user_subscriptions
+                        WHERE user_id = ? AND target_type = ? AND target_id = ?
+                    """, (user["id"], target_type, normalized_id))
+                    excluded = True
 
         self.send_json_response(200, {
             "success": True,
@@ -5340,12 +5390,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         Requires authentication (401 requireAuth).
         Returns { success: True, hasLiked: bool, likesCount: int }.
         """
+        action = "toggle"
         if not _body_already_read:
             payload = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
             if payload is None:
                 return
             if not article_id:
                 article_id = payload.get("articleId") or payload.get("article_id") or ""
+            action = payload.get("action", "toggle")
 
         user = self.get_current_user()
         if not user:
@@ -5381,16 +5433,31 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             cur.execute("SELECT id FROM article_likes WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
             existing_like = cur.fetchone()
 
-            if existing_like:
-                cur.execute("DELETE FROM article_likes WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+            if action == "like":
+                if existing_like:
+                    has_liked = True
+                else:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT OR IGNORE INTO article_likes (article_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_art_id, user_id, now_iso)
+                    )
+                    has_liked = True
+            elif action == "unlike":
+                if existing_like:
+                    cur.execute("DELETE FROM article_likes WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
                 has_liked = False
             else:
-                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                cur.execute(
-                    "INSERT INTO article_likes (article_id, user_id, created_at) VALUES (?, ?, ?)",
-                    (real_art_id, user_id, now_iso)
-                )
-                has_liked = True
+                if existing_like:
+                    cur.execute("DELETE FROM article_likes WHERE article_id = ? AND user_id = ?", (real_art_id, user_id))
+                    has_liked = False
+                else:
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT OR IGNORE INTO article_likes (article_id, user_id, created_at) VALUES (?, ?, ?)",
+                        (real_art_id, user_id, now_iso)
+                    )
+                    has_liked = True
 
             cur.execute("SELECT COUNT(*) AS cnt FROM article_likes WHERE article_id = ?", (real_art_id,))
             likes_count = cur.fetchone()["cnt"]
@@ -6606,12 +6673,17 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             placeholders = ",".join("?" for _ in target_article_ids)
 
             cur.execute(f"""
-                SELECT id, article_id, user_id, author_name, author_avatar, content,
-                       status, comment_type, is_solution, parent_answer_id, parent_comment_id,
-                       client_operation_id, updated_at, revision, created_at
-                FROM article_comments
-                WHERE article_id IN ({placeholders}) AND status IN ('published', 'deleted')
-                ORDER BY is_solution DESC, created_at ASC
+                SELECT ac.id, ac.article_id, ac.user_id, 
+                       COALESCE(up.name, u.name, ac.author_name) AS author_name, 
+                       COALESCE(up.avatar, u.avatar, ac.author_avatar) AS author_avatar, 
+                       ac.content, ac.status, ac.comment_type, ac.is_solution, 
+                       ac.parent_answer_id, ac.parent_comment_id,
+                       ac.client_operation_id, ac.updated_at, ac.revision, ac.created_at
+                FROM article_comments ac
+                LEFT JOIN users u ON ac.user_id = u.id
+                LEFT JOIN user_profiles up ON ac.user_id = up.user_id
+                WHERE ac.article_id IN ({placeholders}) AND ac.status IN ('published', 'deleted')
+                ORDER BY ac.is_solution DESC, ac.created_at ASC
             """, tuple(target_article_ids))
             rows = cur.fetchall()
 
@@ -9222,6 +9294,11 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # User existence check: user_profiles, sessions, moderation_submissions, article_comments
                 user_exists = (p_row is not None)
                 if not user_exists:
+                    cur.execute("SELECT 1 FROM users WHERE id = ? LIMIT 1", (user_id,))
+                    if cur.fetchone():
+                        user_exists = True
+
+                if not user_exists:
                     cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
                     if cur.fetchone():
                         user_exists = True
@@ -11153,6 +11230,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Synchronize user_name in sessions table across all active sessions of this user
                 cur.execute("UPDATE sessions SET user_name = ? WHERE user_id = ?", (name, user["id"]))
+                cur.execute("UPDATE users SET name = ? WHERE id = ?", (name, user["id"]))
+                cur.execute("UPDATE users SET avatar = ? WHERE id = ?", (avatar, user["id"]))
 
             initials = "".join([part[0].upper() for part in str(name).split()[:2]]) if name else "SC"
             profile_dto = {
