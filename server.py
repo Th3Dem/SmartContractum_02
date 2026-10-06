@@ -1367,6 +1367,14 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             conn.execute("ALTER TABLE user_profiles ADD COLUMN website TEXT;")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN first_name TEXT;")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN last_name TEXT;")
+        except Exception:
+            pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS user_pinned_materials (
                 user_id TEXT PRIMARY KEY,
@@ -2880,7 +2888,14 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         # /api/auth/login establishes the session and issues CSRF token;
         # Registration and verification are unauthenticated onboarding endpoints
         # requiring Origin/Referer check above, but no pre-existing CSRF token.
-        if path in ("/api/auth/login", "/api/auth/register", "/api/auth/verify-email", "/api/auth/resend-code"):
+        if path in (
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/verify-email",
+            "/api/auth/resend-code",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password"
+        ):
             return True
 
         # Non-ambient authorization header bypasses CSRF token requirement
@@ -2940,6 +2955,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(200, {"success": True, "authenticated": False, "user": None})
         elif path == "/api/user/feed-settings":
             self.handle_get_feed_settings()
+        elif path == "/api/user/settings":
+            self.handle_get_user_settings()
         elif path == "/api/exceptions":
             self.handle_get_exceptions()
         elif path == "/api/subscriptions":
@@ -3076,6 +3093,18 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_auth_verify_email()
         elif path == "/api/auth/resend-code":
             self.handle_auth_resend_code()
+        elif path == "/api/auth/change-password":
+            self.handle_auth_change_password()
+        elif path == "/api/auth/change-email":
+            self.handle_auth_change_email()
+        elif path == "/api/auth/verify-change-email":
+            self.handle_auth_verify_change_email()
+        elif path == "/api/auth/forgot-password":
+            self.handle_auth_forgot_password()
+        elif path == "/api/auth/reset-password":
+            self.handle_auth_reset_password()
+        elif path == "/api/auth/logout-all":
+            self.handle_auth_logout_all()
         elif path == "/api/user/feed-settings":
             self.handle_post_feed_settings()
         elif path == "/api/clubs":
@@ -10911,10 +10940,10 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
             with conn:
                 cur = conn.cursor()
                 try:
-                    cur.execute("SELECT name, specialization, company, bio, avatar, website, created_at FROM user_profiles WHERE user_id = ?", (user["id"],))
+                    cur.execute("SELECT name, specialization, company, bio, avatar, website, first_name, last_name, created_at FROM user_profiles WHERE user_id = ?", (user["id"],))
                     existing_profile = cur.fetchone()
                 except sqlite3.OperationalError:
-                    cur.execute("SELECT name, specialization, company, bio, avatar, created_at FROM user_profiles WHERE user_id = ?", (user["id"],))
+                    cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user["id"],))
                     existing_profile = cur.fetchone()
 
                 # 1. Validate name: 1..100 characters. Return 400 if empty.
@@ -11002,6 +11031,25 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         })
                         return
 
+                # First/last name handling
+                if "firstName" in payload:
+                    first_name = (payload["firstName"] or "").strip()
+                elif "first_name" in payload:
+                    first_name = (payload["first_name"] or "").strip()
+                else:
+                    first_name = ""
+                    if existing_profile and "first_name" in existing_profile.keys():
+                        first_name = existing_profile["first_name"] or ""
+                        
+                if "lastName" in payload:
+                    last_name = (payload["lastName"] or "").strip()
+                elif "last_name" in payload:
+                    last_name = (payload["last_name"] or "").strip()
+                else:
+                    last_name = ""
+                    if existing_profile and "last_name" in existing_profile.keys():
+                        last_name = existing_profile["last_name"] or ""
+
                 # 6. Avatar handling:
                 # - Check if removeAvatar is true or avatar is empty string: set avatar to None in db.
                 # - If avatar is provided in payload (non-empty string): validate image format/parameters and update avatar.
@@ -11035,8 +11083,8 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 try:
                     cur.execute("""
-                        INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, website, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, website, first_name, last_name, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET
                             name = excluded.name,
                             specialization = excluded.specialization,
@@ -11044,20 +11092,36 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                             bio = excluded.bio,
                             avatar = excluded.avatar,
                             website = excluded.website,
+                            first_name = excluded.first_name,
+                            last_name = excluded.last_name,
                             updated_at = excluded.updated_at
-                    """, (user["id"], name, specialization, company, bio, avatar, website, created_at_val, now_iso))
+                    """, (user["id"], name, specialization, company, bio, avatar, website, first_name, last_name, created_at_val, now_iso))
                 except sqlite3.OperationalError:
-                    cur.execute("""
-                        INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(user_id) DO UPDATE SET
-                            name = excluded.name,
-                            specialization = excluded.specialization,
-                            company = excluded.company,
-                            bio = excluded.bio,
-                            avatar = excluded.avatar,
-                            updated_at = excluded.updated_at
-                    """, (user["id"], name, specialization, company, bio, avatar, created_at_val, now_iso))
+                    try:
+                        cur.execute("""
+                            INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, website, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(user_id) DO UPDATE SET
+                                name = excluded.name,
+                                specialization = excluded.specialization,
+                                company = excluded.company,
+                                bio = excluded.bio,
+                                avatar = excluded.avatar,
+                                website = excluded.website,
+                                updated_at = excluded.updated_at
+                        """, (user["id"], name, specialization, company, bio, avatar, website, created_at_val, now_iso))
+                    except sqlite3.OperationalError:
+                        cur.execute("""
+                            INSERT INTO user_profiles (user_id, name, specialization, company, bio, avatar, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(user_id) DO UPDATE SET
+                                name = excluded.name,
+                                specialization = excluded.specialization,
+                                company = excluded.company,
+                                bio = excluded.bio,
+                                avatar = excluded.avatar,
+                                updated_at = excluded.updated_at
+                        """, (user["id"], name, specialization, company, bio, avatar, created_at_val, now_iso))
 
                 # Synchronize user_name in sessions table across all active sessions of this user
                 cur.execute("UPDATE sessions SET user_name = ? WHERE user_id = ?", (name, user["id"]))
@@ -11476,6 +11540,361 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
         finally:
             conn.close()
 
+    def handle_get_user_settings(self):
+        """GET /api/user/settings"""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {
+                "success": False,
+                "error": "Требуется авторизация",
+                "requireAuth": True
+            })
+            return
+
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                # user is already fetched by get_current_user, but we need email, etc. Wait, get_current_user might return some of these?
+                # Let's just query what we need.
+                cur.execute("""
+                    SELECT u.id, u.login, u.email, u.email_verified_at,
+                           p.name, p.first_name, p.last_name, p.bio,
+                           p.specialization, p.company, p.website, p.avatar
+                    FROM users u
+                    LEFT JOIN user_profiles p ON u.id = p.user_id
+                    WHERE u.id = ?
+                """, (user["id"],))
+                row = cur.fetchone()
+                if not row:
+                    self.send_json_response(404, {"success": False, "error": "Пользователь не найден"})
+                    return
+                
+                settings = {
+                    "id": row["id"],
+                    "login": row["login"],
+                    "email": row["email"],
+                    "emailVerified": bool(row["email_verified_at"]),
+                    "name": row["name"] or "",
+                    "firstName": row["first_name"] or "",
+                    "lastName": row["last_name"] or "",
+                    "bio": row["bio"] or "",
+                    "specialization": row["specialization"] or "",
+                    "company": row["company"] or "",
+                    "website": row["website"] or "",
+                    "avatar": row["avatar"] or ""
+                }
+                self.send_json_response(200, {"success": True, "settings": settings})
+        finally:
+            conn.close()
+
+
+    def handle_auth_change_password(self):
+        """POST /api/auth/change-password"""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
+            return
+            
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None: return
+        
+        current_password = data.get("currentPassword", "")
+        new_password = data.get("newPassword", "")
+        
+        if len(new_password) < 8:
+            self.send_json_response(400, {"success": False, "error": "Новый пароль должен содержать минимум 8 символов"})
+            return
+            
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT password_hash FROM users WHERE id = ?", (user["id"],))
+                row = cur.fetchone()
+                if not row or not verify_password(current_password, row["password_hash"]):
+                    self.send_json_response(400, {"success": False, "error": "Неверный текущий пароль"})
+                    return
+                
+                new_hash = hash_password(new_password)
+                cur.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", 
+                            (new_hash, datetime.datetime.now(datetime.timezone.utc).isoformat(), user["id"]))
+                
+                # Revoke all sessions
+                cur.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user["id"],))
+                
+            self.clear_cookie("sc_session")
+            self.clear_cookie("sc_csrf")
+            self.send_json_response(200, {"success": True, "message": "Пароль успешно изменен"})
+        finally:
+            conn.close()
+
+    def handle_auth_change_email(self):
+        """POST /api/auth/change-email"""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
+            return
+            
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None: return
+        
+        password = data.get("password", "")
+        new_email = data.get("newEmail", "").strip()
+        
+        if not validate_email_format(new_email):
+            self.send_json_response(400, {"success": False, "error": "Некорректный формат нового email"})
+            return
+            
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT password_hash, email FROM users WHERE id = ?", (user["id"],))
+                row = cur.fetchone()
+                if not row or not verify_password(password, row["password_hash"]):
+                    self.send_json_response(400, {"success": False, "error": "Неверный пароль"})
+                    return
+                
+                cur.execute("SELECT id FROM users WHERE email_normalized = ? AND status != 'disabled'", (new_email.lower(),))
+                if cur.fetchone():
+                    self.send_json_response(400, {"success": False, "error": "Указанный email уже используется"})
+                    return
+                
+                code = generate_verification_code()
+                code_hash = hash_verification_code(code)
+                now = datetime.datetime.now(datetime.timezone.utc)
+                expires_at = (now + datetime.timedelta(minutes=10)).isoformat()
+                resend_available_at = (now + datetime.timedelta(minutes=1)).isoformat()
+                now_iso = now.isoformat()
+                
+                cur.execute("""
+                    UPDATE email_verifications SET status = 'invalidated', updated_at = ?
+                    WHERE user_id = ? AND purpose = 'email_change' AND status = 'pending'
+                """, (now_iso, user["id"]))
+                
+                challenge_id = str(uuid.uuid4())
+                cur.execute("""
+                    INSERT INTO email_verifications
+                    (id, user_id, email, purpose, code_hash, expires_at, resend_available_at, created_at, updated_at)
+                    VALUES (?, ?, ?, 'email_change', ?, ?, ?, ?, ?)
+                """, (challenge_id, user["id"], new_email, code_hash, expires_at, resend_available_at, now_iso, now_iso))
+                
+                email_service = getattr(self.server, "email_service", None)
+                if email_service:
+                    email_service.send_email(
+                        new_email,
+                        "Подтверждение смены email",
+                        f"Код для подтверждения смены email: {code}"
+                    )
+                    if row["email"]:
+                        email_service.send_email(
+                            row["email"],
+                            "Запрос на смену email",
+                            "Был запрошен процесс смены email. Если это не вы, срочно смените пароль."
+                        )
+                
+            self.send_json_response(200, {"success": True, "message": "Код подтверждения отправлен на новый email"})
+        finally:
+            conn.close()
+    def handle_auth_verify_change_email(self):
+        """POST /api/auth/verify-change-email"""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
+            return
+            
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None: return
+        code = data.get("code", "")
+        
+        if not code:
+            self.send_json_response(400, {"success": False, "error": "Код подтверждения обязателен"})
+            return
+            
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                cur.execute("""
+                    SELECT id, email, code_hash, expires_at, attempts_left 
+                    FROM email_verifications 
+                    WHERE user_id = ? AND purpose = 'email_change' AND status = 'pending'
+                    ORDER BY created_at DESC LIMIT 1
+                """, (user["id"],))
+                challenge = cur.fetchone()
+                
+                if not challenge or challenge["expires_at"] < now_iso:
+                    self.send_json_response(400, {"success": False, "error": "Код недействителен или просрочен"})
+                    return
+                
+                if not verify_verification_code(code, challenge["code_hash"]):
+                    new_attempts = challenge["attempts_left"] - 1
+                    new_status = "invalidated" if new_attempts <= 0 else "pending"
+                    cur.execute("""
+                        UPDATE email_verifications SET attempts_left = ?, status = ?, updated_at = ? WHERE id = ?
+                    """, (new_attempts, new_status, now_iso, challenge["id"]))
+                    self.send_json_response(400, {"success": False, "error": "Неверный код"})
+                    return
+                
+                cur.execute("""
+                    UPDATE email_verifications SET status = 'consumed', updated_at = ? WHERE id = ?
+                """, (now_iso, challenge["id"]))
+                
+                new_email = challenge["email"]
+                cur.execute("""
+                    UPDATE users 
+                    SET email = ?, email_normalized = ?, email_verified_at = ?, updated_at = ? 
+                    WHERE id = ?
+                """, (new_email, new_email.lower(), now_iso, now_iso, user["id"]))
+                
+            self.send_json_response(200, {"success": True, "message": "Email успешно изменен"})
+        finally:
+            conn.close()
+
+    def handle_auth_forgot_password(self):
+        """POST /api/auth/forgot-password"""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None: return
+        
+        identifier = (data.get("identifier") or "").strip().lower()
+        if not identifier:
+            self.send_json_response(400, {"success": False, "error": "Не указан email или логин"})
+            return
+            
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT id, email, email_verified_at 
+                    FROM users 
+                    WHERE (login_normalized = ? OR email_normalized = ?) AND status != 'disabled'
+                """, (identifier, identifier))
+                row = cur.fetchone()
+                
+                if row and row["email"] and row["email_verified_at"]:
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    code = generate_verification_code()
+                    code_hash = hash_verification_code(code)
+                    expires_at = (now + datetime.timedelta(minutes=10)).isoformat()
+                    resend_available_at = (now + datetime.timedelta(minutes=1)).isoformat()
+                    now_iso = now.isoformat()
+                    
+                    cur.execute("""
+                        UPDATE email_verifications SET status = 'invalidated', updated_at = ?
+                        WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
+                    """, (now_iso, row["id"]))
+                    
+                    challenge_id = str(uuid.uuid4())
+                    cur.execute("""
+                        INSERT INTO email_verifications
+                        (id, user_id, email, purpose, code_hash, expires_at, resend_available_at, created_at, updated_at)
+                        VALUES (?, ?, ?, 'password_reset', ?, ?, ?, ?, ?)
+                    """, (challenge_id, row["id"], row["email"], code_hash, expires_at, resend_available_at, now_iso, now_iso))
+                    
+                    email_service = getattr(self.server, "email_service", None)
+                    if email_service:
+                        email_service.send_email(
+                            row["email"],
+                            "Восстановление пароля",
+                            f"Код для сброса пароля: {code}"
+                        )
+            
+            # Neutral response
+            self.send_json_response(200, {"success": True, "message": "Если учетная запись существует, инструкции по сбросу отправлены на привязанный email"})
+        finally:
+            conn.close()
+    def handle_auth_reset_password(self):
+        """POST /api/auth/reset-password"""
+        data = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
+        if data is None: return
+        
+        identifier = (data.get("identifier") or "").strip().lower()
+        code = data.get("code", "")
+        new_password = data.get("newPassword", "")
+        
+        if len(new_password) < 8:
+            self.send_json_response(400, {"success": False, "error": "Новый пароль должен содержать минимум 8 символов"})
+            return
+            
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT id FROM users 
+                    WHERE (login_normalized = ? OR email_normalized = ?) AND status != 'disabled'
+                """, (identifier, identifier))
+                user_row = cur.fetchone()
+                if not user_row:
+                    self.send_json_response(400, {"success": False, "error": "Неверный код или пользователь не найден"})
+                    return
+                
+                user_id = user_row["id"]
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                
+                cur.execute("""
+                    SELECT id, code_hash, expires_at, attempts_left 
+                    FROM email_verifications 
+                    WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
+                    ORDER BY created_at DESC LIMIT 1
+                """, (user_id,))
+                challenge = cur.fetchone()
+                
+                if not challenge or challenge["expires_at"] < now_iso:
+                    self.send_json_response(400, {"success": False, "error": "Код недействителен или просрочен"})
+                    return
+                    
+                if not verify_verification_code(code, challenge["code_hash"]):
+                    new_attempts = challenge["attempts_left"] - 1
+                    new_status = "invalidated" if new_attempts <= 0 else "pending"
+                    cur.execute("""
+                        UPDATE email_verifications SET attempts_left = ?, status = ?, updated_at = ? WHERE id = ?
+                    """, (new_attempts, new_status, now_iso, challenge["id"]))
+                    self.send_json_response(400, {"success": False, "error": "Неверный код"})
+                    return
+                    
+                cur.execute("""
+                    UPDATE email_verifications SET status = 'consumed', updated_at = ? WHERE id = ?
+                """, (now_iso, challenge["id"]))
+                
+                cur.execute("""
+                    UPDATE email_verifications SET status = 'invalidated', updated_at = ?
+                    WHERE user_id = ? AND purpose = 'password_reset' AND status = 'pending'
+                """, (now_iso, user_id))
+                
+                new_hash = hash_password(new_password)
+                cur.execute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", 
+                            (new_hash, now_iso, user_id))
+                
+                cur.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
+                
+            self.clear_cookie("sc_session")
+            self.clear_cookie("sc_csrf")
+            self.send_json_response(200, {"success": True, "message": "Пароль успешно сброшен. Пожалуйста, выполните вход."})
+        finally:
+            conn.close()
+
+    def handle_auth_logout_all(self):
+        """POST /api/auth/logout-all"""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация"})
+            return
+            
+        conn = self.get_db()
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user["id"],))
+                
+            self.clear_cookie("sc_session")
+            self.clear_cookie("sc_csrf")
+            self.send_json_response(200, {"success": True, "authenticated": False})
+        finally:
+            conn.close()
 
 
 def create_server(
