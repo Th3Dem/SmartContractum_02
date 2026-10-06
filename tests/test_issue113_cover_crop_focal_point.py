@@ -14,6 +14,7 @@ import urllib.parse
 from io import BytesIO
 
 import server
+from backend_source import BACKEND_FILES, backend_source_file
 
 
 class TestIssue113CoverCropFocalPoint(unittest.TestCase):
@@ -115,7 +116,7 @@ class TestIssue113CoverCropFocalPoint(unittest.TestCase):
 
     def test_server_article_api_includes_focal_point_fields(self):
         """Verify server article endpoints include coverPosition, focalPoint, objectPosition."""
-        with open(os.path.join(self.server_dir, "server.py"), "r", encoding="utf-8") as f:
+        with backend_source_file() as f:
             srv = f.read()
 
         # Both handle_get_article and handle_get_articles must include resolve_cover_position

@@ -34,6 +34,7 @@ import urllib.request
 
 import server
 from server import create_server, init_db
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -652,7 +653,7 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
 
     def test_16_invariants_zero_emojis_and_zero_em_dashes(self):
         """Verifies zero emojis and zero em dashes in test file and server profile handler."""
-        for file_path in [__file__, os.path.join(PROJECT_ROOT, "server.py")]:
+        for file_path in [__file__, *BACKEND_FILES]:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 

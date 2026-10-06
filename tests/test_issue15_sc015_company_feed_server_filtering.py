@@ -35,6 +35,7 @@ from server import (
     create_server,
     init_db,
 )
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -299,7 +300,7 @@ class TestIssue15SC015CompanyFeedServerFiltering(unittest.TestCase):
             "[\U00010000-\U0010ffff]",
             flags=re.UNICODE
         )
-        for filepath in [os.path.join(PROJECT_ROOT, "server.py"),
+        for filepath in [*BACKEND_FILES,
                          os.path.join(FRONTEND_DIR, "js", "feed.js")]:
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -309,8 +310,7 @@ class TestIssue15SC015CompanyFeedServerFiltering(unittest.TestCase):
 
     def test_12_server_py_sql_inspection(self):
         """Verify server.py implements the required SQL-level json_extract filtering."""
-        server_py_path = os.path.join(PROJECT_ROOT, "server.py")
-        with open(server_py_path, "r", encoding="utf-8") as f:
+        with backend_source_file() as f:
             code = f.read()
 
         self.assertIn("json_extract(publication_settings, '$.companyId') = ?", code)

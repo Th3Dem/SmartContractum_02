@@ -46,6 +46,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import server
 import image_decoder
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'public')
@@ -1352,7 +1353,7 @@ class TestFeedRefinementsAndPolish(unittest.TestCase):
             cls.card_js = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'article.js'), 'r', encoding='utf-8') as f:
             cls.article_js = f.read()
-        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+        with backend_source_file() as f:
             cls.server_py = f.read()
 
     def test_saved_tab_in_subnav(self):
@@ -1431,7 +1432,7 @@ class TestTask26SecondLevelMenuSubscriptionsAndMyFeed(unittest.TestCase):
             cls.article_html = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'article.js'), 'r', encoding='utf-8') as f:
             cls.article_js = f.read()
-        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+        with backend_source_file() as f:
             cls.server_py = f.read()
 
         os.environ["SERVER_QUIET"] = "1"
@@ -1716,7 +1717,7 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             cls.feed_js = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'card.js'), 'r', encoding='utf-8') as f:
             cls.card_js = f.read()
-        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+        with backend_source_file() as f:
             cls.server_py = f.read()
 
         os.environ["SERVER_QUIET"] = "1"
@@ -1867,7 +1868,7 @@ class TestTask28CoverSyncAndFeedPolish(unittest.TestCase):
             cls.feed_css = f.read()
         with open(os.path.join(FRONTEND_DIR, 'js', 'feed.js'), 'r', encoding='utf-8') as f:
             cls.feed_js = f.read()
-        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+        with backend_source_file() as f:
             cls.server_py = f.read()
 
         os.environ["SERVER_QUIET"] = "1"
@@ -2220,7 +2221,7 @@ class TestTask29FullwidthCoverAndMediaStorage(unittest.TestCase):
             cls.card_js = f.read()
         with open(os.path.join(PROJECT_ROOT, 'image_decoder.py'), 'r', encoding='utf-8') as f:
             cls.image_decoder_py = f.read()
-        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+        with backend_source_file() as f:
             cls.server_py = f.read()
 
         os.environ["SERVER_QUIET"] = "1"
@@ -4059,7 +4060,7 @@ class TestTask34StickyPanelsAndMultiFilter(unittest.TestCase):
         self.assertIn("params.set('audiences'", self.feed_js)
 
         # Server-side joint filtering verification in server.py
-        with open(os.path.join(PROJECT_ROOT, 'server.py'), 'r', encoding='utf-8') as f:
+        with backend_source_file() as f:
             server_code = f.read()
         self.assertIn('allowed_audiences', server_code)
         self.assertIn('allowed_formats', server_code)

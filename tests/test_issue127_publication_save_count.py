@@ -47,6 +47,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import server
 from server import create_server, init_db
+from backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -375,7 +376,7 @@ class TestIssue127PublicationSaveCount(unittest.TestCase):
     def test_08_strict_invariants(self):
         """Verify strict zero emojis and zero em dashes across all modified files."""
         files_to_check = [
-            os.path.join(PROJECT_ROOT, "server.py"),
+            *BACKEND_FILES,
             os.path.join(FRONTEND_DIR, "article.html"),
             os.path.join(FRONTEND_DIR, "js", "article.js"),
             os.path.join(FRONTEND_DIR, "js", "card.js"),
