@@ -37,7 +37,9 @@ import server
 from server import (
     LOGIN_RATE_LIMITER,
     authenticate_user,
-    bootstrap_admin,
+    LEGACY_DEFAULT_ADMIN_PASSWORD,
+    create_admin,
+    disable_legacy_admin_password,
     create_server,
     create_user,
     hash_password,
@@ -509,29 +511,25 @@ class TestIssue205RealAccountsSecureSessions(unittest.TestCase):
             conn.close()
 
     def test_07_bootstrap_admin_account(self):
-        """Bootstrap trusted administrator account with secure hashed password."""
+        """The administrator is created only explicitly, with a random password; the old public default is disabled."""
         conn = self._get_db()
         try:
-            # Check bootstrap_admin
-            admin_id = bootstrap_admin(conn)
-            # If already bootstrapped in setUp, returns None; if freshly run, returns id
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM users WHERE role = 'admin' AND status = 'active'")
-            admin_row = cur.fetchone()
-            self.assertIsNotNone(admin_row, "Active admin user must exist in users table")
-            self.assertEqual(admin_row["role"], "admin")
-            self.assertEqual(admin_row["status"], "active")
-
-            # Verify admin credentials authenticate
-            default_admin_pass = os.environ.get("ADMIN_INITIAL_PASSWORD", "AdminSecure2026!")
-            user_dict, err = authenticate_user(conn, admin_row["login"], default_admin_pass)
-            self.assertIsNotNone(user_dict)
+            admin_id, password = create_admin(conn, "root_admin", "root@example.com")
+            self.assertGreaterEqual(len(password), 20)
+            user_dict, err = authenticate_user(conn, "root_admin", password)
             self.assertIsNone(err)
             self.assertEqual(user_dict["role"], "admin")
 
-            # Verify repeated call is idempotent
-            res = bootstrap_admin(conn)
-            self.assertIsNone(res, "Repeated bootstrap_admin must return None when admin already exists")
+            # Promoting an existing account rotates its password and revokes its sessions
+            _, second_password = create_admin(conn, "root_admin", "root@example.com")
+            self.assertNotEqual(password, second_password)
+            self.assertIsNotNone(authenticate_user(conn, "root_admin", password)[1])
+
+            # An admin still using the password that older versions put in the code is locked out
+            create_admin(conn, "old_admin", "old@example.com", password=LEGACY_DEFAULT_ADMIN_PASSWORD)
+            self.assertEqual(disable_legacy_admin_password(conn), 1)
+            self.assertIsNotNone(authenticate_user(conn, "old_admin", LEGACY_DEFAULT_ADMIN_PASSWORD)[1])
+            self.assertEqual(disable_legacy_admin_password(conn), 0)
         finally:
             conn.close()
 

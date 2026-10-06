@@ -7,7 +7,7 @@ import secrets
 import sqlite3
 from typing import Any, Dict, Optional, Tuple
 
-from backend.security import hash_password, verify_password
+from backend.security import EMAIL_REGEX, LOGIN_REGEX, hash_password, verify_password
 
 
 def create_user(
@@ -188,51 +188,67 @@ def migrate_legacy_profiles(conn: sqlite3.Connection) -> int:
     return migrated_count
 
 
-def bootstrap_admin(conn: sqlite3.Connection) -> Optional[str]:
+# Password that older versions assigned to the auto-created admin; it is public in the repository history
+LEGACY_DEFAULT_ADMIN_PASSWORD = "AdminSecure2026!"
+
+
+def create_admin(conn: sqlite3.Connection, login: str, email: str, password: Optional[str] = None) -> Tuple[str, str]:
     """
-    Bootstraps trusted administrator account (login 'admin') with a secure hashed password
-    if no active admin exists in the users table.
+    Creates (or promotes) the administrator account with a random password unless one is given.
+    Intended for the trusted server command `server.py --create-admin`; never runs automatically.
+    Returns (user_id, password). The password is shown once by the caller and is not stored in clear text.
     """
+    login_clean = (login or "").strip()
+    if not LOGIN_REGEX.match(login_clean):
+        raise ValueError("Логин: 3-30 символов, латинские буквы, цифры, дефис и подчеркивание")
+    email_clean = (email or "").strip()
+    if not EMAIL_REGEX.match(email_clean):
+        raise ValueError("Некорректный email")
+    password = password or secrets.token_urlsafe(18)
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    pw_hash = hash_password(password)
     with conn:
-        cur = conn.cursor()
-        cur.execute("SELECT id FROM users WHERE role = 'admin' AND status = 'active' LIMIT 1")
-        if cur.fetchone():
-            return None
-
-        admin_login = "admin"
-        admin_login_norm = admin_login.lower()
-        admin_password = os.environ.get("ADMIN_INITIAL_PASSWORD", "AdminSecure2026!")
-        admin_email = os.environ.get("ADMIN_INITIAL_EMAIL", "admin@smartcontractum.local")
-        admin_id = "user_admin"
-
-        cur.execute("SELECT id FROM users WHERE id = ? OR login_normalized = ?", (admin_id, admin_login_norm))
-        row = cur.fetchone()
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        admin_pw_hash = hash_password(admin_password)
-
+        row = conn.execute("SELECT id FROM users WHERE login_normalized = ? OR email_normalized = ?",
+                           (login_clean.lower(), email_clean.lower())).fetchone()
         if row:
+            user_id = row[0]
             conn.execute("""
-                UPDATE users
-                SET login = ?, login_normalized = ?, role = 'admin', status = 'active',
-                    password_hash = ?, email = COALESCE(email, ?),
-                    email_normalized = COALESCE(email_normalized, ?),
-                    email_verified_at = COALESCE(email_verified_at, ?),
-                    updated_at = ?
+                UPDATE users SET role = 'admin', status = 'active', password_hash = ?,
+                    email_verified_at = COALESCE(email_verified_at, ?), updated_at = ?
                 WHERE id = ?
-            """, (admin_login, admin_login_norm, admin_pw_hash, admin_email, admin_email.lower(), now_iso, now_iso, row["id"]))
-            target_id = row["id"]
+            """, (pw_hash, now_iso, now_iso, user_id))
+            conn.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
         else:
+            user_id = f"usr_{secrets.token_hex(12)}"
             conn.execute("""
                 INSERT INTO users (
                     id, login, login_normalized, email, email_normalized,
                     password_hash, status, role, email_verified_at, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, 'active', 'admin', ?, ?, ?)
-            """, (admin_id, admin_login, admin_login_norm, admin_email, admin_email.lower(), admin_pw_hash, now_iso, now_iso, now_iso))
-            target_id = admin_id
-
+            """, (user_id, login_clean, login_clean.lower(), email_clean, email_clean.lower(),
+                  pw_hash, now_iso, now_iso, now_iso))
         conn.execute("""
             INSERT OR IGNORE INTO user_profiles (user_id, name, specialization, created_at, updated_at)
-            VALUES (?, 'Администратор', 'Системный администратор', ?, ?)
-        """, (target_id, now_iso, now_iso))
+            VALUES (?, 'Администратор', 'Администратор платформы', ?, ?)
+        """, (user_id, now_iso, now_iso))
+    return user_id, password
 
-        return target_id
+
+def disable_legacy_admin_password(conn: sqlite3.Connection) -> int:
+    """
+    Earlier versions created an 'admin' account with a password written in the public repository.
+    Any account still using it gets an unusable password hash and loses its sessions.
+    Returns the number of accounts secured.
+    """
+    secured = 0
+    rows = conn.execute("""
+        SELECT id, password_hash FROM users
+        WHERE password_hash IS NOT NULL AND (role = 'admin' OR login_normalized = 'admin')
+    """).fetchall()
+    for row in rows:
+        if verify_password(LEGACY_DEFAULT_ADMIN_PASSWORD, row[1]):
+            with conn:
+                conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", ("!disabled-legacy-default", row[0]))
+                conn.execute("UPDATE sessions SET is_revoked = 1 WHERE user_id = ?", (row[0],))
+            secured += 1
+    return secured
