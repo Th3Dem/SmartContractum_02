@@ -6221,22 +6221,22 @@
     window.ArticleReader.syncArticleReportStatus = syncArticleReportStatus;
     window.ArticleReader.openArticleReportModal = openArticleReportModal;
     window.ArticleReader.markArticleAsReported = markArticleAsReported;
-    window.ArticleReader.isArticleReported = isArticleReported;
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('auth:change', function(e) {
+        if (e.detail && e.detail.user) {
+          currentUser = e.detail.user;
+          window.currentUser = e.detail.user;
+        } else {
+          currentUser = null;
+          window.currentUser = null;
+        }
+        if (window._reportedArticleIds) window._reportedArticleIds.clear();
+        if (window._reportedCommentIds) window._reportedCommentIds.clear();
+        if (typeof loadUserCommentSubscriptions === 'function') {
+          loadUserCommentSubscriptions();
+        }
+      });
+    }
   }
 })();
-
-if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  window.addEventListener('auth:change', function(e) {
-    if (e.detail && e.detail.user) {
-      window.currentUser = e.detail.user;
-    } else {
-      window.currentUser = null;
-    }
-    if (window._reportedArticleIds) window._reportedArticleIds.clear();
-    if (window._reportedCommentIds) window._reportedCommentIds.clear();
-    if (typeof loadUserCommentSubscriptions === 'function') {
-      loadUserCommentSubscriptions();
-    }
-  });
-}
 
