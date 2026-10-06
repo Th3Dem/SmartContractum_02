@@ -677,9 +677,12 @@
   }
 
   function initAuthControls() {
+  if (window.SCAuth && window.SCAuth._initialized) return;
+
     const loginBtn = document.getElementById('headerLoginBtn');
     if (loginBtn) {
       loginBtn.addEventListener('click', function (e) {
+    if (window.SCAuth && window.SCAuth._initialized) return;
         e.preventDefault();
         if (currentUser) {
           if (confirm('Вы вошли как «' + currentUser.name + '». Выйти из профиля?')) {
@@ -4612,6 +4615,7 @@
         const loginBtn = document.getElementById('btnEmptyLogin');
         if (loginBtn) {
           loginBtn.addEventListener('click', function () { openAuthModal('subscriptions'); });
+    if (window.SCAuth && window.SCAuth._initialized) return;
         }
         return;
       } else if (state.noSubscriptions) {
