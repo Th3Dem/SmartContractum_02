@@ -6116,131 +6116,19 @@
     renderCompaniesParticipantsList(companies);
   }
 
+  // Companies have their own profile page (Issue #212); the in-feed company screen is gone.
+  // A deep link such as feed.html?company=<id> is replaced so Back does not return to a redirect.
   function openCompanyDetail(companyId) {
-    state.activeCompanyId = companyId;
-    state.tab = 'companies';
-    ensureToolbarPlacement();
-    syncURL(false);
-    updateSubnavTabsUI();
-
-    const detailCard = document.getElementById('companyDetailCard');
-    const articlesContainer = document.getElementById('companyArticlesContainer') || document.getElementById('companyDetailArticlesList');
-    if (detailCard) detailCard.innerHTML = '<div class="feed-skeleton-card" style="height: 160px;"></div>';
-    if (articlesContainer) articlesContainer.innerHTML = '';
-
-    fetch('/api/companies/' + encodeURIComponent(companyId))
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data && data.success && data.company) {
-          renderCompanyDetailCard(data.company);
-          loadCompanyArticles(companyId, data.company);
-        } else {
-          showToast('Компания не найдена', 'error');
-          state.activeCompanyId = null;
-          syncURL(false);
-          updateSubnavTabsUI();
-          loadCompanies(state.previousBlogsSubtab || 'posts');
-        }
-      })
-      .catch(function () {
-        showToast('Ошибка при загрузке компании', 'error');
-      });
-  }
-
-  function renderCompanyDetailCard(comp) {
-    const detailCard = document.getElementById('companyDetailCard');
-    if (!detailCard) return;
-    detailCard.className = 'entity-card-detail company-profile-header';
-
-    const avatarInitials = getInitials(comp.name);
-    const avatarHtml = comp.logo
-      ? '<img src="' + escapeHtml(comp.logo) + '" alt="' + escapeHtml(comp.name) + '" class="company-profile-avatar company-profile-avatar-img entity-avatar entity-avatar-large entity-avatar-img">'
-      : '<div class="company-profile-avatar entity-avatar entity-avatar-large">' + escapeHtml(avatarInitials) + '</div>';
-
-    const verifiedIcon = comp.isVerified
-      ? '<span class="verified-icon" title="Верифицированная компания" aria-label="Верифицированная компания"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></span>'
-      : '';
-
-    const isSub = Boolean(comp.isSubscribed || (state.userSubscriptions && state.userSubscriptions.companies && state.userSubscriptions.companies.includes(comp.id)));
-
-    let statsParts = [
-      pluralizePublications(comp.articlesCount || 0),
-      (comp.subscribersCount || 0) + ' ' + pluralize(comp.subscribersCount || 0, 'подписчик', 'подписчика', 'подписчиков')
-    ];
-    let websiteHtml = '';
-    if (comp.website) {
-      let displayWeb = comp.website.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-      websiteHtml = '<span class="meta-dot">·</span><a href="' + escapeHtml(comp.website) + '" target="_blank" rel="noopener noreferrer" class="company-profile-website">' + escapeHtml(displayWeb) + '</a>';
-    }
-
-    const writeBtnHtml = comp.canPublish
-      ? '<a href="editor.html?companyId=' + encodeURIComponent(comp.id) + '" class="btn btn-secondary btn-comp-write">Написать публикацию</a>'
-      : '';
-
-    detailCard.innerHTML =
-      '<div class="company-profile-top">' +
-        '<div class="company-profile-main">' +
-          avatarHtml +
-          '<div class="company-profile-content">' +
-            '<div class="company-profile-title-row">' +
-              '<h2 class="company-profile-title entity-detail-title">' + escapeHtml(comp.name) + '</h2>' +
-              verifiedIcon +
-              '<span class="card-corporate-badge">Блог компании</span>' +
-            '</div>' +
-            (comp.specialization ? '<div class="company-profile-spec entity-detail-spec">' + escapeHtml(comp.specialization) + '</div>' : '') +
-            (comp.description ? '<p class="company-profile-desc entity-detail-desc">' + escapeHtml(comp.description) + '</p>' : '') +
-            '<div class="company-profile-meta">' +
-              '<span>' + statsParts.join(' <span class="meta-dot">·</span> ') + '</span>' +
-              websiteHtml +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="company-profile-actions">' +
-          '<button type="button" class="btn btn-secondary btn-comp-sub ' + (isSub ? 'is-subscribed' : '') + '" id="btnCompanyDetailSubscribe" data-company-id="' + escapeHtml(comp.id) + '">' +
-            (isSub ? 'Вы подписаны' : 'Подписаться') +
-          '</button>' +
-          writeBtnHtml +
-        '</div>' +
-      '</div>';
-
-    const subBtn = detailCard.querySelector('#btnCompanyDetailSubscribe');
-    if (subBtn) {
-      subBtn.addEventListener('click', function () {
-        toggleSubscription('company', comp.id, subBtn, comp.name);
-      });
+    if (!companyId) return;
+    const target = 'company.html?id=' + encodeURIComponent(companyId);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('company') === companyId || params.get('companyId') === companyId) {
+      window.location.replace(target);
+    } else {
+      window.location.href = target;
     }
   }
-
-  function loadCompanyArticles(companyId, companyObj) {
-    const container = document.getElementById('companyArticlesContainer') || document.getElementById('companyDetailArticlesList');
-    if (!container) return;
-    container.innerHTML = '<div class="feed-skeleton-card" style="height: 120px;"></div>';
-
-    fetch('/api/articles?companyId=' + encodeURIComponent(companyId))
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        container.innerHTML = '';
-        const articles = (data && Array.isArray(data.articles)) ? data.articles : [];
-        if (articles.length > 0) {
-          articles.forEach(function (art) {
-            container.appendChild(createCardElement(art, { isCompanyDetail: true }));
-          });
-        } else {
-          const canPublish = companyObj && companyObj.canPublish;
-          const writeCTA = canPublish
-            ? '<a href="editor.html?companyId=' + encodeURIComponent(companyId) + '" class="btn btn-secondary" style="margin-top: 12px;">Написать публикацию</a>'
-            : '';
-          container.innerHTML =
-            '<div class="feed-empty-state">' +
-              '<p class="empty-state-desc">У этого блога пока нет публикаций</p>' +
-              writeCTA +
-            '</div>';
-        }
-      })
-      .catch(function () {
-        container.innerHTML = '<div class="feed-empty-state"><p class="empty-state-desc">Ошибка при загрузке публикаций компании.</p></div>';
-      });
-  }
+  window.openCompanyDetail = openCompanyDetail;
 
   // --- DIRECTIONS ---
   let cachedDirectionsList = [];

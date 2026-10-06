@@ -170,17 +170,17 @@ class TestIssue139CorporateBlogs(unittest.TestCase):
         self.assertIn("options.onCompanySubscribeToggle", js)
 
     def test_06_company_detail_page_and_empty_state(self):
-        """Verify feed.js implements company blog detail header, articles feed, and CTA."""
-        feed_js_path = os.path.join(FRONTEND_DIR, "js", "feed.js")
-        with open(feed_js_path, "r", encoding="utf-8") as f:
-            js = f.read()
+        """Company blogs open the standalone company profile (Issue #212) with header, subscribe, CTA and empty state."""
+        with open(os.path.join(FRONTEND_DIR, "js", "feed.js"), "r", encoding="utf-8") as f:
+            feed_js = f.read()
+        with open(os.path.join(FRONTEND_DIR, "js", "company.js"), "r", encoding="utf-8") as f:
+            company_js = f.read()
 
-        self.assertIn("renderCompanyDetailCard", js)
-        self.assertIn("company-profile-header", js)
-        self.assertIn("btnCompanyDetailSubscribe", js)
-        self.assertIn("Написать публикацию", js)
-        self.assertIn("loadCompanyArticles", js)
-        self.assertIn("У этого блога пока нет публикаций", js)
+        self.assertIn("'company.html?id=' + encodeURIComponent(companyId)", feed_js)
+        self.assertIn("btnSubscribe", company_js)
+        self.assertIn("Написать публикацию", company_js)
+        self.assertIn("Публикаций пока нет", company_js)
+        self.assertIn("/api/articles?", company_js)
 
     def test_07_invariants_no_emojis_no_em_dashes(self):
         """Invariant: Zero emojis and zero em dashes in corporate blogs modified files."""

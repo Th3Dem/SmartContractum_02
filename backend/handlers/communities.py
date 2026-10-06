@@ -4,6 +4,7 @@ import json
 import urllib.parse
 import uuid
 
+from backend.companies import normalize_website
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import STANDARD_TOPICS, slugify
 from backend.db import can_user_publish_for_company
@@ -453,7 +454,10 @@ class CommunitiesHandlers:
             self.send_json_response(400, {"success": False, "error": "Специализация компании обязательна"})
             return
 
-        website = (data.get("website") or "").strip()
+        website, website_error = normalize_website(data.get("website") if isinstance(data.get("website"), str) else "")
+        if website_error:
+            self.send_json_response(400, {"success": False, "error": website_error})
+            return
         logo = data.get("logo")
         directions = data.get("directions") or []
         if isinstance(directions, str):

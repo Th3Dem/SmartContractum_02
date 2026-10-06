@@ -19,6 +19,7 @@ from backend.handlers.comments import CommentsHandlers
 from backend.handlers.engagement import EngagementHandlers
 from backend.handlers.subscriptions import SubscriptionsHandlers
 from backend.handlers.communities import CommunitiesHandlers
+from backend.handlers.company_profile import CompanyProfileHandlers
 from backend.handlers.moderation import ModerationHandlers
 from backend.handlers.notifications import NotificationsHandlers
 from backend.handlers.drafts import DraftsHandlers
@@ -37,6 +38,7 @@ class ModerationRequestHandler(
     EngagementHandlers,
     SubscriptionsHandlers,
     CommunitiesHandlers,
+    CompanyProfileHandlers,
     ModerationHandlers,
     NotificationsHandlers,
     DraftsHandlers,
