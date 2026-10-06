@@ -67,7 +67,15 @@
             </div>
             <div class="sc-auth-tab-content" id="tab-forgot" style="display:none;">
               <div class="sc-auth-banner">Введите email или логин для восстановления</div>
-              <input type="text" id="forgot-identifier" placeholder="Логин или Email">
+              <div id="forgot-step-1">
+                <input type="text" id="forgot-identifier" placeholder="Логин или Email">
+                <button id="btn-forgot-submit">Отправить код</button>
+              </div>
+              <div id="forgot-step-2" style="display:none;">
+                <input type="text" id="forgot-code" placeholder="6-значный код">
+                <input type="password" id="forgot-new-password" placeholder="Новый пароль">
+                <button id="btn-reset-submit">Сбросить пароль</button>
+              </div>
             </div>
           </div>
         </div>
@@ -89,12 +97,21 @@
       document.getElementById('btn-register-submit').addEventListener('click', () => this.handleRegister());
       document.getElementById('btn-verify-submit').addEventListener('click', () => this.handleVerify());
       document.getElementById('btn-verify-resend').addEventListener('click', () => this.handleResend());
+      document.getElementById('btn-forgot-submit').addEventListener('click', () => this.handleForgot());
+      document.getElementById('btn-reset-submit').addEventListener('click', () => this.handleReset());
     }
 
     switchTab(tab) {
       this.modalMode = tab;
       document.getElementById('login-password').value = '';
       document.getElementById('register-password').value = '';
+      document.getElementById('forgot-identifier').value = '';
+      document.getElementById('forgot-code').value = '';
+      document.getElementById('forgot-new-password').value = '';
+      const step1 = document.getElementById('forgot-step-1');
+      if (step1) step1.style.display = 'block';
+      const step2 = document.getElementById('forgot-step-2');
+      if (step2) step2.style.display = 'none';
       
       document.querySelectorAll('.sc-auth-tab-content').forEach(c => c.style.display = 'none');
       document.getElementById('tab-' + tab).style.display = 'block';
@@ -161,7 +178,7 @@
           </button>
           <div class="sc-auth-dropdown" role="menu" style="display:none; position:absolute; right:0;">
             <a href="profile.html?id=${encodeURIComponent(user.id)}" role="menuitem">Мой профиль</a>
-            <a href="#settings" role="menuitem">Настройки</a>
+            <a href="settings.html" role="menuitem">Настройки</a>
             <button class="sc-auth-logout-btn" role="menuitem">Выход</button>
           </div>
         </div>
@@ -338,6 +355,60 @@
       } catch (e) {
         console.error('Resend error', e);
         this.showError('Network error');
+        btn.disabled = false;
+      }
+    }
+
+    async handleForgot() {
+      this.hideError();
+      const btn = document.getElementById('btn-forgot-submit');
+      const id = document.getElementById('forgot-identifier').value;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: id })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          document.getElementById('forgot-step-1').style.display = 'none';
+          document.getElementById('forgot-step-2').style.display = 'block';
+          this.pendingForgotIdentifier = id;
+        } else {
+          this.showError(data.error || 'Error sending code');
+        }
+      } catch (e) {
+        console.error('Forgot error', e);
+        this.showError('Network error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async handleReset() {
+      this.hideError();
+      const btn = document.getElementById('btn-reset-submit');
+      const code = document.getElementById('forgot-code').value;
+      const newPassword = document.getElementById('forgot-new-password').value;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: this.pendingForgotIdentifier, code, newPassword })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.switchTab('login');
+          document.getElementById('login-identifier').value = this.pendingForgotIdentifier;
+        } else {
+          this.showError(data.error || 'Reset error');
+        }
+      } catch (e) {
+        console.error('Reset error', e);
+        this.showError('Network error');
+      } finally {
         btn.disabled = false;
       }
     }
