@@ -319,7 +319,7 @@
     }
   };
 
-  let currentUser = null;
+  let currentUser = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
   let pendingTabAfterAuth = null;
   let feedAbortController = null;
 
@@ -1489,15 +1489,15 @@
       subscriptions: 'Мои подписки — SmartContractum',
       my: 'Мои подписки — SmartContractum',
       clubs: 'Клубы и сообщества — SmartContractum',
-      companies: 'Блоги - SmartContractum',
-      blogs: 'Блоги - SmartContractum',
+      companies: 'Блоги — SmartContractum',
+      blogs: 'Блоги — SmartContractum',
       directions: 'Темы — SmartContractum',
       saved: 'Сохраненные — SmartContractum'
     };
     const t = titles[state.tab] || 'Лента публикаций — SmartContractum';
     document.title = t;
     if (titleEl) {
-      titleEl.textContent = t.split(' - ')[0].replace(/ \S+ SmartContractum$/, '');
+      titleEl.textContent = t.split(' — ')[0].replace(/ \S+ SmartContractum$/, '');
     }
   }
 
@@ -7373,6 +7373,37 @@
     window.FeedApp.retryLoad = function () {
       loadArticles(true);
     };
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('auth:change', function(e) {
+        if (e.detail && e.detail.user) {
+          currentUser = e.detail.user;
+          window.currentUser = e.detail.user;
+        } else {
+          currentUser = null;
+          window.currentUser = null;
+        }
+        const user = (window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : (currentUser || null);
+        if (window._reportedArticleIds) window._reportedArticleIds.clear();
+        
+        if (user) {
+          fetch('/api/subscriptions')
+            .then(res => { if (res.ok) return res.json(); throw new Error(); })
+            .then(data => {
+              if (data && data.subscriptions) {
+                window._activeSubscriptions = data.subscriptions;
+              }
+            })
+            .catch(() => { window._activeSubscriptions = []; });
+        } else {
+          window._activeSubscriptions = [];
+        }
+        
+        if (typeof updateSavedCounter === 'function') {
+          updateSavedCounter();
+        }
+      });
+    }
   }
 
 })();
+

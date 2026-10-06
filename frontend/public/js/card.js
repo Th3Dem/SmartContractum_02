@@ -724,7 +724,7 @@
   // --------------------------------------------------------------------------
   function getStoredBookmarks() {
     try {
-      const user = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
+      const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
       const key = (user && user.id) ? ('sc_bookmarks_' + user.id) : 'sc_bookmarks_guest';
       let data = localStorage.getItem(key);
       if (!data && !user) {
@@ -780,15 +780,17 @@
 
   function toggleCardBookmark(id, btn) {
     if (!id) return false;
-    const user = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
+    const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
     if (!user) {
       showCardToast('Для сохранения публикации необходимо войти');
       if (typeof window !== 'undefined' && typeof window.openAuthModal === 'function') {
-        window.openAuthModal();
+        window.SCAuth.openModal('login');
       }
       return false;
     }
 
+    if (btn && btn.dataset.pending === 'true') return false;
+    if (btn) btn.dataset.pending = 'true';
     const countEl = btn ? btn.querySelector('.card-save-count') : null;
     const prevCount = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
     const wasBookmarked = btn ? btn.classList.contains('is-bookmarked') : false;
@@ -802,7 +804,7 @@
       }
     }
 
-    const userKey = 'sc_bookmarks_' + user.id;
+    const userKey = (user && user.id) ? ('sc_bookmarks_' + user.id) : 'sc_bookmarks_guest';
     const bookmarks = getStoredBookmarks();
     const idx = bookmarks.indexOf(id);
     if (nextBookmarked && idx === -1) {
@@ -828,6 +830,7 @@
       return res.json();
     })
     .then(function (data) {
+      if (btn) btn.dataset.pending = 'false';
       if (data && data.success) {
         if (btn) {
           updateBookmarkButtonState(btn, Boolean(data.isSaved));
@@ -855,6 +858,7 @@
       }
     })
     .catch(function (err) {
+      if (btn) btn.dataset.pending = 'false';
       // Rollback on network or HTTP error
       if (btn) {
         updateBookmarkButtonState(btn, wasBookmarked);
@@ -868,7 +872,7 @@
       if (err && String(err.message).indexOf('401') !== -1) {
         showCardToast('Для сохранения публикации необходимо войти');
         if (typeof window !== 'undefined' && typeof window.openAuthModal === 'function') {
-          window.openAuthModal();
+          window.SCAuth.openModal('login');
         }
       } else {
         showCardToast('Не удалось связаться с сервером');

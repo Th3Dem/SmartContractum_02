@@ -396,12 +396,13 @@
   // 2.1 Comment Bookmarks, Subscriptions, Share & Report
   // --------------------------------------------------------------------------
   function getCommentBookmarks() {
+    const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
+    const bKey = (user && user.id) ? ('sc_comment_bookmarks_' + user.id) : 'sc_comment_bookmarks_guest';
     try {
-      const data = localStorage.getItem('sc_comment_bookmarks');
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
+      const data = localStorage.getItem(bKey);
+      if (data) return JSON.parse(data) || [];
+    } catch (e) {}
+    return [];
   }
 
   function isCommentBookmarked(commentId, commentObj) {
@@ -413,8 +414,12 @@
     return list.indexOf(commentId) !== -1;
   }
 
-  function toggleCommentBookmark(commentId) {
+  function toggleCommentBookmark(commentId, btn) {
     if (!commentId) return false;
+    if (btn && btn.dataset.pending === 'true') return false;
+    if (btn) btn.dataset.pending = 'true';
+    const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
+    const bKey = (user && user.id) ? ('sc_comment_bookmarks_' + user.id) : 'sc_comment_bookmarks_guest';
     const list = getCommentBookmarks();
     const idx = list.indexOf(commentId);
     let bookmarked = false;
@@ -428,28 +433,33 @@
       showToast('Комментарий сохранен в закладки');
     }
     try {
-      localStorage.setItem('sc_comment_bookmarks', JSON.stringify(list));
+      localStorage.setItem(bKey, JSON.stringify(list));
     } catch (e) {}
 
     if (currentUser) {
       fetch('/api/comments/' + encodeURIComponent(commentId) + '/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: bookmarked ? 'save' : 'unsave' })
-      })
-      .then(function (res) { return res.json(); })
-      .catch(function () {});
+        body: JSON.stringify({ isSaved: bookmarked })
+      }).then(res => res.json()).then(data => {
+        if (btn) btn.dataset.pending = 'false';
+      }).catch(err => {
+        if (btn) btn.dataset.pending = 'false';
+      });
+    } else {
+      if (btn) btn.dataset.pending = 'false';
     }
     return bookmarked;
   }
 
   function getCommentSubscriptions() {
+    const user = (typeof window !== 'undefined' && window.SCAuth && window.SCAuth.currentUser) ? window.SCAuth.currentUser : ((typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null);
+    const sKey = (user && user.id) ? ('sc_comment_subscriptions_' + user.id) : 'sc_comment_subscriptions_guest';
     try {
-      const data = localStorage.getItem('sc_comment_subscriptions');
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
+      const data = localStorage.getItem(sKey);
+      if (data) return JSON.parse(data) || [];
+    } catch (e) {}
+    return [];
   }
 
   function isCommentSubscribed(commentId) {
@@ -847,7 +857,8 @@
       showToast('Войдите, чтобы подписаться на ответы');
       return;
     }
-    btn.disabled = true;
+    if (btn && btn.dataset.pending === 'true') return;
+    if (btn) btn.dataset.pending = 'true';
     fetch('/api/comments/' + encodeURIComponent(commentId) + '/subscribe', {
       method: 'POST',
       headers: {
@@ -860,7 +871,7 @@
         });
       })
       .then(function (result) {
-        btn.disabled = false;
+        if (btn) btn.dataset.pending = 'false';
         if (result.status === 200 && result.data && result.data.success) {
           const isSubscribed = Boolean(result.data.subscribed);
           btn.classList.toggle('is-subscribed', isSubscribed);
@@ -881,7 +892,7 @@
         }
       })
       .catch(function () {
-        btn.disabled = false;
+        if (btn) btn.dataset.pending = 'false';
         showToast('Ошибка сети при обновлении подписки');
       });
   }
@@ -907,7 +918,7 @@
     btns.forEach(function (btn) {
       btn.classList.add('is-reported');
       btn.setAttribute('title', 'Жалоба уже отправлена');
-      btn.disabled = false;
+      if (btn) btn.dataset.pending = 'false';
       const svg = btn.querySelector('svg');
       if (svg) {
         svg.setAttribute('fill', 'currentColor');
@@ -1816,15 +1827,17 @@
     });
   }
 
-  function toggleArticleLike(articleId) {
+  function toggleArticleLike(articleId, btn) {
     if (!currentUser) {
       openAuthModal();
       showToast('Войдите, чтобы поставить лайк');
       return;
     }
-
-    const topBtn = document.getElementById('railBtnLike') || document.getElementById('btnArticleLike') || document.getElementById('mobileBtnLike');
-    const wasLiked = topBtn ? topBtn.classList.contains('is-liked') : false;
+    const targetBtn = btn || document.getElementById('railBtnLike') || document.getElementById('btnArticleLike') || document.getElementById('mobileBtnLike');
+    if (targetBtn && targetBtn.dataset.pending === 'true') return;
+    if (targetBtn) targetBtn.dataset.pending = 'true';
+    
+    const wasLiked = targetBtn ? targetBtn.classList.contains('is-liked') : false;
     const countEl = document.getElementById('railLikeCount') || document.getElementById('articleLikeCount') || document.getElementById('mobileLikeCount');
     const prevCount = parseInt(countEl ? countEl.textContent : '0', 10) || 0;
 
@@ -3005,7 +3018,7 @@
       if (saveBtn) {
         saveBtn.addEventListener('click', function (e) {
           e.preventDefault();
-          const isNowBookmarked = toggleCommentBookmark(comment.id);
+          const isNowBookmarked = toggleCommentBookmark(comment.id, saveBtn);
           saveBtn.classList.toggle('is-bookmarked', isNowBookmarked);
           const newTitle = isNowBookmarked ? 'Удалить из закладок' : 'Сохранить';
           saveBtn.setAttribute('title', newTitle);
@@ -3771,7 +3784,7 @@
     if (saveBtn) {
       saveBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        const isNowBookmarked = toggleCommentBookmark(comment.id);
+        const isNowBookmarked = toggleCommentBookmark(comment.id, saveBtn);
         saveBtn.classList.toggle('is-bookmarked', isNowBookmarked);
         const newTitle = isNowBookmarked ? 'Удалить из закладок' : 'Сохранить';
         saveBtn.setAttribute('title', newTitle);
@@ -4941,12 +4954,12 @@
     const likeBtnBottom = document.getElementById('btnArticleLikeBottom');
     if (likeBtnTop) {
       likeBtnTop.addEventListener('click', function () {
-        toggleArticleLike(articleId);
+        toggleArticleLike(articleId, this);
       });
     }
     if (likeBtnBottom) {
       likeBtnBottom.addEventListener('click', function () {
-        toggleArticleLike(articleId);
+        toggleArticleLike(articleId, this);
       });
     }
 
@@ -4954,14 +4967,14 @@
     const railBtnLike = document.getElementById('railBtnLike');
     if (railBtnLike) {
       railBtnLike.addEventListener('click', function () {
-        toggleArticleLike(articleId);
+        toggleArticleLike(articleId, this);
       });
     }
 
     const mobileBtnLike = document.getElementById('mobileBtnLike');
     if (mobileBtnLike) {
       mobileBtnLike.addEventListener('click', function () {
-        toggleArticleLike(articleId);
+        toggleArticleLike(articleId, this);
       });
     }
 
@@ -6208,6 +6221,22 @@
     window.ArticleReader.syncArticleReportStatus = syncArticleReportStatus;
     window.ArticleReader.openArticleReportModal = openArticleReportModal;
     window.ArticleReader.markArticleAsReported = markArticleAsReported;
-    window.ArticleReader.isArticleReported = isArticleReported;
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('auth:change', function(e) {
+        if (e.detail && e.detail.user) {
+          currentUser = e.detail.user;
+          window.currentUser = e.detail.user;
+        } else {
+          currentUser = null;
+          window.currentUser = null;
+        }
+        if (window._reportedArticleIds) window._reportedArticleIds.clear();
+        if (window._reportedCommentIds) window._reportedCommentIds.clear();
+        if (typeof loadUserCommentSubscriptions === 'function') {
+          loadUserCommentSubscriptions();
+        }
+      });
+    }
   }
 })();
+
