@@ -180,21 +180,32 @@
       }
 
       this.notifications.forEach(n => {
+        // The API returns camelCase fields; accept snake_case too for older responses
+        const isRead = Boolean(n.isRead !== undefined ? n.isRead : n.is_read);
+        const rawArticleId = n.articleId || n.article_id || '';
+        const rawCommentId = n.commentId || n.comment_id || '';
+        const createdAt = n.createdAt || n.created_at;
+
         const item = document.createElement('a');
-        item.className = 'notif-item ' + (n.is_read ? 'is-read' : 'is-unread');
-        
-        const articleId = n.article_id ? encodeURIComponent(n.article_id) : '';
-        const commentId = n.comment_id ? encodeURIComponent(n.comment_id) : '';
-        item.href = `article.html?id=${articleId}#comment-${commentId}`;
-        
+        item.className = 'notif-item ' + (isRead ? 'is-read' : 'is-unread');
+
+        if (n.type === 'moderation_revision' || n.type === 'moderation_rejected') {
+          item.href = 'my-materials.html';
+        } else {
+          const articleId = encodeURIComponent(rawArticleId);
+          item.href = rawCommentId
+            ? `article.html?id=${articleId}#comment-${encodeURIComponent(rawCommentId)}`
+            : `article.html?id=${articleId}`;
+        }
+
         item.innerHTML = `
           <div class="notif-item-title">${this.escapeHTML(n.title || 'Уведомление')}</div>
           <div class="notif-item-msg">${this.escapeHTML(n.message || '')}</div>
-          <div class="notif-item-time">${this.formatTime(n.created_at)}</div>
+          <div class="notif-item-time">${this.formatTime(createdAt)}</div>
         `;
 
         item.addEventListener('click', (e) => {
-          if (!n.is_read) {
+          if (!isRead) {
             this.markAsRead(n.id, item);
           }
         });
@@ -221,7 +232,7 @@
     },
 
     markAllRead: function() {
-      if (this.unreadCount === 0 && (!this.notifications || this.notifications.every(n => n.is_read))) {
+      if (this.unreadCount === 0 && (!this.notifications || this.notifications.every(n => (n.isRead !== undefined ? n.isRead : n.is_read)))) {
         return;
       }
 

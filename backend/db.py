@@ -10,7 +10,7 @@ from backend import config
 from backend.config import VALID_STATUSES
 from backend.content import extract_article_text
 from backend.seeds import seed_database
-from backend.users import bootstrap_admin, migrate_legacy_profiles
+from backend.users import disable_legacy_admin_password, migrate_legacy_profiles
 
 
 def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlite3.Connection:
@@ -39,7 +39,7 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
                 draft_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 author_id TEXT NOT NULL DEFAULT 'author_local',
-                status TEXT NOT NULL DEFAULT 'pending_moderation' CHECK (status IN ('draft', 'pending_moderation', 'approved', 'rejected')),
+                status TEXT NOT NULL DEFAULT 'pending_moderation' CHECK (status IN ('draft', 'pending_moderation', 'approved', 'rejected', 'needs_revision')),
                 publication_settings TEXT NOT NULL,
                 article_html TEXT NOT NULL,
                 article_delta TEXT,
@@ -453,7 +453,10 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         seed_database(conn)
 
     migrate_legacy_profiles(conn)
-    bootstrap_admin(conn)
+    disable_legacy_admin_password(conn)
+    # Imported here: backend.moderation depends on this module
+    from backend.moderation import migrate_moderation_schema
+    migrate_moderation_schema(conn)
 
     return conn
 

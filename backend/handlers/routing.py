@@ -35,6 +35,18 @@ class RoutingHandlers:
             self.handle_moderation_status(parsed)
         elif path == "/api/moderation/list":
             self.handle_moderation_list()
+        elif path == "/api/moderation/my":
+            self.handle_my_submissions(parsed)
+        elif path.startswith("/api/moderation/my/"):
+            self.handle_my_submission(path[len("/api/moderation/my/"):].strip("/"))
+        elif path == "/api/admin/moderation/queue":
+            self.handle_admin_queue(parsed)
+        elif path == "/api/admin/moderation/log":
+            self.handle_admin_log(parsed)
+        elif path.startswith("/api/admin/moderation/submissions/"):
+            self.handle_admin_submission(path[len("/api/admin/moderation/submissions/"):].strip("/"))
+        elif path == "/api/admin/users":
+            self.handle_admin_users(parsed)
         elif (path.startswith("/api/articles/") or path.startswith("/api/questions/")) and path.endswith("/comments"):
             prefix = "/api/articles/" if path.startswith("/api/articles/") else "/api/questions/"
             art_id = path[len(prefix): -len("/comments")].strip("/")
@@ -285,6 +297,22 @@ class RoutingHandlers:
             self.handle_subscriptions_toggle()
         elif path == "/api/moderation/submit":
             self.handle_moderation_submit()
+        elif path.startswith("/api/admin/moderation/submissions/") and path.count("/") == 6:
+            # /api/admin/moderation/submissions/<id>/<action>
+            submission_id, action = path[len("/api/admin/moderation/submissions/"):].split("/", 1)
+            if action == "decision":
+                self.handle_admin_decision(submission_id)
+            elif action in ("claim", "release"):
+                self.handle_admin_claim(submission_id, take=(action == "claim"))
+            else:
+                self.send_json_response(404, {"success": False, "error": f"API endpoint not found: {path}"})
+        elif path.startswith("/api/admin/users/") and path.count("/") == 5:
+            # /api/admin/users/<id>/<role|status>
+            target_id, field = path[len("/api/admin/users/"):].split("/", 1)
+            if field in ("role", "status"):
+                self.handle_admin_user_update(target_id, field)
+            else:
+                self.send_json_response(404, {"success": False, "error": f"API endpoint not found: {path}"})
         elif path == "/api/media/upload" or path == "/api/upload/image":
             self.handle_media_upload()
         elif path == "/api/drafts":
