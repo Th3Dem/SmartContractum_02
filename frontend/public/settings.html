@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/auth.css">
   <link rel="stylesheet" href="css/settings.css">
+  <link rel="stylesheet" href="css/notifications.css">
 </head>
 <body class="app-body">
   <div class="app-container">
@@ -83,6 +84,32 @@
             </span>
           </button>
           
+          
+          <!-- Notifications Bell button with unread badge & popup -->
+          <div class="header-notif-wrap" id="headerNotifWrap">
+            <button
+              type="button"
+              id="headerNotificationsBtn"
+              class="header-notif-btn"
+              title="Уведомления"
+              aria-label="Уведомления"
+              aria-expanded="false"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+              </svg>
+              <span id="headerNotifBadge" class="header-notif-badge" style="display: none;">0</span>
+            </button>
+            <div id="headerNotifPopup" class="header-notif-popup" role="region" aria-label="Список уведомлений">
+              <div class="notif-popup-header">
+                <span class="notif-popup-title">Уведомления</span>
+                <button type="button" id="notifMarkAllReadBtn" class="notif-mark-read-btn">Прочитать все</button>
+              </div>
+              <div id="notifListContainer" class="notif-list-container">
+              </div>
+            </div>
+          </div>
           <div class="header-user-bar">
             <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
               <div class="btn-user-avatar-wrap" aria-hidden="true">
@@ -251,6 +278,7 @@
     }
   </script>
   <script src="js/auth.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/settings.js"></script>
 </body>
 </html>

@@ -586,6 +586,7 @@
   }
 
   function loadHeaderNotifications() {
+    if (window.SCNotifications) return;
     const notifBtn = document.getElementById('headerNotificationsBtn');
     const notifBadge = document.getElementById('headerNotifBadge');
     const notifList = document.getElementById('notifListContainer');
@@ -4406,59 +4407,62 @@
     });
 
     // Header notifications controls
-    const notifBtn = document.getElementById('headerNotificationsBtn');
-    const notifBadge = document.getElementById('headerNotifBadge');
-    const notifPopup = document.getElementById('headerNotifPopup');
-    const notifList = document.getElementById('notifListContainer');
-    const markAllBtn = document.getElementById('notifMarkAllReadBtn');
-    const notifWrap = document.getElementById('headerNotifWrap');
+    (function() {
+      if (window.SCNotifications) return;
+      const notifBtn = document.getElementById('headerNotificationsBtn');
+      const notifBadge = document.getElementById('headerNotifBadge');
+      const notifPopup = document.getElementById('headerNotifPopup');
+      const notifList = document.getElementById('notifListContainer');
+      const markAllBtn = document.getElementById('notifMarkAllReadBtn');
+      const notifWrap = document.getElementById('headerNotifWrap');
 
-    if (notifBtn && notifPopup) {
-      notifBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const isVisible = notifPopup.style.display !== 'none';
-        if (isVisible) {
-          notifPopup.style.display = 'none';
-          notifBtn.setAttribute('aria-expanded', 'false');
-        } else {
-          notifPopup.style.display = 'block';
-          notifBtn.setAttribute('aria-expanded', 'true');
-          loadHeaderNotifications();
-        }
-      });
-
-      if (markAllBtn) {
-        markAllBtn.addEventListener('click', function (e) {
+      if (notifBtn && notifPopup) {
+        notifBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          fetch('/api/notifications/read', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-          })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-              if (data && data.success) {
-                if (notifBadge) notifBadge.style.display = 'none';
-                if (notifList) {
-                  const items = notifList.querySelectorAll('.notif-item.is-unread');
-                  items.forEach(function (el) {
-                    el.classList.remove('is-unread');
-                    el.classList.add('is-read');
-                  });
-                }
-              }
+          const isVisible = notifPopup.style.display !== 'none';
+          if (isVisible) {
+            notifPopup.style.display = 'none';
+            notifBtn.setAttribute('aria-expanded', 'false');
+          } else {
+            notifPopup.style.display = 'block';
+            notifBtn.setAttribute('aria-expanded', 'true');
+            loadHeaderNotifications();
+          }
+        });
+
+        if (markAllBtn) {
+          markAllBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            fetch('/api/notifications/read', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({})
             })
-            .catch(function () {});
+              .then(function (res) { return res.json(); })
+              .then(function (data) {
+                if (data && data.success) {
+                  if (notifBadge) notifBadge.style.display = 'none';
+                  if (notifList) {
+                    const items = notifList.querySelectorAll('.notif-item.is-unread');
+                    items.forEach(function (el) {
+                      el.classList.remove('is-unread');
+                      el.classList.add('is-read');
+                    });
+                  }
+                }
+              })
+              .catch(function () {});
+          });
+        }
+
+        document.addEventListener('click', function (e) {
+          if (notifWrap && !notifWrap.contains(e.target)) {
+            notifPopup.style.display = 'none';
+            notifBtn.setAttribute('aria-expanded', 'false');
+          }
         });
       }
-
-      document.addEventListener('click', function (e) {
-        if (notifWrap && !notifWrap.contains(e.target)) {
-          notifPopup.style.display = 'none';
-          notifBtn.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
+    })();
 
     const logoutBtn = document.getElementById('headerLogoutBtn');
     if (logoutBtn) {
