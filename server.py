@@ -35,6 +35,37 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import image_decoder
 
+
+def load_env_file(path: str) -> List[str]:
+    """
+    Loads KEY=VALUE lines from a local env file into os.environ without overriding
+    variables that are already set. Returns the names that were loaded.
+    Lines starting with # and blank lines are ignored; values may be quoted.
+    """
+    loaded = []
+    if not os.path.isfile(path):
+        return loaded
+    with open(path, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            if key and key not in os.environ:
+                os.environ[key] = value
+                loaded.append(key)
+    return loaded
+
+
+# Secrets and mail settings live in a git-ignored .env next to this file. Only a real
+# server start reads it, so importing the module (tests) never picks up production credentials.
+if __name__ == "__main__":
+    load_env_file(os.environ.get("SC_ENV_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
 # Base paths
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_PUBLIC_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -685,18 +716,64 @@ def verify_verification_code(code: str, stored_hash: str) -> bool:
     return hmac.compare_digest(stored_hash, computed)
 
 
+def render_code_email(heading: str, intro: str, code: str, outro: str) -> Tuple[str, str]:
+    """Builds the plain-text and HTML bodies of a one-time code email."""
+    text = f"{heading}\n\n{intro}\n\nКод: {code}\n\n{outro}\n\nSmartContractum\n"
+    esc = html.escape
+    html_body = f"""<!doctype html>
+<html lang="ru"><body style="margin:0;padding:0;background:#f4f5f7;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;">
+<tr><td style="padding:28px 32px 8px;font-size:18px;font-weight:bold;color:#2563eb;">SmartContractum</td></tr>
+<tr><td style="padding:8px 32px 0;font-size:20px;font-weight:bold;color:#111827;">{esc(heading)}</td></tr>
+<tr><td style="padding:12px 32px 0;font-size:15px;line-height:1.5;color:#4b5563;">{esc(intro)}</td></tr>
+<tr><td style="padding:20px 32px;">
+<div style="display:inline-block;padding:12px 20px;background:#eff6ff;border-radius:8px;font-size:30px;font-weight:bold;letter-spacing:6px;color:#111827;">{esc(code)}</div>
+</td></tr>
+<tr><td style="padding:0 32px 28px;font-size:13px;line-height:1.5;color:#6b7280;">{esc(outro)}</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+    return text, html_body
+
+
 class EmailService:
-    """Mail adapter supporting real SMTP and offline-first fake outbox."""
+    """Mail adapter: real SMTP when configured, otherwise an offline outbox for development."""
 
     def __init__(self):
         self.simulate_failure = False
         self.sent_emails: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
 
-    def is_configured(self) -> bool:
+    @staticmethod
+    def settings() -> Dict[str, Any]:
         host = os.environ.get("SMTP_HOST", "").strip()
-        adapter = os.environ.get("MAIL_ADAPTER", "fake").strip().lower()
-        return bool(host) and adapter != "fake"
+        port = int(os.environ.get("SMTP_PORT", "465").strip() or "465")
+        user = os.environ.get("SMTP_USER", "").strip()
+        return {
+            "adapter": os.environ.get("MAIL_ADAPTER", "smtp" if host else "fake").strip().lower(),
+            "host": host,
+            "port": port,
+            "user": user,
+            "password": os.environ.get("SMTP_PASSWORD", ""),
+            "use_ssl": os.environ.get("SMTP_USE_SSL", "1" if port == 465 else "0").strip().lower() in ("1", "true", "yes"),
+            "use_tls": os.environ.get("SMTP_USE_TLS", "1").strip().lower() in ("1", "true", "yes"),
+            "from_email": os.environ.get("SMTP_FROM_EMAIL", "").strip() or user,
+            "from_name": os.environ.get("SMTP_FROM_NAME", "SmartContractum").strip(),
+        }
+
+    def is_configured(self) -> bool:
+        s = self.settings()
+        return bool(s["host"]) and bool(s["from_email"]) and s["adapter"] != "fake"
+
+    def describe(self) -> str:
+        s = self.settings()
+        if not self.is_configured():
+            return "Mail: development outbox only (no SMTP_HOST); codes are stored in the email_outbox table, nothing is delivered"
+        mode = "SSL" if s["use_ssl"] else ("STARTTLS" if s["use_tls"] else "plain")
+        return f"Mail: SMTP {s['host']}:{s['port']} ({mode}) as {s['from_email'] or '<no sender>'}"
 
     def set_simulate_failure(self, fail: bool) -> None:
         self.simulate_failure = fail
@@ -716,14 +793,53 @@ class EmailService:
         code: str,
         login: str
     ) -> Tuple[bool, Optional[str]]:
-        subject = "Код подтверждения регистрации SmartContractum"
-        body_text = (
-            f"Здравствуйте, {login}!\n\n"
-            f"Ваш код подтверждения для завершения регистрации на платформе SmartContractum: {code}\n\n"
-            f"Код действителен в течение 10 минут.\n"
-            f"Если вы не запрашивали регистрацию, проигнорируйте это письмо.\n"
+        body_text, html_body = render_code_email(
+            "Подтвердите email",
+            f"Здравствуйте, {login}! Чтобы завершить регистрацию на SmartContractum, введите этот код в окне регистрации.",
+            code,
+            "Код действует 10 минут. Если вы не регистрировались, просто проигнорируйте это письмо."
         )
-        return self.send_email(conn, recipient, subject, body_text, extra={"code": code, "login": login})
+        return self.send_email(
+            conn, recipient, "Код подтверждения регистрации SmartContractum", body_text,
+            extra={"code": code, "login": login}, html_body=html_body
+        )
+
+    def deliver_smtp(self, recipient: str, subject: str, body_text: str, html_body: Optional[str] = None) -> None:
+        """Sends one message through the configured SMTP server; raises on any failure."""
+        import email.utils
+        import smtplib
+        import ssl
+        from email.message import EmailMessage
+
+        s = self.settings()
+        if not s["from_email"]:
+            raise RuntimeError("SMTP_FROM_EMAIL or SMTP_USER must be set")
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = email.utils.formataddr((s["from_name"], s["from_email"]))
+        msg["To"] = recipient
+        msg["Date"] = email.utils.formatdate(localtime=False)
+        msg["Message-ID"] = email.utils.make_msgid(domain=s["from_email"].split("@")[-1])
+        msg.set_content(body_text)
+        if html_body:
+            msg.add_alternative(html_body, subtype="html")
+
+        context = ssl.create_default_context()
+        if s["use_ssl"]:
+            smtp = smtplib.SMTP_SSL(s["host"], s["port"], timeout=15, context=context)
+        else:
+            smtp = smtplib.SMTP(s["host"], s["port"], timeout=15)
+        try:
+            if not s["use_ssl"] and s["use_tls"]:
+                smtp.starttls(context=context)
+            if s["user"] and s["password"]:
+                smtp.login(s["user"], s["password"])
+            smtp.send_message(msg)
+        finally:
+            try:
+                smtp.quit()
+            except Exception:
+                pass
 
     def send_email(
         self,
@@ -731,11 +847,13 @@ class EmailService:
         recipient: str,
         subject: str,
         body_text: str,
-        extra: Optional[Dict[str, Any]] = None
+        extra: Optional[Dict[str, Any]] = None,
+        html_body: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Delivers one message via SMTP (or the fake adapter) and records it in the durable outbox."""
+        """Delivers one message via SMTP (or the development outbox) and records it in email_outbox."""
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         outbox_id = f"outbox_{secrets.token_hex(16)}"
+        stored_body = body_text
 
         def record_outbox(status: str, error_message: Optional[str]) -> None:
             sent_at = now_iso if status == "sent" else None
@@ -743,7 +861,7 @@ class EmailService:
                 conn.execute("""
                     INSERT INTO email_outbox (id, recipient, subject, body_text, status, error_message, created_at, sent_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (outbox_id, recipient, subject, body_text, status, error_message, now_iso, sent_at))
+                """, (outbox_id, recipient, subject, stored_body, status, error_message, now_iso, sent_at))
 
         if self.simulate_failure or os.environ.get("FAIL_MAIL_DELIVERY") == "1":
             err_msg = "Ошибка отправки письма: Simulated SMTP delivery failure"
@@ -754,41 +872,20 @@ class EmailService:
             return False, err_msg
 
         if self.is_configured():
+            # Delivered codes are not kept in clear text in the database
+            code = (extra or {}).get("code")
+            if code:
+                stored_body = body_text.replace(code, "******")
             try:
-                import smtplib
-                from email.mime.text import MIMEText
-                msg = MIMEText(body_text, "plain", "utf-8")
-                msg["Subject"] = subject
-                msg["From"] = os.environ.get("SMTP_FROM_EMAIL", "noreply@smartcontractum.local")
-                msg["To"] = recipient
-
-                host = os.environ.get("SMTP_HOST", "127.0.0.1")
-                port = int(os.environ.get("SMTP_PORT", "587"))
-                user = os.environ.get("SMTP_USER", "")
-                password = os.environ.get("SMTP_PASSWORD", "")
-                use_tls = os.environ.get("SMTP_USE_TLS", "1").lower() in ("1", "true", "yes")
-
-                smtp = smtplib.SMTP(host, port, timeout=10)
-                try:
-                    if use_tls:
-                        smtp.starttls()
-                    if user and password:
-                        smtp.login(user, password)
-                    smtp.sendmail(msg["From"], [recipient], msg.as_string())
-                finally:
-                    try:
-                        smtp.quit()
-                    except Exception:
-                        pass
+                self.deliver_smtp(recipient, subject, body_text, html_body)
             except Exception as e:
-                err_msg = f"Ошибка отправки письма: {e}"
+                sys.stderr.write(f"[mail] delivery to {recipient} failed: {e}\n")
                 try:
-                    record_outbox("failed", err_msg)
+                    record_outbox("failed", f"SMTP error: {type(e).__name__}")
                 except Exception:
                     pass
-                return False, err_msg
+                return False, "Не удалось отправить письмо. Попробуйте позже."
 
-        # Fake adapter (offline-first) records the message as delivered to the outbox
         record_outbox("sent", None)
         email_record = {
             "id": outbox_id,
@@ -11892,9 +11989,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                       (now + datetime.timedelta(minutes=1)).isoformat(), now_iso, now_iso))
             RECOVERY_RATE_LIMITER.record(limit_key)
 
+            body_text, html_body = render_code_email(
+                "Подтвердите новый email",
+                "Для вашего аккаунта SmartContractum запрошена смена email на этот адрес. Введите код в настройках аккаунта.",
+                code,
+                "Код действует 10 минут. Если вы ничего не меняли, просто проигнорируйте это письмо."
+            )
             sent, err_msg = self.mailer().send_email(
-                conn, new_email, "Подтверждение смены email SmartContractum",
-                f"Код для подтверждения нового адреса: {code}\n\nКод действителен 10 минут.\n"
+                conn, new_email, "Подтверждение смены email SmartContractum", body_text,
+                extra={"code": code}, html_body=html_body
             )
             if not sent:
                 with conn:
@@ -12043,10 +12146,15 @@ class ModerationRequestHandler(http.server.SimpleHTTPRequestHandler):
                         """, (str(uuid.uuid4()), row["id"], row["email"], hash_verification_code(code),
                               (now + datetime.timedelta(minutes=10)).isoformat(),
                               (now + datetime.timedelta(minutes=1)).isoformat(), now_iso, now_iso))
+                    body_text, html_body = render_code_email(
+                        "Восстановление пароля",
+                        "Кто-то, возможно вы, запросил сброс пароля для аккаунта SmartContractum. Введите этот код в окне восстановления.",
+                        code,
+                        "Код действует 10 минут. Если вы не запрашивали сброс, проигнорируйте это письмо: пароль останется прежним."
+                    )
                     self.mailer().send_email(
-                        conn, row["email"], "Восстановление пароля SmartContractum",
-                        f"Код для сброса пароля: {code}\n\nКод действителен 10 минут. "
-                        f"Если вы не запрашивали сброс, проигнорируйте это письмо.\n"
+                        conn, row["email"], "Восстановление пароля SmartContractum", body_text,
+                        extra={"code": code}, html_body=html_body
                     )
         finally:
             conn.close()
@@ -12505,6 +12613,9 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] =
     print(f"Antigravity Moderation Server running at http://{host}:{port}/")
     print(f"Serving static files from {httpd.directory}")
     print(f"SQLite database at {httpd.db_path}")
+    print(EMAIL_SERVICE.describe())
+    if "EMAIL_VERIFICATION_SECRET" not in os.environ:
+        print("WARNING: EMAIL_VERIFICATION_SECRET is not set; the public default is used. Set it in .env before production.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -12519,6 +12630,23 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default=os.environ.get("HOST", "0.0.0.0"), help="Host to bind to (default 0.0.0.0)")
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
     parser.add_argument("--seed", action="store_true", help="Seed database with demo data on startup")
+    parser.add_argument("--send-test-email", metavar="ADDRESS", help="Send one test email with the current mail settings and exit")
     args = parser.parse_args()
+    if args.send_test_email:
+        print(EMAIL_SERVICE.describe())
+        if not EMAIL_SERVICE.is_configured():
+            sys.exit("SMTP is not configured: set SMTP_HOST, SMTP_USER and SMTP_PASSWORD in .env")
+        text, html_body = render_code_email(
+            "Тестовое письмо",
+            "Если вы видите это письмо, отправка почты SmartContractum настроена правильно.",
+            "123456",
+            "Это проверочное письмо, код в нем ненастоящий."
+        )
+        try:
+            EMAIL_SERVICE.deliver_smtp(args.send_test_email, "Проверка почты SmartContractum", text, html_body)
+        except Exception as e:
+            sys.exit(f"Delivery failed: {type(e).__name__}: {e}")
+        print(f"Test email sent to {args.send_test_email}")
+        sys.exit(0)
     port = args.port or args.port_pos or int(os.environ.get("PORT", 8000))
     run_server(host=args.host, port=port, db_path=args.db, seed=args.seed)
