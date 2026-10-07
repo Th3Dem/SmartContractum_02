@@ -94,7 +94,7 @@ body,
     right: 0;
     height: 56px;
     z-index: 990;
-    background: var(--surface-1);
+    background: var(--bg-surface);
     border-top: 1px solid var(--border-subtle);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
