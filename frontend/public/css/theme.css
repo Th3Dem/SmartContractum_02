@@ -58,6 +58,7 @@
 
   --accent-color: #2563eb;
   --accent: #2563eb;
+  --surface-1: #ffffff;       /* Issue #254: was used in article.css but never declared */
   --surface-2: #f1f3f5;
   --accent-hover: #1d4ed8;
   --accent-subtle: #eff6ff;
@@ -180,6 +181,7 @@
 
   --accent-color: #3861fb;     /* CMC Royal Blue */
   --accent: #3861fb;
+  --surface-1: #1e293b;       /* Issue #254: the value dark rules already used as fallback */
   --surface-2: rgba(255, 255, 255, 0.06);
   --accent-hover: #2752e7;
   --accent-subtle: rgba(56, 97, 251, 0.15);
