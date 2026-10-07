@@ -985,7 +985,7 @@
       if (submitBtn) {
         submitBtn.setAttribute('disabled', 'disabled');
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span>Публикация...</span>';
+        submitBtn.innerHTML = '<span>Отправка...</span>';
       }
 
       const response = await fetch('/api/moderation/submit', {
@@ -1013,9 +1013,10 @@
           clearDraft();
         }
         updateDraftsBadge();
-        showToast('Вопрос успешно опубликован!', 'success');
+        showToast(resData.isDuplicate ? 'Вопрос уже на модерации' : 'Вопрос отправлен на модерацию', 'success');
 
-        const targetUrl = resData.url || (resData.submissionId ? `/article.html?id=${resData.submissionId}` : '/feed.html?tab=questions');
+        // A pending question is not public yet: the author follows it in My materials
+        const targetUrl = resData.url || (resData.submissionId ? `/my-materials.html?submitted=${encodeURIComponent(resData.submissionId)}` : '/my-materials.html');
         setTimeout(function () {
           window.location.href = targetUrl;
         }, 300);

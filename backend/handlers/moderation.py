@@ -13,6 +13,14 @@ from backend.moderation import REJECT_REASONS, STATUS_LABELS, material_type_of
 from backend.submissions import validate_submission_payload
 
 
+def submission_url(submission_id, status):
+    """Where the author goes after submitting: the article once published, otherwise My materials."""
+    quoted = urllib.parse.quote(submission_id)
+    if status == "approved":
+        return f"/article.html?id={quoted}"
+    return f"/my-materials.html?submitted={quoted}"
+
+
 class ModerationHandlers:
     def handle_moderation_submit(self):
         """
@@ -91,6 +99,7 @@ class ModerationHandlers:
                             "success": True,
                             "status": existing["status"],
                             "submissionId": existing["id"],
+                            "url": submission_url(existing["id"], existing["status"]),
                             "snapshotHash": existing["snapshot_hash"],
                             "createdAt": existing["created_at"],
                             "isDuplicate": True
@@ -214,7 +223,7 @@ class ModerationHandlers:
                             "status": dup_row["status"],
                             "submissionId": dup_row["id"],
                             "id": dup_row["id"],
-                            "url": f"/article.html?id={dup_row['id']}",
+                            "url": submission_url(dup_row["id"], dup_row["status"]),
                             "snapshotHash": dup_row["snapshot_hash"],
                             "createdAt": dup_row["created_at"],
                             "isDuplicate": True
@@ -233,7 +242,7 @@ class ModerationHandlers:
                 "status": "pending_moderation",
                 "submissionId": submission_id,
                 "id": submission_id,
-                "url": f"/article.html?id={submission_id}",
+                "url": submission_url(submission_id, "pending_moderation"),
                 "snapshotHash": snapshot_hash,
                 "createdAt": now_iso
             })

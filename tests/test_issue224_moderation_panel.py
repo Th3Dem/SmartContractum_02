@@ -153,6 +153,29 @@ class TestModerationPanel(unittest.TestCase):
         self.assertEqual(len(self.mails_to("author_one@example.com")), 1)
         self.assertEqual(self.decide(moderator, sid, "reject", reasonCode="spam")[0], 409, "decided only once")
 
+    def test_submit_links_to_my_materials_until_published(self):
+        """Issue #242: a pending material has no public page yet, the author follows it in My materials."""
+        author = self.client("author_one")
+        payload = submission_payload("link-draft", title="Материал для проверки ссылки")
+        payload["idempotencyKey"] = "link-key-1"
+        status, body = author.request("POST", "/api/moderation/submit", payload)
+        self.assertEqual(status, 200, body)
+        sid = body["submissionId"]
+        self.assertEqual(body["url"], f"/my-materials.html?submitted={sid}")
+        _, again = author.request("POST", "/api/moderation/submit", payload)
+        self.assertEqual((again["isDuplicate"], again["url"]), (True, f"/my-materials.html?submitted={sid}"))
+        self.assertEqual(self.decide(self.client("mod_anna"), sid, "approve")[0], 200)
+        _, published = author.request("POST", "/api/moderation/submit", payload)
+        self.assertEqual(published["url"], f"/article.html?id={sid}", "once published the link leads to the article")
+
+    def test_question_editor_follows_the_server_link(self):
+        with open(os.path.join(PROJECT_ROOT, "frontend", "public", "js", "question-editor.js"), encoding="utf-8") as f:
+            js = f.read()
+        self.assertNotIn("Вопрос успешно опубликован", js)
+        self.assertIn("Вопрос отправлен на модерацию", js)
+        self.assertIn("/my-materials.html?submitted=", js)
+        self.assertNotIn("`/article.html?id=${resData.submissionId}`", js)
+
     def test_revise_requires_remarks_and_allows_resubmission(self):
         author = self.client("author_two")
         sid = self.submit(author, "revise-draft")
