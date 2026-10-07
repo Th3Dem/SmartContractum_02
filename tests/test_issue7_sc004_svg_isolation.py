@@ -31,6 +31,7 @@ import image_decoder
 from image_decoder import ImageDecodeError, decode_and_validate_image
 import server
 from server import create_server, init_db, save_media_file, validate_cover_image
+from tests.auth_helpers import upload_auth_headers
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
@@ -114,7 +115,7 @@ class TestIssue7SC004SVGIsolation(unittest.TestCase):
                 req = urllib.request.Request(
                     f"{self.base_url}/api/media/upload",
                     data=payload,
-                    headers={"Content-Type": "image/svg+xml"},
+                    headers={**upload_auth_headers(self.db_path), "Content-Type": "image/svg+xml"},
                     method="POST"
                 )
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
@@ -282,7 +283,7 @@ class TestIssue7SC004SVGIsolation(unittest.TestCase):
         upload_req = urllib.request.Request(
             f"{self.base_url}/api/media/upload",
             data=json.dumps({"image": self._to_data_uri(svg_39_22)}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={**upload_auth_headers(self.db_path), "Content-Type": "application/json"},
             method="POST"
         )
         with urllib.request.urlopen(upload_req) as resp:

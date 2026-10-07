@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Настройки - SmartContractum</title>
+  <title>Компания - SmartContractum</title>
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/auth.css">
-  <link rel="stylesheet" href="css/settings.css">
+  <link rel="stylesheet" href="css/company.css">
   <link rel="stylesheet" href="css/notifications.css">
 </head>
 <body class="app-body">
@@ -127,136 +127,77 @@
       </div>
     </header>
 
-    <main class="settings-page-wrapper">
-      <div id="unauthorizedCard" class="auth-required-card settings-card active">
-         <h2>Требуется авторизация</h2>
-         <p style="margin-bottom:20px;color:var(--text-secondary);">Пожалуйста, войдите в свой аккаунт, чтобы управлять настройками.</p>
-         <button class="settings-btn-primary" onclick="window.SCAuth && window.SCAuth.openModal('login')">Войти</button>
+    <main class="co-page" id="companyPage">
+      <div class="co-state" id="companyState">
+        <div class="co-skeleton" aria-hidden="true"></div>
       </div>
 
-      <div id="settingsContent" class="hidden">
-        <div class="settings-header">
-          <h1>Настройки</h1>
-        </div>
-
-        <div class="settings-tabs">
-          <button class="settings-tab-btn active" id="tabBtnProfile">Профиль</button>
-          <button class="settings-tab-btn" id="tabBtnSecurity">Безопасность</button>
-          <button class="settings-tab-btn" id="tabBtnCompanies">Компании</button>
-        </div>
-
-        <div id="tabContentProfile" class="settings-tab-content active">
-          <div class="settings-card">
-            <h2>Публичный профиль</h2>
-            <form id="profileForm">
-              <div class="settings-form-group">
-                <label for="name">Отображаемое имя (обязательно)</label>
-                <input type="text" id="name" name="name" class="settings-form-control" required>
+      <div id="companyView" hidden>
+        <section class="co-card co-hero">
+          <div class="co-cover" id="companyCover" aria-hidden="true"></div>
+          <div class="co-hero-body">
+            <div class="co-logo" id="companyLogo" aria-hidden="true"></div>
+            <div class="co-hero-row">
+              <div class="co-identity">
+                <h1 class="co-name"><span id="companyName"></span><span class="co-verified" id="companyVerified" title="Компания подтверждена" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span></h1>
+                <p class="co-specialization" id="companySpecialization"></p>
+                <p class="co-description" id="companyDescription"></p>
               </div>
-              <div class="settings-form-group">
-                <label for="firstName">Имя</label>
-                <input type="text" id="firstName" name="firstName" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="lastName">Фамилия</label>
-                <input type="text" id="lastName" name="lastName" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="specialization">Специализация</label>
-                <input type="text" id="specialization" name="specialization" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="company">Организация</label>
-                <input type="text" id="company" name="company" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="bio">О себе</label>
-                <textarea id="bio" name="bio" class="settings-form-control"></textarea>
-              </div>
-              <div class="settings-form-group">
-                <label for="website">Сайт</label>
-                <input type="url" id="website" name="website" class="settings-form-control">
-              </div>
-              <button type="submit" id="btnSaveProfile" class="settings-btn-primary">Сохранить профиль</button>
-            </form>
-          </div>
-        </div>
-
-        <div id="tabContentSecurity" class="settings-tab-content">
-          <div class="settings-card">
-            <h2>Учетные данные</h2>
-            <div class="settings-form-group">
-              <label for="secUsername">Логин</label>
-              <input type="text" id="secUsername" class="settings-form-control" readonly disabled>
-            </div>
-            <div class="settings-form-group">
-              <label for="secEmail">Email</label>
-              <div style="display:flex;align-items:center;">
-                <input type="text" id="secEmail" class="settings-form-control" readonly disabled style="flex:1;">
-                <span id="secEmailStatus" class="settings-status-badge"></span>
-              </div>
+              <div class="co-actions" id="companyActions"></div>
             </div>
           </div>
+        </section>
 
-          <div class="settings-card">
-            <h2>Смена email</h2>
-            <div id="emailAlert" class="settings-alert"></div>
-            <form id="changeEmailForm">
-              <div class="settings-form-group">
-                <label for="emailCurrentPassword">Текущий пароль</label>
-                <input type="password" id="emailCurrentPassword" name="currentPassword" class="settings-form-control" required autocomplete="current-password">
-              </div>
-              <div class="settings-form-group">
-                <label for="newEmail">Новый email</label>
-                <input type="email" id="newEmail" name="newEmail" class="settings-form-control" required autocomplete="email">
-              </div>
-              <button type="submit" id="btnRequestChangeEmail" class="settings-btn-primary">Запросить смену email</button>
-            </form>
+        <section class="co-card co-stats" id="companyStats" aria-label="Показатели"></section>
 
-            <form id="confirmEmailForm" class="hidden" style="margin-top:20px;">
-              <div class="settings-form-group">
-                <label for="emailCode">Код подтверждения (отправлен на новый email)</label>
-                <input type="text" id="emailCode" name="code" class="settings-form-control" required autocomplete="one-time-code">
-              </div>
-              <button type="submit" id="btnConfirmChangeEmail" class="settings-btn-primary">Подтвердить новый email</button>
-            </form>
-          </div>
+        <div class="co-layout">
+          <section class="co-card co-main">
+            <nav class="co-tabs" role="tablist" aria-label="Разделы компании" id="companyTabs">
+              <button type="button" class="co-tab is-active" role="tab" data-tab="publications" aria-selected="true">Публикации <span class="co-tab-count" data-count="publications"></span></button>
+              <button type="button" class="co-tab" role="tab" data-tab="questions" aria-selected="false">Вопросы <span class="co-tab-count" data-count="questions"></span></button>
+              <button type="button" class="co-tab" role="tab" data-tab="subscribers" aria-selected="false">Подписчики <span class="co-tab-count" data-count="subscribers"></span></button>
+              <button type="button" class="co-tab" role="tab" data-tab="following" aria-selected="false">Подписки компании <span class="co-tab-count" data-count="following"></span></button>
+            </nav>
+            <div class="co-tab-body" id="companyTabBody" aria-live="polite"></div>
+          </section>
 
-          <div class="settings-card">
-            <h2>Смена пароля</h2>
-            <div id="passwordAlert" class="settings-alert"></div>
-            <form id="changePasswordForm">
-              <div class="settings-form-group">
-                <label for="currentPassword">Текущий пароль</label>
-                <input type="password" id="currentPassword" name="currentPassword" class="settings-form-control" required autocomplete="current-password">
-              </div>
-              <div class="settings-form-group">
-                <label for="newPassword">Новый пароль</label>
-                <input type="password" id="newPassword" name="newPassword" class="settings-form-control" required autocomplete="new-password">
-              </div>
-              <div class="settings-form-group">
-                <label for="newPasswordConfirm">Повтор нового пароля</label>
-                <input type="password" id="newPasswordConfirm" name="newPasswordConfirm" class="settings-form-control" required autocomplete="new-password">
-              </div>
-              <button type="submit" id="btnChangePassword" class="settings-btn-primary">Изменить пароль</button>
-            </form>
-          </div>
-
-          <div class="settings-card">
-            <h2>Сессии</h2>
-            <p style="margin-bottom:20px;color:var(--text-secondary);">Вы можете завершить все активные сессии на других устройствах.</p>
-            <button id="btnLogoutAll" class="settings-btn-danger">Выйти на всех устройствах</button>
-          </div>
-        </div>
-        <div id="tabContentCompanies" class="settings-tab-content">
-          <div class="settings-card">
-            <h2>Мои компании</h2>
-            <p class="settings-companies-lead">Компании, которыми вы владеете или от имени которых публикуете материалы.</p>
-            <div id="settingsCompaniesList" class="settings-companies-list"></div>
-            <a href="feed.html?tab=companies" class="settings-btn-primary settings-companies-create">Создать компанию</a>
-          </div>
+          <aside class="co-side">
+            <section class="co-card co-side-card">
+              <h2 class="co-side-title">О компании</h2>
+              <div class="co-about" id="companyAbout"></div>
+              <dl class="co-facts" id="companyFacts"></dl>
+            </section>
+            <section class="co-card co-side-card" id="companyDirectionsCard" hidden>
+              <h2 class="co-side-title">Направления</h2>
+              <div class="co-chips" id="companyDirections"></div>
+            </section>
+          </aside>
         </div>
       </div>
+
+      <div class="co-dialog" id="editDialog" hidden>
+        <div class="co-dialog-backdrop" data-close></div>
+        <div class="co-dialog-card" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+          <div class="co-dialog-head">
+            <h2 class="co-dialog-title" id="editTitle">Профиль компании</h2>
+            <button type="button" class="co-icon-btn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <form id="editForm" class="co-form" novalidate>
+            <label class="co-field"><span class="co-label">Название</span><input class="co-input" name="name" maxlength="120" required></label>
+            <label class="co-field"><span class="co-label">Специализация</span><input class="co-input" name="specialization" maxlength="120" required></label>
+            <label class="co-field"><span class="co-label">Кратко о компании</span><textarea class="co-input co-textarea" name="description" rows="2" maxlength="300" required></textarea><span class="co-hint">Одна-две фразы под названием, до 300 символов</span></label>
+            <label class="co-field"><span class="co-label">Подробное описание</span><textarea class="co-input co-textarea" name="about" rows="7" maxlength="8000"></textarea><span class="co-hint">Чем занимается компания, команда, проекты. Абзацы разделяйте пустой строкой.</span></label>
+            <label class="co-field"><span class="co-label">Сайт</span><input class="co-input" name="website" maxlength="300" placeholder="https://example.ru"></label>
+            <fieldset class="co-field co-fieldset"><legend class="co-label">Направления</legend><div class="co-chips" id="editDirections"></div></fieldset>
+            <div class="co-message" id="editMessage" role="alert" hidden></div>
+            <div class="co-dialog-actions">
+              <button type="button" class="co-btn co-btn-ghost" data-close>Отмена</button>
+              <button type="submit" class="co-btn co-btn-primary" id="editSubmit">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="co-toast" id="companyToast" role="status" hidden></div>
     </main>
   </div>
 
@@ -288,6 +229,6 @@
   </script>
   <script src="js/auth.js"></script>
   <script src="js/notifications.js"></script>
-  <script src="js/settings.js"></script>
+  <script src="js/company.js"></script>
 </body>
 </html>

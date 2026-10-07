@@ -681,6 +681,8 @@
             options.onCompanyClick(cid);
           } else if (typeof window.openCompanyDetail === 'function') {
             window.openCompanyDetail(cid);
+          } else {
+            window.location.href = 'company.html?id=' + encodeURIComponent(cid);
           }
         });
         compInfoEl.addEventListener('keydown', function (e) {
@@ -693,6 +695,8 @@
               options.onCompanyClick(cid);
             } else if (typeof window.openCompanyDetail === 'function') {
               window.openCompanyDetail(cid);
+            } else {
+              window.location.href = 'company.html?id=' + encodeURIComponent(cid);
             }
           }
         });

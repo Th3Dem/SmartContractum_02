@@ -20,6 +20,7 @@ from backend.handlers.comments import CommentsHandlers
 from backend.handlers.engagement import EngagementHandlers
 from backend.handlers.subscriptions import SubscriptionsHandlers
 from backend.handlers.communities import CommunitiesHandlers
+from backend.handlers.company_profile import CompanyProfileHandlers
 from backend.handlers.moderation import ModerationHandlers
 from backend.handlers.notifications import NotificationsHandlers
 from backend.handlers.drafts import DraftsHandlers
@@ -38,6 +39,7 @@ class ModerationRequestHandler(
     EngagementHandlers,
     SubscriptionsHandlers,
     CommunitiesHandlers,
+    CompanyProfileHandlers,
     ModerationHandlers,
     AdminHandlers,
     NotificationsHandlers,
@@ -70,7 +72,7 @@ def create_server(
     httpd = http.server.ThreadingHTTPServer(server_address, ModerationRequestHandler)
     httpd.db_path = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
     httpd.directory = directory or FRONTEND_PUBLIC_DIR
-    httpd.media_dir = media_dir or os.environ.get("config.MEDIA_DIR", config.MEDIA_DIR)
+    httpd.media_dir = media_dir or os.environ.get("MEDIA_DIR", config.MEDIA_DIR)
     os.makedirs(httpd.media_dir, exist_ok=True)
 
     if allow_demo_login is None:

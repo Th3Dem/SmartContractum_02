@@ -75,6 +75,16 @@ class RoutingHandlers:
             else:
                 club_id = path[len("/api/clubs/"):].strip("/")
                 self.handle_get_club_detail(club_id)
+        elif path.startswith("/api/companies/") and path.rstrip("/").endswith(("/profile", "/subscribers", "/subscriptions")):
+            company_id, section = path.strip("/").split("/")[2:4]
+            if section == "profile":
+                self.handle_get_company_profile(company_id)
+            elif section == "subscribers":
+                self.handle_get_company_subscribers(company_id, parsed)
+            else:
+                self.handle_get_company_subscriptions(company_id)
+        elif path == "/api/user/companies":
+            self.handle_get_my_companies()
         elif path == "/api/companies" or path.startswith("/api/companies/"):
             if path == "/api/companies":
                 self.handle_get_companies(parsed)
@@ -195,6 +205,8 @@ class RoutingHandlers:
             self.handle_post_club()
         elif path == "/api/companies":
             self.handle_post_company()
+        elif path.startswith("/api/companies/") and path.rstrip("/").endswith("/subscriptions/toggle"):
+            self.handle_toggle_company_subscription(path.strip("/").split("/")[2])
         elif path == "/api/likes/toggle":
             p = self.read_json_body(MAX_JSON_BODY_BYTES, allow_empty=True, default_empty={})
             if p is None:
@@ -356,6 +368,9 @@ class RoutingHandlers:
                 return
         elif path.startswith("/api/drafts/"):
             self.handle_put_draft(path)
+            return
+        elif path.startswith("/api/companies/") and path.strip("/").count("/") == 2:
+            self.handle_update_company(path.strip("/").split("/")[2])
             return
 
         raw_body = self.read_request_body(MAX_JSON_BODY_BYTES)
