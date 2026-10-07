@@ -1,11 +1,18 @@
 """Account area: pinned material and account settings."""
 import datetime
+import hashlib
+import hmac
 import json
 import sqlite3
 import urllib.parse
 
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import TOPICS_TITLE_MAP, format_date_ru, make_content_snippet
+
+
+def session_public_id(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:20]
+
 
 
 class AccountHandlers:
@@ -417,12 +424,10 @@ class AccountHandlers:
         try:
             with conn:
                 cur = conn.cursor()
-                # user is already fetched by get_current_user, but we need email, etc. Wait, get_current_user might return some of these?
-                # Let's just query what we need.
                 cur.execute("""
-                    SELECT u.id, u.login, u.email, u.email_verified_at,
+                    SELECT u.id, u.login, u.email, u.email_verified_at, u.role, u.created_at,
                            p.name, p.first_name, p.last_name, p.bio,
-                           p.specialization, p.company, p.website, p.avatar
+                           p.specialization, p.company, p.website, p.avatar, p.cover
                     FROM users u
                     LEFT JOIN user_profiles p ON u.id = p.user_id
                     WHERE u.id = ?
@@ -444,8 +449,63 @@ class AccountHandlers:
                     "specialization": row["specialization"] or "",
                     "company": row["company"] or "",
                     "website": row["website"] or "",
-                    "avatar": row["avatar"] or ""
+                    "avatar": row["avatar"] or "",
+                    "cover": row["cover"] or "",
+                    "role": row["role"],
+                    "createdAt": row["created_at"],
+                    "emailVerifiedAt": row["email_verified_at"]
                 }
                 self.send_json_response(200, {"success": True, "settings": settings})
         finally:
             conn.close()
+
+    def handle_get_sessions(self):
+        """GET /api/auth/sessions: active sessions of the current user, newest first."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация", "requireAuth": True})
+            return
+        current = self.get_session_token() or ""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn = self.get_db()
+        try:
+            rows = conn.execute("""
+                SELECT token, created_at, expires_at, user_agent FROM sessions
+                WHERE user_id = ? AND is_revoked = 0 AND expires_at > ?
+                ORDER BY created_at DESC LIMIT 50
+            """, (user["id"], now_iso)).fetchall()
+        finally:
+            conn.close()
+        self.send_json_response(200, {"success": True, "sessions": [{
+            # The token itself never leaves the server; a hash prefix identifies the session
+            "id": session_public_id(r["token"]),
+            "createdAt": r["created_at"],
+            "expiresAt": r["expires_at"],
+            "userAgent": r["user_agent"] or "",
+            "current": hmac.compare_digest(r["token"], current),
+        } for r in rows]})
+
+    def handle_revoke_session(self):
+        """POST /api/auth/sessions/revoke {id}: ends one of the current user's sessions."""
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация", "requireAuth": True})
+            return
+        data = self.read_json_body(MAX_JSON_BODY_BYTES)
+        if data is None:
+            return
+        public_id = str(data.get("id") or "")
+        conn = self.get_db()
+        try:
+            rows = conn.execute("SELECT token FROM sessions WHERE user_id = ? AND is_revoked = 0", (user["id"],)).fetchall()
+            target = next((r["token"] for r in rows if public_id and hmac.compare_digest(session_public_id(r["token"]), public_id)), None)
+            if not target:
+                self.send_json_response(404, {"success": False, "error": "Сеанс не найден"})
+                return
+            with conn:
+                conn.execute("UPDATE sessions SET is_revoked = 1 WHERE token = ? AND user_id = ?", (target, user["id"]))
+        finally:
+            conn.close()
+        is_current = hmac.compare_digest(target, self.get_session_token() or "")
+        self.send_json_response(200, {"success": True, "current": is_current},
+                                extra_headers=self.cleared_session_cookie_headers() if is_current else None)

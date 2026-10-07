@@ -25,6 +25,8 @@ class RoutingHandlers:
             self.handle_get_feed_settings()
         elif path == "/api/user/settings":
             self.handle_get_user_settings()
+        elif path == "/api/auth/sessions":
+            self.handle_get_sessions()
         elif path == "/api/exceptions":
             self.handle_get_exceptions()
         elif path == "/api/subscriptions":
@@ -199,6 +201,8 @@ class RoutingHandlers:
             self.handle_auth_reset_password()
         elif path == "/api/auth/logout-all":
             self.handle_auth_logout_all()
+        elif path == "/api/auth/sessions/revoke":
+            self.handle_revoke_session()
         elif path == "/api/user/feed-settings":
             self.handle_post_feed_settings()
         elif path == "/api/clubs":
