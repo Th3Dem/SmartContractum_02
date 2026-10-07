@@ -193,10 +193,11 @@ class BaseHandlers:
         token = secrets.token_hex(32)
         csrf_token = secrets.token_hex(32)
         now = datetime.datetime.now(datetime.timezone.utc)
+        user_agent = (self.headers.get("User-Agent") or "")[:300] if getattr(self, "headers", None) else ""
         conn.execute("""
-            INSERT INTO sessions (token, user_id, user_name, user_role, created_at, expires_at, is_revoked)
-            VALUES (?, ?, ?, ?, ?, ?, 0)
-        """, (token, user_id, user_name, user_role, now.isoformat(), (now + datetime.timedelta(days=7)).isoformat()))
+            INSERT INTO sessions (token, user_id, user_name, user_role, created_at, expires_at, is_revoked, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+        """, (token, user_id, user_name, user_role, now.isoformat(), (now + datetime.timedelta(days=7)).isoformat(), user_agent))
         return token, csrf_token
 
     def session_cookie_headers(self, token: str, csrf_token: str) -> List[Tuple[str, str]]:

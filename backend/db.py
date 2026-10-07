@@ -356,6 +356,11 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             conn.execute("ALTER TABLE sessions ADD COLUMN user_role TEXT NOT NULL DEFAULT 'user';")
         except Exception:
             pass
+        try:
+            # Browser of the sign-in, shown in the list of active sessions
+            conn.execute("ALTER TABLE sessions ADD COLUMN user_agent TEXT;")
+        except Exception:
+            pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);")
 

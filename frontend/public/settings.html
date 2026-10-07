@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/auth.css">
   <link rel="stylesheet" href="css/settings.css">
+  <link rel="stylesheet" href="css/media-crop.css">
   <link rel="stylesheet" href="css/notifications.css">
 </head>
 <body class="app-body">
@@ -127,136 +128,265 @@
       </div>
     </header>
 
-    <main class="settings-page-wrapper">
-      <div id="unauthorizedCard" class="auth-required-card settings-card active">
-         <h2>Требуется авторизация</h2>
-         <p style="margin-bottom:20px;color:var(--text-secondary);">Пожалуйста, войдите в свой аккаунт, чтобы управлять настройками.</p>
-         <button class="settings-btn-primary" onclick="window.SCAuth && window.SCAuth.openModal('login')">Войти</button>
-      </div>
+    <main class="st-page">
+      <svg class="st-sprite" aria-hidden="true" focusable="false">
+        <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+        <symbol id="i-devices" viewBox="0 0 24 24"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 18h6"/><rect x="17" y="8" width="5" height="12" rx="1"/></symbol>
+        <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></symbol>
+        <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 2-2v-1a2 2 0 0 1 2-2h2a4 4 0 0 0 4-4A10 10 0 0 0 12 2z"/></symbol>
+        <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></symbol>
+        <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+        <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+        <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+        <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+        <symbol id="i-badge" viewBox="0 0 24 24"><path d="M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14z"/><path d="M8.2 13.9 7 23l5-3 5 3-1.2-9.1"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+        <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+        <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+      </svg>
 
-      <div id="settingsContent" class="hidden">
-        <div class="settings-header">
-          <h1>Настройки</h1>
-        </div>
-
-        <div class="settings-tabs">
-          <button class="settings-tab-btn active" id="tabBtnProfile">Профиль</button>
-          <button class="settings-tab-btn" id="tabBtnSecurity">Безопасность</button>
-          <button class="settings-tab-btn" id="tabBtnCompanies">Компании</button>
-        </div>
-
-        <div id="tabContentProfile" class="settings-tab-content active">
-          <div class="settings-card">
-            <h2>Публичный профиль</h2>
-            <form id="profileForm">
-              <div class="settings-form-group">
-                <label for="name">Отображаемое имя (обязательно)</label>
-                <input type="text" id="name" name="name" class="settings-form-control" required>
-              </div>
-              <div class="settings-form-group">
-                <label for="firstName">Имя</label>
-                <input type="text" id="firstName" name="firstName" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="lastName">Фамилия</label>
-                <input type="text" id="lastName" name="lastName" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="specialization">Специализация</label>
-                <input type="text" id="specialization" name="specialization" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="company">Организация</label>
-                <input type="text" id="company" name="company" class="settings-form-control">
-              </div>
-              <div class="settings-form-group">
-                <label for="bio">О себе</label>
-                <textarea id="bio" name="bio" class="settings-form-control"></textarea>
-              </div>
-              <div class="settings-form-group">
-                <label for="website">Сайт</label>
-                <input type="url" id="website" name="website" class="settings-form-control">
-              </div>
-              <button type="submit" id="btnSaveProfile" class="settings-btn-primary">Сохранить профиль</button>
-            </form>
-          </div>
-        </div>
-
-        <div id="tabContentSecurity" class="settings-tab-content">
-          <div class="settings-card">
-            <h2>Учетные данные</h2>
-            <div class="settings-form-group">
-              <label for="secUsername">Логин</label>
-              <input type="text" id="secUsername" class="settings-form-control" readonly disabled>
-            </div>
-            <div class="settings-form-group">
-              <label for="secEmail">Email</label>
-              <div style="display:flex;align-items:center;">
-                <input type="text" id="secEmail" class="settings-form-control" readonly disabled style="flex:1;">
-                <span id="secEmailStatus" class="settings-status-badge"></span>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h2>Смена email</h2>
-            <div id="emailAlert" class="settings-alert"></div>
-            <form id="changeEmailForm">
-              <div class="settings-form-group">
-                <label for="emailCurrentPassword">Текущий пароль</label>
-                <input type="password" id="emailCurrentPassword" name="currentPassword" class="settings-form-control" required autocomplete="current-password">
-              </div>
-              <div class="settings-form-group">
-                <label for="newEmail">Новый email</label>
-                <input type="email" id="newEmail" name="newEmail" class="settings-form-control" required autocomplete="email">
-              </div>
-              <button type="submit" id="btnRequestChangeEmail" class="settings-btn-primary">Запросить смену email</button>
-            </form>
-
-            <form id="confirmEmailForm" class="hidden" style="margin-top:20px;">
-              <div class="settings-form-group">
-                <label for="emailCode">Код подтверждения (отправлен на новый email)</label>
-                <input type="text" id="emailCode" name="code" class="settings-form-control" required autocomplete="one-time-code">
-              </div>
-              <button type="submit" id="btnConfirmChangeEmail" class="settings-btn-primary">Подтвердить новый email</button>
-            </form>
-          </div>
-
-          <div class="settings-card">
-            <h2>Смена пароля</h2>
-            <div id="passwordAlert" class="settings-alert"></div>
-            <form id="changePasswordForm">
-              <div class="settings-form-group">
-                <label for="currentPassword">Текущий пароль</label>
-                <input type="password" id="currentPassword" name="currentPassword" class="settings-form-control" required autocomplete="current-password">
-              </div>
-              <div class="settings-form-group">
-                <label for="newPassword">Новый пароль</label>
-                <input type="password" id="newPassword" name="newPassword" class="settings-form-control" required autocomplete="new-password">
-              </div>
-              <div class="settings-form-group">
-                <label for="newPasswordConfirm">Повтор нового пароля</label>
-                <input type="password" id="newPasswordConfirm" name="newPasswordConfirm" class="settings-form-control" required autocomplete="new-password">
-              </div>
-              <button type="submit" id="btnChangePassword" class="settings-btn-primary">Изменить пароль</button>
-            </form>
-          </div>
-
-          <div class="settings-card">
-            <h2>Сессии</h2>
-            <p style="margin-bottom:20px;color:var(--text-secondary);">Вы можете завершить все активные сессии на других устройствах.</p>
-            <button id="btnLogoutAll" class="settings-btn-danger">Выйти на всех устройствах</button>
-          </div>
-        </div>
-        <div id="tabContentCompanies" class="settings-tab-content">
-          <div class="settings-card">
-            <h2>Мои компании</h2>
-            <p class="settings-companies-lead">Компании, которыми вы владеете или от имени которых публикуете материалы.</p>
-            <div id="settingsCompaniesList" class="settings-companies-list"></div>
-            <a href="feed.html?tab=companies" class="settings-btn-primary settings-companies-create">Создать компанию</a>
-          </div>
+      <div id="unauthorizedCard" class="st-guard">
+        <div class="st-card st-guard-card">
+          <span class="st-guard-icon"><svg><use href="#i-shield"/></svg></span>
+          <h1>Настройки аккаунта</h1>
+          <p>Войдите, чтобы управлять профилем, безопасностью и компаниями.</p>
+          <button type="button" class="st-btn st-btn-primary" id="btnGuardLogin">Войти</button>
         </div>
       </div>
+
+      <div id="settingsContent" class="st-layout" hidden>
+        <aside class="st-aside">
+          <div class="st-card st-me">
+            <span class="st-me-avatar" id="meAvatar"></span>
+            <div class="st-me-text">
+              <span class="st-me-name" id="meName"></span>
+              <span class="st-me-login" id="meLogin"></span>
+            </div>
+          </div>
+          <nav class="st-card st-nav" aria-label="Разделы настроек">
+            <button type="button" class="st-nav-item is-active" id="tabBtnProfile" data-section="profile"><svg><use href="#i-user"/></svg><span>Профиль</span></button>
+            <button type="button" class="st-nav-item" id="tabBtnSecurity" data-section="security"><svg><use href="#i-shield"/></svg><span>Вход и безопасность</span></button>
+            <button type="button" class="st-nav-item" id="tabBtnSessions" data-section="sessions"><svg><use href="#i-devices"/></svg><span>Устройства</span><span class="st-nav-count" id="sessionsCount"></span></button>
+            <button type="button" class="st-nav-item" id="tabBtnCompanies" data-section="companies"><svg><use href="#i-building"/></svg><span>Компании</span><span class="st-nav-count" id="companiesCount"></span></button>
+            <button type="button" class="st-nav-item" id="tabBtnAppearance" data-section="appearance"><svg><use href="#i-palette"/></svg><span>Оформление</span></button>
+          </nav>
+          <a class="st-card st-view-profile" id="linkViewProfile" href="profile.html"><svg><use href="#i-external"/></svg><span>Открыть мой профиль</span></a>
+        </aside>
+
+        <div class="st-content">
+          <!-- Profile -->
+          <section class="st-section" id="tabContentProfile" data-section="profile">
+            <header class="st-section-head">
+              <h1>Профиль</h1>
+              <p>Как вас видят читатели в ленте, комментариях и на странице профиля.</p>
+            </header>
+
+            <div class="st-card st-identity">
+              <div class="st-cover" id="coverPreview">
+                <div class="st-cover-actions">
+                  <button type="button" class="st-chip-btn" id="btnCoverEdit"><svg><use href="#i-image"/></svg><span>Обложка</span></button>
+                  <button type="button" class="st-chip-btn" id="btnCoverRemove" hidden aria-label="Удалить обложку" title="Удалить обложку"><svg><use href="#i-trash"/></svg></button>
+                </div>
+              </div>
+              <div class="st-identity-row">
+                <div class="st-avatar-wrap">
+                  <span class="st-avatar" id="avatarPreview"></span>
+                  <button type="button" class="st-avatar-edit" id="btnAvatarEdit" aria-label="Изменить фото" title="Изменить фото"><svg><use href="#i-camera"/></svg></button>
+                </div>
+                <div class="st-identity-text">
+                  <span class="st-identity-name" id="previewName"></span>
+                  <span class="st-identity-sub" id="previewSub"></span>
+                  <button type="button" class="st-link st-link-danger" id="btnAvatarRemove" hidden>Удалить фото</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="st-card st-progress" id="profileProgress">
+              <div class="st-progress-head">
+                <span class="st-progress-title">Профиль заполнен на <b id="progressValue">0%</b></span>
+                <span class="st-progress-hint" id="progressHint"></span>
+              </div>
+              <div class="st-progress-bar"><span id="progressBar"></span></div>
+              <div class="st-progress-steps" id="progressSteps"></div>
+            </div>
+
+            <form id="profileForm" class="st-card st-form" novalidate>
+              <h2 class="st-card-title">Основное</h2>
+              <div class="st-field">
+                <label for="name"><svg><use href="#i-user"/></svg>Отображаемое имя <span class="st-required" title="Обязательное поле">*</span></label>
+                <input type="text" id="name" name="name" maxlength="100" required autocomplete="nickname" placeholder="Например, Анна Смирнова">
+                <div class="st-field-foot"><span>Показывается в ленте, комментариях и в шапке сайта</span><span class="st-counter" data-for="name"></span></div>
+              </div>
+              <div class="st-row">
+                <div class="st-field">
+                  <label for="firstName">Имя</label>
+                  <input type="text" id="firstName" name="firstName" maxlength="60" autocomplete="given-name">
+                </div>
+                <div class="st-field">
+                  <label for="lastName">Фамилия</label>
+                  <input type="text" id="lastName" name="lastName" maxlength="60" autocomplete="family-name">
+                </div>
+              </div>
+              <div class="st-row">
+                <div class="st-field">
+                  <label for="specialization"><svg><use href="#i-badge"/></svg>Специализация</label>
+                  <input type="text" id="specialization" name="specialization" maxlength="120" list="specializationOptions" placeholder="Например, аудитор смарт-контрактов">
+                  <datalist id="specializationOptions">
+                    <option value="Разработчик смарт-контрактов"></option>
+                    <option value="Аудитор смарт-контрактов"></option>
+                    <option value="Архитектор решений"></option>
+                    <option value="Специалист по информационной безопасности"></option>
+                    <option value="Юрист в сфере цифровых активов"></option>
+                    <option value="Продуктовый менеджер"></option>
+                    <option value="Аналитик"></option>
+                  </datalist>
+                </div>
+                <div class="st-field">
+                  <label for="company"><svg><use href="#i-briefcase"/></svg>Организация</label>
+                  <input type="text" id="company" name="company" maxlength="120" autocomplete="organization" placeholder="Где вы работаете">
+                </div>
+              </div>
+
+              <h2 class="st-card-title st-card-title-gap">О себе</h2>
+              <div class="st-field">
+                <label for="bio"><svg><use href="#i-text"/></svg>Коротко о себе</label>
+                <textarea id="bio" name="bio" rows="4" maxlength="1000" placeholder="Чем занимаетесь, в каких проектах участвовали, о чем пишете"></textarea>
+                <div class="st-field-foot"><span>Помогает читателям понять, кто автор материала</span><span class="st-counter" data-for="bio"></span></div>
+              </div>
+              <div class="st-field">
+                <label for="website"><svg><use href="#i-globe"/></svg>Сайт</label>
+                <input type="url" id="website" name="website" maxlength="300" inputmode="url" placeholder="https://example.ru">
+                <div class="st-field-foot"><span id="websiteHint">Ссылка появится в карточке профиля</span></div>
+              </div>
+
+              <div class="st-savebar" id="saveBar" hidden>
+                <span class="st-savebar-text"><svg><use href="#i-info"/></svg>Есть несохраненные изменения</span>
+                <div class="st-savebar-actions">
+                  <button type="button" class="st-btn st-btn-ghost" id="btnResetProfile">Отменить</button>
+                  <button type="submit" class="st-btn st-btn-primary" id="btnSaveProfile">Сохранить</button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <!-- Security -->
+          <section class="st-section" id="tabContentSecurity" data-section="security" hidden>
+            <header class="st-section-head">
+              <h1>Вход и безопасность</h1>
+              <p>Данные для входа, почта для восстановления доступа и пароль.</p>
+            </header>
+
+            <div class="st-card st-list">
+              <div class="st-list-row">
+                <span class="st-list-icon"><svg><use href="#i-at"/></svg></span>
+                <div class="st-list-text"><span class="st-list-label">Логин</span><span class="st-list-value" id="secUsername"></span><span class="st-list-hint">Используется для входа, изменить его нельзя</span></div>
+                <button type="button" class="st-icon-btn" id="btnCopyLogin" aria-label="Скопировать логин" title="Скопировать"><svg><use href="#i-copy"/></svg></button>
+              </div>
+              <div class="st-list-row">
+                <span class="st-list-icon"><svg><use href="#i-mail"/></svg></span>
+                <div class="st-list-text"><span class="st-list-label">Email</span><span class="st-list-value"><span id="secEmail"></span> <span id="secEmailStatus" class="st-badge"></span></span><span class="st-list-hint">Никому не показывается. Нужен для входа и восстановления пароля</span></div>
+                <button type="button" class="st-btn st-btn-ghost st-btn-sm" data-toggle="emailPanel">Изменить</button>
+              </div>
+              <div class="st-expand" id="emailPanel" hidden>
+                <form id="changeEmailForm" novalidate>
+                  <div class="st-row">
+                    <div class="st-field"><label for="newEmail">Новый email</label><input type="email" id="newEmail" name="newEmail" required autocomplete="email"></div>
+                    <div class="st-field"><label for="emailCurrentPassword">Текущий пароль</label><input type="password" id="emailCurrentPassword" name="currentPassword" required autocomplete="current-password"></div>
+                  </div>
+                  <p class="st-note">Мы отправим код на новый адрес, а на текущий придет уведомление. Пока вы не введете код, вход работает по старому адресу.</p>
+                  <div class="st-alert" id="emailAlert" role="alert" hidden></div>
+                  <div class="st-actions"><button type="button" class="st-btn st-btn-ghost" data-toggle="emailPanel">Отмена</button><button type="submit" class="st-btn st-btn-primary" id="btnRequestChangeEmail">Получить код</button></div>
+                </form>
+                <form id="confirmEmailForm" novalidate hidden>
+                  <div class="st-field"><label for="emailCode">Код из письма</label><input type="text" id="emailCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" class="st-code"></div>
+                  <div class="st-alert" id="emailConfirmAlert" role="alert" hidden></div>
+                  <div class="st-actions"><button type="button" class="st-btn st-btn-ghost" id="btnEmailBack">Изменить адрес</button><button type="submit" class="st-btn st-btn-primary" id="btnConfirmChangeEmail">Подтвердить</button></div>
+                </form>
+              </div>
+              <div class="st-list-row">
+                <span class="st-list-icon"><svg><use href="#i-key"/></svg></span>
+                <div class="st-list-text"><span class="st-list-label">Пароль</span><span class="st-list-value">••••••••••</span><span class="st-list-hint">После смены пароля другие устройства выйдут из аккаунта</span></div>
+                <button type="button" class="st-btn st-btn-ghost st-btn-sm" data-toggle="passwordPanel">Изменить</button>
+              </div>
+              <div class="st-expand" id="passwordPanel" hidden>
+                <form id="changePasswordForm" novalidate>
+                  <div class="st-field"><label for="currentPassword">Текущий пароль</label><div class="st-pass"><input type="password" id="currentPassword" name="currentPassword" required autocomplete="current-password"><button type="button" class="st-pass-toggle" data-reveal="currentPassword" aria-label="Показать пароль"><svg><use href="#i-eye"/></svg></button></div></div>
+                  <div class="st-row">
+                    <div class="st-field"><label for="newPassword">Новый пароль</label><div class="st-pass"><input type="password" id="newPassword" name="newPassword" required autocomplete="new-password"><button type="button" class="st-pass-toggle" data-reveal="newPassword" aria-label="Показать пароль"><svg><use href="#i-eye"/></svg></button></div></div>
+                    <div class="st-field"><label for="newPasswordConfirm">Повторите пароль</label><div class="st-pass"><input type="password" id="newPasswordConfirm" name="newPasswordConfirm" required autocomplete="new-password"><button type="button" class="st-pass-toggle" data-reveal="newPasswordConfirm" aria-label="Показать пароль"><svg><use href="#i-eye"/></svg></button></div></div>
+                  </div>
+                  <div class="st-strength" aria-live="polite"><div class="st-strength-bar"><span id="strengthBar"></span></div><span class="st-strength-label" id="strengthLabel">Введите новый пароль</span></div>
+                  <ul class="st-rules" id="passwordRules">
+                    <li data-rule="length">Не короче 8 символов</li>
+                    <li data-rule="mixed">Буквы и цифры</li>
+                    <li data-rule="different">Отличается от текущего</li>
+                    <li data-rule="match">Пароли совпадают</li>
+                  </ul>
+                  <div class="st-alert" id="passwordAlert" role="alert" hidden></div>
+                  <div class="st-actions"><button type="button" class="st-btn st-btn-ghost" data-toggle="passwordPanel">Отмена</button><button type="submit" class="st-btn st-btn-primary" id="btnChangePassword">Сменить пароль</button></div>
+                </form>
+              </div>
+              <div class="st-list-row">
+                <span class="st-list-icon"><svg><use href="#i-badge"/></svg></span>
+                <div class="st-list-text"><span class="st-list-label">Роль</span><span class="st-list-value" id="secRole"></span></div>
+              </div>
+              <div class="st-list-row">
+                <span class="st-list-icon"><svg><use href="#i-calendar"/></svg></span>
+                <div class="st-list-text"><span class="st-list-label">На платформе с</span><span class="st-list-value" id="secCreated"></span></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Sessions -->
+          <section class="st-section" id="tabContentSessions" data-section="sessions" hidden>
+            <header class="st-section-head">
+              <h1>Устройства</h1>
+              <p>Где выполнен вход в ваш аккаунт. Если устройство вам незнакомо, завершите сеанс и смените пароль.</p>
+            </header>
+            <div class="st-card st-sessions" id="sessionsList"></div>
+            <div class="st-card st-danger">
+              <div><span class="st-danger-title">Выйти на всех устройствах</span><span class="st-list-hint">Завершит все сеансы, включая этот. Потребуется войти заново.</span></div>
+              <button type="button" class="st-btn st-btn-danger" id="btnLogoutAll"><svg><use href="#i-logout"/></svg>Выйти везде</button>
+            </div>
+          </section>
+
+          <!-- Companies -->
+          <section class="st-section" id="tabContentCompanies" data-section="companies" hidden>
+            <header class="st-section-head st-section-head-row">
+              <div><h1>Компании</h1><p>Компании, которыми вы владеете или от имени которых публикуете материалы.</p></div>
+              <a href="feed.html?tab=companies" class="st-btn st-btn-primary"><svg><use href="#i-plus"/></svg>Создать компанию</a>
+            </header>
+            <div class="st-companies" id="settingsCompaniesList"></div>
+          </section>
+
+          <!-- Appearance -->
+          <section class="st-section" id="tabContentAppearance" data-section="appearance" hidden>
+            <header class="st-section-head">
+              <h1>Оформление</h1>
+              <p>Тема сохраняется в этом браузере.</p>
+            </header>
+            <div class="st-themes" role="radiogroup" aria-label="Тема оформления">
+              <button type="button" class="st-theme st-theme-light" role="radio" data-theme-choice="light"><span class="st-theme-preview"><span></span><span></span><span></span></span><span class="st-theme-name"><svg><use href="#i-sun"/></svg>Светлая</span></button>
+              <button type="button" class="st-theme st-theme-dark" role="radio" data-theme-choice="dark"><span class="st-theme-preview"><span></span><span></span><span></span></span><span class="st-theme-name"><svg><use href="#i-moon"/></svg>Темная</span></button>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="st-toast" id="settingsToast" role="status" hidden></div>
     </main>
   </div>
 
@@ -288,6 +418,7 @@
   </script>
   <script src="js/auth.js"></script>
   <script src="js/notifications.js"></script>
+  <script src="js/media-crop.js"></script>
   <script src="js/settings.js"></script>
 </body>
 </html>
