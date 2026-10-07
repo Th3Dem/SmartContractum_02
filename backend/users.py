@@ -208,8 +208,15 @@ def create_admin(conn: sqlite3.Connection, login: str, email: str, password: Opt
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     pw_hash = hash_password(password)
     with conn:
-        row = conn.execute("SELECT id FROM users WHERE login_normalized = ? OR email_normalized = ?",
-                           (login_clean.lower(), email_clean.lower())).fetchone()
+        rows = conn.execute("SELECT id, login, login_normalized FROM users WHERE login_normalized = ? OR email_normalized = ?",
+                            (login_clean.lower(), email_clean.lower())).fetchall()
+        # The email may already belong to another account: promoting that one under a different
+        # login would hand admin rights to an account the operator did not name.
+        other = next((r for r in rows if r[2] != login_clean.lower()), None)
+        if other:
+            raise ValueError(f"Email уже принадлежит аккаунту '{other[1]}'. "
+                             f"Укажите этот логин или другой email")
+        row = rows[0] if rows else None
         if row:
             user_id = row[0]
             conn.execute("""
