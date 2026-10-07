@@ -1986,7 +1986,7 @@ body.preview-mode .editor-card {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
-  color: var(--accent-primary);
+  color: var(--accent-color);
   margin-top: 1px;
 }
 
