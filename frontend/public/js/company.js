@@ -116,7 +116,7 @@
 
     const actions = [];
     if (c.canEdit) {
-      actions.push('<button type="button" class="co-btn co-btn-ghost" id="btnEditCompany">Редактировать</button>');
+      actions.push(`<a class="co-btn co-btn-ghost" id="btnEditCompany" href="settings.html#company=${encodeURIComponent(c.id)}">${ICON_PEN}Редактировать</a>`);
     }
     if (c.canPublish) {
       actions.push(`<a class="co-btn co-btn-ghost" href="editor.html?companyId=${encodeURIComponent(c.id)}">Написать от имени компании</a>`);
@@ -161,6 +161,7 @@
 
   const ICON_IMAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>';
   const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const ICON_CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>';
   const ICON_PEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
   function renderMediaControls(c) {
@@ -172,9 +173,8 @@
         <button type="button" class="media-edit-btn" data-media="cover">${ICON_IMAGE}<span>${c.cover ? 'Изменить обложку' : 'Добавить обложку'}</span></button>
         ${c.cover ? `<button type="button" class="media-edit-btn" data-media-remove="cover" aria-label="Удалить обложку">${ICON_TRASH}</button>` : ''}
       </div>`);
-    document.querySelector('.co-hero-body').insertAdjacentHTML('beforeend', `
-      <button type="button" class="media-logo-edit co-media-control co-logo-edit" data-media="logo" aria-label="${c.logo ? 'Изменить логотип' : 'Добавить логотип'}" title="${c.logo ? 'Изменить логотип' : 'Добавить логотип'}">${ICON_PEN}</button>
-      ${c.logo ? `<button type="button" class="co-media-control co-logo-remove" data-media-remove="logo">Удалить логотип</button>` : ''}`);
+    document.querySelector('.co-logo-wrap').insertAdjacentHTML('beforeend', `
+      <button type="button" class="co-media-control co-logo-edit" data-media="logo" aria-label="${c.logo ? 'Изменить логотип' : 'Добавить логотип'}" title="${c.logo ? 'Изменить логотип' : 'Добавить логотип'}">${ICON_CAMERA}</button>`);
   }
 
   async function editMedia(kind) {
@@ -348,57 +348,10 @@
     if (state.tab === 'subscribers') loadSubscribers(true);
   }
 
-  function openEdit() {
-    const c = state.company;
-    const form = $('editForm');
-    form.name.value = c.name;
-    form.specialization.value = c.specialization || '';
-    form.description.value = c.description || '';
-    form.about.value = c.about || '';
-    form.website.value = c.website || '';
-    const selected = new Set(c.directions || []);
-    $('editDirections').innerHTML = Object.entries(state.directions).map(([id, title]) => `
-      <label class="co-check"><input type="checkbox" value="${escapeHtml(id)}" ${selected.has(id) ? 'checked' : ''}><span>${escapeHtml(title)}</span></label>`).join('');
-    $('editMessage').hidden = true;
-    $('editDialog').hidden = false;
-    setTimeout(() => form.name.focus(), 0);
-  }
-
-  function closeEdit() {
-    $('editDialog').hidden = true;
-  }
-
-  async function submitEdit(e) {
-    e.preventDefault();
-    const form = $('editForm');
-    const payload = {
-      name: form.name.value,
-      specialization: form.specialization.value,
-      description: form.description.value,
-      about: form.about.value,
-      website: form.website.value,
-      directions: Array.from($('editDirections').querySelectorAll('input:checked')).map(i => i.value)
-    };
-    $('editSubmit').disabled = true;
-    const { ok, data } = await api('PUT', '/api/companies/' + encodeURIComponent(companyId), payload);
-    $('editSubmit').disabled = false;
-    if (!ok) {
-      const msg = $('editMessage');
-      msg.textContent = data.error || 'Не удалось сохранить';
-      msg.hidden = false;
-      return;
-    }
-    state.company = data.company;
-    closeEdit();
-    render();
-    toast('Профиль компании сохранен');
-  }
-
   /* ---------------------------------------------------------------- events */
 
   document.addEventListener('click', (e) => {
     if (e.target.closest('#btnSubscribe')) return toggleSubscribe();
-    if (e.target.closest('#btnEditCompany')) return openEdit();
     if (e.target.closest('#btnCopyLink')) {
       const url = window.location.origin + window.location.pathname + '?id=' + encodeURIComponent(companyId);
       (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(
@@ -416,10 +369,7 @@
     if (add) return toggleFollow(add.dataset.followType, add.dataset.followId, 'subscribe');
     const remove = e.target.closest('[data-unfollow-type]');
     if (remove) return toggleFollow(remove.dataset.unfollowType, remove.dataset.unfollowId, 'unsubscribe');
-    if (e.target.closest('#editDialog [data-close]')) return closeEdit();
   });
-  $('editForm').addEventListener('submit', submitEdit);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('editDialog').hidden) closeEdit(); });
 
   const initialTab = new URLSearchParams(window.location.search).get('tab');
   if (['questions', 'subscribers', 'following'].includes(initialTab)) {

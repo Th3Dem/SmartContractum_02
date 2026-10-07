@@ -156,7 +156,8 @@
         <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
         <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
         <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
-        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+        <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
       </svg>
 
       <div id="unauthorizedCard" class="st-guard">
@@ -374,6 +375,92 @@
           </section>
 
           <!-- Appearance -->
+          <!-- Company editor: opened from the companies list or the company page (#company=<id>) -->
+          <section class="st-section" id="tabContentCompany" data-section="company" hidden>
+            <a class="st-back" href="#companies"><svg><use href="#i-back"/></svg>Все компании</a>
+            <header class="st-section-head st-section-head-row">
+              <div><h1 id="coTitle">Профиль компании</h1><p>Так компанию видят читатели в ленте и на странице блога.</p></div>
+              <a class="st-btn st-btn-ghost" id="coViewLink" href="company.html"><svg><use href="#i-external"/></svg>Открыть страницу</a>
+            </header>
+
+            <div class="st-card st-empty" id="coDenied" hidden>Редактировать профиль компании может только ее владелец.</div>
+
+            <div id="coEditor" hidden>
+              <div class="st-card st-identity">
+                <div class="st-cover st-cover-company" id="coCoverPreview">
+                  <div class="st-cover-actions">
+                    <button type="button" class="st-chip-btn" id="btnCoCoverEdit"><svg><use href="#i-image"/></svg><span>Обложка</span></button>
+                    <button type="button" class="st-chip-btn" id="btnCoCoverRemove" hidden aria-label="Удалить обложку" title="Удалить обложку"><svg><use href="#i-trash"/></svg></button>
+                  </div>
+                </div>
+                <div class="st-identity-row">
+                  <div class="st-avatar-wrap">
+                    <span class="st-avatar st-logo" id="coLogoPreview"></span>
+                    <button type="button" class="st-avatar-edit" id="btnCoLogoEdit" aria-label="Изменить логотип" title="Изменить логотип"><svg><use href="#i-camera"/></svg></button>
+                  </div>
+                  <div class="st-identity-text">
+                    <span class="st-identity-name" id="coPreviewName"></span>
+                    <span class="st-identity-sub" id="coPreviewSub"></span>
+                    <button type="button" class="st-link st-link-danger" id="btnCoLogoRemove" hidden>Удалить логотип</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="st-card st-progress" id="coProgress">
+                <div class="st-progress-head">
+                  <span class="st-progress-title">Профиль компании заполнен на <b id="coProgressValue">0%</b></span>
+                  <span class="st-progress-hint" id="coProgressHint"></span>
+                </div>
+                <div class="st-progress-bar"><span id="coProgressBar"></span></div>
+                <div class="st-progress-steps" id="coProgressSteps"></div>
+              </div>
+
+              <form id="companyForm" class="st-card st-form" novalidate>
+                <h2 class="st-card-title">Основное</h2>
+                <div class="st-field">
+                  <label for="coName"><svg><use href="#i-building"/></svg>Название <span class="st-required" title="Обязательное поле">*</span></label>
+                  <input type="text" id="coName" name="name" maxlength="120" required placeholder="Например, ООО «Смарт Аудит»">
+                  <div class="st-field-foot"><span id="coNameError">Как в документах или как вас знают клиенты</span><span class="st-counter" data-for="coName"></span></div>
+                </div>
+                <div class="st-field">
+                  <label for="coSpecialization"><svg><use href="#i-badge"/></svg>Специализация <span class="st-required" title="Обязательное поле">*</span></label>
+                  <input type="text" id="coSpecialization" name="specialization" maxlength="120" required placeholder="Например, аудит и разработка смарт-контрактов">
+                  <div class="st-field-foot"><span id="coSpecializationError">Показывается под названием в ленте и на странице блога</span><span class="st-counter" data-for="coSpecialization"></span></div>
+                </div>
+                <div class="st-field">
+                  <label for="coDescription"><svg><use href="#i-text"/></svg>Кратко о компании <span class="st-required" title="Обязательное поле">*</span></label>
+                  <textarea id="coDescription" name="description" rows="2" maxlength="300" required placeholder="Одна-две фразы: чем компания полезна читателям"></textarea>
+                  <div class="st-field-foot"><span id="coDescriptionError">Выводится в шапке страницы компании</span><span class="st-counter" data-for="coDescription"></span></div>
+                </div>
+                <div class="st-field">
+                  <label for="coWebsite"><svg><use href="#i-globe"/></svg>Сайт</label>
+                  <input type="url" id="coWebsite" name="website" maxlength="300" inputmode="url" placeholder="https://example.ru">
+                  <div class="st-field-foot"><span id="coWebsiteError">Ссылка появится в блоке «О компании»</span></div>
+                </div>
+
+                <h2 class="st-card-title st-card-title-gap">О компании</h2>
+                <div class="st-field">
+                  <label for="coAbout"><svg><use href="#i-text"/></svg>Подробное описание</label>
+                  <textarea id="coAbout" name="about" rows="6" maxlength="8000" placeholder="Команда, проекты, клиенты, чем вы отличаетесь"></textarea>
+                  <div class="st-field-foot"><span>Абзацы разделяйте пустой строкой</span><span class="st-counter" data-for="coAbout"></span></div>
+                </div>
+                <div class="st-field">
+                  <span class="st-label"><svg><use href="#i-briefcase"/></svg>Направления <span class="st-muted" id="coDirectionsCount"></span></span>
+                  <div class="st-chips" id="coDirections"></div>
+                  <div class="st-field-foot"><span>По ним компанию находят в каталоге блогов, не больше 12</span></div>
+                </div>
+
+                <div class="st-savebar" id="coSaveBar" hidden>
+                  <span class="st-savebar-text"><svg><use href="#i-info"/></svg>Есть несохраненные изменения</span>
+                  <div class="st-savebar-actions">
+                    <button type="button" class="st-btn st-btn-ghost" id="btnResetCompany">Отменить</button>
+                    <button type="submit" class="st-btn st-btn-primary" id="btnSaveCompany">Сохранить</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </section>
+
           <section class="st-section" id="tabContentAppearance" data-section="appearance" hidden>
             <header class="st-section-head">
               <h1>Оформление</h1>

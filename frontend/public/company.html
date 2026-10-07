@@ -137,7 +137,9 @@
         <section class="co-card co-hero">
           <div class="co-cover" id="companyCover" aria-hidden="true"></div>
           <div class="co-hero-body">
-            <div class="co-logo" id="companyLogo" aria-hidden="true"></div>
+            <div class="co-logo-wrap">
+              <div class="co-logo" id="companyLogo" aria-hidden="true"></div>
+            </div>
             <div class="co-hero-row">
               <div class="co-identity">
                 <h1 class="co-name"><span id="companyName"></span><span class="co-verified" id="companyVerified" title="Компания подтверждена" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span></h1>
@@ -147,9 +149,8 @@
               <div class="co-actions" id="companyActions"></div>
             </div>
           </div>
+          <div class="co-stats" id="companyStats" aria-label="Показатели"></div>
         </section>
-
-        <section class="co-card co-stats" id="companyStats" aria-label="Показатели"></section>
 
         <div class="co-layout">
           <section class="co-card co-main">
@@ -176,28 +177,6 @@
         </div>
       </div>
 
-      <div class="co-dialog" id="editDialog" hidden>
-        <div class="co-dialog-backdrop" data-close></div>
-        <div class="co-dialog-card" role="dialog" aria-modal="true" aria-labelledby="editTitle">
-          <div class="co-dialog-head">
-            <h2 class="co-dialog-title" id="editTitle">Профиль компании</h2>
-            <button type="button" class="co-icon-btn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-          </div>
-          <form id="editForm" class="co-form" novalidate>
-            <label class="co-field"><span class="co-label">Название</span><input class="co-input" name="name" maxlength="120" required></label>
-            <label class="co-field"><span class="co-label">Специализация</span><input class="co-input" name="specialization" maxlength="120" required></label>
-            <label class="co-field"><span class="co-label">Кратко о компании</span><textarea class="co-input co-textarea" name="description" rows="2" maxlength="300" required></textarea><span class="co-hint">Одна-две фразы под названием, до 300 символов</span></label>
-            <label class="co-field"><span class="co-label">Подробное описание</span><textarea class="co-input co-textarea" name="about" rows="7" maxlength="8000"></textarea><span class="co-hint">Чем занимается компания, команда, проекты. Абзацы разделяйте пустой строкой.</span></label>
-            <label class="co-field"><span class="co-label">Сайт</span><input class="co-input" name="website" maxlength="300" placeholder="https://example.ru"></label>
-            <fieldset class="co-field co-fieldset"><legend class="co-label">Направления</legend><div class="co-chips" id="editDirections"></div></fieldset>
-            <div class="co-message" id="editMessage" role="alert" hidden></div>
-            <div class="co-dialog-actions">
-              <button type="button" class="co-btn co-btn-ghost" data-close>Отмена</button>
-              <button type="submit" class="co-btn co-btn-primary" id="editSubmit">Сохранить</button>
-            </div>
-          </form>
-        </div>
-      </div>
       <div class="co-toast" id="companyToast" role="status" hidden></div>
     </main>
   </div>

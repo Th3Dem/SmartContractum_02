@@ -351,6 +351,7 @@
 
 .st-avatar-edit {
   position: absolute;
+  z-index: 2;
   right: 0;
   bottom: 2px;
   display: inline-flex;
@@ -1097,6 +1098,108 @@
 
 .st-has-savebar .st-toast {
   bottom: 96px;
+}
+
+/* Company editor */
+.st-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.st-back:hover {
+  color: var(--accent-text);
+}
+
+.st-back svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* A company logo is a rounded square, a person is a circle */
+.st-avatar.st-logo {
+  border-radius: 18px;
+}
+
+.st-logo + .st-avatar-edit {
+  right: 4px;
+  bottom: 6px;
+}
+
+.st-cover.st-cover-company {
+  background:
+    radial-gradient(circle at 80% 40%, rgba(45, 212, 191, 0.35), transparent 55%),
+    linear-gradient(120deg, #0f2a4a, #134e5e 60%, #0f766e);
+}
+
+.st-field textarea.is-invalid {
+  border-color: var(--danger-color);
+}
+
+.st-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.st-label svg {
+  width: 15px !important;
+  height: 15px !important;
+  color: var(--text-muted);
+}
+
+.st-muted {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.st-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.st-chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.st-chip-toggle:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.st-chip-toggle.is-on {
+  border-color: var(--accent-color);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.st-chip-toggle svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.st-chip-toggle:not(.is-on) svg {
+  display: none;
 }
 
 /* Narrow screens: navigation becomes a horizontal strip above the content */
