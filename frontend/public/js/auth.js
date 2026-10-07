@@ -1,3 +1,37 @@
+/*
+ * CSRF: every same-origin POST, PUT, PATCH or DELETE carries the sc_csrf cookie value in the
+ * X-CSRF-Token header. auth.js is loaded on every page with the header, so pages that do not
+ * load config.js (settings, company, admin, my-materials) are covered too. The flag is shared
+ * with config.js, so the interceptor is installed once whichever script runs first.
+ */
+(function() {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function' || window.__sc_csrf_interceptor_installed) return;
+  window.__sc_csrf_interceptor_installed = true;
+  const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+  const originalFetch = window.fetch;
+
+  function csrfToken() {
+    const match = document.cookie.split(';').map(c => c.trim()).find(c => c.indexOf('sc_csrf=') === 0);
+    return match ? decodeURIComponent(match.slice('sc_csrf='.length)) : '';
+  }
+
+  window.fetch = function(input, init) {
+    try {
+      const url = typeof input === 'string' || input instanceof URL ? String(input) : (input && input.url) || '';
+      const method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+      const token = csrfToken();
+      if (token && MUTATING.has(method) && new URL(url, window.location.href).origin === window.location.origin) {
+        const headers = new Headers((init && init.headers) || (input instanceof Request ? input.headers : undefined));
+        if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
+        init = Object.assign({}, init, { headers });
+      }
+    } catch (e) {
+      // Leave the request as it is
+    }
+    return originalFetch.call(this, input, init);
+  };
+})();
+
 (function() {
   if (window.SCAuth && window.SCAuth._initialized) return window.SCAuth;
 
