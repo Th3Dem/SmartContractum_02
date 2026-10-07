@@ -483,11 +483,12 @@
       const questionAnswerUrl = isPreview ? '#' : ('article.html?id=' + encodeURIComponent(item.id || '') + (aCount === 0 ? '#comment-form' : '#comments'));
       const answersClass = item.hasSolution ? 'is-solved' : (aCount > 0 ? 'has-answers' : 'no-answers');
       const answersBtnHtml =
-        '<a href="' + questionAnswerUrl + '" class="btn-card-answers ' + answersClass + '" title="' + (aCount === 0 ? 'Ответить на вопрос' : 'Перейти к ответам') + '">' +
+        '<a href="' + questionAnswerUrl + '" class="btn-card-answers ' + answersClass + '" title="' + (aCount === 0 ? 'Ответить на вопрос' : 'Перейти к ответам') + '" aria-label="' + (item.hasSolution ? 'Решение принято, ' : '') + aText + '">' +
           '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>' +
           '</svg>' +
-          '<span>' + (item.hasSolution ? 'Решение принято • ' : '') + aText + '</span>' +
+          '<span class="card-answers-label">' + (item.hasSolution ? 'Решение принято • ' : '') + aText + '</span>' +
+          '<span class="card-answers-count" aria-hidden="true">' + aCount + '</span>' +
         '</a>';
       footerLeftHtml = likeBtnHtml + voteCapsuleHtml + answersBtnHtml + bookmarkHtml;
       footerLeftHtml += shareHtml + reportHtml;
@@ -514,7 +515,7 @@
         '</span>';
     } else {
       readMoreHtml =
-        '<a href="' + actionTargetUrl + '" class="card-read-more btn-read-more" title="' + readMoreText + '">' +
+        '<a href="' + actionTargetUrl + '" class="card-read-more btn-read-more" title="' + readMoreText + '" aria-label="' + readMoreText + '">' +
           '<span>' + readMoreText + '</span>' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<line x1="5" y1="12" x2="19" y2="12"></line>' +

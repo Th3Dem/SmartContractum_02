@@ -1880,9 +1880,27 @@ button.author-name:focus-visible,
     height: 14px;
   }
 
+  /* Card capsule stays compact on touch: 44px buttons overflowed its fixed 108px box (Issue #247) */
   .card-footer-left .vote-capsule {
-    min-height: 46px;
-    height: auto;
+    height: 34px;
+    min-height: 34px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    aspect-ratio: auto;
+    padding: 0 2px;
+    gap: 2px;
+  }
+
+  .card-footer-left .vote-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .card-footer-left .vote-capsule::after {
+    width: 34px;
   }
 
   .article-bottom-actions .article-vote-wrapper {
