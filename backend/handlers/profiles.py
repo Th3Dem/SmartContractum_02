@@ -8,6 +8,7 @@ from typing import Any, Dict
 from backend import config
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import TOPICS_TITLE_MAP, format_date_ru, make_content_snippet
+from backend.media_library import focal_dict, is_upload_owned_by, record_upload
 from backend.submissions import validate_cover_image
 
 
@@ -207,6 +208,8 @@ class ProfilesHandlers:
             company = p_row["company"] if p_row and p_row["company"] else ""
             bio = p_row["bio"] if p_row and p_row["bio"] else ""
             avatar = p_row["avatar"] if p_row and p_row["avatar"] else None
+            cover = p_row["cover"] if p_row and "cover" in p_row.keys() and p_row["cover"] else None
+            cover_focal = focal_dict(p_row["cover_focal"]) if p_row and "cover_focal" in p_row.keys() else None
             website = ""
             if p_row:
                 try:
@@ -363,6 +366,8 @@ class ProfilesHandlers:
                 "company": company,
                 "bio": bio,
                 "avatar": avatar,
+                "cover": cover,
+                "coverFocal": cover_focal,
                 "website": website,
                 "createdAt": created_at_val,
                 "date": format_date_ru(created_at_val) if created_at_val else None,
@@ -802,7 +807,16 @@ class ProfilesHandlers:
                                 "error": res.error_msg or "Аватар должен быть валидным изображением JPG, PNG, WebP или GIF до 10 МБ."
                             })
                             return
+                        if stripped_avatar.startswith("/media/") and not is_upload_owned_by(conn, stripped_avatar, user["id"]):
+                            # Knowing the URL of someone else's upload does not allow taking it as an avatar
+                            self.send_json_response(403, {
+                                "success": False,
+                                "error": "Можно использовать только изображения, загруженные вами"
+                            })
+                            return
                         avatar = res.saved_url
+                        if not stripped_avatar.startswith("/media/"):
+                            record_upload(conn, avatar, user["id"], res.meta)
                 else:
                     avatar = existing_profile["avatar"] if existing_profile and existing_profile["avatar"] else None
 

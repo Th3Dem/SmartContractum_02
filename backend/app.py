@@ -13,6 +13,7 @@ from backend.handlers.routing import RoutingHandlers
 from backend.handlers.auth import AuthHandlers
 from backend.handlers.account import AccountHandlers
 from backend.handlers.admin import AdminHandlers
+from backend.handlers.profile_media import ProfileMediaHandlers
 from backend.handlers.profiles import ProfilesHandlers
 from backend.handlers.profile_activity import ProfileActivityHandlers
 from backend.handlers.articles import ArticlesHandlers
@@ -33,6 +34,7 @@ class ModerationRequestHandler(
     AuthHandlers,
     AccountHandlers,
     ProfilesHandlers,
+    ProfileMediaHandlers,
     ProfileActivityHandlers,
     ArticlesHandlers,
     CommentsHandlers,

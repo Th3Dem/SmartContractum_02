@@ -32,6 +32,7 @@ import unittest
 import urllib.error
 import urllib.request
 
+from backend.media_library import record_upload
 import server
 from server import create_server, init_db
 from tests.backend_source import BACKEND_FILES, backend_source_file
@@ -69,6 +70,9 @@ class TestIssue188ProfileEditBackend(unittest.TestCase):
 
         conn = init_db(cls.db_path, seed=False)
         cls._seed_test_data(conn)
+        # The fixture files stand for Bob's own uploads: avatars can only be chosen from one's uploads
+        for avatar_filename in os.listdir(avatars_dir):
+            record_upload(conn, f"/media/avatars/{avatar_filename}", "user_bob")
         conn.close()
 
         cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR, media_dir=cls.media_dir, seed=False)

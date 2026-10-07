@@ -205,6 +205,10 @@ class RoutingHandlers:
             self.handle_post_club()
         elif path == "/api/companies":
             self.handle_post_company()
+        elif path == "/api/user/profile-media":
+            self.handle_update_profile_media()
+        elif path.startswith("/api/companies/") and path.rstrip("/").endswith("/media") and path.strip("/").count("/") == 3:
+            self.handle_update_company_media(path.strip("/").split("/")[2])
         elif path.startswith("/api/companies/") and path.rstrip("/").endswith("/subscriptions/toggle"):
             self.handle_toggle_company_subscription(path.strip("/").split("/")[2])
         elif path == "/api/likes/toggle":
