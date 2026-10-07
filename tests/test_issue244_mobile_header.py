@@ -116,6 +116,14 @@ class TestIssue244Static(unittest.TestCase):
                 self.assertIn('aria-label="Сохраненные черновики"', button)
                 self.assertIn('aria-describedby="drafts-badge"', button)
 
+    def test_nav_labels_are_visually_hidden_not_removed(self):
+        css = read("css/theme.css")
+        for marker in ("@media (max-width: 640px) {", "@media (max-width: 800px) {\n  /* Issue #257"):
+            block = css[css.index(marker):]
+            rule = re.search(r"\.header-nav \.nav-text \{([^}]*)\}", block).group(1)
+            self.assertNotIn("display: none", rule)
+            self.assertIn("clip: rect(0, 0, 0, 0);", rule)
+
     def test_header_control_heights_follow_base_rules(self):
         css = read("css/theme.css")
         start, block = media_block(css, "Issue #244: phone header controls")
@@ -348,6 +356,59 @@ class TestIssue244Browser(unittest.TestCase):
                     for st in states:
                         self.assertEqual(st["title"], st["text"], st)
                         self.assertEqual(st["cls"], expected_class[st["text"]], st)
+
+    # Issue #257: "Дом" and "Лента" keep their accessible names when the labels are hidden
+
+    NAV_WIDTHS = [320, 375, 640, 641, 768, 800, 801, 1280]
+
+    def test_nav_links_keep_accessible_names_on_all_widths(self):
+        for width in self.NAV_WIDTHS:
+            phone = width < 1024
+            ctx = self.browser.new_context(viewport={"width": width, "height": 800}, is_mobile=phone, has_touch=phone)
+            page = ctx.new_page()
+            try:
+                for name in HEADER_PAGES:
+                    with self.subTest(width=width, page=name):
+                        page.goto("%s/%s" % (self.base, name), wait_until="networkidle")
+                        header = page.locator(".app-header")
+                        for label, href in (("Дом", "index.html"), ("Лента", "feed.html")):
+                            link = header.get_by_role("link", name=label, exact=True)
+                            self.assertEqual(link.count(), 1, label)
+                            self.assertTrue(link.is_visible(), label)
+                            self.assertEqual(link.get_attribute("href"), href)
+                        labels_visible = page.evaluate("""() => [...document.querySelectorAll('.header-nav .nav-text')]
+                          .every(e => e.getBoundingClientRect().width > 1)""")
+                        self.assertEqual(labels_visible, width > 800, "labels are visible only on wide screens")
+            finally:
+                ctx.close()
+
+    def test_nav_links_work_from_the_keyboard(self):
+        for width, start, label, target in ((375, "feed.html", "Дом", "/index.html"),
+                                            (768, "index.html", "Лента", "/feed.html"),
+                                            (1280, "feed.html", "Дом", "/index.html")):
+            with self.subTest(width=width, link=label):
+                ctx, page = self.open(width, start, phone=width < 1024)
+                try:
+                    link = page.locator(".app-header").get_by_role("link", name=label, exact=True)
+                    link_id = link.get_attribute("id")
+                    for _ in range(15):
+                        page.keyboard.press("Tab")
+                        if page.evaluate("document.activeElement && document.activeElement.id") == link_id:
+                            break
+                    self.assertEqual(page.evaluate("document.activeElement.id"), link_id, "reachable with Tab")
+                    focus = page.evaluate("""() => {
+                      const e = document.activeElement; const cs = getComputedStyle(e);
+                      return {visible: e.matches(':focus-visible'), outline: cs.outlineStyle, outlineWidth: parseFloat(cs.outlineWidth),
+                              bg: cs.backgroundColor};
+                    }""")
+                    self.assertTrue(focus["visible"])
+                    self.assertTrue(focus["outline"] != "none" and focus["outlineWidth"] > 0
+                                    or focus["bg"] not in ("rgba(0, 0, 0, 0)", "transparent"), focus)
+                    with page.expect_navigation():
+                        page.keyboard.press("Enter")
+                    self.assertTrue(page.url.split("?")[0].endswith(target), page.url)
+                finally:
+                    ctx.close()
 
 
 if __name__ == "__main__":

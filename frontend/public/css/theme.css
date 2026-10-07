@@ -718,8 +718,17 @@ body {
     gap: 8px;
     grid-template-columns: auto 1fr auto;
   }
+  /* Issue #257: visually hidden, still the accessible name of the link */
   .header-nav .nav-text {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .nav-link {
     padding: 6px 8px;
@@ -901,8 +910,17 @@ body {
    (481 to 796 px, and 321 to 332 px for signed-in users). Navigation labels and
    the user name give way first, then the logo text; desktop from 801 px is unchanged. */
 @media (max-width: 800px) {
+  /* Issue #257: visually hidden, still the accessible name of the "Дом" / "Лента" links */
   .header-nav .nav-text {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .nav-link {
     padding: 6px 8px;
