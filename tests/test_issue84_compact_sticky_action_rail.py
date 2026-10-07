@@ -23,7 +23,7 @@ Automated test suite for Issue #84:
    - .rail-vote-wrapper: vertical capsule layout.
 4. Mobile Bottom Action Bar:
    - In article.html: #mobileActionBar with all 5 actions.
-   - In article.css: display: none on desktop, display: flex on mobile (< 768px), fixed bottom, height 56px, z-index 990.
+   - In article.css: display: none on desktop, display: flex below 1200px (Issue #246), fixed bottom, height 56px, z-index 990.
 5. JavaScript Integration in article.js:
    - Like sync and toggle across desktop, rail, and mobile.
    - Vote capsule sync into #railArticleVote and #mobileArticleVote.
@@ -181,12 +181,12 @@ class TestIssue84CompactStickyActionRail(unittest.TestCase):
         self.assertIn('id="mobileBtnShare"', self.article_html)
 
     def test_05_mobile_bottom_action_bar_styling_and_media_queries(self):
-        """Verify mobile action bar is hidden on desktop and fixed at bottom on mobile (< 768px)."""
+        """Verify the bottom action bar is hidden on desktop and fixed at the bottom below 1200px (Issue #246)."""
         desktop_hidden = re.search(r'(#mobileActionBar|\.mobile-action-bar)[^{]*\{[^}]*display:\s*none', self.article_css)
         self.assertIsNotNone(desktop_hidden, "#mobileActionBar must be display: none by default on desktop")
 
-        mobile_query = re.search(r'@media\s*\(\s*max-width:\s*767px\s*\)\s*\{([\s\S]+?)(?=\n@media|\Z)', self.article_css)
-        self.assertIsNotNone(mobile_query, "Mobile media query (max-width: 767px) must exist in article.css")
+        mobile_query = re.search(r'@media\s*\(\s*max-width:\s*1199px\s*\)\s*\{([\s\S]+?)(?=\n@media|\Z)', self.article_css)
+        self.assertIsNotNone(mobile_query, "Media query (max-width: 1199px) must exist in article.css")
         query_block = mobile_query.group(1)
 
         self.assertIn("display: flex", query_block)
