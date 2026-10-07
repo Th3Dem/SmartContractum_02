@@ -445,6 +445,12 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             );
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_drafts_user_type ON user_drafts(user_id, material_type, updated_at);")
+        # Issue #252: rich content so a draft opens on another device with its formatting
+        for col in ("content_delta", "content_html"):
+            try:
+                conn.execute(f"ALTER TABLE user_drafts ADD COLUMN {col} TEXT;")
+            except Exception:
+                pass
 
     if seed is None:
         if os.environ.get("SEED_ON_INIT") == "1":
