@@ -13,6 +13,7 @@ command line.
 Usage:
     python3 server.py --port 8000 [--host 127.0.0.1] [--db path] [--seed]
     python3 server.py --send-test-email ADDRESS
+    python3 server.py --create-admin LOGIN EMAIL
 """
 
 import argparse
@@ -63,7 +64,21 @@ if __name__ == "__main__":
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
     parser.add_argument("--seed", action="store_true", help="Seed database with demo data on startup")
     parser.add_argument("--send-test-email", metavar="ADDRESS", help="Send one test email with the current mail settings and exit")
+    parser.add_argument("--create-admin", nargs=2, metavar=("LOGIN", "EMAIL"),
+                        help="Create or promote the administrator account with a new random password and exit")
     args = parser.parse_args()
+    if args.create_admin:
+        admin_conn = init_db(args.db or config.DEFAULT_DB_PATH, seed=False)
+        try:
+            admin_id, admin_password = create_admin(admin_conn, args.create_admin[0], args.create_admin[1])
+        except ValueError as e:
+            sys.exit(f"Cannot create administrator: {e}")
+        finally:
+            admin_conn.close()
+        print(f"Administrator '{args.create_admin[0]}' is ready (id {admin_id}).")
+        print(f"Password (shown once, store it in a password manager): {admin_password}")
+        print("Existing sessions of this account were revoked.")
+        sys.exit(0)
     if args.send_test_email:
         print(EMAIL_SERVICE.describe())
         if not EMAIL_SERVICE.is_configured():

@@ -9,6 +9,7 @@ import uuid
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import compute_snapshot_hash, sanitize_article_html
 from backend.db import can_user_publish_for_company
+from backend.moderation import REJECT_REASONS, STATUS_LABELS, material_type_of
 from backend.submissions import validate_submission_payload
 
 
@@ -160,6 +161,15 @@ class ModerationHandlers:
                         }
                     })
                     return
+                if last_sub and last_sub["status"] == "rejected":
+                    self.send_json_response(400, {
+                        "success": False,
+                        "error": "Материал отклонен модератором и не может быть отправлен повторно.",
+                        "fieldErrors": {
+                            "status": "Материал отклонен модератором."
+                        }
+                    })
+                    return
 
             # Compute deterministic SHA-256 snapshot hash
             snapshot_hash = compute_snapshot_hash(title, article_html, pub_settings)
@@ -183,6 +193,12 @@ class ModerationHandlers:
                         article_html, article_delta_json, idempotency_key, snapshot_hash,
                         now_iso, now_iso
                     ))
+                    # A newer version replaces earlier unreviewed versions of the same material in the queue
+                    conn.execute("""
+                        UPDATE moderation_submissions
+                        SET status = 'draft', claimed_by = NULL, claimed_at = NULL, updated_at = ?
+                        WHERE draft_id = ? AND author_id = ? AND status = 'pending_moderation' AND id != ?
+                    """, (now_iso, draft_id, author_id, submission_id))
             except sqlite3.IntegrityError:
                 # Race condition with identical idempotency_key
                 if idempotency_key:
@@ -361,3 +377,90 @@ class ModerationHandlers:
                     conn.close()
                 except Exception:
                     pass
+
+    def handle_my_submissions(self, parsed_url):
+        """
+        GET /api/moderation/my?status=
+        The latest version of each material the current user sent to moderation, with the decision.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация", "requireAuth": True})
+            return
+        query = urllib.parse.parse_qs(parsed_url.query)
+        status_filter = query.get("status", [""])[0]
+        conn = self.get_db()
+        try:
+            rows = conn.execute("""
+                SELECT ms.* FROM moderation_submissions ms
+                WHERE ms.author_id = ? AND ms.status != 'draft'
+                  AND ms.created_at = (
+                      SELECT MAX(x.created_at) FROM moderation_submissions x
+                      WHERE x.draft_id = ms.draft_id AND x.author_id = ms.author_id AND x.status != 'draft'
+                  )
+                ORDER BY COALESCE(ms.reviewed_at, ms.created_at) DESC
+                LIMIT 200
+            """, (user["id"],)).fetchall()
+        finally:
+            conn.close()
+        items = []
+        counts = {"pending_moderation": 0, "needs_revision": 0, "approved": 0, "rejected": 0}
+        for r in rows:
+            if r["status"] in counts:
+                counts[r["status"]] += 1
+            if status_filter and r["status"] != status_filter:
+                continue
+            items.append({
+                "id": r["id"],
+                "draftId": r["draft_id"],
+                "title": r["title"],
+                "materialType": material_type_of(r["publication_settings"]),
+                "status": r["status"],
+                "statusLabel": STATUS_LABELS.get(r["status"], r["status"]),
+                "reviewComment": r["review_comment"],
+                "reviewReasonLabel": REJECT_REASONS.get(r["review_reason_code"] or "", None),
+                "reviewedAt": r["reviewed_at"],
+                "createdAt": r["created_at"],
+                "url": f"/article.html?id={urllib.parse.quote(r['id'])}" if r["status"] == "approved" else None,
+            })
+        self.send_json_response(200, {"success": True, "items": items, "counts": counts})
+
+    def handle_my_submission(self, submission_id):
+        """
+        GET /api/moderation/my/<id>
+        Full snapshot of the current user's own material returned for revision, to reopen it in the editor.
+        """
+        user = self.get_current_user()
+        if not user:
+            self.send_json_response(401, {"success": False, "error": "Необходима авторизация", "requireAuth": True})
+            return
+        conn = self.get_db()
+        try:
+            row = conn.execute("SELECT * FROM moderation_submissions WHERE id = ?", (submission_id,)).fetchone()
+        finally:
+            conn.close()
+        if not row or row["author_id"] != user["id"]:
+            self.send_json_response(404, {"success": False, "error": "Материал не найден"})
+            return
+        try:
+            settings = json.loads(row["publication_settings"] or "{}")
+        except ValueError:
+            settings = {}
+        try:
+            delta = json.loads(row["article_delta"]) if row["article_delta"] else None
+        except ValueError:
+            delta = None
+        self.send_json_response(200, {"success": True, "submission": {
+            "id": row["id"],
+            "draftId": row["draft_id"],
+            "title": row["title"],
+            "materialType": material_type_of(row["publication_settings"]),
+            "status": row["status"],
+            "statusLabel": STATUS_LABELS.get(row["status"], row["status"]),
+            "reviewComment": row["review_comment"],
+            "reviewReasonLabel": REJECT_REASONS.get(row["review_reason_code"] or "", None),
+            "html": row["article_html"],
+            "delta": delta,
+            "publicationSettings": settings,
+            "canRevise": row["status"] == "needs_revision",
+        }})
