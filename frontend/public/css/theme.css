@@ -876,6 +876,27 @@ body {
   box-sizing: border-box;
 }
 
+/* Issue #244: phone header controls share one 34 px height (32 px at 320 px).
+   These follow the base rules above so the cascade keeps them. */
+@media (max-width: 480px) {
+  .header-notif-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .header-login-action-btn {
+    box-sizing: border-box;
+    height: 34px;
+    padding: 2px 4px 2px 2px;
+  }
+}
+
+@media (max-width: 320px) {
+  .header-notif-btn {
+    width: 32px;
+    height: 32px;
+  }
+}
+
 .header-notif-popup {
   position: absolute;
   top: calc(100% + 10px);
