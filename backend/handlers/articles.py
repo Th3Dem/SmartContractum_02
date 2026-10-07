@@ -13,6 +13,19 @@ from backend.content import (
 from backend.submissions import resolve_cover_position
 
 
+def author_profile_names(cur, author_ids):
+    """
+    Current display names of material authors. The name stored inside old demo materials is only a
+    fallback: a real author's materials follow their profile, including after a rename.
+    """
+    ids = sorted({a for a in author_ids if a})
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    cur.execute(f"SELECT user_id, name FROM user_profiles WHERE user_id IN ({placeholders})", ids)
+    return {r["user_id"]: r["name"].strip() for r in cur.fetchall() if r["name"] and r["name"].strip()}
+
+
 class ArticlesHandlers:
     def handle_articles_api(self, parsed_url):
         """
@@ -50,6 +63,7 @@ class ArticlesHandlers:
                 (article_id, article_id)
             )
             row = cur.fetchone()
+            profile_names = author_profile_names(cur, [row["author_id"]]) if row else {}
 
         if not row:
             self.send_json_response(404, {
@@ -71,7 +85,7 @@ class ArticlesHandlers:
         article_html = row["article_html"] or ""
         reading_time, reading_minutes = calculate_reading_time(article_html)
 
-        author_name = settings.get("author") or (
+        author_name = profile_names.get(row["author_id"]) or settings.get("author") or (
             "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
         )
         author_initials = settings.get("authorInitials") or (
@@ -435,6 +449,7 @@ class ArticlesHandlers:
                 query_sql += " ORDER BY created_at DESC"
                 cur.execute(query_sql, tuple(query_params))
                 rows = cur.fetchall()
+                profile_names = author_profile_names(cur, [r["author_id"] for r in rows])
 
                 # Pre-fetch counts for likes, saves and comments
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
@@ -540,13 +555,10 @@ class ArticlesHandlers:
             # Author metadata
             raw_author = settings.get("author")
             if isinstance(raw_author, dict):
-                author_name = raw_author.get("name") or (
-                    "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
-                )
-            else:
-                author_name = raw_author or (
-                    "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
-                )
+                raw_author = raw_author.get("name")
+            author_name = profile_names.get(row["author_id"]) or raw_author or (
+                "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
+            )
             author_initials = settings.get("authorInitials") or (
                 "".join([part[0].upper() for part in str(author_name).split()[:2]]) if author_name else "SC"
             )
