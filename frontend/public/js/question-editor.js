@@ -758,6 +758,7 @@
       } else {
         textEl.textContent = 'Все изменения сохранены';
       }
+      if (statusEl) statusEl.title = textEl.textContent;
     }
   }
 
