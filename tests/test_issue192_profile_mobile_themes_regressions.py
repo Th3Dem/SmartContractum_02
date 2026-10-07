@@ -1031,9 +1031,12 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
                 self.assertIsNotNone(avatar_box)
                 self.assertIsNotNone(name_box)
 
-                # Name must be rendered below the avatar
-                self.assertGreater(name_box["y"], avatar_box["y"] + avatar_box["height"] - 5,
-                                   f"Avatar overlaps name on viewport {vp}")
+                # Name is next to the avatar on wide screens and below it on phones (Issue #234)
+                below = name_box["y"] > avatar_box["y"] + avatar_box["height"] - 5
+                beside = name_box["x"] > avatar_box["x"] + avatar_box["width"] - 5
+                self.assertTrue(below or beside, f"Avatar overlaps name on viewport {vp}")
+                if vp["width"] <= 640:
+                    self.assertTrue(below, f"On phones the name goes under the avatar ({vp})")
 
                 # Check horizontal overflow: page content width should not exceed viewport width
                 scroll_width = page.evaluate("() => document.documentElement.scrollWidth")
