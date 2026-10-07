@@ -388,6 +388,9 @@
                 materialType: this.materialType,
                 title: title,
                 content: text,
+                // Rich content so the draft opens with its formatting on another device (Issue #252)
+                delta: draft.delta,
+                html: draft.html,
                 revision: this.currentRevision,
                 publicationSettings: draft.publicationSettings
               })
@@ -563,7 +566,15 @@
             const data = await res.json();
             if (data.drafts) {
               const serverDrafts = data.drafts;
-              serverDrafts.forEach(sd => {
+              serverDrafts.forEach(raw => {
+                // Server dates are ISO strings; local drafts sort by milliseconds (Issue #252)
+                const parsedTime = Date.parse(raw.updatedAt);
+                const sd = Object.assign({}, raw, { updatedAt: Number.isNaN(parsedTime) ? 0 : parsedTime });
+                if (!sd.delta) delete sd.delta;
+                if (!sd.html) delete sd.html;
+                const serverText = typeof sd.content === 'string' ? sd.content.trim() : '';
+                if (!sd.snippet && serverText) sd.snippet = serverText.substring(0, 150);
+                if (!sd.wordCount && serverText) sd.wordCount = serverText.split(/\s+/).filter(Boolean).length;
                 const existing = list.find(ld => ld.id === sd.id);
                 if (!existing || sd.revision > existing.revision) {
                   const merged = { ...existing, ...sd, userId: this.userId };
@@ -825,7 +836,8 @@
       } else if (draft.html && this.editor && this.editor.root) {
         this.editor.root.innerHTML = draft.html;
       } else if (this.editor && typeof this.editor.setText === 'function') {
-        this.editor.setText('');
+        // Older server drafts keep plain text only (Issue #252)
+        this.editor.setText(typeof draft.content === 'string' ? draft.content : '');
       }
 
       if (this.tagsSetter && typeof this.tagsSetter === 'function') {

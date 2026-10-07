@@ -36,4 +36,4 @@ jobs:
       - name: Run browser smoke tests
         env:
           RUN_BROWSER_SMOKE: '1'
-        run: python3 -m unittest tests/test_issue22_sc023_browser_smoke.py tests/test_issue192_profile_mobile_themes_regressions.py tests/test_issue247_feed_mobile_overflow.py -v
+        run: python3 -m unittest tests/test_issue22_sc023_browser_smoke.py tests/test_issue192_profile_mobile_themes_regressions.py tests/test_issue252_draft_settings_sync.py tests/test_issue247_feed_mobile_overflow.py -v
