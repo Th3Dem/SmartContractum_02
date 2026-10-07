@@ -940,6 +940,22 @@
   background: var(--bg-card);
 }
 
+/* The material the author has just sent */
+.mine-card.is-new {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.mine-new-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
 .mine-card-head {
   display: flex;
   align-items: center;

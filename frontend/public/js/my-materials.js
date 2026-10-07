@@ -14,7 +14,8 @@
     approved: ''
   };
 
-  const state = { filter: '', items: [] };
+  // my-materials.html?submitted=<id>: the material the author has just sent
+  const state = { filter: '', items: [], submitted: new URLSearchParams(window.location.search).get('submitted') || '' };
   const $ = (id) => document.getElementById(id);
 
   function escapeHtml(value) {
@@ -83,18 +84,24 @@
       if (item.status === 'needs_revision') action = `<a class="mod-btn mod-btn-primary" href="${editorUrl(item)}">Исправить в редакторе</a>`;
       if (item.status === 'approved' && item.url) action = `<a class="mod-btn mod-btn-ghost" href="${escapeHtml(item.url)}">Открыть</a>`;
       return `
-        <article class="mine-card">
+        <article class="mine-card${item.id === state.submitted ? ' is-new' : ''}" id="mine-${escapeHtml(item.id)}">
+          ${item.id === state.submitted ? '<p class="mine-new-note">Материал отправлен. Модератор проверит его, и мы пришлем уведомление и письмо с решением.</p>' : ''}
           <div class="mine-card-head">
             <span class="mod-type">${item.materialType === 'question' ? 'Вопрос' : 'Публикация'}</span>
             <span class="mod-status ${STATUS_CLASS[item.status] || ''}">${escapeHtml(item.statusLabel)}</span>
             <span class="mine-date">${item.reviewedAt ? 'решение ' + escapeHtml(formatDate(item.reviewedAt)) : 'отправлено ' + escapeHtml(formatDate(item.createdAt))}</span>
           </div>
           <h2 class="mine-title">${escapeHtml(item.title)}</h2>
-          ${STATUS_HINT[item.status] ? `<p class="mine-hint">${STATUS_HINT[item.status]}</p>` : ''}
+          ${STATUS_HINT[item.status] && item.id !== state.submitted ? `<p class="mine-hint">${STATUS_HINT[item.status]}</p>` : ''}
           ${note}
           ${action ? `<div class="mine-actions">${action}</div>` : ''}
         </article>`;
     }).join('');
+    const fresh = state.submitted && document.getElementById('mine-' + state.submitted);
+    if (fresh && !render.scrolled) {
+      render.scrolled = true;
+      fresh.scrollIntoView({ block: 'center' });
+    }
   }
 
   function onAuth(user) {
