@@ -6,6 +6,7 @@ import uuid
 
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import format_date_ru
+from backend.identity import author_identities
 
 
 class EngagementHandlers:
@@ -642,6 +643,9 @@ class EngagementHandlers:
                     else:
                         author_name = raw_author or "Пользователь"
                         author_avatar = settings.get("authorAvatar")
+                    live = author_identities(cur, [ar["author_id"]]).get(ar["author_id"]) or {}
+                    author_name = live.get("name") or author_name
+                    author_avatar = live.get("avatar") or author_avatar
                     cover_image = settings.get("coverImage")
                     if search_q:
                         if search_q not in title.lower() and search_q not in desc.lower() and search_q not in author_name.lower():

@@ -6,6 +6,7 @@ import re
 from backend import config
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.companies import is_company_owner
+from backend.identity import sync_comment_snapshots
 from backend.media_library import (
     COMPANY_MEDIA_KINDS,
     PROFILE_MEDIA_KINDS,
@@ -82,6 +83,7 @@ class ProfileMediaHandlers:
                 if kind == "avatar":
                     conn.execute("UPDATE user_profiles SET avatar = ?, updated_at = ? WHERE user_id = ?",
                                  (None if remove else url, now, user["id"]))
+                    sync_comment_snapshots(conn, user["id"])
                 else:
                     conn.execute("UPDATE user_profiles SET cover = ?, cover_focal = ?, updated_at = ? WHERE user_id = ?",
                                  (None if remove else url, None if remove else focal, now, user["id"]))
