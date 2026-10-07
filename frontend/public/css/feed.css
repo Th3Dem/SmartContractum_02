@@ -6541,3 +6541,20 @@ body.is-directions-tab .widget-topics-card {
     margin-left: 0;
   }
 }
+
+/* ==========================================================================
+   Issue #247: feed tabs on phones. Card footer rules live in card-footer.css.
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Tabs scroll inside their row; the fade shows that more tabs follow */
+  .feed-subnav-container {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  }
+}
+
+@media (max-width: 520px) {
+  .feed-subnav-tab {
+    height: 32px;
+  }
+}
