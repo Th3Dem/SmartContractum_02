@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Мои материалы - SmartContractum</title>
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/moderation.css">
+  <link rel="stylesheet" href="css/notifications.css">
+</head>
+<body class="app-body">
+  <div class="app-container">
+    <header class="app-header" id="appHeader">
+      <div class="header-container">
+        <!-- Brand Logo -->
+        <a href="index.html" class="brand-logo" aria-label="SmartContractum Главная" title="На главную">
+          <div class="logo-icon-box" aria-hidden="true">
+            <svg class="smart-contract-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="scDocGradFeedUnified" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#38bdf8"></stop>
+                  <stop offset="0.5" stop-color="#6188ff"></stop>
+                  <stop offset="1" stop-color="#16c784"></stop>
+                </linearGradient>
+              </defs>
+              <path d="M7 3.5h11.5l7.5 7.5v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z" fill="rgba(56, 189, 248, 0.06)" stroke="url(#scDocGradFeedUnified)" stroke-width="1.8" stroke-linejoin="round"></path>
+              <path d="M18.5 3.5v6a1.5 1.5 0 0 0 1.5 1.5h6" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              <line x1="9.5" y1="12.5" x2="15.5" y2="12.5" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"></line>
+              <line x1="9.5" y1="17.5" x2="19.5" y2="17.5" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round"></line>
+              <line x1="9.5" y1="22.5" x2="16.5" y2="22.5" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round"></line>
+              <circle cx="23" cy="23" r="5" fill="#0b1426" stroke="#16c784" stroke-width="1.8"></circle>
+              <path d="M21 23l1.5 1.5 3-3" stroke="#16c784" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </div>
+          <div class="logo-text-group">
+            <span class="logo-title"><span class="logo-smart">Smart</span><span class="logo-contractum">Contractum</span></span>
+          </div>
+        </a>
+
+        <!-- Navigation -->
+        <nav class="header-nav" id="headerNav" aria-label="Основная навигация">
+          <ul class="nav-list">
+            <li class="nav-item">
+              <a href="index.html" class="nav-link" id="navIndex">
+                <span class="nav-icon-box">
+                  <svg class="nav-svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                  </svg>
+                </span>
+                <span class="nav-text">Дом</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="feed.html" class="nav-link" id="navFeed">
+                <span class="nav-icon-box">
+                  <svg class="nav-svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+                    <path d="M18 14h-8"></path>
+                    <path d="M15 18h-5"></path>
+                    <path d="M10 6h8v4h-8V6Z"></path>
+                  </svg>
+                </span>
+                <span class="nav-text">Лента</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- Header Right Group: Theme Switcher + Auth -->
+        <div class="header-right-group">
+          <!-- Theme Toggle Switch (Dark / Light Tumbler) -->
+          <button type="button" class="btn-theme-toggle" id="btnThemeToggle" role="switch" aria-checked="false" title="Переключить тему оформления" aria-label="Переключить тему оформления">
+            <span class="theme-toggle-track" aria-hidden="true">
+              <span class="theme-toggle-thumb">
+                <svg class="theme-icon-moon" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                </svg>
+                <svg class="theme-icon-sun" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+                </svg>
+              </span>
+            </span>
+          </button>
+          
+          
+          <!-- Notifications Bell button with unread badge & popup -->
+          <div class="header-notif-wrap" id="headerNotifWrap">
+            <button
+              type="button"
+              id="headerNotificationsBtn"
+              class="header-notif-btn"
+              title="Уведомления"
+              aria-label="Уведомления"
+              aria-expanded="false"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+              </svg>
+              <span id="headerNotifBadge" class="header-notif-badge" style="display: none;">0</span>
+            </button>
+            <div id="headerNotifPopup" class="header-notif-popup" role="region" aria-label="Список уведомлений">
+              <div class="notif-popup-header">
+                <span class="notif-popup-title">Уведомления</span>
+                <button type="button" id="notifMarkAllReadBtn" class="notif-mark-read-btn">Прочитать все</button>
+              </div>
+              <div id="notifListContainer" class="notif-list-container">
+              </div>
+            </div>
+          </div>
+          <div class="header-user-bar">
+            <a href="#auth" class="header-login-action-btn" id="headerLoginBtn" title="Войти в личный кабинет">
+              <div class="btn-user-avatar-wrap" aria-hidden="true">
+                <svg class="btn-user-svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <span class="btn-user-label" id="headerUserLabel">Вход</span>
+              <svg class="btn-user-arrow" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 010-1.06z" clip-rule="evenodd"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="mod-page mod-page-narrow" id="minePage">
+      <div class="mod-guard" id="modGuard" hidden>
+        <div class="mod-guard-card">
+          <h1 class="mod-guard-title">Мои материалы</h1>
+          <p class="mod-guard-text">Войдите, чтобы увидеть статус своих публикаций и вопросов.</p>
+          <button type="button" class="mod-btn mod-btn-primary" id="modGuardLogin">Войти</button>
+        </div>
+      </div>
+
+      <div class="mod-shell" id="modShell" hidden>
+        <div class="mod-topbar">
+          <div>
+            <h1 class="mod-title">Мои материалы</h1>
+            <p class="mod-subtitle">Статус публикаций и вопросов, которые вы отправили на модерацию</p>
+          </div>
+          <div class="mod-topbar-actions">
+            <a class="mod-btn mod-btn-ghost" href="question-editor.html">Задать вопрос</a>
+            <a class="mod-btn mod-btn-primary" href="editor.html">Написать публикацию</a>
+          </div>
+        </div>
+        <div class="mod-segmented" id="mineFilter" role="group" aria-label="Статус">
+          <button type="button" class="mod-seg is-active" data-status="">Все <span class="mod-count" data-count="all"></span></button>
+          <button type="button" class="mod-seg" data-status="needs_revision">Нужна доработка <span class="mod-count" data-count="needs_revision"></span></button>
+          <button type="button" class="mod-seg" data-status="pending_moderation">На модерации <span class="mod-count" data-count="pending_moderation"></span></button>
+          <button type="button" class="mod-seg" data-status="approved">Опубликовано <span class="mod-count" data-count="approved"></span></button>
+          <button type="button" class="mod-seg" data-status="rejected">Отклонено <span class="mod-count" data-count="rejected"></span></button>
+        </div>
+        <div class="mine-list" id="mineList" aria-live="polite"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Theme toggle initialization and tumbler binding
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      try {
+        localStorage.setItem('ag_theme', theme);
+        localStorage.setItem('sc_theme', theme);
+      } catch(e) {}
+      const toggleBtn = document.getElementById('btnThemeToggle');
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-checked', theme === 'dark' ? 'false' : 'true');
+        toggleBtn.title = theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на тёмную тему';
+      }
+    }
+
+    const savedTheme = localStorage.getItem('ag_theme') || localStorage.getItem('sc_theme') || 'dark';
+    applyTheme(savedTheme);
+
+    const toggleBtn = document.getElementById('btnThemeToggle');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+      });
+    }
+  </script>
+  <script src="js/auth.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/my-materials.js"></script>
+</body>
+</html>

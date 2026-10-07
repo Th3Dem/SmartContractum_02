@@ -12,6 +12,7 @@ from backend.handlers.base import BaseHandlers
 from backend.handlers.routing import RoutingHandlers
 from backend.handlers.auth import AuthHandlers
 from backend.handlers.account import AccountHandlers
+from backend.handlers.admin import AdminHandlers
 from backend.handlers.profile_media import ProfileMediaHandlers
 from backend.handlers.profiles import ProfilesHandlers
 from backend.handlers.profile_activity import ProfileActivityHandlers
@@ -42,6 +43,7 @@ class ModerationRequestHandler(
     CommunitiesHandlers,
     CompanyProfileHandlers,
     ModerationHandlers,
+    AdminHandlers,
     NotificationsHandlers,
     DraftsHandlers,
     MediaHandlers,

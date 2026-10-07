@@ -33,6 +33,32 @@ def render_code_email(heading: str, intro: str, code: str, outro: str) -> Tuple[
     return text, html_body
 
 
+def render_notice_email(heading: str, intro: str, details: str, button_text: str, button_url: str) -> Tuple[str, str]:
+    """Builds the plain-text and HTML bodies of an informational email with one call to action."""
+    text = f"{heading}\n\n{intro}\n\n" + (f"{details}\n\n" if details else "") + f"{button_text}: {button_url}\n\nSmartContractum\n"
+    esc = html.escape
+    details_html = (
+        f'<tr><td style="padding:16px 32px 0;"><div style="padding:14px 16px;background:#f9fafb;border-left:3px solid #2563eb;'
+        f'border-radius:6px;font-size:15px;line-height:1.55;color:#111827;white-space:pre-line;">{esc(details)}</div></td></tr>'
+        if details else ""
+    )
+    html_body = f"""<!doctype html>
+<html lang="ru"><body style="margin:0;padding:0;background:#f4f5f7;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;">
+<tr><td style="padding:28px 32px 8px;font-size:18px;font-weight:bold;color:#2563eb;">SmartContractum</td></tr>
+<tr><td style="padding:8px 32px 0;font-size:20px;font-weight:bold;color:#111827;">{esc(heading)}</td></tr>
+<tr><td style="padding:12px 32px 0;font-size:15px;line-height:1.55;color:#4b5563;">{esc(intro)}</td></tr>
+{details_html}
+<tr><td style="padding:24px 32px 28px;"><a href="{esc(button_url)}" style="display:inline-block;padding:11px 20px;background:#2563eb;border-radius:8px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;">{esc(button_text)}</a></td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+    return text, html_body
+
+
 class EmailService:
     """Mail adapter: real SMTP when configured, otherwise an offline outbox for development."""
 

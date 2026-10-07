@@ -44,3 +44,8 @@ LEGACY_MATERIAL_TYPES = {"article": "publication", "post": "publication", "news"
 # Request body size limits (Issue #8 / SC-005)
 MAX_JSON_BODY_BYTES = 5 * 1024 * 1024    # 5 МБ для стандартных JSON-запросов
 MAX_MEDIA_BODY_BYTES = 15 * 1024 * 1024  # 15 МБ для загрузки медиа/обложек
+
+
+def site_url() -> str:
+    """Public base URL used in links inside emails, without a trailing slash."""
+    return os.environ.get("SITE_URL", "http://localhost:8000").rstrip("/")
