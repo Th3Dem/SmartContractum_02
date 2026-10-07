@@ -264,5 +264,44 @@ class TestModerationPanel(unittest.TestCase):
         conn.close()
 
 
+class TestCreateAdmin(unittest.TestCase):
+    """The server command names one account; it never promotes a different one found by email."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.conn = init_db(os.path.join(self.temp_dir, "admin.db"), seed=False)
+        self.conn.row_factory = sqlite3.Row
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def role(self, login):
+        return self.conn.execute("SELECT role FROM users WHERE login = ?", (login,)).fetchone()[0]
+
+    def test_email_of_another_account_is_refused(self):
+        create_user(self.conn, "owner_one", "owner@example.com", PASSWORD, email_verified=True)
+        with self.assertRaises(ValueError) as ctx:
+            create_admin(self.conn, "chief", "owner@example.com")
+        self.assertIn("owner_one", str(ctx.exception), "the message names the account that has the email")
+        self.assertEqual(self.role("owner_one"), "user")
+        self.assertIsNone(self.conn.execute("SELECT 1 FROM users WHERE login = 'chief'").fetchone())
+
+    def test_login_and_email_of_two_accounts_are_refused(self):
+        create_user(self.conn, "chief", "chief@example.com", PASSWORD, email_verified=True)
+        create_user(self.conn, "owner_one", "owner@example.com", PASSWORD, email_verified=True)
+        with self.assertRaises(ValueError):
+            create_admin(self.conn, "chief", "owner@example.com")
+        self.assertEqual((self.role("chief"), self.role("owner_one")), ("user", "user"))
+
+    def test_named_account_is_promoted(self):
+        create_user(self.conn, "owner_one", "owner@example.com", PASSWORD, email_verified=True)
+        user_id, _ = create_admin(self.conn, "Owner_One", "owner@example.com")
+        self.assertEqual(self.role("owner_one"), "admin")
+        _, _ = create_admin(self.conn, "fresh_admin", "fresh@example.com")
+        self.assertEqual(self.role("fresh_admin"), "admin")
+        self.assertTrue(user_id)
+
+
 if __name__ == "__main__":
     unittest.main()
