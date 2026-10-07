@@ -1,6 +1,7 @@
 """Personal server drafts with revision checks."""
 import datetime
 import json
+import sqlite3
 import urllib.parse
 import uuid
 
@@ -78,6 +79,12 @@ def _draft_fields(data, current=None):
         "content_delta": _json_object_input(delta, DELTA_ERROR) if delta_new else delta,
         "content_html": _html_input(html),
     }
+
+
+def _revision_input(value):
+    if value is None or (isinstance(value, int) and not isinstance(value, bool)):
+        return value
+    raise ValueError("revision должен быть целым числом")
 
 
 def _draft_json(row):
@@ -204,6 +211,7 @@ class DraftsHandlers:
 
         try:
             fields = _draft_fields(data)
+            client_revision = _revision_input(data.get("revision"))
         except ValueError as e:
             self.send_json_response(400, {"success": False, "error": str(e)})
             return
@@ -213,31 +221,46 @@ class DraftsHandlers:
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("SELECT user_id, revision FROM user_drafts WHERE id = ?", (draft_id,))
+                cur.execute("SELECT * FROM user_drafts WHERE id = ?", (draft_id,))
                 row = cur.fetchone()
 
                 if row:
                     if row["user_id"] != user["id"]:
                         self.send_json_response(403, {"success": False, "error": "Нет доступа к черновику"})
                         return
-                    
-                    new_revision = row["revision"] + 1
+
+                    # Issue #256: POST to an existing draft is an update and obeys the same
+                    # revision check as PUT; without a revision freshness cannot be proven.
+                    if client_revision is None or client_revision < row["revision"]:
+                        self.send_json_response(409, {"success": False, "error": "CONFLICT", "serverDraft": _draft_json(row)})
+                        return
+
+                    # Compare-and-swap on the revision read above: a concurrent save in between wins, this one conflicts
                     cur.execute("""
                         UPDATE user_drafts
                         SET material_type = ?, title = ?, content = ?, publication_settings = ?, company_id = ?,
-                            content_delta = ?, content_html = ?, revision = ?, updated_at = ?
-                        WHERE id = ?
+                            content_delta = ?, content_html = ?, revision = revision + 1, updated_at = ?
+                        WHERE id = ? AND revision = ?
                     """, (material_type, fields["title"], fields["content"], fields["publication_settings"],
                           fields["company_id"], fields["content_delta"], fields["content_html"],
-                          new_revision, now_iso, draft_id))
+                          now_iso, draft_id, row["revision"]))
+                    if cur.rowcount == 0:
+                        cur.execute("SELECT * FROM user_drafts WHERE id = ?", (draft_id,))
+                        self.send_json_response(409, {"success": False, "error": "CONFLICT", "serverDraft": _draft_json(cur.fetchone())})
+                        return
                 else:
-                    cur.execute("""
-                        INSERT INTO user_drafts (id, user_id, material_type, title, content, publication_settings, company_id,
-                                                 content_delta, content_html, revision, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                    """, (draft_id, user["id"], material_type, fields["title"], fields["content"],
-                          fields["publication_settings"], fields["company_id"], fields["content_delta"],
-                          fields["content_html"], now_iso, now_iso))
+                    try:
+                        cur.execute("""
+                            INSERT INTO user_drafts (id, user_id, material_type, title, content, publication_settings, company_id,
+                                                     content_delta, content_html, revision, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                        """, (draft_id, user["id"], material_type, fields["title"], fields["content"],
+                              fields["publication_settings"], fields["company_id"], fields["content_delta"],
+                              fields["content_html"], now_iso, now_iso))
+                    except sqlite3.IntegrityError:
+                        # Created by a concurrent request after the SELECT above
+                        self.send_json_response(409, {"success": False, "error": "CONFLICT"})
+                        return
 
                 cur.execute("SELECT * FROM user_drafts WHERE id = ?", (draft_id,))
                 draft_row = cur.fetchone()
@@ -307,10 +330,14 @@ class DraftsHandlers:
                     UPDATE user_drafts
                     SET material_type = ?, title = ?, content = ?, publication_settings = ?, company_id = ?,
                         content_delta = ?, content_html = ?, revision = ?, updated_at = ?
-                    WHERE id = ?
+                    WHERE id = ? AND revision = ?
                 """, (material_type, fields["title"], fields["content"], fields["publication_settings"],
                       fields["company_id"], fields["content_delta"], fields["content_html"],
-                      new_revision, now_iso, draft_id))
+                      new_revision, now_iso, draft_id, server_revision))
+                if cur.rowcount == 0:
+                    cur.execute("SELECT * FROM user_drafts WHERE id = ?", (draft_id,))
+                    self.send_json_response(409, {"success": False, "error": "CONFLICT", "serverDraft": _draft_json(cur.fetchone())})
+                    return
 
                 cur.execute("SELECT * FROM user_drafts WHERE id = ?", (draft_id,))
                 updated_row = cur.fetchone()

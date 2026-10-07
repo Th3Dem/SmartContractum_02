@@ -23,6 +23,8 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
+import urllib.request
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
@@ -240,6 +242,98 @@ class TestIssue252DraftsApi(unittest.TestCase):
         self.assertEqual(db_row(self.db_path, "d-private")["title"], "Черновик d-private")
 
 
+class TestIssue256StaleSave(unittest.TestCase):
+    """Issue #256: a stale save through POST (the editor's path while revision is 1)
+    must not overwrite a newer server version."""
+
+    @classmethod
+    def setUpClass(cls):
+        start_server(cls, "issue256_api")
+        add_user(cls.db_path, "two_tabs")
+        cls.tab_a = Client(cls.base).login("two_tabs", PASSWORD)
+        cls.tab_b = Client(cls.base).login("two_tabs", PASSWORD)
+
+    @classmethod
+    def tearDownClass(cls):
+        stop_server(cls)
+
+    def payload(self, draft_id, material_type, label, revision):
+        return {"id": draft_id, "materialType": material_type, "revision": revision,
+                "title": "Title " + label, "content": "Text " + label, "html": "<p>%s</p>" % label,
+                "delta": {"ops": [{"insert": label + "\n"}]},
+                "publicationSettings": {"materialType": material_type, "keywords": [label]}}
+
+    def test_stale_post_from_second_tab_gets_conflict_without_changes(self):
+        for material_type in ("publication", "question"):
+            with self.subTest(material_type=material_type):
+                draft_id = "tabs-" + material_type
+                status, _ = self.tab_a.request("POST", "/api/drafts", self.payload(draft_id, material_type, "Initial", 1))
+                self.assertEqual(status, 201)
+                status, body = self.tab_a.request("POST", "/api/drafts", self.payload(draft_id, material_type, "A", 1))
+                self.assertEqual((status, body["draft"]["revision"]), (200, 2))
+                before = dict(db_row(self.db_path, draft_id))
+
+                status, body = self.tab_b.request("POST", "/api/drafts", self.payload(draft_id, material_type, "B", 1))
+                self.assertEqual(status, 409, body)
+                self.assertEqual(body["error"], "CONFLICT")
+                self.assertEqual(body["serverDraft"]["content"], "Text A")
+                self.assertEqual(body["serverDraft"]["revision"], 2)
+                self.assertEqual(dict(db_row(self.db_path, draft_id)), before, "no change on conflict")
+                _, got = self.tab_a.request("GET", "/api/drafts/" + draft_id)
+                self.assertEqual((got["draft"]["title"], got["draft"]["html"], got["draft"]["revision"]),
+                                 ("Title A", "<p>A</p>", 2))
+                self.assertEqual(got["draft"]["publicationSettings"]["keywords"], ["A"])
+                self.assertEqual(got["draft"]["delta"], {"ops": [{"insert": "A\n"}]})
+
+    def test_post_to_existing_draft_without_revision_conflicts(self):
+        self.tab_a.request("POST", "/api/drafts", self.payload("no-rev", "publication", "A", 1))
+        before = dict(db_row(self.db_path, "no-rev"))
+        payload = self.payload("no-rev", "publication", "B", None)
+        del payload["revision"]
+        status, _ = self.tab_b.request("POST", "/api/drafts", payload)
+        self.assertEqual(status, 409)
+        self.assertEqual(dict(db_row(self.db_path, "no-rev")), before)
+
+    def test_fresh_saves_and_put_protection_keep_working(self):
+        status, body = self.tab_a.request("POST", "/api/drafts", self.payload("fresh", "question", "1", 1))
+        self.assertEqual((status, body["draft"]["revision"]), (201, 1))
+        status, body = self.tab_a.request("POST", "/api/drafts", self.payload("fresh", "question", "2", 1))
+        self.assertEqual((status, body["draft"]["revision"]), (200, 2))
+        status, body = self.tab_a.request("PUT", "/api/drafts/fresh", self.payload("fresh", "question", "3", 2))
+        self.assertEqual((status, body["draft"]["revision"]), (200, 3))
+        status, _ = self.tab_b.request("PUT", "/api/drafts/fresh", self.payload("fresh", "question", "old", 2))
+        self.assertEqual(status, 409)
+        self.assertEqual(db_row(self.db_path, "fresh")["content"], "Text 3")
+
+    def test_concurrent_saves_of_the_same_revision_let_one_win(self):
+        self.tab_a.request("POST", "/api/drafts", self.payload("race", "publication", "start", 1))
+        token = [c.value for c in self.tab_a.jar if c.name == "sc_session"][0]
+
+        def save(label, revision, results, method="POST", path="/api/drafts"):
+            data = json.dumps(self.payload("race", "publication", label, revision)).encode("utf-8")
+            req = urllib.request.Request(self.base + path, data=data, method=method,
+                                         headers={"Content-Type": "application/json", "Authorization": "Bearer " + token})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as res:
+                    results.append(res.status)
+            except urllib.error.HTTPError as e:
+                results.append(e.code)
+
+        for round_no in range(8):
+            revision = db_row(self.db_path, "race")["revision"]
+            results = []
+            method, path = ("POST", "/api/drafts") if round_no % 2 == 0 else ("PUT", "/api/drafts/race")
+            threads = [threading.Thread(target=save, args=("r%d-%d" % (round_no, i), revision, results, method, path))
+                       for i in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            with self.subTest(round=round_no, method=method):
+                self.assertEqual(sorted(results), [200, 409, 409, 409])
+                self.assertEqual(db_row(self.db_path, "race")["revision"], revision + 1)
+
+
 class TestIssue252Migration(unittest.TestCase):
     def test_old_table_gets_new_columns_and_keeps_rows(self):
         temp_dir = tempfile.mkdtemp()
@@ -421,6 +515,48 @@ class TestIssue252Browser(unittest.TestCase):
             ctx.close()
         self.assertIn("Без сети", local)
         self.assertNotEqual(status, "Сохранено в аккаунте")
+
+    def test_stale_tab_gets_conflict_and_keeps_its_text(self):
+        """Issue #256: two independent browser contexts of one account edit the same draft."""
+        user_id, token = self.session("two_tab_writer")
+        tab_a, tab_b = self.context(token), self.context(token)
+        try:
+            page_a = tab_a.new_page()
+            page_a.goto(self.base + "/editor.html", wait_until="networkidle")
+            page_a.locator("#article-title").fill("Общий черновик")
+            self.wait_account_saved(page_a)
+
+            page_b = tab_b.new_page()
+            page_b.on("dialog", lambda d: d.dismiss())  # "save as a copy?" -> no
+            page_b.goto(self.base + "/editor.html", wait_until="networkidle")
+            page_b.locator("#btn-drafts-modal").click()
+            page_b.locator("#drafts-modal .draft-item .btn-load").first.click()
+            page_b.wait_for_function("() => document.getElementById('article-title').value === 'Общий черновик'", timeout=5000)
+
+            page_a.locator("#article-title").fill("Версия вкладки A")
+            page_a.wait_for_function("() => document.getElementById('save-status-text').textContent === 'Сохранено в аккаунте'"
+                                     " && document.getElementById('article-title').value === 'Версия вкладки A'", timeout=10000)
+            page_a.wait_for_timeout(500)
+            server_a = self.server_drafts(user_id)[0]
+            self.assertEqual(server_a["title"], "Версия вкладки A")
+
+            page_b.locator("#article-title").fill("Устаревшая версия вкладки B")
+            page_b.wait_for_function("() => document.getElementById('save-status-text').textContent === 'Конфликт синхронизации'",
+                                     timeout=10000)
+            local_b = page_b.evaluate("""() => new Promise(resolve => {
+              const dm = window.EditorApp.Drafts;
+              const req = dm.db.transaction(['drafts'], 'readonly').objectStore('drafts').get(dm.currentDraftId);
+              req.onsuccess = () => resolve(req.result ? req.result.title : null);
+            })""")
+            self.assertEqual(page_b.locator("#article-title").input_value(), "Устаревшая версия вкладки B")
+        finally:
+            tab_a.close()
+            tab_b.close()
+        self.assertEqual(local_b, "Устаревшая версия вкладки B", "tab B keeps its text on the device")
+        rows = self.server_drafts(user_id)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["title"], rows[0]["revision"]), ("Версия вкладки A", server_a["revision"]),
+                         "the server keeps tab A's version")
 
     def test_guest_draft_stays_on_the_device(self):
         ctx = self.context()
