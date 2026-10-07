@@ -14,7 +14,7 @@ import urllib.parse
 from io import BytesIO
 
 import server
-from backend_source import BACKEND_FILES, backend_source_file
+from tests.backend_source import BACKEND_FILES, backend_source_file
 
 
 class TestIssue113CoverCropFocalPoint(unittest.TestCase):

@@ -1,6 +1,5 @@
 """Validation of submitted publications and questions, including cover images."""
 import base64
-import image_decoder
 import os
 import re
 import time
