@@ -278,6 +278,9 @@ class TestIssue247Browser(unittest.TestCase):
                     # The phone document bar is fixed in #244; here only the preview card is checked
                     page.evaluate("document.getElementById('btn-next-to-settings').click()")
                     page.wait_for_selector("#pub-card-preview .card-footer", state="visible", timeout=5000)
+                    # The settings view opens with a scale(0.98) animation; measure after it ends
+                    page.wait_for_function("""() => document.getAnimations().every(a =>
+                      a.effect.getComputedTiming().iterations === Infinity || a.playState === 'finished')""", timeout=5000)
                     r = page.evaluate(FOOTER_JS, "#pub-card-preview")
                 finally:
                     ctx.close()
