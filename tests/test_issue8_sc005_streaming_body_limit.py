@@ -36,6 +36,7 @@ from image_decoder import (
     _decode_png,
 )
 import server
+from tests.auth_helpers import upload_auth_headers
 from server import (
     MAX_JSON_BODY_BYTES,
     MAX_MEDIA_BODY_BYTES,
@@ -210,7 +211,7 @@ class TestIssue8SC005StreamingBodyLimitAndPNG(unittest.TestCase):
         status, headers, body = self._send_raw_http(
             "POST",
             "/api/media/upload",
-            headers={
+            headers={**upload_auth_headers(self.db_path),
                 "Content-Type": "image/png",
                 "Content-Length": str(oversized_media_cl),
             },
@@ -313,7 +314,7 @@ class TestIssue8SC005StreamingBodyLimitAndPNG(unittest.TestCase):
         req = urllib.request.Request(
             f"{self.base_url}/api/media/upload",
             data=bomb_png,
-            headers={"Content-Type": "image/png"},
+            headers={**upload_auth_headers(self.db_path), "Content-Type": "image/png"},
             method="POST",
         )
         try:
@@ -332,7 +333,7 @@ class TestIssue8SC005StreamingBodyLimitAndPNG(unittest.TestCase):
         req_json = urllib.request.Request(
             f"{self.base_url}/api/media/upload",
             data=json_payload,
-            headers={"Content-Type": "application/json"},
+            headers={**upload_auth_headers(self.db_path), "Content-Type": "application/json"},
             method="POST",
         )
         try:
@@ -360,7 +361,7 @@ class TestIssue8SC005StreamingBodyLimitAndPNG(unittest.TestCase):
         req = urllib.request.Request(
             f"{self.base_url}/api/media/upload",
             data=valid_png,
-            headers={"Content-Type": "image/png"},
+            headers={**upload_auth_headers(self.db_path), "Content-Type": "image/png"},
             method="POST",
         )
         with urllib.request.urlopen(req) as resp:

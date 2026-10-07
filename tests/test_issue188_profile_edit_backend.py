@@ -34,7 +34,7 @@ import urllib.request
 
 import server
 from server import create_server, init_db
-from backend_source import BACKEND_FILES, backend_source_file
+from tests.backend_source import BACKEND_FILES, backend_source_file
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
