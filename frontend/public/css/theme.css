@@ -718,8 +718,17 @@ body {
     gap: 8px;
     grid-template-columns: auto 1fr auto;
   }
+  /* Issue #257: visually hidden, still the accessible name of the link */
   .header-nav .nav-text {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .nav-link {
     padding: 6px 8px;
@@ -874,6 +883,80 @@ body {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+}
+
+/* Issue #244: phone header controls share one 34 px height (32 px at 320 px).
+   These follow the base rules above so the cascade keeps them. */
+@media (max-width: 480px) {
+  .header-notif-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .header-login-action-btn {
+    box-sizing: border-box;
+    height: 34px;
+    padding: 2px 4px 2px 2px;
+  }
+}
+
+@media (max-width: 320px) {
+  .header-notif-btn {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Issue #244 review: between the phone and desktop layouts the header overflowed
+   (481 to 796 px, and 321 to 332 px for signed-in users). Navigation labels and
+   the user name give way first, then the logo text; desktop from 801 px is unchanged. */
+@media (max-width: 800px) {
+  /* Issue #257: visually hidden, still the accessible name of the "Дом" / "Лента" links */
+  .header-nav .nav-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .nav-link {
+    padding: 6px 8px;
+    gap: 0;
+  }
+  .app-header .sc-auth-user-name {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .logo-text-group {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-container {
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .header-right-group {
+    gap: 4px;
+  }
+  .theme-toggle-track {
+    width: 44px;
+    height: 24px;
+  }
+  .theme-toggle-thumb {
+    width: 18px;
+    height: 18px;
+  }
+  .header-notif-btn {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 .header-notif-popup {
