@@ -897,6 +897,50 @@ body {
   }
 }
 
+/* Issue #244 review: between the phone and desktop layouts the header overflowed
+   (481 to 796 px, and 321 to 332 px for signed-in users). Navigation labels and
+   the user name give way first, then the logo text; desktop from 801 px is unchanged. */
+@media (max-width: 800px) {
+  .header-nav .nav-text {
+    display: none;
+  }
+  .nav-link {
+    padding: 6px 8px;
+    gap: 0;
+  }
+  .app-header .sc-auth-user-name {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .logo-text-group {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-container {
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .header-right-group {
+    gap: 4px;
+  }
+  .theme-toggle-track {
+    width: 44px;
+    height: 24px;
+  }
+  .theme-toggle-thumb {
+    width: 18px;
+    height: 18px;
+  }
+  .header-notif-btn {
+    width: 32px;
+    height: 32px;
+  }
+}
+
 .header-notif-popup {
   position: absolute;
   top: calc(100% + 10px);

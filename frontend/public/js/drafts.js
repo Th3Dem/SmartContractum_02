@@ -246,6 +246,21 @@
       }
     }
 
+    // Status text and tooltip change together: on phones the text is visually hidden
+    // and the tooltip explains the colored dot (Issue #244)
+    setStatusText(text) {
+      if (this.statusTextEl) this.statusTextEl.textContent = text;
+      if (this.statusEl) this.statusEl.title = text;
+    }
+
+    // Final state of a save attempt: drop the "saving" classes so the dot stops pulsing
+    finishStatus(stateClass, text) {
+      if (!this.statusEl) return;
+      this.statusEl.classList.remove('status-unsaved', 'status-saving', 'status-saved', 'status-error', 'saving');
+      this.statusEl.classList.add(stateClass);
+      this.setStatusText(text);
+    }
+
     setStatus(state) {
       if (!this.statusEl) {
         this.statusEl = document.getElementById('save-status');
@@ -258,20 +273,20 @@
       switch (state) {
         case 'unsaved':
           this.statusEl.classList.add('status-unsaved');
-          this.statusTextEl.textContent = 'Есть изменения';
+          this.setStatusText('Есть изменения');
           break;
         case 'saving':
           this.statusEl.classList.add('status-saving', 'saving');
-          this.statusTextEl.textContent = 'Сохранение...';
+          this.setStatusText('Сохранение...');
           break;
         case 'error':
           this.statusEl.classList.add('status-error');
-          this.statusTextEl.textContent = 'Ошибка сохранения';
+          this.setStatusText('Ошибка сохранения');
           break;
         case 'saved':
         default:
           this.statusEl.classList.add('status-saved');
-          this.statusTextEl.textContent = 'Все изменения сохранены';
+          this.setStatusText('Все изменения сохранены');
           break;
       }
     }
@@ -398,16 +413,10 @@
                 newRevision = data.draft.revision;
                 draft.revision = newRevision;
               }
-              if (this.statusEl) {
-                this.statusEl.classList.add('status-saved');
-                this.statusTextEl.textContent = 'Сохранено в аккаунте';
-              }
+              this.finishStatus('status-saved', 'Сохранено в аккаунте');
             } else if (res.status === 409) {
               syncConflict = true;
-              if (this.statusEl) {
-                this.statusEl.classList.add('status-error');
-                this.statusTextEl.textContent = 'Конфликт синхронизации';
-              }
+              this.finishStatus('status-error', 'Конфликт синхронизации');
               const saveCopy = confirm('Конфликт синхронизации. Сохранить как копию?');
               if (saveCopy) {
                 this.currentDraftId = 'draft_' + Date.now();
@@ -417,17 +426,14 @@
                 else this.putToLocalStorage(draft);
               }
             } else {
-              if (this.statusEl) {
-                this.statusEl.classList.add('status-saved');
-                this.statusTextEl.textContent = 'Сохранено на устройстве';
-              }
+              this.finishStatus('status-saved', 'Сохранено на устройстве');
             }
           } catch (e) {
-            if (this.statusEl) {
-              this.statusEl.classList.add('status-saved');
-              this.statusTextEl.textContent = 'Сохранено на устройстве';
-            }
+            this.finishStatus('status-saved', 'Сохранено на устройстве');
           }
+        } else {
+          // Guest or offline: the draft is saved locally, there is nothing to sync
+          this.finishStatus('status-saved', 'Сохранено на устройстве');
         }
 
         this.currentRevision = newRevision;

@@ -30,6 +30,7 @@ except ImportError:
 
 import server
 from server import create_server, init_db
+from tests.auth_helpers import upload_auth_headers
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 
@@ -38,6 +39,12 @@ PAGES = [
     "profile.html", "company.html", "settings.html", "my-materials.html", "admin.html",
 ]
 PHONE_WIDTHS = [320, 360, 390, 414]
+# Review of PR #245: widths between the phone and desktop layouts, including the
+# ones named in the Issue (480, 481, 520, 559, 560)
+BETWEEN_WIDTHS = [324, 332, 480, 481, 520, 559, 560, 600, 640, 700, 768, 784, 800]
+HEADER_PAGES = ["index.html", "feed.html", "article.html?id=art-01", "editor.html", "question-editor.html",
+                "profile.html?id=author_smirnov", "company.html?id=smarttech-innovations", "settings.html",
+                "my-materials.html", "admin.html"]
 
 
 def read(rel_path):
@@ -95,6 +102,20 @@ class TestIssue244Static(unittest.TestCase):
         self.assertIn("#save-status-text", block)
         self.assertIn("height: 34px;", block)
 
+    def test_status_text_and_tooltip_change_together(self):
+        js = read("js/drafts.js")
+        self.assertNotIn("statusTextEl.textContent =", js.replace("if (this.statusTextEl) this.statusTextEl.textContent = text;", ""),
+                         "every status text change must go through setStatusText")
+        self.assertIn("if (this.statusEl) this.statusEl.title = text;", js)
+        self.assertIn("if (statusEl) statusEl.title = textEl.textContent;", read("js/question-editor.js"))
+
+    def test_drafts_button_has_accessible_name(self):
+        for name in ("editor.html", "question-editor.html"):
+            with self.subTest(page=name):
+                button = re.search(r'<button id="btn-drafts-modal"[^>]*>', read(name)).group(0)
+                self.assertIn('aria-label="Сохраненные черновики"', button)
+                self.assertIn('aria-describedby="drafts-badge"', button)
+
     def test_header_control_heights_follow_base_rules(self):
         css = read("css/theme.css")
         start, block = media_block(css, "Issue #244: phone header controls")
@@ -140,6 +161,7 @@ class TestIssue244Browser(unittest.TestCase):
         cls.db_path = os.path.join(cls.temp_dir, "issue244.db")
         server.DEFAULT_DB_PATH = cls.db_path
         init_db(cls.db_path, seed=True).close()
+        cls.token = upload_auth_headers(cls.db_path)["Authorization"].split(" ", 1)[1]
         cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, directory=FRONTEND_DIR, seed=False)
         cls.base = "http://127.0.0.1:%d" % cls.httpd.server_address[1]
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
@@ -159,8 +181,10 @@ class TestIssue244Browser(unittest.TestCase):
         cls.httpd.server_close()
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
-    def open(self, width, page_name, phone=True):
+    def open(self, width, page_name, phone=True, signed_in=False):
         ctx = self.browser.new_context(viewport={"width": width, "height": 800}, is_mobile=phone, has_touch=phone)
+        if signed_in:
+            ctx.add_cookies([{"name": "sc_session", "value": self.token, "url": self.base}])
         page = ctx.new_page()
         page.goto("%s/%s" % (self.base, page_name), wait_until="networkidle")
         page.wait_for_timeout(150)
@@ -230,6 +254,100 @@ class TestIssue244Browser(unittest.TestCase):
             self.assertGreater(page.locator("#save-status-text").bounding_box()["width"], 50)
         finally:
             ctx.close()
+
+    def test_header_fits_between_phone_and_desktop(self):
+        """Every visible header element stays on screen at in-between widths, guest and signed in."""
+        js = """() => {
+          const vw = document.documentElement.clientWidth;
+          const out = [];
+          for (const e of document.querySelectorAll('.app-header *')) {
+            if (e.closest('.header-notif-popup, .feed-create-menu, .sc-auth-dropdown')) continue;
+            const cs = getComputedStyle(e); const b = e.getBoundingClientRect();
+            if (cs.display === 'none' || cs.visibility === 'hidden' || b.width <= 1) continue;
+            if (b.right > vw + 0.5 || b.left < -0.5) out.push((e.id || e.className) + ' ' + Math.round(b.right));
+          }
+          return out.slice(0, 3);
+        }"""
+        for signed_in in (False, True):
+            for width in BETWEEN_WIDTHS:
+                ctx = self.browser.new_context(viewport={"width": width, "height": 800}, is_mobile=True, has_touch=True)
+                if signed_in:
+                    ctx.add_cookies([{"name": "sc_session", "value": self.token, "url": self.base}])
+                page = ctx.new_page()
+                try:
+                    for name in HEADER_PAGES:
+                        with self.subTest(width=width, page=name, signed_in=signed_in):
+                            page.goto("%s/%s" % (self.base, name), wait_until="networkidle")
+                            page.wait_for_timeout(100)
+                            self.assertEqual(page.evaluate(js), [])
+                            if name in ("editor.html", "question-editor.html"):
+                                bar = page.evaluate("""() => {
+                                  const bar = document.querySelector('.editor-document-bar');
+                                  const text = document.getElementById('save-status-text').getBoundingClientRect();
+                                  return {h: Math.round(bar.getBoundingClientRect().height), textH: Math.round(text.height)};
+                                }""")
+                                self.assertLessEqual(bar["h"], 52, "document bar stays one row")
+                                self.assertLessEqual(bar["textH"], 24, "status text does not wrap")
+                finally:
+                    ctx.close()
+
+    def test_desktop_header_keeps_labels_and_user_name(self):
+        ctx, page = self.open(1280, "feed.html", phone=False, signed_in=True)
+        try:
+            page.wait_for_selector(".sc-auth-user-name", state="visible", timeout=5000)
+            self.assertTrue(page.locator(".logo-text-group").is_visible())
+            self.assertTrue(page.locator(".header-nav .nav-text").first.is_visible())
+        finally:
+            ctx.close()
+
+    def test_drafts_button_is_named_by_purpose_on_phones(self):
+        for name in ("editor.html", "question-editor.html"):
+            with self.subTest(page=name):
+                ctx, page = self.open(390, name, signed_in=True)
+                try:
+                    button = page.get_by_role("button", name="Сохраненные черновики", exact=True)
+                    self.assertTrue(button.is_visible())
+                    self.assertEqual(button.get_attribute("id"), "btn-drafts-modal")
+                    self.assertFalse(page.locator(".btn-drafts span:not(#drafts-badge)").first.is_visible(),
+                                     "the text label is hidden on phones, the name comes from aria-label")
+                finally:
+                    ctx.close()
+
+    def test_autosave_tooltip_follows_every_state(self):
+        """Real typing drives unsaved, saving and saved; a failing local store drives error."""
+        record = """() => {
+          window.__states = [];
+          const s = document.getElementById('save-status'), t = document.getElementById('save-status-text');
+          const rec = () => window.__states.push({text: t.textContent, title: s.title,
+            cls: [...s.classList].filter(c => c.startsWith('status-') || c === 'saving').sort().join(' ')});
+          new MutationObserver(rec).observe(s, {subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'title']});
+        }"""
+        expected_class = {"Есть изменения": "status-unsaved", "Сохранение...": "saving status-saving",
+                          "Ошибка сохранения": "status-error", "Сохранено в аккаунте": "status-saved",
+                          "Сохранено на устройстве": "status-saved", "Все изменения сохранены": "status-saved"}
+        for name, title_input in (("editor.html", "#article-title"), ("question-editor.html", "#questionTitleInput")):
+            for signed_in in (True, False):
+                with self.subTest(page=name, signed_in=signed_in):
+                    ctx, page = self.open(390, name, signed_in=signed_in)
+                    try:
+                        page.evaluate(record)
+                        page.locator(title_input).type("Проверка статуса")
+                        page.wait_for_function("() => document.getElementById('save-status').classList.contains('status-saved')", timeout=8000)
+                        page.evaluate("""() => {
+                          window.DraftsManager.prototype.putToDB = () => Promise.reject(new Error('test'));
+                          window.DraftsManager.prototype.putToLocalStorage = () => { throw new Error('test'); };
+                        }""")
+                        page.locator(title_input).type(" ошибка")
+                        page.wait_for_function("() => document.getElementById('save-status').classList.contains('status-error')", timeout=8000)
+                        states = page.evaluate("window.__states")
+                    finally:
+                        ctx.close()
+                    seen = {st["text"] for st in states}
+                    self.assertTrue({"Есть изменения", "Сохранение...", "Ошибка сохранения"} <= seen, seen)
+                    self.assertTrue(seen & {"Сохранено в аккаунте", "Сохранено на устройстве"}, seen)
+                    for st in states:
+                        self.assertEqual(st["title"], st["text"], st)
+                        self.assertEqual(st["cls"], expected_class[st["text"]], st)
 
 
 if __name__ == "__main__":
