@@ -352,7 +352,7 @@ class TestProfileSystem(unittest.TestCase):
 
         # Headings hierarchy
         self.assertIn('<h1 class="profile-name"', html)
-        self.assertIn('<h2 id="editProfileModalTitle"', html)
+        self.assertNotIn('editProfileModal', html, "profile fields are edited on settings.html (Issue #234)")
         self.assertIn('<h3 class="profile-subheading"', html)
         self.assertIn('<h3 class="profile-widget-title"', html)
 
@@ -383,12 +383,11 @@ class TestProfileSystem(unittest.TestCase):
             code = f.read()
 
         # Save and restore focus on modal
-        self.assertIn("lastEditTriggerEl", code)
-        self.assertIn("lastEditTriggerEl.focus()", code)
+        self.assertIn("lastAuthTriggerEl.focus()", code)
 
         # Escape key handling
         self.assertIn("e.key === 'Escape'", code)
-        self.assertIn("closeEditModal", code)
+        self.assertIn("closeAuthModal", code)
 
         # Dynamic aria-current updates on tab switch
         self.assertIn("setAttribute('aria-current', 'page')", code)

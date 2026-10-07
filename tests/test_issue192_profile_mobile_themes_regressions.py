@@ -881,7 +881,7 @@ class TestAccessibilityAndFocusRegressions(unittest.TestCase):
 
         # In Full Profile Page (profile-page.js)
         self.assertIn("function trapModalFocus(e, modalEl)", page_js)
-        self.assertIn("editProfileModal", page_js)
+        self.assertNotIn("editProfileModal", page_js, "editing moved to settings.html (Issue #234)")
         self.assertIn("authModal", page_js)
         self.assertIn("articleReportModal", page_js)
         self.assertIn("profileSocialModal", page_js)
@@ -892,7 +892,6 @@ class TestAccessibilityAndFocusRegressions(unittest.TestCase):
         with open(PROFILE_PAGE_JS_PATH, "r", encoding="utf-8") as f:
             page_js = f.read()
 
-        self.assertIn("lastEditTriggerEl.focus()", page_js)
         self.assertIn("lastAuthTriggerEl.focus()", page_js)
         self.assertIn("lastSocialTriggerEl.focus()", page_js)
         self.assertIn("modal._activeReportBtn.focus()", page_js)

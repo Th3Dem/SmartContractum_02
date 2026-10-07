@@ -293,8 +293,9 @@ class TestIssue172FullProfileSidebar(unittest.TestCase):
         self.assertIn('id="sidebarReputationPubs"', html)
         self.assertIn('id="sidebarReputationQuestions"', html)
 
-        # Edit modal website field
-        self.assertIn('id="editProfileWebsite"', html)
+        # The website is edited on the settings page (Issue #234)
+        with open(os.path.join(FRONTEND_DIR, "settings.html"), "r", encoding="utf-8") as f:
+            self.assertIn('name="website"', f.read())
 
     # =========================================================================
     # Frontend Script Tests
@@ -322,7 +323,6 @@ class TestIssue172FullProfileSidebar(unittest.TestCase):
         self.assertIn("sidebarUserSpecialization", page_js)
         self.assertIn("sidebarUserTopics", page_js)
         self.assertIn("sidebarReputationRating", page_js)
-        self.assertIn("editProfileWebsite", page_js)
 
     # =========================================================================
     # Frontend CSS Tests
