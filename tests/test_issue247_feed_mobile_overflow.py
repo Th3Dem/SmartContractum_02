@@ -2,10 +2,19 @@
 """
 tests/test_issue247_feed_mobile_overflow.py
 
-Issue #247: on phones the feed must not scroll sideways. The card footer
-actions fit the card (container queries on .card-footer), the feed tabs are
-32 to 34 px high and scroll inside their own row, and the vote capsule in the
-card stays compact on touch screens. The desktop card does not change.
+Issue #247: on phones the feed must not scroll sideways.
+
+- Card footer actions stay inside the card; every action keeps a 32x32 px tap
+  area (both vote arrows, share, report, read more); actions wrap to another
+  row when one row does not fit.
+- "Read more" stays available on every width (icon with an accessible name
+  or its own row) and opens the card's material.
+- Feed tabs are 32 to 34 px high, every tab is reachable by scrolling the tab
+  row and really switches the section.
+- The same card fits the profile and the editor preview (shared
+  css/card-footer.css with container queries).
+- The vote capsule in the card stays compact on touch screens; the desktop
+  card does not change.
 
 Static checks always run. The browser checks run with RUN_BROWSER_SMOKE=1 and
 Playwright; set PLAYWRIGHT_CDP_URL to drive an already running Chromium
@@ -36,6 +45,7 @@ from tests.auth_helpers import upload_auth_headers
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 PHONE_WIDTHS = [320, 360, 375, 414]
+MIN_TARGET = 32
 
 
 def read(rel_path):
@@ -44,15 +54,22 @@ def read(rel_path):
 
 
 class TestIssue247Static(unittest.TestCase):
-    def test_footer_container_rules_follow_base_card_rules(self):
-        css = read("css/feed.css")
-        block = css.index("Issue #247: feed cards and tabs fit phone screens")
-        for base in (".card-footer {\n  display: flex;", ".btn-card-action {\n  height: 36px;",
-                     ".btn-card-share,\n.btn-card-report {", ".card-read-more,\n.btn-read-more {",
-                     ".btn-card-answers {\n  display: inline-flex;"):
-            self.assertLess(css.index(base), block, base)
-        self.assertIn("container: card-footer / inline-size;", css[block:])
-        self.assertIn("@container card-footer (max-width: 470px)", css[block:])
+    def test_shared_footer_styles_load_after_page_styles(self):
+        for page in ("feed.html", "profile.html", "editor.html"):
+            with self.subTest(page=page):
+                head = read(page).split("</head>", 1)[0]
+                links = re.findall(r'<link rel="stylesheet" href="([^"]+)">', head)
+                self.assertIn("css/card-footer.css", links)
+                self.assertEqual(links[-1], "css/card-footer.css", "must win over page card rules")
+
+    def test_footer_rules_use_container_queries_and_keep_32px_targets(self):
+        css = read("css/card-footer.css")
+        self.assertIn("container: card-footer / inline-size;", css)
+        self.assertIn("@container card-footer (max-width: 470px)", css)
+        for size in re.findall(r"(?:width|height): (\d+)px;", css):
+            if size != "1":
+                self.assertGreaterEqual(int(size), MIN_TARGET, css)
+        self.assertNotIn(".card-footer-right {\n    display: none;", css, "read more must not be removed")
 
     def test_card_capsule_is_compact_on_touch(self):
         css = read("css/theme.css")
@@ -70,33 +87,41 @@ class TestIssue247Static(unittest.TestCase):
         self.assertIn("<span class=\"card-answers-count\" aria-hidden=\"true\">", js)
 
 
-FEED_JS = """() => {
+# Measures every visible card footer under `root`.
+FOOTER_JS = """(root) => {
   const vw = document.documentElement.clientWidth;
   const visible = e => { const cs = getComputedStyle(e); const b = e.getBoundingClientRect(); return cs.display !== 'none' && cs.visibility !== 'hidden' && b.width > 0 && b.height > 0; };
-  const cards = [...document.querySelectorAll('.feed-card')].filter(visible);
-  const out = [], missing = [], heights = [];
+  const name = e => String(e.getAttribute('class') || e.tagName).split(' ').slice(0, 2).join('.');
+  const cards = [...document.querySelectorAll(root)].filter(visible);
+  const out = [], missing = [], small = [], overlap = [], readMore = [];
   for (const card of cards) {
     const cb = card.getBoundingClientRect();
     const footer = card.querySelector('.card-footer');
-    heights.push(Math.round(footer.getBoundingClientRect().height));
-    for (const e of footer.querySelectorAll('*')) {
-      if (!visible(e)) continue;
+    const actions = [...footer.querySelectorAll('button, a')].filter(visible);
+    for (const e of actions) {
       const b = e.getBoundingClientRect();
-      if (b.right > cb.right + 0.5 || b.left < cb.left - 0.5) out.push(String(e.getAttribute('class')));
+      if (b.right > cb.right + 0.5 || b.left < cb.left - 0.5) out.push(name(e));
+      if (b.width < %(min)d - 0.5 || b.height < %(min)d - 0.5) small.push(name(e) + ' ' + Math.round(b.width) + 'x' + Math.round(b.height));
+    }
+    const items = [...footer.querySelectorAll('.card-footer-left > *, .card-footer-right > *')].filter(visible);
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      const a = items[i].getBoundingClientRect(), b = items[j].getBoundingClientRect();
+      if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) overlap.push(name(items[i]) + '/' + name(items[j]));
     }
     for (const sel of ['.btn-card-like', '.vote-btn-up', '.vote-btn-down', '.btn-card-bookmark', '.btn-card-share']) {
       const el = footer.querySelector(sel);
       if (!el || !visible(el)) missing.push(sel);
     }
     if (!footer.querySelector('.btn-card-comments, .btn-card-answers')) missing.push('comments');
+    const more = footer.querySelector('.card-read-more');
+    const title = card.querySelector('.card-title a');
+    readMore.push({visible: !!more && visible(more), name: more ? (more.getAttribute('aria-label') || '') : '',
+                   href: more ? more.getAttribute('href') : null, titleHref: title ? title.getAttribute('href') : null});
   }
-  const small = [...document.querySelectorAll('.card-footer button, .card-footer a')].filter(visible)
-    .filter(e => e.getBoundingClientRect().height < 32 || e.getBoundingClientRect().width < 24)
-    .map(e => String(e.getAttribute('class')));
   const tabs = [...document.querySelectorAll('#feedSubnavTabs .feed-subnav-tab')].filter(visible)
     .map(e => Math.round(e.getBoundingClientRect().height));
-  return {cards: cards.length, overflow: document.documentElement.scrollWidth - vw, out, missing, heights, small, tabs};
-}"""
+  return {cards: cards.length, overflow: document.documentElement.scrollWidth - vw, out, missing, small, overlap, readMore, tabs};
+}""" % {"min": MIN_TARGET}
 
 
 @unittest.skipUnless(PLAYWRIGHT_AVAILABLE and os.environ.get("RUN_BROWSER_SMOKE") == "1",
@@ -128,52 +153,139 @@ class TestIssue247Browser(unittest.TestCase):
         cls.httpd.server_close()
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
-    def open(self, width, signed_in=False):
+    def context(self, width, signed_in=False, height=900):
         touch = width < 1024
-        ctx = self.browser.new_context(viewport={"width": width, "height": 900}, is_mobile=touch, has_touch=touch)
+        ctx = self.browser.new_context(viewport={"width": width, "height": height}, is_mobile=touch, has_touch=touch)
         if signed_in:
             ctx.add_cookies([{"name": "sc_session", "value": self.token, "url": self.base}])
+        return ctx
+
+    def open(self, width, path="/feed.html", signed_in=False):
+        ctx = self.context(width, signed_in)
         page = ctx.new_page()
-        page.goto(self.base + "/feed.html", wait_until="networkidle")
+        page.goto(self.base + path, wait_until="networkidle")
         page.wait_for_timeout(300)
         return ctx, page
 
-    def check_phone(self, r, width):
+    def check_footers(self, r, feed=True):
         self.assertGreater(r["cards"], 0)
-        self.assertLessEqual(r["overflow"], 0, "feed scrolls sideways")
-        self.assertEqual(r["out"], [], "footer element leaves the card")
+        self.assertLessEqual(r["overflow"], 0, "page scrolls sideways")
+        self.assertEqual(r["out"], [], "footer action leaves the card")
+        self.assertEqual(r["small"], [], "tap area under 32x32 px")
+        self.assertEqual(r["overlap"], [], "footer items overlap")
         self.assertEqual(r["missing"], [], "footer action is hidden")
-        self.assertEqual(r["small"], [])
+        for more in r["readMore"]:
+            self.assertTrue(more["visible"], "read more is hidden")
+            self.assertTrue(more["name"], "read more has no accessible name")
+            if feed:
+                self.assertTrue(more["href"].startswith(more["titleHref"]), more)
         for h in r["tabs"]:
             self.assertTrue(32 <= h <= 34, r["tabs"])
-        if width >= 360:
-            self.assertLessEqual(max(r["heights"]), 44, "footer fits one row")
 
     def test_publications_fit_phone_widths(self):
         for signed_in in (False, True):
             for width in PHONE_WIDTHS:
                 with self.subTest(width=width, signed_in=signed_in):
-                    ctx, page = self.open(width, signed_in)
+                    ctx, page = self.open(width, signed_in=signed_in)
                     try:
-                        r = page.evaluate(FEED_JS)
+                        r = page.evaluate(FOOTER_JS, ".feed-card")
+                        reports = page.locator(".feed-card .btn-card-report").count()
                     finally:
                         ctx.close()
-                    self.check_phone(r, width)
+                    self.check_footers(r)
+                    self.assertGreater(reports, 0, "report is offered on other authors' cards")
 
     def test_questions_fit_phone_widths(self):
+        for signed_in in (False, True):
+            for width in PHONE_WIDTHS:
+                with self.subTest(width=width, signed_in=signed_in):
+                    ctx, page = self.open(width, signed_in=signed_in)
+                    try:
+                        page.locator("#tabFeedQuestions").tap()
+                        page.wait_for_timeout(800)
+                        self.assertGreater(page.locator(".feed-card .btn-card-answers").count(), 0)
+                        r = page.evaluate(FOOTER_JS, ".feed-card")
+                        label = page.locator(".feed-card .btn-card-answers").first.get_attribute("aria-label")
+                    finally:
+                        ctx.close()
+                    self.check_footers(r)
+                    self.assertRegex(label, r"ответ")
+
+    def test_narrowest_read_more_opens_the_material(self):
+        ctx, page = self.open(320)
+        try:
+            card = page.locator(".feed-card").first
+            title_href = card.locator(".card-title a").get_attribute("href")
+            more = card.locator(".card-read-more")
+            self.assertTrue(more.is_visible())
+            self.assertEqual(more.get_attribute("aria-label"), "Читать далее")
+            more.tap()
+            page.wait_for_url("**/" + title_href, timeout=5000)
+        finally:
+            ctx.close()
+
+    def test_every_tab_is_reachable_and_switches_the_section(self):
+        for width in (320, 375):
+            for signed_in in (False, True):
+                with self.subTest(width=width, signed_in=signed_in):
+                    ctx, page = self.open(width, signed_in=signed_in)
+                    try:
+                        ids = page.evaluate("""() => [...document.querySelectorAll('#feedSubnavTabs .feed-subnav-tab, #feedSavedTab')]
+                          .filter(e => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0).map(e => e.id)""")
+                        expected = {"tabFeedAll", "tabFeedQuestions", "tabFeedDirections", "tabFeedCompanies"}
+                        if signed_in:
+                            expected |= {"tabFeedSubscriptions", "feedSavedTab"}
+                        self.assertTrue(expected <= set(ids), ids)
+                        for tab_id in ids:
+                            tab = page.locator("#" + tab_id)
+                            tab.scroll_into_view_if_needed()
+                            box = tab.bounding_box()
+                            self.assertGreaterEqual(box["x"], -0.5, tab_id)
+                            self.assertLessEqual(box["x"] + box["width"], width + 0.5, tab_id)
+                            tab.tap()
+                            page.wait_for_timeout(700)
+                            active = page.evaluate("""() => [...document.querySelectorAll('#feedSubnavTabs .feed-subnav-tab, #feedSavedTab')]
+                              .filter(t => t.getAttribute('aria-selected') === 'true').map(t => t.id)""")
+                            self.assertEqual(active, [tab_id])
+                            tab_param = page.evaluate("new URLSearchParams(location.search).get('tab')")
+                            self.assertEqual(tab_param, page.locator("#" + tab_id).get_attribute("data-tab")
+                                             .replace("companies", "blogs"))
+                    finally:
+                        ctx.close()
+
+    def test_profile_cards_fit_phone_widths(self):
         for width in PHONE_WIDTHS:
             with self.subTest(width=width):
-                ctx, page = self.open(width)
+                ctx, page = self.open(width, "/profile.html?id=author_smirnov&tab=publications")
                 try:
-                    page.locator("#tabFeedQuestions").click()
-                    page.wait_for_timeout(800)
-                    self.assertGreater(page.locator(".feed-card .btn-card-answers").count(), 0)
-                    r = page.evaluate(FEED_JS)
-                    label = page.locator(".feed-card .btn-card-answers").first.get_attribute("aria-label")
+                    page.wait_for_selector(".feed-card .card-footer", timeout=5000)
+                    r = page.evaluate(FOOTER_JS, ".feed-card")
                 finally:
                     ctx.close()
-                self.check_phone(r, width)
-                self.assertRegex(label, r"ответ")
+                self.check_footers(r, feed=False)
+
+    def test_editor_preview_card_fits_phone_widths(self):
+        for width in (320, 375, 414):
+            with self.subTest(width=width):
+                ctx = self.context(width, signed_in=True)
+                try:
+                    page = ctx.new_page()
+                    page.goto(self.base + "/editor.html", wait_until="networkidle")
+                    page.locator("#article-title").fill("Карточка в превью на телефоне")
+                    page.locator("#editor .ql-editor").click()
+                    page.keyboard.type("Текст для проверки превью карточки. " * 4)
+                    page.wait_for_timeout(300)
+                    # The phone document bar is fixed in #244; here only the preview card is checked
+                    page.evaluate("document.getElementById('btn-next-to-settings').click()")
+                    page.wait_for_selector("#pub-card-preview .card-footer", state="visible", timeout=5000)
+                    r = page.evaluate(FOOTER_JS, "#pub-card-preview")
+                finally:
+                    ctx.close()
+                self.assertEqual(r["cards"], 1)
+                self.assertLessEqual(r["overflow"], 0)
+                self.assertEqual(r["out"], [])
+                self.assertEqual(r["small"], [])
+                self.assertEqual(r["overlap"], [])
 
     def test_tablet_capsule_fits_its_box(self):
         ctx, page = self.open(768)
@@ -193,25 +305,16 @@ class TestIssue247Browser(unittest.TestCase):
               const f = document.querySelector('.card-footer');
               const more = f.querySelector('.card-read-more');
               const cap = f.querySelector('.vote-capsule').getBoundingClientRect();
+              const tops = [...f.querySelectorAll('.card-footer-left > *, .card-footer-right > *')].map(e => Math.round(e.getBoundingClientRect().top));
               return {label: more.querySelector('span').getBoundingClientRect().width, moreH: Math.round(more.getBoundingClientRect().height),
-                      capW: Math.round(cap.width), answersLabel: document.querySelectorAll('.card-answers-label').length};
+                      capW: Math.round(cap.width), rows: new Set(tops).size};
             }""")
         finally:
             ctx.close()
         self.assertGreater(r["label"], 20, "read more text is visible on desktop")
         self.assertEqual(r["moreH"], 36)
         self.assertEqual(r["capW"], 108)
-
-    def test_read_more_link_is_reachable_by_name(self):
-        ctx, page = self.open(414)
-        try:
-            link = page.locator(".feed-card .card-read-more").first
-            self.assertTrue(link.is_visible())
-            self.assertEqual(link.get_attribute("aria-label"), "Читать далее")
-            box = link.bounding_box()
-            self.assertEqual((round(box["width"]), round(box["height"])), (32, 32))
-        finally:
-            ctx.close()
+        self.assertEqual(r["rows"], 1)
 
 
 if __name__ == "__main__":
