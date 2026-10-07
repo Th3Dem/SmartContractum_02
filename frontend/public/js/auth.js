@@ -388,7 +388,7 @@
 
       container.innerHTML = `
         <div class="sc-auth-user-menu-wrapper">
-          <button type="button" class="sc-auth-user-trigger" aria-expanded="false" aria-haspopup="menu">
+          <button type="button" class="sc-auth-user-trigger" aria-expanded="false" aria-haspopup="menu" aria-label="Меню пользователя ${escapeHtml(userName)}">
             ${avatar}
             <span class="sc-auth-user-name">${escapeHtml(userName)}</span>
             <span class="sc-auth-chevron-icon">${ICONS.chevron}</span>
