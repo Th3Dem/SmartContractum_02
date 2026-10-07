@@ -6541,3 +6541,142 @@ body.is-directions-tab .widget-topics-card {
     margin-left: 0;
   }
 }
+
+/* ==========================================================================
+   Issue #247: feed cards and tabs fit phone screens
+   Kept at the end of the file so it follows the base card and tab rules.
+   Card footer rules depend on the footer width (container queries), so the
+   same card fits the feed, the profile and other narrow columns.
+   ========================================================================== */
+.card-footer {
+  container: card-footer / inline-size;
+}
+
+.card-answers-count {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Tabs scroll inside their row; the fade shows that more tabs follow */
+  .feed-subnav-container {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  }
+}
+
+@media (max-width: 520px) {
+  .feed-subnav-tab {
+    height: 32px;
+  }
+}
+
+@container card-footer (max-width: 470px) {
+  /* Fallback: if the actions still do not fit, they wrap instead of leaving the card */
+  .card-footer-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .card-footer-left {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .card-footer-left .btn-card-action,
+  .card-footer-left .btn-card-answers {
+    height: 32px;
+    min-height: 32px;
+    min-width: 32px;
+    padding: 0 6px;
+    gap: 4px;
+  }
+
+  .card-footer-left .btn-card-share,
+  .card-footer-left .btn-card-report {
+    width: 32px;
+    max-width: 32px;
+    padding: 0;
+  }
+
+  .card-footer-left .vote-capsule {
+    height: 32px;
+    min-height: 32px;
+  }
+
+  /* Questions show the answer count only; the full text stays in aria-label */
+  .card-answers-label {
+    display: none;
+  }
+
+  .card-answers-count {
+    display: inline;
+  }
+
+  /* Read more becomes a 32px arrow button; the label stays for screen readers */
+  .card-footer-right .card-read-more {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .card-footer-right .card-read-more span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+@container card-footer (max-width: 350px) {
+  /* The card title and cover already open the material */
+  .card-footer-right {
+    display: none;
+  }
+
+  .card-footer-left {
+    justify-content: space-between;
+    gap: 2px;
+  }
+
+  .card-footer-left .btn-card-action:not(.btn-card-share):not(.btn-card-report),
+  .card-footer-left .btn-card-answers {
+    padding: 0 5px;
+  }
+
+  .card-footer-left .vote-capsule {
+    gap: 0;
+  }
+
+  .card-footer-left .vote-btn {
+    width: 28px;
+    min-width: 28px;
+  }
+}
+
+@container card-footer (max-width: 305px) {
+  .card-footer-left .btn-card-action:not(.btn-card-share):not(.btn-card-report),
+  .card-footer-left .btn-card-answers {
+    padding: 0 3px;
+  }
+
+  .card-footer-left .btn-card-share,
+  .card-footer-left .btn-card-report {
+    width: 28px;
+    min-width: 28px;
+    max-width: 28px;
+  }
+
+  .card-footer-left .vote-btn {
+    width: 24px;
+    min-width: 24px;
+  }
+}
