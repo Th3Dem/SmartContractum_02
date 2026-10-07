@@ -71,14 +71,23 @@
   /* ---------------------------------------------------------------- navigation */
 
   function showSection(name, push) {
-    if (!SECTIONS.includes(name)) name = 'profile';
+    // #company=<id> opens the company editor inside the Companies part of the menu
+    let companyToEdit = null;
+    if (String(name || '').indexOf('company=') === 0) {
+      companyToEdit = decodeURIComponent(name.slice('company='.length));
+      name = 'company';
+    }
+    if (!SECTIONS.includes(name) && !(name === 'company' && companyToEdit)) name = 'profile';
+    const navName = name === 'company' ? 'companies' : name;
     document.querySelectorAll('.st-nav-item').forEach(b => {
-      const active = b.dataset.section === name;
+      const active = b.dataset.section === navName;
       b.classList.toggle('is-active', active);
       if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     document.querySelectorAll('.st-section').forEach(s => { s.hidden = s.dataset.section !== name; });
-    if (push !== false) history.replaceState(null, '', name === 'profile' ? window.location.pathname : '#' + name);
+    if (push !== false) history.replaceState(null, '', name === 'profile' ? window.location.pathname
+      : '#' + (name === 'company' ? 'company=' + encodeURIComponent(companyToEdit) : name));
+    if (name === 'company') loadCompanyEditor(companyToEdit);
     if (name === 'sessions') loadSessions();
     if (name === 'companies') loadCompanies();
     if (name === 'appearance') renderThemeChoice();
@@ -162,7 +171,7 @@
   function updateSaveBar() {
     const dirty = changedFields().length > 0;
     $('saveBar').hidden = !dirty;
-    document.body.classList.toggle('st-has-savebar', dirty);
+    document.body.classList.toggle('st-has-savebar', dirty || companyDirty());
   }
 
   function validateWebsite() {
@@ -429,10 +438,185 @@
           <span class="st-list-hint">${escapeHtml(c.specialization || '')}</span>
         </div>
         <div class="st-company-actions">
-          <a class="st-btn st-btn-ghost st-btn-sm" href="editor.html?companyId=${encodeURIComponent(c.id)}"><svg><use href="#i-pen"/></svg>Написать</a>
+          ${c.role === 'owner' ? `<a class="st-btn st-btn-ghost st-btn-sm" href="#company=${encodeURIComponent(c.id)}"><svg><use href="#i-pen"/></svg>Редактировать</a>` : ''}
+          <a class="st-btn st-btn-ghost st-btn-sm" href="editor.html?companyId=${encodeURIComponent(c.id)}">Написать</a>
           <a class="st-btn st-btn-ghost st-btn-sm" href="company.html?id=${encodeURIComponent(c.id)}">Открыть</a>
         </div>
       </div>`).join('');
+  }
+
+  /* ---------------------------------------------------------------- company editor */
+
+  const COMPANY_FIELDS = { name: 'coName', specialization: 'coSpecialization', description: 'coDescription', website: 'coWebsite', about: 'coAbout' };
+  const COMPANY_HINTS = {
+    name: 'Как в документах или как вас знают клиенты',
+    specialization: 'Показывается под названием в ленте и на странице блога',
+    description: 'Выводится в шапке страницы компании',
+    website: 'Ссылка появится в блоке «О компании»'
+  };
+  const COMPANY_STEPS = [
+    { label: 'Логотип', test: (c) => Boolean(c.logo), focus: 'btnCoLogoEdit' },
+    { label: 'Название', test: (c, f) => Boolean(f.name), focus: 'coName' },
+    { label: 'Специализация', test: (c, f) => Boolean(f.specialization), focus: 'coSpecialization' },
+    { label: 'Кратко', test: (c, f) => Boolean(f.description), focus: 'coDescription' },
+    { label: 'Подробно', test: (c, f) => f.about.length >= 100, focus: 'coAbout' },
+    { label: 'Сайт', test: (c, f) => Boolean(f.website), focus: 'coWebsite' },
+    { label: 'Направления', test: (c, f, d) => d.length > 0, focus: 'coDirections' },
+    { label: 'Обложка', test: (c) => Boolean(c.cover), focus: 'btnCoCoverEdit' }
+  ];
+  const co = { id: null, company: null, initial: null, directions: [], allDirections: null, saving: false };
+
+  function companyValues() {
+    const values = {};
+    Object.entries(COMPANY_FIELDS).forEach(([key, id]) => { values[key] = ($(id).value || '').trim(); });
+    return values;
+  }
+
+  function companyDirty() {
+    if (!co.initial) return false;
+    const now = companyValues();
+    return Object.keys(COMPANY_FIELDS).some(k => now[k] !== co.initial[k]) ||
+      co.directions.join('|') !== co.initial.directions.join('|');
+  }
+
+  async function loadCompanyEditor(id) {
+    if (!id || (co.id === id && co.company)) return;
+    if (co.id && co.id !== id && companyDirty() && !window.confirm('Есть несохраненные изменения. Перейти к другой компании?')) return;
+    co.id = id;
+    co.company = null;
+    co.initial = null;
+    $('coEditor').hidden = true;
+    $('coDenied').hidden = true;
+    $('coViewLink').href = 'company.html?id=' + encodeURIComponent(id);
+    const requests = [api('GET', '/api/companies/' + encodeURIComponent(id) + '/profile')];
+    if (!co.allDirections) requests.push(api('GET', '/api/directions'));
+    const [profile, dirs] = await Promise.all(requests);
+    if (dirs) co.allDirections = (dirs.data.directions || []).map(d => ({ id: d.id, title: d.title }));
+    if (co.id !== id) return;
+    if (!profile.ok) {
+      $('coDenied').textContent = profile.status === 404 ? 'Компания не найдена' : 'Не удалось загрузить компанию';
+      $('coDenied').hidden = false;
+      return;
+    }
+    const c = profile.data.company;
+    if (!c.canEdit) {
+      $('coDenied').textContent = 'Редактировать профиль компании может только ее владелец.';
+      $('coDenied').hidden = false;
+      return;
+    }
+    populateCompany(c);
+    $('coEditor').hidden = false;
+  }
+
+  function populateCompany(c) {
+    co.company = c;
+    Object.entries(COMPANY_FIELDS).forEach(([key, id]) => { $(id).value = c[key] || ''; });
+    co.directions = (c.directions || []).slice();
+    co.initial = Object.assign(companyValues(), { directions: co.directions.slice() });
+    $('coTitle').textContent = c.name;
+    renderCompany();
+  }
+
+  function renderCompany() {
+    const c = co.company;
+    if (!c) return;
+    const f = companyValues();
+    $('coPreviewName').textContent = f.name || 'Название компании';
+    $('coPreviewSub').textContent = f.specialization || 'Специализация не указана';
+    $('coLogoPreview').innerHTML = (c.logo ? `<img src="${escapeHtml(c.logo)}" alt="" onerror="this.remove()">` : '') +
+      `<span>${escapeHtml(initials(f.name || c.name))}</span>`;
+    $('btnCoLogoRemove').hidden = !c.logo;
+    const cover = $('coCoverPreview');
+    cover.style.backgroundImage = c.cover ? `url("${encodeURI(c.cover)}")` : '';
+    cover.classList.toggle('has-image', Boolean(c.cover));
+    $('btnCoCoverRemove').hidden = !c.cover;
+
+    const known = co.allDirections || [];
+    const titles = Object.fromEntries(known.map(d => [d.id, d.title]));
+    const all = known.concat(co.directions.filter(d => !titles[d]).map(d => ({ id: d, title: d })));
+    $('coDirections').innerHTML = all.map(d => {
+      const on = co.directions.includes(d.id);
+      return `<button type="button" class="st-chip-toggle${on ? ' is-on' : ''}" data-direction="${escapeHtml(d.id)}" aria-pressed="${on}"><svg><use href="#i-check"/></svg>${escapeHtml(d.title)}</button>`;
+    }).join('');
+    $('coDirectionsCount').textContent = co.directions.length ? `${co.directions.length} из 12` : '';
+
+    const done = COMPANY_STEPS.filter(step => step.test(c, f, co.directions));
+    const pct = Math.round((done.length / COMPANY_STEPS.length) * 100);
+    $('coProgressValue').textContent = pct + '%';
+    $('coProgressBar').style.width = pct + '%';
+    $('coProgress').classList.toggle('is-complete', pct === 100);
+    $('coProgressHint').textContent = pct === 100 ? 'Отлично, профиль компании заполнен' : 'Подробный профиль помогает читателям доверять блогу';
+    $('coProgressSteps').innerHTML = COMPANY_STEPS.map(step => {
+      const ok = step.test(c, f, co.directions);
+      return `<button type="button" class="st-step${ok ? ' is-done' : ''}" data-focus="${step.focus}" ${ok ? 'tabindex="-1"' : ''}>
+        <svg><use href="#${ok ? 'i-check' : 'i-plus'}"/></svg>${step.label}</button>`;
+    }).join('');
+    renderCounters();
+    const dirty = companyDirty();
+    $('coSaveBar').hidden = !dirty;
+    document.body.classList.toggle('st-has-savebar', dirty || changedFields().length > 0);
+  }
+
+  function showCompanyErrors(errors) {
+    Object.entries(COMPANY_FIELDS).forEach(([key, id]) => {
+      const hint = $(id + 'Error');
+      $(id).classList.toggle('is-invalid', Boolean(errors[key]));
+      if (!hint) return;
+      hint.textContent = errors[key] || COMPANY_HINTS[key] || '';
+      hint.classList.toggle('is-error', Boolean(errors[key]));
+    });
+  }
+
+  async function saveCompany(e) {
+    if (e) e.preventDefault();
+    if (co.saving || !companyDirty()) return;
+    const f = companyValues();
+    const missing = {};
+    ['name', 'specialization', 'description'].forEach(k => { if (!f[k]) missing[k] = 'Обязательное поле'; });
+    showCompanyErrors(missing);
+    if (Object.keys(missing).length) {
+      $(COMPANY_FIELDS[Object.keys(missing)[0]]).focus();
+      return toast('Заполните обязательные поля', true);
+    }
+    co.saving = true;
+    $('btnSaveCompany').disabled = true;
+    $('btnSaveCompany').textContent = 'Сохраняем...';
+    const { ok, data } = await api('PUT', '/api/companies/' + encodeURIComponent(co.id), Object.assign({}, f, { directions: co.directions }));
+    co.saving = false;
+    $('btnSaveCompany').disabled = false;
+    $('btnSaveCompany').textContent = 'Сохранить';
+    if (!ok) {
+      showCompanyErrors(data.fieldErrors || {});
+      return toast(data.error || 'Не удалось сохранить профиль компании', true);
+    }
+    populateCompany(Object.assign({}, co.company, data.company));
+    showCompanyErrors({});
+    toast('Профиль компании сохранен');
+  }
+
+  function resetCompany() {
+    if (!co.company) return;
+    Object.entries(COMPANY_FIELDS).forEach(([key, id]) => { $(id).value = co.initial[key]; });
+    co.directions = co.initial.directions.slice();
+    showCompanyErrors({});
+    renderCompany();
+  }
+
+  async function editCompanyImage(kind) {
+    if (!window.SCMediaCrop || !co.company) return;
+    const picked = await window.SCMediaCrop.open(kind === 'logo'
+      ? { title: 'Логотип компании', aspect: 1, outputWidth: 400, outputHeight: 400, minWidth: 64, minHeight: 64 }
+      : { title: 'Обложка компании', aspect: 3, outputWidth: 1500, outputHeight: 500, minWidth: 600, minHeight: 200 });
+    if (picked) saveCompanyImage({ kind, url: picked.url, focal: picked.focal });
+  }
+
+  async function saveCompanyImage(payload) {
+    const { ok, data } = await api('POST', `/api/companies/${encodeURIComponent(co.id)}/media`, payload);
+    if (!ok) return toast(data.error || 'Не удалось сохранить изображение', true);
+    co.company.logo = data.logo;
+    co.company.cover = data.cover;
+    renderCompany();
+    toast(payload.remove ? 'Изображение удалено' : 'Изображение сохранено');
   }
 
   /* ---------------------------------------------------------------- appearance */
@@ -543,9 +727,33 @@
     $('changeEmailForm').hidden = false;
   });
   $('btnLogoutAll').addEventListener('click', logoutAll);
+  $('companyForm').addEventListener('submit', saveCompany);
+  $('companyForm').addEventListener('input', renderCompany);
+  $('btnResetCompany').addEventListener('click', resetCompany);
+  $('btnCoLogoEdit').addEventListener('click', () => editCompanyImage('logo'));
+  $('btnCoCoverEdit').addEventListener('click', () => editCompanyImage('cover'));
+  $('btnCoLogoRemove').addEventListener('click', () => saveCompanyImage({ kind: 'logo', remove: true }));
+  $('btnCoCoverRemove').addEventListener('click', () => saveCompanyImage({ kind: 'cover', remove: true }));
+  $('coDirections').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-direction]');
+    if (!chip) return;
+    const id = chip.dataset.direction;
+    if (co.directions.includes(id)) co.directions = co.directions.filter(d => d !== id);
+    else if (co.directions.length >= 12) return toast('Можно выбрать не больше 12 направлений', true);
+    else co.directions.push(id);
+    renderCompany();
+  });
+  $('coProgressSteps').addEventListener('click', (e) => {
+    const step = e.target.closest('[data-focus]');
+    if (!step || step.classList.contains('is-done')) return;
+    const target = $(step.dataset.focus);
+    if (target.tagName === 'BUTTON') return target.click();
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (target.focus) target.focus();
+  });
   window.addEventListener('hashchange', () => showSection(window.location.hash.replace('#', ''), false));
   window.addEventListener('beforeunload', (e) => {
-    if (state.settings && changedFields().length) {
+    if ((state.settings && changedFields().length) || companyDirty()) {
       e.preventDefault();
       e.returnValue = '';
     }

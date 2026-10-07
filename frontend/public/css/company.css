@@ -872,3 +872,142 @@
     flex: 1;
   }
 }
+
+/* ==========================================================================
+   Issue #240: same hero as the person profile. Logo next to the name, the
+   statistics inside the hero card, editing on settings.html#company=<id>.
+   The logo stays a rounded square: a company, not a person.
+   ========================================================================== */
+.co-cover {
+  height: 150px;
+  background:
+    radial-gradient(circle at 80% 40%, rgba(45, 212, 191, 0.35), transparent 55%),
+    linear-gradient(120deg, #0f2a4a, #134e5e 60%, #0f766e);
+}
+
+[data-theme="dark"] .co-cover {
+  background:
+    radial-gradient(circle at 80% 40%, rgba(45, 212, 191, 0.22), transparent 55%),
+    linear-gradient(120deg, #0b1c33, #0f3a46 60%, #0b4f4a);
+}
+
+.co-cover.media-has-image {
+  background-size: cover;
+}
+
+.co-hero-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 0 28px 20px;
+}
+
+.co-logo-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-top: -44px;
+}
+
+.co-logo {
+  width: 104px;
+  height: 104px;
+  margin: 0;
+  background: var(--accent-color);
+}
+
+.co-logo::after {
+  color: #ffffff;
+  font-size: 1.9rem;
+}
+
+.co-logo-edit {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--bg-card);
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.co-logo-edit:hover {
+  background: var(--accent-hover);
+}
+
+.co-logo-edit svg {
+  width: 15px;
+  height: 15px;
+}
+
+.co-hero-row {
+  flex: 1;
+  min-width: 0;
+  padding-top: 16px;
+}
+
+.co-name {
+  font-size: 1.45rem;
+}
+
+.co-btn svg {
+  width: 15px;
+  height: 15px;
+  margin-right: 6px;
+}
+
+.co-hero .co-stats {
+  margin: 0;
+  padding: 12px 28px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.co-hero .co-stat {
+  padding: 4px 12px;
+}
+
+@media (max-width: 768px) {
+  .co-cover {
+    height: 140px;
+  }
+
+  .co-hero-body {
+    padding: 0 18px 18px;
+  }
+
+  .co-hero .co-stats {
+    padding: 12px 18px 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .co-hero-body {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .co-logo-wrap {
+    margin-top: -44px;
+  }
+
+  .co-logo {
+    width: 88px;
+    height: 88px;
+  }
+
+  .co-hero-row {
+    width: 100%;
+    padding-top: 0;
+  }
+
+  .co-identity {
+    min-width: 0;
+  }
+}
