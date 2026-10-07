@@ -8,6 +8,7 @@ from typing import Any, Dict
 from backend import config
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import TOPICS_TITLE_MAP, format_date_ru, make_content_snippet
+from backend.identity import sync_comment_snapshots
 from backend.media_library import focal_dict, is_upload_owned_by, record_upload
 from backend.submissions import validate_cover_image
 
@@ -869,6 +870,8 @@ class ProfilesHandlers:
                 cur.execute("UPDATE sessions SET user_name = ? WHERE user_id = ?", (name, user["id"]))
                 cur.execute("UPDATE users SET name = ? WHERE id = ?", (name, user["id"]))
                 cur.execute("UPDATE users SET avatar = ? WHERE id = ?", (avatar, user["id"]))
+                # Earlier comments show the author as they are now
+                sync_comment_snapshots(cur, user["id"])
 
             initials = "".join([part[0].upper() for part in str(name).split()[:2]]) if name else "SC"
             profile_dto = {

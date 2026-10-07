@@ -10,20 +10,8 @@ from backend.content import (
     format_date_ru,
     normalize_keyword,
 )
+from backend.identity import author_identities, initials_of
 from backend.submissions import resolve_cover_position
-
-
-def author_profile_names(cur, author_ids):
-    """
-    Current display names of material authors. The name stored inside old demo materials is only a
-    fallback: a real author's materials follow their profile, including after a rename.
-    """
-    ids = sorted({a for a in author_ids if a})
-    if not ids:
-        return {}
-    placeholders = ",".join("?" * len(ids))
-    cur.execute(f"SELECT user_id, name FROM user_profiles WHERE user_id IN ({placeholders})", ids)
-    return {r["user_id"]: r["name"].strip() for r in cur.fetchall() if r["name"] and r["name"].strip()}
 
 
 class ArticlesHandlers:
@@ -63,7 +51,7 @@ class ArticlesHandlers:
                 (article_id, article_id)
             )
             row = cur.fetchone()
-            profile_names = author_profile_names(cur, [row["author_id"]]) if row else {}
+            identities = author_identities(cur, [row["author_id"]]) if row else {}
 
         if not row:
             self.send_json_response(404, {
@@ -85,13 +73,13 @@ class ArticlesHandlers:
         article_html = row["article_html"] or ""
         reading_time, reading_minutes = calculate_reading_time(article_html)
 
-        author_name = profile_names.get(row["author_id"]) or settings.get("author") or (
+        live = identities.get(row["author_id"]) or {}
+        author_name = live.get("name") or settings.get("author") or (
             "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
         )
-        author_initials = settings.get("authorInitials") or (
-            "".join([part[0].upper() for part in author_name.split()[:2]]) if author_name else "SC"
-        )
-        author_role = settings.get("authorRole") or ""
+        author_initials = initials_of(author_name) if live.get("name") else (settings.get("authorInitials") or initials_of(author_name))
+        author_role = live.get("specialization") or settings.get("authorRole") or ""
+        author_avatar = live.get("avatar") or settings.get("authorAvatar") or None
 
         topics = settings.get("topics") or []
 
@@ -159,6 +147,7 @@ class ArticlesHandlers:
             "author": author_name,
             "authorInitials": author_initials,
             "authorRole": author_role,
+            "authorAvatar": author_avatar,
             "date": format_date_ru(row["created_at"]),
             "createdAt": row["created_at"],
             "updatedAt": row["updated_at"],
@@ -449,7 +438,7 @@ class ArticlesHandlers:
                 query_sql += " ORDER BY created_at DESC"
                 cur.execute(query_sql, tuple(query_params))
                 rows = cur.fetchall()
-                profile_names = author_profile_names(cur, [r["author_id"] for r in rows])
+                identities = author_identities(cur, [r["author_id"] for r in rows])
 
                 # Pre-fetch counts for likes, saves and comments
                 cur.execute("SELECT article_id, COUNT(*) AS cnt FROM article_likes GROUP BY article_id")
@@ -556,13 +545,13 @@ class ArticlesHandlers:
             raw_author = settings.get("author")
             if isinstance(raw_author, dict):
                 raw_author = raw_author.get("name")
-            author_name = profile_names.get(row["author_id"]) or raw_author or (
+            live = identities.get(row["author_id"]) or {}
+            author_name = live.get("name") or raw_author or (
                 "Пользователь #" + row["author_id"][:6] if row["author_id"] else "Автор SmartContractum"
             )
-            author_initials = settings.get("authorInitials") or (
-                "".join([part[0].upper() for part in str(author_name).split()[:2]]) if author_name else "SC"
-            )
-            author_role = settings.get("authorRole") or ""
+            author_initials = initials_of(author_name) if live.get("name") else (settings.get("authorInitials") or initials_of(author_name))
+            author_role = live.get("specialization") or settings.get("authorRole") or ""
+            author_avatar = live.get("avatar") or settings.get("authorAvatar") or None
             keywords = settings.get("keywords") or []
             norm_kws = [normalize_keyword(k).lstrip('#').strip().lower() for k in keywords]
 
@@ -770,6 +759,7 @@ class ArticlesHandlers:
                 "author": author_name,
                 "authorInitials": author_initials,
                 "authorRole": author_role,
+                "authorAvatar": author_avatar,
                 "date": format_date_ru(row["created_at"]),
                 "createdAt": row["created_at"],
                 "description": desc,

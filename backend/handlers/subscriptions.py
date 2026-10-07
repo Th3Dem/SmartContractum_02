@@ -5,6 +5,7 @@ import urllib.parse
 
 from backend.config import LEGACY_MATERIAL_TYPES, MAX_JSON_BODY_BYTES, VALID_MATERIAL_TYPES
 from backend.content import STANDARD_TOPICS, normalize_keyword
+from backend.identity import author_identities
 
 
 class SubscriptionsHandlers:
@@ -319,6 +320,7 @@ class SubscriptionsHandlers:
 
             cur.execute("SELECT * FROM companies ORDER BY created_at ASC")
             comp_rows = cur.fetchall()
+            identities = author_identities(cur, [r["author_id"] for r in rows])
 
         authors_map = {}
         tags_map = {}
@@ -333,9 +335,10 @@ class SubscriptionsHandlers:
                 settings = {}
 
             author_id = row["author_id"]
-            author_name = settings.get("author") or "Автор платформы"
-            author_role = settings.get("authorRole") or ""
-            author_avatar = settings.get("authorAvatar") or settings.get("avatar") or None
+            live = identities.get(author_id) or {}
+            author_name = live.get("name") or settings.get("author") or "Автор платформы"
+            author_role = live.get("specialization") or settings.get("authorRole") or ""
+            author_avatar = live.get("avatar") or settings.get("authorAvatar") or settings.get("avatar") or None
             if author_id not in authors_map:
                 authors_map[author_id] = {
                     "id": author_id,
