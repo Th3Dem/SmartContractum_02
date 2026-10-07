@@ -2613,3 +2613,250 @@
   background-color: #f8fafc;
   border-color: var(--border-color);
 }
+
+/* ==========================================================================
+   Issue #234: one visual language with the settings page (settings.html).
+   Same cover, round avatar with a ring, name next to the avatar, the statistics
+   inside the hero card, and owner links styled like the settings menu.
+   ========================================================================== */
+.profile-cover {
+  height: 150px;
+  background:
+    radial-gradient(circle at 15% 30%, rgba(56, 189, 248, 0.35), transparent 55%),
+    linear-gradient(120deg, #dbeafe, #c7d2fe 55%, #ccfbf1);
+  border-bottom: none;
+}
+
+[data-theme="dark"] .profile-cover {
+  background:
+    radial-gradient(circle at 15% 30%, rgba(56, 189, 248, 0.22), transparent 55%),
+    linear-gradient(120deg, #13203d, #1e2a55 55%, #0f2f2b);
+}
+
+.profile-cover.media-has-image {
+  background-size: cover;
+}
+
+.profile-identity-wrap {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 0 28px 20px;
+}
+
+.profile-avatar-wrap {
+  width: 104px;
+  height: 104px;
+  margin-top: -44px;
+  margin-bottom: 0;
+}
+
+.profile-avatar {
+  width: 104px;
+  height: 104px;
+  border: 4px solid var(--bg-card, var(--bg-surface));
+  border-radius: 50%;
+  background: var(--accent-color);
+  box-shadow: var(--shadow-md);
+}
+
+.profile-avatar-initials {
+  color: #ffffff;
+  font-size: 1.9rem;
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  right: 2px;
+  bottom: 4px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--bg-card, var(--bg-surface));
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.profile-avatar-edit:hover {
+  background: var(--accent-hover);
+}
+
+.profile-avatar-edit svg {
+  width: 15px;
+  height: 15px;
+}
+
+.profile-main-row {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  padding-top: 16px;
+}
+
+.profile-name {
+  font-size: 1.45rem;
+}
+
+.btn-profile-edit,
+.btn-profile-subscribe {
+  height: 34px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+.btn-profile-more {
+  width: 34px;
+  height: 34px;
+}
+
+/* Statistics live at the bottom of the hero card */
+.profile-hero .profile-stats-bar {
+  gap: 8px;
+  padding: 12px 28px 16px;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.profile-hero .profile-stat-item {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-md, 8px);
+}
+
+/* Owner links follow the settings menu */
+.profile-owner-nav-widget {
+  padding: 14px 8px 8px;
+}
+
+.profile-owner-nav-widget .profile-widget-title {
+  padding: 0 10px;
+}
+
+.profile-owner-nav-list {
+  gap: 2px;
+}
+
+.profile-owner-nav-link {
+  gap: 12px;
+  height: 38px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.profile-owner-nav-link svg {
+  width: 17px;
+  height: 17px;
+  color: currentColor;
+}
+
+.profile-owner-nav-link:hover,
+.profile-owner-nav-link:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.profile-owner-nav-link:hover svg,
+.profile-owner-nav-link:focus-visible svg {
+  transform: none;
+}
+
+/* Empty overview of one's own profile */
+.profile-empty-owner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.profile-empty-title {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.profile-empty-text {
+  max-width: 420px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.profile-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-search-input {
+  min-width: 220px;
+}
+
+@media (max-width: 1024px) {
+  /* In a column the main column must take the page width, not the width of its tabs */
+  .profile-layout-columns {
+    align-items: stretch;
+  }
+
+  .profile-main-column {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-cover {
+    height: 140px;
+  }
+
+  .profile-identity-wrap {
+    padding: 0 18px 18px;
+  }
+
+  .profile-main-row {
+    align-items: stretch;
+  }
+
+  .profile-hero .profile-stats-bar {
+    padding: 12px 18px 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-identity-wrap {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .profile-avatar-wrap {
+    width: 88px;
+    height: 88px;
+    margin-top: -44px;
+  }
+
+  .profile-avatar {
+    width: 88px;
+    height: 88px;
+  }
+
+  .profile-main-row {
+    width: 100%;
+    padding-top: 0;
+  }
+
+  .profile-search-input {
+    min-width: 0;
+  }
+}

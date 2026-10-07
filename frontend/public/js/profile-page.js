@@ -58,19 +58,6 @@
 
   let currentSearchQuery = '';
   let searchDebounceTimer = null;
-  let lastEditTriggerEl = null;
-  let lastCropTriggerEl = null;
-  let pendingAvatarData = null;
-  let uploadedAvatarUrl = null;
-  let isAvatarRemoved = false;
-  let avatarUploadSeq = 0;
-  let rawSelectedImage = null;
-  let cropZoom = 1;
-  let cropPanX = 0;
-  let cropPanY = 0;
-  let isDraggingCrop = false;
-  let dragStartX = 0;
-  let dragStartY = 0;
 
   let currentTopic = '';
   let tabLoadedState = {
@@ -795,7 +782,7 @@
 
     // Show main profile view
     const mainWrap = document.getElementById('profileMainContent');
-    if (mainWrap) mainWrap.style.display = 'block';
+    if (mainWrap) mainWrap.style.display = 'flex';
 
     // 1. Avatar
     const avatarImg = document.getElementById('profileAvatarImg');
@@ -1706,7 +1693,21 @@
     if (!feedContainer) return;
 
     if (!Array.isArray(items) || items.length === 0) {
-      feedContainer.innerHTML = '<div class="profile-empty-state">Нет недавней активности</div>';
+      const isOwn = !!(currentProfile && (currentProfile.isOwnProfile || (window.currentUser && (window.currentUser.id === currentProfile.id || window.currentUser.id === currentProfile.userId))));
+      if (isOwn && !currentSearchQuery) {
+        // The owner gets the next steps instead of an empty block
+        feedContainer.innerHTML = `
+          <div class="profile-empty-state profile-empty-owner">
+            <div class="profile-empty-title">Здесь появятся ваши публикации, вопросы и ответы</div>
+            <div class="profile-empty-text">Читатели видят эту страницу. Расскажите о себе и поделитесь первым материалом.</div>
+            <div class="profile-empty-actions">
+              <a class="btn-profile-subscribe" href="editor.html">Написать публикацию</a>
+              <a class="btn-profile-edit" href="settings.html#profile">Заполнить профиль</a>
+            </div>
+          </div>`;
+      } else {
+        feedContainer.innerHTML = '<div class="profile-empty-state">Нет недавней активности</div>';
+      }
       if (actionsContainer) actionsContainer.style.display = 'none';
       return;
     }
@@ -3235,516 +3236,6 @@
     copyTextToClipboard(window.location.href, 'Ссылка на профиль скопирована');
   }
 
-  function showEditError(msg) {
-    const errEl = document.getElementById('editProfileError');
-    if (errEl) {
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-    }
-  }
-
-  function clearEditError() {
-    const errEl = document.getElementById('editProfileError');
-    if (errEl) {
-      errEl.textContent = '';
-      errEl.style.display = 'none';
-    }
-  }
-
-  function updateModalAvatarPreview(avatarUrl, name) {
-    const previewImg = document.getElementById('editAvatarPreviewImg');
-    const initialsSpan = document.getElementById('editAvatarInitials');
-    const displayName = name || (currentProfile && currentProfile.name) || '';
-
-    if (previewImg) {
-      previewImg.onerror = function () {
-        previewImg.style.display = 'none';
-        if (initialsSpan) {
-          initialsSpan.textContent = getInitials(displayName);
-          initialsSpan.style.display = 'block';
-        }
-      };
-    }
-
-    if (avatarUrl) {
-      if (previewImg) {
-        previewImg.src = avatarUrl;
-        previewImg.style.display = 'block';
-      }
-      if (initialsSpan) initialsSpan.style.display = 'none';
-    } else {
-      if (previewImg) {
-        previewImg.src = '';
-        previewImg.style.display = 'none';
-      }
-      if (initialsSpan) {
-        initialsSpan.textContent = getInitials(displayName);
-        initialsSpan.style.display = 'block';
-      }
-    }
-  }
-
-  function handleChooseAvatar() {
-    const fileInput = document.getElementById('editAvatarFileInput');
-    if (fileInput) fileInput.click();
-  }
-
-  function handleRemoveAvatar() {
-    avatarUploadSeq++;
-    isAvatarRemoved = true;
-    pendingAvatarData = null;
-    uploadedAvatarUrl = null;
-    rawSelectedImage = null;
-    const fileInput = document.getElementById('editAvatarFileInput');
-    if (fileInput) fileInput.value = '';
-    const btnCrop = document.getElementById('btnCropAvatar');
-    if (btnCrop) btnCrop.style.display = 'none';
-    const inpName = document.getElementById('editProfileName');
-    const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
-    updateModalAvatarPreview(null, name);
-    clearEditError();
-  }
-
-  function handleAvatarFileSelected(e) {
-    const fileInput = e.target;
-    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
-    const file = fileInput.files[0];
-
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
-    if (!allowedTypes.includes(file.type) && !/\.(png|jpe?g|webp|svg)$/i.test(file.name)) {
-      showEditError('Разрешены только изображения PNG, JPEG, WebP, SVG');
-      fileInput.value = '';
-      return;
-    }
-
-    const maxBytes = 10 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      showEditError('Размер изображения не должен превышать 10 МБ');
-      fileInput.value = '';
-      return;
-    }
-
-    clearEditError();
-
-    const seq = ++avatarUploadSeq;
-    isAvatarRemoved = false;
-
-    const reader = new FileReader();
-    reader.onload = function (evt) {
-      if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-
-      const dataUri = evt.target.result;
-      pendingAvatarData = dataUri;
-      uploadedAvatarUrl = null;
-
-      const img = new Image();
-      img.onload = function () {
-        if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-        rawSelectedImage = img;
-        const btnCrop = document.getElementById('btnCropAvatar');
-        if (btnCrop) btnCrop.style.display = 'inline-flex';
-      };
-      img.src = dataUri;
-
-      const inpName = document.getElementById('editProfileName');
-      const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
-      updateModalAvatarPreview(dataUri, name);
-
-      // Preemptive upload to media storage
-      fetch('/api/media/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: dataUri })
-      })
-        .then(function (res) {
-          if (!res.ok) {
-            return res.json().then(function (d) { throw new Error((d && d.error) || 'Ошибка загрузки аватара'); });
-          }
-          return res.json();
-        })
-        .then(function (resData) {
-          if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-          if (resData && resData.success && resData.url) {
-            uploadedAvatarUrl = resData.url;
-          } else {
-            showEditError((resData && resData.error) || 'Ошибка загрузки аватара');
-            pendingAvatarData = null;
-            uploadedAvatarUrl = null;
-          }
-        })
-        .catch(function (err) {
-          if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-          showEditError(err.message || 'Ошибка загрузки аватара');
-          pendingAvatarData = null;
-          uploadedAvatarUrl = null;
-        });
-    };
-    reader.onerror = function () {
-      if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-      showEditError('Ошибка чтения файла изображения');
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function openAvatarCropModal() {
-    lastCropTriggerEl = document.activeElement || document.getElementById('btnCropAvatar');
-    if (!rawSelectedImage) {
-      const previewImg = document.getElementById('editAvatarPreviewImg');
-      if (previewImg && previewImg.src && previewImg.style.display !== 'none') {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = function () {
-          rawSelectedImage = img;
-          initAvatarCropper();
-        };
-        img.src = previewImg.src;
-        if (img.complete) {
-          rawSelectedImage = img;
-          initAvatarCropper();
-        }
-        return;
-      }
-    }
-    initAvatarCropper();
-  }
-
-  function initAvatarCropper() {
-    const modal = document.getElementById('avatarCropModal');
-    if (!modal) return;
-    cropZoom = 1;
-    cropPanX = 0;
-    cropPanY = 0;
-    const zoomInput = document.getElementById('avatarCropZoom');
-    if (zoomInput) zoomInput.value = '1';
-    modal.style.display = 'flex';
-    drawAvatarCropCanvas();
-    const initialFocusEl = document.getElementById('avatarCropZoom') ||
-                           document.getElementById('btnApplyAvatarCrop') ||
-                           document.getElementById('btnCloseAvatarCropModal');
-    if (initialFocusEl && typeof initialFocusEl.focus === 'function') {
-      setTimeout(function () {
-        try { initialFocusEl.focus(); } catch (err) {}
-      }, 40);
-    }
-  }
-
-  function closeAvatarCropModal(restoreFocus) {
-    const modal = document.getElementById('avatarCropModal');
-    if (modal) modal.style.display = 'none';
-    if (restoreFocus !== false && lastCropTriggerEl && typeof lastCropTriggerEl.focus === 'function') {
-      try { lastCropTriggerEl.focus(); } catch (err) {}
-    }
-  }
-
-  function drawAvatarCropCanvas() {
-    const canvas = document.getElementById('avatarCropCanvas');
-    if (!canvas || !rawSelectedImage) return;
-    const ctx = canvas.getContext('2d');
-    const cw = canvas.width;
-    const ch = canvas.height;
-
-    ctx.clearRect(0, 0, cw, ch);
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, cw, ch);
-
-    const img = rawSelectedImage;
-    const baseScale = Math.max(cw / (img.naturalWidth || cw), ch / (img.naturalHeight || ch));
-    const scale = baseScale * cropZoom;
-    const drawW = (img.naturalWidth || cw) * scale;
-    const drawH = (img.naturalHeight || ch) * scale;
-
-    const maxPanX = Math.max(0, (drawW - cw) / 2);
-    const maxPanY = Math.max(0, (drawH - ch) / 2);
-    cropPanX = Math.max(-maxPanX, Math.min(maxPanX, cropPanX));
-    cropPanY = Math.max(-maxPanY, Math.min(maxPanY, cropPanY));
-
-    const drawX = (cw - drawW) / 2 + cropPanX;
-    const drawY = (ch - drawH) / 2 + cropPanY;
-
-    ctx.drawImage(img, drawX, drawY, drawW, drawH);
-  }
-
-  function applyAvatarCrop() {
-    const canvas = document.getElementById('avatarCropCanvas');
-    if (!canvas || !rawSelectedImage) return;
-
-    const targetSize = 256;
-    const offscreen = document.createElement('canvas');
-    offscreen.width = targetSize;
-    offscreen.height = targetSize;
-    const ctx = offscreen.getContext('2d');
-
-    const img = rawSelectedImage;
-    const baseScale = Math.max(targetSize / (img.naturalWidth || targetSize), targetSize / (img.naturalHeight || targetSize));
-    const scale = baseScale * cropZoom;
-    const drawW = (img.naturalWidth || targetSize) * scale;
-    const drawH = (img.naturalHeight || targetSize) * scale;
-
-    const scaleFactor = targetSize / canvas.width;
-    const drawX = (targetSize - drawW) / 2 + (cropPanX * scaleFactor);
-    const drawY = (targetSize - drawH) / 2 + (cropPanY * scaleFactor);
-
-    ctx.drawImage(img, drawX, drawY, drawW, drawH);
-
-    const croppedDataUrl = offscreen.toDataURL('image/png');
-    closeAvatarCropModal();
-
-    const seq = ++avatarUploadSeq;
-    pendingAvatarData = croppedDataUrl;
-    uploadedAvatarUrl = null;
-    isAvatarRemoved = false;
-
-    const inpName = document.getElementById('editProfileName');
-    const name = inpName ? inpName.value : (currentProfile && currentProfile.name);
-    updateModalAvatarPreview(croppedDataUrl, name);
-
-    // Preemptive upload of cropped avatar
-    fetch('/api/media/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: croppedDataUrl })
-    })
-      .then(function (res) {
-        if (!res.ok) {
-          return res.json().then(function (d) { throw new Error((d && d.error) || 'Ошибка загрузки аватара'); });
-        }
-        return res.json();
-      })
-      .then(function (resData) {
-        if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-        if (resData && resData.success && resData.url) {
-          uploadedAvatarUrl = resData.url;
-        } else {
-          showEditError((resData && resData.error) || 'Ошибка загрузки аватара');
-          pendingAvatarData = null;
-          uploadedAvatarUrl = null;
-        }
-      })
-      .catch(function (err) {
-        if (seq !== avatarUploadSeq || isAvatarRemoved) return;
-        showEditError(err.message || 'Ошибка загрузки аватара');
-        pendingAvatarData = null;
-        uploadedAvatarUrl = null;
-      });
-  }
-
-  function openEditModal() {
-    lastEditTriggerEl = document.activeElement;
-    const modal = document.getElementById('editProfileModal');
-    if (!modal || !currentProfile) return;
-
-    clearEditError();
-    avatarUploadSeq++;
-    pendingAvatarData = null;
-    uploadedAvatarUrl = null;
-    rawSelectedImage = null;
-    isAvatarRemoved = false;
-
-    const inpName = document.getElementById('editProfileName');
-    const inpSpec = document.getElementById('editProfileSpec');
-    const inpComp = document.getElementById('editProfileCompany');
-    const inpSite = document.getElementById('editProfileWebsite');
-    const inpBio = document.getElementById('editProfileBio');
-    const fileInput = document.getElementById('editAvatarFileInput');
-    if (fileInput) fileInput.value = '';
-
-    if (inpName) inpName.value = currentProfile.name || '';
-    if (inpSpec) inpSpec.value = currentProfile.specialization || '';
-    if (inpComp) inpComp.value = currentProfile.company || '';
-    if (inpSite) inpSite.value = currentProfile.website || '';
-    if (inpBio) inpBio.value = currentProfile.bio || '';
-
-    updateModalAvatarPreview(currentProfile.avatar, currentProfile.name);
-
-    const btnCrop = document.getElementById('btnCropAvatar');
-    if (btnCrop) {
-      btnCrop.style.display = currentProfile.avatar ? 'inline-flex' : 'none';
-      if (currentProfile.avatar) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = function () {
-          rawSelectedImage = img;
-        };
-        img.src = currentProfile.avatar;
-      }
-    }
-
-    modal.style.display = 'flex';
-    if (inpName) {
-      setTimeout(function () { inpName.focus(); }, 50);
-    }
-  }
-
-  function closeEditModal() {
-    const modal = document.getElementById('editProfileModal');
-    if (modal) modal.style.display = 'none';
-    closeAvatarCropModal(false);
-    clearEditError();
-    avatarUploadSeq++;
-    pendingAvatarData = null;
-    uploadedAvatarUrl = null;
-    rawSelectedImage = null;
-    isAvatarRemoved = false;
-    const fileInput = document.getElementById('editAvatarFileInput');
-    if (fileInput) fileInput.value = '';
-    if (lastEditTriggerEl && typeof lastEditTriggerEl.focus === 'function') {
-      try { lastEditTriggerEl.focus(); } catch (e) {}
-    }
-  }
-
-  function saveProfileEdit() {
-    if (!currentProfile) return;
-
-    clearEditError();
-
-    const inpName = document.getElementById('editProfileName');
-    const inpSpec = document.getElementById('editProfileSpec');
-    const inpComp = document.getElementById('editProfileCompany');
-    const inpSite = document.getElementById('editProfileWebsite');
-    const inpBio = document.getElementById('editProfileBio');
-    const saveBtn = document.getElementById('btnSaveProfile');
-
-    const rawName = inpName ? inpName.value : '';
-    const trimmedName = rawName.trim();
-    if (!trimmedName || trimmedName.length < 1 || trimmedName.length > 100) {
-      showEditError('Имя обязательно для заполнения и должно содержать от 1 до 100 символов');
-      if (inpName) inpName.focus();
-      return;
-    }
-
-    const rawSpec = inpSpec ? inpSpec.value : '';
-    const trimmedSpec = rawSpec.trim();
-    if (trimmedSpec.length > 120) {
-      showEditError('Специализация не должна превышать 120 символов');
-      if (inpSpec) inpSpec.focus();
-      return;
-    }
-
-    const rawComp = inpComp ? inpComp.value : '';
-    const trimmedComp = rawComp.trim();
-    if (trimmedComp.length > 120) {
-      showEditError('Название компании не должно превышать 120 символов');
-      if (inpComp) inpComp.focus();
-      return;
-    }
-
-    const rawBio = inpBio ? inpBio.value : '';
-    const trimmedBio = rawBio.trim();
-    if (trimmedBio.length > 1000) {
-      showEditError('О себе не должно превышать 1000 символов');
-      if (inpBio) inpBio.focus();
-      return;
-    }
-
-    let site = (inpSite ? inpSite.value : '').trim();
-    if (site) {
-      const schemeMatch = site.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
-      if (schemeMatch) {
-        const scheme = schemeMatch[1].toLowerCase();
-        if (scheme !== 'http' && scheme !== 'https') {
-          showEditError('Адрес сайта должен использовать протокол http или https');
-          if (inpSite) inpSite.focus();
-          return;
-        }
-      } else {
-        const proto = 'https:' + '//';
-        site = proto + site;
-      }
-
-      if (site.length > 300) {
-        showEditError('Адрес сайта не должен превышать 300 символов');
-        if (inpSite) inpSite.focus();
-        return;
-      }
-
-      try {
-        const parsed = new URL(site);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          showEditError('Адрес сайта должен использовать протокол http или https');
-          if (inpSite) inpSite.focus();
-          return;
-        }
-        if (!parsed.hostname) {
-          showEditError('Укажите корректный адрес сайта');
-          if (inpSite) inpSite.focus();
-          return;
-        }
-      } catch (err) {
-        showEditError('Укажите корректный адрес сайта');
-        if (inpSite) inpSite.focus();
-        return;
-      }
-    }
-
-    let newAvatar = null;
-    if (isAvatarRemoved) {
-      newAvatar = null;
-    } else if (uploadedAvatarUrl) {
-      newAvatar = uploadedAvatarUrl;
-    } else if (pendingAvatarData) {
-      newAvatar = pendingAvatarData;
-    } else {
-      newAvatar = currentProfile.avatar || null;
-    }
-
-    const payload = {
-      name: trimmedName,
-      specialization: trimmedSpec,
-      company: trimmedComp,
-      bio: trimmedBio,
-      website: site,
-      avatar: newAvatar,
-      removeAvatar: isAvatarRemoved
-    };
-
-    if (saveBtn) saveBtn.disabled = true;
-
-    fetch('/api/user/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(payload)
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { status: res.status, ok: res.ok, data: data };
-        }).catch(function () {
-          return { status: res.status, ok: false, data: null };
-        });
-      })
-      .then(function (result) {
-        if (saveBtn) saveBtn.disabled = false;
-        const data = result.data;
-        if (result.ok && data && data.success && data.profile) {
-          const prof = data.profile;
-          currentProfile.name = prof.name || payload.name;
-          currentProfile.specialization = prof.specialization !== undefined ? prof.specialization : payload.specialization;
-          currentProfile.company = prof.company !== undefined ? prof.company : payload.company;
-          currentProfile.bio = prof.bio !== undefined ? prof.bio : payload.bio;
-          currentProfile.website = prof.website !== undefined ? prof.website : payload.website;
-          currentProfile.avatar = isAvatarRemoved ? null : (prof.avatar !== undefined ? prof.avatar : payload.avatar);
-
-          const isOwn = Boolean(currentProfile.isOwnProfile || (currentUser && (currentUser.id === currentProfile.id || currentUser.id === currentProfile.userId)));
-          if (isOwn && currentUser) {
-            currentUser.name = currentProfile.name;
-            currentUser.avatar = currentProfile.avatar;
-            window.currentUser = currentUser;
-            updateHeaderUserBar();
-          }
-
-          renderProfile(currentProfile);
-          closeEditModal();
-          showToast('Профиль успешно обновлен');
-        } else {
-          const errMsg = (data && data.error) || 'Ошибка сохранения профиля';
-          showEditError(errMsg);
-        }
-      })
-      .catch(function () {
-        if (saveBtn) saveBtn.disabled = false;
-        showEditError('Ошибка сети при сохранении профиля');
-      });
-  }
-
   function openAuthModal(triggerEl) {
     lastAuthTriggerEl = triggerEl || document.activeElement;
     const modal = document.getElementById('authModal');
@@ -4246,136 +3737,6 @@
       btnMore.addEventListener('click', copyProfileLink);
     }
 
-    // 3. Edit profile button
-    const btnEdit = document.getElementById('btnProfileEdit');
-    if (btnEdit) {
-      btnEdit.addEventListener('click', openEditModal);
-    }
-
-    // 4. Edit modal controls
-    const btnCloseEdit = document.getElementById('btnCloseEditProfileModal');
-    if (btnCloseEdit) {
-      btnCloseEdit.addEventListener('click', closeEditModal);
-    }
-
-    const btnCancelEdit = document.getElementById('btnCancelEditProfile');
-    if (btnCancelEdit) {
-      btnCancelEdit.addEventListener('click', closeEditModal);
-    }
-
-    const btnSave = document.getElementById('btnSaveProfile');
-    if (btnSave) {
-      btnSave.addEventListener('click', saveProfileEdit);
-    }
-
-    const btnChooseAvatar = document.getElementById('btnChooseAvatar');
-    if (btnChooseAvatar) {
-      btnChooseAvatar.addEventListener('click', handleChooseAvatar);
-    }
-
-    const btnRemoveAvatar = document.getElementById('btnRemoveAvatar');
-    if (btnRemoveAvatar) {
-      btnRemoveAvatar.addEventListener('click', handleRemoveAvatar);
-    }
-
-    const editAvatarFileInput = document.getElementById('editAvatarFileInput');
-    if (editAvatarFileInput) {
-      editAvatarFileInput.addEventListener('change', handleAvatarFileSelected);
-    }
-
-    const btnCropAvatar = document.getElementById('btnCropAvatar');
-    if (btnCropAvatar) {
-      btnCropAvatar.addEventListener('click', openAvatarCropModal);
-    }
-
-    const btnCloseCrop = document.getElementById('btnCloseAvatarCropModal');
-    if (btnCloseCrop) {
-      btnCloseCrop.addEventListener('click', closeAvatarCropModal);
-    }
-
-    const btnCancelCrop = document.getElementById('btnCancelAvatarCrop');
-    if (btnCancelCrop) {
-      btnCancelCrop.addEventListener('click', closeAvatarCropModal);
-    }
-
-    const btnApplyCrop = document.getElementById('btnApplyAvatarCrop');
-    if (btnApplyCrop) {
-      btnApplyCrop.addEventListener('click', applyAvatarCrop);
-    }
-
-    const zoomInput = document.getElementById('avatarCropZoom');
-    if (zoomInput) {
-      zoomInput.addEventListener('input', function (e) {
-        cropZoom = parseFloat(e.target.value) || 1;
-        drawAvatarCropCanvas();
-      });
-    }
-
-    const cropCanvas = document.getElementById('avatarCropCanvas');
-    if (cropCanvas) {
-      cropCanvas.addEventListener('mousedown', function (e) {
-        isDraggingCrop = true;
-        dragStartX = e.clientX - cropPanX;
-        dragStartY = e.clientY - cropPanY;
-      });
-      window.addEventListener('mousemove', function (e) {
-        if (!isDraggingCrop) return;
-        cropPanX = e.clientX - dragStartX;
-        cropPanY = e.clientY - dragStartY;
-        drawAvatarCropCanvas();
-      });
-      window.addEventListener('mouseup', function () {
-        isDraggingCrop = false;
-      });
-      cropCanvas.addEventListener('touchstart', function (e) {
-        if (e.touches && e.touches.length === 1) {
-          isDraggingCrop = true;
-          dragStartX = e.touches[0].clientX - cropPanX;
-          dragStartY = e.touches[0].clientY - cropPanY;
-        }
-      }, { passive: true });
-      window.addEventListener('touchmove', function (e) {
-        if (!isDraggingCrop || !e.touches || e.touches.length !== 1) return;
-        cropPanX = e.touches[0].clientX - dragStartX;
-        cropPanY = e.touches[0].clientY - dragStartY;
-        drawAvatarCropCanvas();
-      }, { passive: true });
-      window.addEventListener('touchend', function () {
-        isDraggingCrop = false;
-      });
-    }
-
-    const cropModal = document.getElementById('avatarCropModal');
-    if (cropModal) {
-      cropModal.addEventListener('click', function (e) {
-        if (e.target === cropModal) closeAvatarCropModal();
-      });
-    }
-
-    const inpName = document.getElementById('editProfileName');
-    if (inpName) {
-      inpName.addEventListener('input', function () {
-        clearEditError();
-        const previewImg = document.getElementById('editAvatarPreviewImg');
-        if (!previewImg || previewImg.style.display === 'none') {
-          const initialsSpan = document.getElementById('editAvatarInitials');
-          if (initialsSpan) initialsSpan.textContent = getInitials(inpName.value || 'SC');
-        }
-      });
-    }
-
-    ['editProfileSpec', 'editProfileCompany', 'editProfileWebsite', 'editProfileBio'].forEach(function (id) {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('input', clearEditError);
-    });
-
-    const editModal = document.getElementById('editProfileModal');
-    if (editModal) {
-      editModal.addEventListener('click', function (e) {
-        if (e.target === editModal) closeEditModal();
-      });
-    }
-
     // 5. Header user menu and auth controls
     const btnLogin = document.getElementById('headerLoginBtn');
     const userMenu = document.getElementById('headerUserMenu');
@@ -4678,12 +4039,6 @@
     // 6. Keyboard dismissals (Escape) and focus trap (Tab)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        const cropModal = document.getElementById('avatarCropModal');
-        if (cropModal && cropModal.style.display !== 'none') {
-          e.preventDefault();
-          closeAvatarCropModal();
-          return;
-        }
         const notifPopup = document.getElementById('headerNotifPopup');
         if (notifPopup && notifPopup.style.display !== 'none') {
           notifPopup.style.display = 'none';
@@ -4699,12 +4054,6 @@
         const reportModal = document.getElementById('articleReportModal');
         if (reportModal && reportModal.style.display !== 'none') {
           closeArticleReportModal();
-          return;
-        }
-        const editModal = document.getElementById('editProfileModal');
-        if (editModal && editModal.style.display !== 'none') {
-          e.preventDefault();
-          closeEditModal();
           return;
         }
         const authModal = document.getElementById('authModal');
@@ -4723,18 +4072,12 @@
 
       if (e.key === 'Tab') {
         let activeModal = null;
-        const cropModal = document.getElementById('avatarCropModal');
-        const editModal = document.getElementById('editProfileModal');
         const authModal = document.getElementById('authModal');
         const reportModal = document.getElementById('articleReportModal');
         const socialModal = document.getElementById('profileSocialModal');
         const userModal = document.getElementById('userProfileModal');
 
-        if (cropModal && cropModal.style.display !== 'none' && cropModal.style.display !== '') {
-          activeModal = cropModal;
-        } else if (editModal && editModal.style.display !== 'none' && editModal.style.display !== '') {
-          activeModal = editModal;
-        } else if (authModal && authModal.style.display !== 'none' && authModal.style.display !== '') {
+        if (authModal && authModal.style.display !== 'none' && authModal.style.display !== '') {
           activeModal = authModal;
         } else if (reportModal && reportModal.style.display !== 'none' && reportModal.style.display !== '') {
           activeModal = reportModal;
@@ -5364,23 +4707,6 @@
     getSearchQuery: function () { return currentSearchQuery; },
     toggleSubscription: toggleSubscription,
     copyProfileLink: copyProfileLink,
-    openEditModal: openEditModal,
-    closeEditModal: closeEditModal,
-    saveProfileEdit: saveProfileEdit,
-    handleChooseAvatar: handleChooseAvatar,
-    handleRemoveAvatar: handleRemoveAvatar,
-    handleAvatarFileSelected: handleAvatarFileSelected,
-    updateModalAvatarPreview: updateModalAvatarPreview,
-    showEditError: showEditError,
-    clearEditError: clearEditError,
-    getPendingAvatarData: function () { return pendingAvatarData; },
-    getUploadedAvatarUrl: function () { return uploadedAvatarUrl; },
-    getIsAvatarRemoved: function () { return isAvatarRemoved; },
-    openAvatarCropModal: openAvatarCropModal,
-    closeAvatarCropModal: closeAvatarCropModal,
-    applyAvatarCrop: applyAvatarCrop,
-    getLastCropTriggerEl: function () { return lastCropTriggerEl; },
-    getAvatarUploadSeq: function () { return avatarUploadSeq; },
     toggleArticleLike: toggleArticleLike,
     toggleArticleBookmark: toggleArticleBookmark,
     openArticleShare: openArticleShare,

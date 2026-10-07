@@ -881,7 +881,7 @@ class TestAccessibilityAndFocusRegressions(unittest.TestCase):
 
         # In Full Profile Page (profile-page.js)
         self.assertIn("function trapModalFocus(e, modalEl)", page_js)
-        self.assertIn("editProfileModal", page_js)
+        self.assertNotIn("editProfileModal", page_js, "editing moved to settings.html (Issue #234)")
         self.assertIn("authModal", page_js)
         self.assertIn("articleReportModal", page_js)
         self.assertIn("profileSocialModal", page_js)
@@ -892,7 +892,6 @@ class TestAccessibilityAndFocusRegressions(unittest.TestCase):
         with open(PROFILE_PAGE_JS_PATH, "r", encoding="utf-8") as f:
             page_js = f.read()
 
-        self.assertIn("lastEditTriggerEl.focus()", page_js)
         self.assertIn("lastAuthTriggerEl.focus()", page_js)
         self.assertIn("lastSocialTriggerEl.focus()", page_js)
         self.assertIn("modal._activeReportBtn.focus()", page_js)
@@ -1032,9 +1031,12 @@ class TestBrowserSmokeRegressions(BaseProfileTestCase):
                 self.assertIsNotNone(avatar_box)
                 self.assertIsNotNone(name_box)
 
-                # Name must be rendered below the avatar
-                self.assertGreater(name_box["y"], avatar_box["y"] + avatar_box["height"] - 5,
-                                   f"Avatar overlaps name on viewport {vp}")
+                # Name is next to the avatar on wide screens and below it on phones (Issue #234)
+                below = name_box["y"] > avatar_box["y"] + avatar_box["height"] - 5
+                beside = name_box["x"] > avatar_box["x"] + avatar_box["width"] - 5
+                self.assertTrue(below or beside, f"Avatar overlaps name on viewport {vp}")
+                if vp["width"] <= 640:
+                    self.assertTrue(below, f"On phones the name goes under the avatar ({vp})")
 
                 # Check horizontal overflow: page content width should not exceed viewport width
                 scroll_width = page.evaluate("() => document.documentElement.scrollWidth")

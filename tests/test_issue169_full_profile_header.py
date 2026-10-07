@@ -188,10 +188,10 @@ class TestIssue169FullProfileHeader(unittest.TestCase):
         # Copy profile link action
         self.assertIn("navigator.clipboard.writeText", js)
 
-        # Edit profile modal interaction
-        self.assertIn("openEditModal", js)
-        self.assertIn("saveProfileEdit", js)
-        self.assertIn("/api/user/profile", js)
+        # Editing lives on the settings page (Issue #234)
+        self.assertNotIn("openEditModal", js)
+        with open(os.path.join(FRONTEND_DIR, "profile.html"), "r", encoding="utf-8") as f:
+            self.assertIn('href="settings.html#profile" class="btn-profile-edit"', f.read())
 
     def test_05_http_endpoint_serving_profile_html_and_redirect(self):
         """Verify HTTP server serves profile.html on GET and redirects /user/:id via 302."""
