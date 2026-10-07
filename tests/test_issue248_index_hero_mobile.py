@@ -72,7 +72,9 @@ HERO_JS = """() => {
   const lines = [...range.getClientRects()];
   const buttons = [...document.querySelectorAll('.btn-hero')].map(b => {
     const r = b.getBoundingClientRect();
-    return {left: r.left, right: r.right, top: Math.round(r.top), h: Math.round(r.height)};
+    const cs = getComputedStyle(b);
+    return {left: r.left, right: r.right, top: Math.round(r.top), h: Math.round(r.height),
+            padding: cs.paddingTop + ' ' + cs.paddingLeft, font: cs.fontSize};
   });
   const out = [...document.querySelectorAll('main *')].filter(e => {
     const r = e.getBoundingClientRect();
@@ -143,7 +145,9 @@ class TestIssue248Browser(unittest.TestCase):
         self.assertEqual(r["fontSize"], 48)
         first, second = r["buttons"]
         self.assertEqual(first["top"], second["top"], "buttons stay in one row")
-        self.assertEqual({b["h"] for b in r["buttons"]}, {54})
+        # Pixel height depends on the platform font rendering; check the unchanged desktop styles instead
+        self.assertEqual({b["padding"] for b in r["buttons"]}, {"14px 32px"})
+        self.assertEqual({b["font"] for b in r["buttons"]}, {"17.6px"})
 
 
 if __name__ == "__main__":
