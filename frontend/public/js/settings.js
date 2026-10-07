@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tabs
     tabBtnProfile: document.getElementById('tabBtnProfile'),
     tabBtnSecurity: document.getElementById('tabBtnSecurity'),
+    tabBtnCompanies: document.getElementById('tabBtnCompanies'),
+    tabContentCompanies: document.getElementById('tabContentCompanies'),
+    companiesList: document.getElementById('settingsCompaniesList'),
     tabContentProfile: document.getElementById('tabContentProfile'),
     tabContentSecurity: document.getElementById('tabContentSecurity'),
     
@@ -88,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tabs
     if (elements.tabBtnProfile) elements.tabBtnProfile.addEventListener('click', () => switchTab('profile'));
     if (elements.tabBtnSecurity) elements.tabBtnSecurity.addEventListener('click', () => switchTab('security'));
+    if (elements.tabBtnCompanies) elements.tabBtnCompanies.addEventListener('click', () => switchTab('companies'));
 
     // Forms
     if (elements.profileForm) elements.profileForm.addEventListener('submit', handleProfileSave);
@@ -106,16 +110,39 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function switchTab(tab) {
-    if (tab === 'profile') {
-      elements.tabBtnProfile.classList.add('active');
-      elements.tabBtnSecurity.classList.remove('active');
-      elements.tabContentProfile.classList.add('active');
-      elements.tabContentSecurity.classList.remove('active');
-    } else {
-      elements.tabBtnSecurity.classList.add('active');
-      elements.tabBtnProfile.classList.remove('active');
-      elements.tabContentSecurity.classList.add('active');
-      elements.tabContentProfile.classList.remove('active');
+    const tabs = {
+      profile: [elements.tabBtnProfile, elements.tabContentProfile],
+      security: [elements.tabBtnSecurity, elements.tabContentSecurity],
+      companies: [elements.tabBtnCompanies, elements.tabContentCompanies]
+    };
+    Object.keys(tabs).forEach((name) => {
+      const [btn, content] = tabs[name];
+      if (btn) btn.classList.toggle('active', name === tab);
+      if (content) content.classList.toggle('active', name === tab);
+    });
+    if (tab === 'companies') loadCompanies();
+  }
+
+  async function loadCompanies() {
+    const list = elements.companiesList;
+    if (!list) return;
+    list.textContent = 'Загрузка...';
+    try {
+      const res = await fetch('/api/user/companies');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'error');
+      if (!data.items.length) {
+        list.innerHTML = '<p class="settings-companies-empty">У вас пока нет компаний.</p>';
+        return;
+      }
+      const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      list.innerHTML = data.items.map((c) => `
+        <a class="settings-company-row" href="company.html?id=${encodeURIComponent(c.id)}">
+          <span class="settings-company-name">${esc(c.name)}</span>
+          <span class="settings-company-role">${c.role === 'owner' ? 'Владелец' : 'Автор'}</span>
+        </a>`).join('');
+    } catch (err) {
+      list.innerHTML = '<p class="settings-companies-empty">Не удалось загрузить компании.</p>';
     }
   }
 

@@ -10,6 +10,7 @@ from backend import config
 from backend.config import VALID_STATUSES
 from backend.content import extract_article_text
 from backend.seeds import seed_database
+from backend.companies import migrate_company_schema
 from backend.users import bootstrap_admin, migrate_legacy_profiles
 
 
@@ -454,6 +455,7 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
 
     migrate_legacy_profiles(conn)
     bootstrap_admin(conn)
+    migrate_company_schema(conn)
 
     return conn
 

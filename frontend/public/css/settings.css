@@ -267,3 +267,53 @@ textarea.settings-form-control {
     padding: 12px;
   }
 }
+
+/* My companies tab */
+.settings-companies-lead {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.settings-companies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.settings-company-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.settings-company-row:hover {
+  border-color: var(--accent-color);
+}
+
+.settings-company-name {
+  font-weight: 600;
+}
+
+.settings-company-role {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.settings-companies-empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.settings-companies-create {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
