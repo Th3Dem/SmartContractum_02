@@ -48,7 +48,7 @@
   width: 360px;
   max-height: 420px;
   overflow-y: auto;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -90,7 +90,7 @@
 }
 
 .notif-mark-read-btn:hover {
-  background-color: var(--bg-primary);
+  background-color: var(--bg-hover);
   text-decoration: underline;
 }
 
