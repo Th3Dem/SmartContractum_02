@@ -7150,20 +7150,8 @@
     }
     })();
 
-    // 7. User Profile Modal (delegated to profile.js)
+    // 7. Author mini card (profile.js handles hover, click, touch and keyboard)
     initUserProfileModal();
-
-    document.addEventListener('click', function (e) {
-      const authorBtn = e.target.closest('.btn-author-profile');
-      if (authorBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const authorId = authorBtn.getAttribute('data-author-id') || authorBtn.getAttribute('data-user-id');
-        if (authorId) {
-          openUserProfileModal(authorId);
-        }
-      }
-    }, true);
   }
 
   function initUserProfileModal() {

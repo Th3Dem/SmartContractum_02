@@ -239,7 +239,10 @@
       authorHtml =
         '<div class="card-meta">' +
           '<div class="author-info">' +
-            '<div class="author-avatar"' + (isPreview ? ' id="preview-card-avatar"' : '') + '>' + authorAvatarInner + '</div>' +
+            (isPreview
+              ? '<div class="author-avatar" id="preview-card-avatar">' + authorAvatarInner + '</div>'
+              // The avatar opens the author card on hover and click; the name is the keyboard stop (Issue #271)
+              : '<div class="author-avatar btn-author-profile" data-author-id="' + escapeHtml(authorId) + '" data-user-id="' + escapeHtml(authorId) + '" aria-hidden="true">' + authorAvatarInner + '</div>') +
             '<div class="author-details">' +
               '<div style="display: flex; align-items: center; flex-wrap: wrap;">' +
                 (isPreview

@@ -413,25 +413,14 @@ class TestIssue21EliminateDoubleEscaping(unittest.TestCase):
             "article.js must escape comment.content using escapeHtml()",
         )
 
-        # User profile modal (profile.js or feed.js) must escape u.name, u.specialization, u.company, u.bio
-        target_modal_js = profile_js if profile_js else feed_js
-        self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.name", target_modal_js)),
-            "profile.js or feed.js must escape u.name using escapeHtml()",
-        )
-        self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.specialization\s*\)", target_modal_js)),
-            "profile.js or feed.js must escape u.specialization using escapeHtml()",
-        )
-        self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.company\s*\)", target_modal_js)),
-            "profile.js or feed.js must escape u.company using escapeHtml()",
-        )
-        self.assertTrue(
-            bool(re.search(r"escapeHtml\(\s*u\.bio\s*\)", target_modal_js)),
-            "profile.js or feed.js must escape u.bio using escapeHtml()",
-        )
-
+        # Author card (profile.js, Issues #271, #272) must escape every user field it renders.
+        # The card shows name, initials, bio and the profile link; specialization and company
+        # live only on the full profile page.
+        for field in ("name", "initials", "bio", "profileUrl", "p.avatar"):
+            self.assertTrue(
+                bool(re.search(r"escapeHtml\(\s*" + re.escape(field) + r"\s*\)", profile_js)),
+                "profile.js must escape %s using escapeHtml()" % field,
+            )
 
 if __name__ == "__main__":
     unittest.main()

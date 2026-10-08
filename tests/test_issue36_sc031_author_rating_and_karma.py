@@ -586,7 +586,8 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         with open(profile_js_path, "r", encoding="utf-8") as f:
             profile_js = f.read()
 
-        self.assertIn("user-profile-rating-num", profile_js)
+        # Quick profile is the author mini card since Issues #271, #272
+        self.assertIn("author-card-rating", profile_js)
         self.assertIn("Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются", profile_js)
         self.assertIn("Рейтинг", profile_js)
 
@@ -601,19 +602,14 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
             article_js = f.read()
         self.assertIn("SmartContractumProfile", article_js)
 
-        # 3. HTML modals
-        feed_html_path = os.path.join(repo_root, "frontend", "public", "feed.html")
-        with open(feed_html_path, "r", encoding="utf-8") as f:
-            feed_html = f.read()
-        self.assertIn('id="userProfileModal"', feed_html)
-
-        article_html_path = os.path.join(repo_root, "frontend", "public", "article.html")
-        with open(article_html_path, "r", encoding="utf-8") as f:
-            article_html = f.read()
-        self.assertIn('id="userProfileModal"', article_html)
+        # 3. The card is created by profile.js; pages no longer carry static modal markup
+        for page in ("feed.html", "article.html"):
+            with open(os.path.join(repo_root, "frontend", "public", page), "r", encoding="utf-8") as f:
+                self.assertNotIn('id="userProfileModal"', f.read(), page)
+        self.assertIn("card.id = 'authorCard'", profile_js)
 
         # 4. Strict Quality Standards
-        self.assertNotIn("\u2014", feed_js[feed_js.find("openUserProfileModal"):feed_js.find("openUserProfileModal") + 2000])
+        self.assertNotIn("\u2014", profile_js)
 
     def test_09_shared_profile_css_and_responsive_grid(self):
         """
@@ -633,50 +629,23 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         with open(profile_css_path, "r", encoding="utf-8") as f:
             profile_css = f.read()
 
-        # Contains core modal and profile classes
-        self.assertIn(".feed-modal-overlay", profile_css)
-        self.assertIn(".user-profile-modal-card", profile_css)
-        self.assertIn(".user-profile-modal-overlay", profile_css)
-        self.assertIn(".user-profile-stats", profile_css)
-        self.assertIn(".user-profile-stat-box", profile_css)
+        # Since Issues #271, #272 the quick profile is the author mini card, styled in profile.css
+        for cls in (".author-card", ".author-card-stats", ".author-card-stat", ".author-card-rating"):
+            self.assertIn(cls, profile_css)
 
-        # Overlay z-index stacks properly above headers (9999)
-        self.assertIn("z-index: 9999", profile_css)
-
-        # 2x2 grid on mobile/narrow screens
-        self.assertIn("grid-template-columns: repeat(2, 1fr)", profile_css)
-        self.assertIn("@media (max-width: 640px)", profile_css)
+        # Card stacks above the sticky header and fits narrow screens
+        self.assertIn("z-index: 1200", profile_css)
+        self.assertIn("max-width: calc(100vw - 24px)", profile_css)
 
         # Linked in both feed.html and article.html
-        feed_html_path = os.path.join(repo_root, "frontend", "public", "feed.html")
-        with open(feed_html_path, "r", encoding="utf-8") as f:
-            feed_html = f.read()
-        self.assertIn('<link rel="stylesheet" href="css/profile.css">', feed_html)
-        self.assertIn('class="feed-modal-overlay user-profile-modal-overlay"', feed_html)
+        for page in ("feed.html", "article.html"):
+            with open(os.path.join(repo_root, "frontend", "public", page), "r", encoding="utf-8") as f:
+                html = f.read()
+            self.assertIn('<link rel="stylesheet" href="css/profile.css">', html, page)
+            self.assertNotIn("user-profile-modal-overlay", html, page)
 
-        article_html_path = os.path.join(repo_root, "frontend", "public", "article.html")
-        with open(article_html_path, "r", encoding="utf-8") as f:
-            article_html = f.read()
-        self.assertIn('<link rel="stylesheet" href="css/profile.css">', article_html)
-        self.assertIn('class="feed-modal-overlay user-profile-modal-overlay"', article_html)
-
-        # CSS Isolation Verification:
+        # CSS isolation: generic modal classes stay scoped under the legacy quick profile selectors
         css_clean = re.sub(r'/\*.*?\*/', '', profile_css, flags=re.DOTALL)
-
-        # 1. Ensure no un-scoped global rules exist for generic modal classes
-        unscoped_patterns = [
-            r'(?m)^\s*\.feed-modal-overlay\s*[{,]',
-            r'(?m)^\s*\.feed-modal-header\s*[{,]',
-            r'(?m)^\s*\.feed-modal-title-wrap\s*[{,]',
-            r'(?m)^\s*\.feed-modal-title\s*[{,]',
-            r'(?m)^\s*\.feed-modal-close-btn\s*[{,:]',
-            r'(?m)^\s*\.feed-modal-body\s*[{,]',
-        ]
-        for pattern in unscoped_patterns:
-            matches = re.findall(pattern, css_clean)
-            self.assertEqual(len(matches), 0, f"Un-scoped global rule found matching pattern: {pattern}")
-
-        # 2. Ensure every selector targeting generic modal classes is scoped under #userProfileModal or .user-profile-modal-card / .user-profile-modal-overlay
         generic_modal_classes = [
             '.feed-modal-overlay',
             '.feed-modal-card',
@@ -687,22 +656,21 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
             '.feed-modal-body',
         ]
         for match in re.finditer(r'([^{}]+)\{([^{}]+)\}', css_clean):
-            selector_group = match.group(1).strip()
-            selectors = [s.strip() for s in selector_group.split(',')]
-            if any(s.startswith('@') for s in selectors):
+            selectors = [x.strip() for x in match.group(1).strip().split(',')]
+            if any(x.startswith('@') for x in selectors):
                 continue
             for sel in selectors:
                 for gen_cls in generic_modal_classes:
                     if gen_cls in sel:
-                        is_scoped = (
+                        self.assertTrue(
                             '#userProfileModal' in sel or
                             '.user-profile-modal-card' in sel or
-                            '.user-profile-modal-overlay' in sel
+                            '.user-profile-modal-overlay' in sel,
+                            f"Selector '{sel}' containing generic class '{gen_cls}' is not scoped"
                         )
-                        self.assertTrue(
-                            is_scoped,
-                            f"Selector '{sel}' containing generic class '{gen_cls}' is not properly scoped under #userProfileModal or .user-profile-modal-card / .user-profile-modal-overlay"
-                        )
+                # The author card never restyles global modal classes
+                if '.author-card' in sel:
+                    self.assertNotIn('.feed-modal', sel)
 
     def test_10_behavioral_profile_modal_abort_focus_and_escape(self):
         """
@@ -1056,34 +1024,32 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
         self.assertEqual(len(closed_voted_tasks), 0, "smartcontractum:voted must do nothing when modal is closed")
 
         # --- SCENARIO 7: Source Code Architectural Conformity ---
-        for js_filename in ["profile.js"]:
-            js_path = os.path.join(repo_root, "frontend", "public", "js", js_filename)
-            with open(js_path, "r", encoding="utf-8") as f:
-                js_content = f.read()
+        # The simulation above mirrors the author mini card (Issues #271, #272) in profile.js.
+        js_path = os.path.join(repo_root, "frontend", "public", "js", "profile.js")
+        with open(js_path, "r", encoding="utf-8") as f:
+            js_content = f.read()
 
-            # Lifecycle methods and sequence token
-            self.assertIn("function closeUserProfileModal", js_content)
-            self.assertIn("function openUserProfileModal", js_content)
-            self.assertIn("profileRequestSeq", js_content)
-            self.assertIn("currentOpenUserId", js_content)
-            self.assertIn("lastProfileTriggerEl", js_content)
+        # Lifecycle methods (legacy names kept for callers) and sequence token
+        self.assertIn("function closeUserProfileModal", js_content)
+        self.assertIn("function openUserProfileModal", js_content)
+        self.assertIn("function openCard", js_content)
+        self.assertIn("function closeCard", js_content)
+        self.assertIn("var seq = ++cardState.seq", js_content)
 
-            # AbortController instantiation and signal assignment
-            self.assertIn("new AbortController()", js_content)
-            self.assertIn("profileAbortController.abort()", js_content)
-            self.assertIn("signal: profileAbortController.signal", js_content)
+        # AbortController instantiation, signal assignment and abort on close/switch
+        self.assertIn("new AbortController()", js_content)
+        self.assertIn("cardState.abort.abort()", js_content)
+        self.assertIn("signal: cardState.abort.signal", js_content)
 
-            # Discard stale response condition
-            self.assertIn("seq !== profileRequestSeq || currentOpenUserId !== userId", js_content)
+        # Discard stale response condition
+        self.assertIn("seq !== cardState.seq || cardState.userId !== userId", js_content)
 
-            # Focus restoration
-            self.assertIn("lastProfileTriggerEl.focus()", js_content)
-
-            # Event listeners
-            self.assertIn("btnCloseUserProfileModal", js_content)
-            self.assertIn("e.key === 'Escape'", js_content)
-            self.assertIn(".btn-author-profile", js_content)
-            self.assertIn("smartcontractum:voted", js_content)
+        # Focus restoration and event listeners
+        self.assertIn("closeCard(true)", js_content)
+        self.assertIn("trigger.focus(", js_content)
+        self.assertIn("e.key === 'Escape'", js_content)
+        self.assertIn(".btn-author-profile", js_content)
+        self.assertIn("smartcontractum:voted", js_content)
 
         # In feed.js and article.js, verify wrapper functions delegate to profile.js
         for caller_js in ["feed.js", "article.js"]:
@@ -1094,7 +1060,6 @@ class TestIssue36AuthorRatingAndKarma(unittest.TestCase):
             self.assertIn("function openUserProfileModal", c_content)
             self.assertIn("function closeUserProfileModal", c_content)
             self.assertIn("SmartContractumProfile", c_content)
-
 
 if __name__ == "__main__":
     unittest.main()
