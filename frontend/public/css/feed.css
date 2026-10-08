@@ -2606,6 +2606,34 @@ button.author-name:focus-visible,
   border-radius: 2px;
 }
 
+/* The card avatar is an author card trigger too (Issue #271); the button reset above must not
+   strip its look (Issue #282). Same idea as .article-author-avatar.btn-author-profile (#108). */
+.author-avatar.btn-author-profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #3861fb 0%, #38bdf8 100%);
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
+}
+
+.author-avatar.btn-author-profile:hover {
+  color: #ffffff;
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.author-avatar.btn-author-profile:focus-visible {
+  border-radius: var(--radius-md);
+}
+
 .meta-sub-row {
   display: flex;
   align-items: center;

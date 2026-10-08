@@ -1064,6 +1064,43 @@ body,
 }
 
 /* Spoilers */
+/* Image with caption from the editor (Issue #280), same look as the editor preview */
+.article-body-content .editor-figure {
+  margin: 2em 0;
+  text-align: center;
+}
+
+.article-body-content .editor-figure img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md, 8px);
+}
+
+.article-body-content .editor-figure figcaption {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.article-body-content .editor-figure.align-full img {
+  width: 100%;
+}
+
+@media (min-width: 769px) {
+  .article-body-content .editor-figure.align-left {
+    float: left;
+    max-width: 48%;
+    margin: 0.5em 1.5em 1em 0;
+  }
+
+  .article-body-content .editor-figure.align-right {
+    float: right;
+    max-width: 48%;
+    margin: 0.5em 0 1em 1.5em;
+  }
+}
+
 .editor-spoiler {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
