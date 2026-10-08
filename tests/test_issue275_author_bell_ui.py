@@ -389,9 +389,10 @@ class TestAuthorBellBrowser(unittest.TestCase):
 
             # turning off removes the row, updates the count and keeps subscriptions
             page.locator(".social-bell-off").click()
+            # the count drops at once; the empty text comes with the server answer
             page.wait_for_function("() => document.getElementById('socialSubBellsCount').textContent === '22'", timeout=5000)
+            page.wait_for_function("() => document.getElementById('profileSocialList').textContent.includes('Никого не нашли')", timeout=5000)
             self.assertEqual(page.locator(".social-bell-row").count(), 0)
-            self.assertIn("Никого не нашли", page.locator("#profileSocialList").inner_text())
             self.assertEqual(page.locator("#ownerNavAuthorBellsCount").inner_text(), "22")
 
             # the unavailable author can be removed
@@ -399,6 +400,8 @@ class TestAuthorBellBrowser(unittest.TestCase):
             page.wait_for_function("() => document.querySelectorAll('.social-bell-row').length === 1", timeout=5000)
             page.locator(".social-bell-off").click()
             page.wait_for_function("() => document.getElementById('socialSubBellsCount').textContent === '21'", timeout=5000)
+            page.wait_for_function("() => document.getElementById('profileSocialList').textContent.includes('Никого не нашли')", timeout=5000)
+            self.assertFalse(self.bell_on("bu_reader", self.extra[0]))
             self.assertTrue(self.subscribed("bu_reader", self.extra[1]), "turning bells off never unsubscribes")
 
             # empty state explains how to turn it on
