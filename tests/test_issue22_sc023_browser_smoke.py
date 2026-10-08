@@ -45,6 +45,7 @@ except ImportError:
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 WORKFLOW_PATH = os.path.join(PROJECT_ROOT, ".github", "workflows", "ci.yml")
 
 
@@ -141,11 +142,14 @@ class TestCIWorkflowConfiguration(unittest.TestCase):
             "Step for installing Playwright and chromium is missing"
         )
 
-        # 5. Browser smoke tests
+        # 5. Browser smoke tests: the runner collects every module with BROWSER_SMOKE = True (Issue #264)
         self.assertTrue(
-            any("tests/test_issue22_sc023_browser_smoke.py" in r for r in step_runs),
+            any("python3 -m tests.run_browser_smoke" in r for r in step_runs),
             "Step for running browser smoke tests is missing"
         )
+        from tests.run_browser_smoke import discover_modules
+        self.assertIn("test_issue22_sc023_browser_smoke", discover_modules(),
+                      "this module must be collected by the browser smoke runner")
 
     def test_05_zero_emojis_in_workflow_and_suite(self) -> None:
         """Zero emojis in ci.yml and test_issue22_sc023_browser_smoke.py."""

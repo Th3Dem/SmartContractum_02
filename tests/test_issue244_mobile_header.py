@@ -33,6 +33,7 @@ from server import create_server, init_db
 from tests.auth_helpers import upload_auth_headers
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 
 PAGES = [
     "index.html", "feed.html", "article.html", "editor.html", "question-editor.html",
