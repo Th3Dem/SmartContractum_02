@@ -1,6 +1,7 @@
 """Moderation panel and user administration for moderators and administrators."""
 import datetime
 import json
+import sqlite3
 import sys
 import urllib.parse
 import uuid
@@ -217,7 +218,14 @@ class AdminHandlers:
 
         conn = self.get_db()
         try:
-            ok, err, row = decide(conn, submission_id, user, decision, reason_code, comment)
+            try:
+                ok, err, row = decide(conn, submission_id, user, decision, reason_code, comment)
+            except sqlite3.Error as e:
+                # The decision and the reader notifications share one transaction (Issue #274): nothing was saved
+                sys.stderr.write(f"[moderation] decision for {submission_id} rolled back: {e}\n")
+                self.send_json_response(503, {"success": False, "code": "decision_not_saved",
+                                              "error": "Решение не сохранено, повторите попытку"})
+                return
             if not ok:
                 messages = {
                     "not_found": (404, "Материал не найден"),

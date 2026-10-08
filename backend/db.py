@@ -600,10 +600,24 @@ def update_submission_status(submission_id: str, new_status: str, db_path: Optio
 
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with conn:
-            cur = conn.execute(
-                "UPDATE moderation_submissions SET status = ?, updated_at = ? WHERE id = ?",
-                (new_status, now_iso, submission_id)
-            )
+            if new_status == "approved":
+                # Only a transition into 'approved' publishes; repeating it changes nothing
+                cur = conn.execute(
+                    "UPDATE moderation_submissions SET status = ?, updated_at = ? WHERE id = ? AND status != 'approved'",
+                    (new_status, now_iso, submission_id)
+                )
+                if cur.rowcount == 0:
+                    row = conn.execute("SELECT 1 FROM moderation_submissions WHERE id = ?", (submission_id,)).fetchone()
+                    return row is not None
+            else:
+                cur = conn.execute(
+                    "UPDATE moderation_submissions SET status = ?, updated_at = ? WHERE id = ?",
+                    (new_status, now_iso, submission_id)
+                )
+            if cur.rowcount > 0 and new_status == "approved":
+                # Same transaction as the status change (Issue #274)
+                from backend.author_delivery import deliver_author_material
+                deliver_author_material(conn, submission_id, now_iso)
             return cur.rowcount > 0
     finally:
         conn.close()

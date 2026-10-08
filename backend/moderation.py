@@ -5,6 +5,8 @@ import sqlite3
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.author_delivery import AUTHOR_NOTIFICATION_TYPES, deliver_author_material
+from backend.author_delivery import ensure_schema as ensure_author_delivery_schema
 from backend.db import can_user_publish_for_company
 
 # Decision -> resulting submission status
@@ -37,8 +39,13 @@ STATUS_LABELS = {
     "draft": "Заменено новой версией",
 }
 
-NOTIFICATION_TYPES = ("new_answer", "new_reply", "solution_accepted",
-                      "moderation_approved", "moderation_revision", "moderation_rejected")
+# Earlier CHECK lists of user_notifications.type, oldest first; each is migrated to NOTIFICATION_TYPES
+_LEGACY_NOTIFICATION_TYPES = (
+    ("new_answer", "new_reply", "solution_accepted"),
+    ("new_answer", "new_reply", "solution_accepted",
+     "moderation_approved", "moderation_revision", "moderation_rejected"),
+)
+NOTIFICATION_TYPES = _LEGACY_NOTIFICATION_TYPES[-1] + AUTHOR_NOTIFICATION_TYPES
 
 
 def _now() -> datetime.datetime:
@@ -102,12 +109,31 @@ def migrate_moderation_schema(conn: sqlite3.Connection) -> None:
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_decisions_submission ON moderation_decisions(submission_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_moderation_decisions_created ON moderation_decisions(created_at)")
-    _rebuild_check(
-        conn, "user_notifications",
-        "CHECK(type IN ('new_answer', 'new_reply', 'solution_accepted'))",
-        "CHECK(type IN (" + ", ".join(f"'{t}'" for t in NOTIFICATION_TYPES) + "))",
-    )
+    _migrate_notifications(conn)
     conn.commit()
+
+
+def _type_check(types) -> str:
+    return "CHECK(type IN (" + ", ".join(f"'{t}'" for t in types) + "))"
+
+
+def _migrate_notifications(conn: sqlite3.Connection) -> None:
+    """Extends the type CHECK and adds the material key of author notifications with its uniqueness (Issue #274)."""
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'user_notifications'").fetchone()
+    new_check = _type_check(NOTIFICATION_TYPES)
+    if row and new_check not in row[0]:
+        old = next((_type_check(t) for t in reversed(_LEGACY_NOTIFICATION_TYPES) if _type_check(t) in row[0]), None)
+        if old is None:
+            raise RuntimeError("Unexpected schema of user_notifications; cannot extend its CHECK constraint")
+        _rebuild_check(conn, "user_notifications", old, new_check)
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(user_notifications)")}
+    if "material_id" not in columns:
+        conn.execute("ALTER TABLE user_notifications ADD COLUMN material_id TEXT")
+    ensure_author_delivery_schema(conn)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_notifications_material
+        ON user_notifications(user_id, type, material_id) WHERE material_id IS NOT NULL
+    """)
 
 
 def material_type_of(settings_json: Optional[str]) -> str:
@@ -221,6 +247,8 @@ def decide(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (f"dec_{uuid.uuid4().hex[:16]}", submission_id, row["draft_id"], row["author_id"], moderator["id"],
               decision, stored_reason, comment or None, now.isoformat()))
+        if status == "approved":
+            deliver_author_material(conn, submission_id, now.isoformat())
     after = conn.execute("SELECT * FROM moderation_submissions WHERE id = ?", (submission_id,)).fetchone()
     return True, None, after
 

@@ -11,6 +11,9 @@
     unreadCount: 0,
     notifications: [],
     activeFetchPromise: null,
+    activeFetchUserId: null,
+    // Bumped on every request and on sign-out: a late response of an older request or account is dropped
+    fetchSeq: 0,
 
     init: function() {
       this.btn = document.getElementById('headerNotificationsBtn');
@@ -49,11 +52,18 @@
 
       window.addEventListener('auth:change', (e) => {
         if (e.detail && e.detail.authenticated && e.detail.user) {
+          const switched = !this.currentUser || this.currentUser.id !== e.detail.user.id;
           this.currentUser = e.detail.user;
+          if (switched) {
+            // Another account: never show the previous user's list while the new one loads
+            this.fetchSeq++;
+            this.resetUI();
+          }
           this.fetchNotifications();
           this.startPolling();
         } else {
           this.currentUser = null;
+          this.fetchSeq++;
           this.stopPolling();
           this.resetUI();
         }
@@ -119,6 +129,7 @@
 
     resetUI: function() {
       this.unreadCount = 0;
+      this.notifications = [];
       if (this.badge) {
         this.badge.style.display = 'none';
         this.badge.textContent = '';
@@ -133,17 +144,19 @@
 
       const currentUserId = this.currentUser.id;
 
-      if (this.activeFetchPromise) {
+      if (this.activeFetchPromise && this.activeFetchUserId === currentUserId) {
         return this.activeFetchPromise;
       }
 
-      this.activeFetchPromise = fetch('/api/notifications')
+      const seq = ++this.fetchSeq;
+      this.activeFetchUserId = currentUserId;
+      const request = fetch('/api/notifications', { credentials: 'same-origin' })
         .then(res => {
           if (!res.ok) throw new Error('Failed to fetch notifications');
           return res.json();
         })
         .then(data => {
-          if (!this.currentUser || this.currentUser.id !== currentUserId) {
+          if (seq !== this.fetchSeq || !this.currentUser || this.currentUser.id !== currentUserId) {
             return;
           }
           this.unreadCount = data.unreadCount || 0;
@@ -154,10 +167,14 @@
           console.error('Error fetching notifications:', err);
         })
         .finally(() => {
-          this.activeFetchPromise = null;
+          if (this.activeFetchPromise === request) {
+            this.activeFetchPromise = null;
+            this.activeFetchUserId = null;
+          }
         });
 
-      return this.activeFetchPromise;
+      this.activeFetchPromise = request;
+      return request;
     },
 
     updateUI: function() {
@@ -188,8 +205,19 @@
 
         const item = document.createElement('a');
         item.className = 'notif-item ' + (isRead ? 'is-read' : 'is-unread');
+        const isAuthorMaterial = n.type === 'author_publication' || n.type === 'author_question';
+        const unavailable = isAuthorMaterial && n.available === false;
+        if (isAuthorMaterial) {
+          item.classList.add('notif-item-author');
+          item.setAttribute('data-notif-type', n.type);
+        }
 
-        if (n.type === 'moderation_revision' || n.type === 'moderation_rejected') {
+        if (unavailable) {
+          // The material is no longer public: no link, no title, only the neutral text from the server
+          item.href = '#';
+          item.classList.add('is-unavailable');
+          item.setAttribute('role', 'button');
+        } else if (n.type === 'moderation_revision' || n.type === 'moderation_rejected') {
           item.href = 'my-materials.html';
         } else {
           const articleId = encodeURIComponent(rawArticleId);
@@ -205,6 +233,7 @@
         `;
 
         item.addEventListener('click', (e) => {
+          if (unavailable) e.preventDefault();
           if (!isRead) {
             this.markAsRead(n.id, item);
           }
@@ -215,19 +244,31 @@
     },
 
     markAsRead: function(notificationId, itemElement) {
+      const userId = this.currentUser && this.currentUser.id;
+      const notif = (this.notifications || []).find(x => x.id === notificationId);
+      if (notif) notif.isRead = true;
+      // keepalive: the click also navigates to the material, the request must outlive the page
       fetch('/api/notifications/read', {
         method: 'POST',
+        keepalive: true,
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ notificationId: notificationId })
       }).then(res => {
+        if (!this.currentUser || this.currentUser.id !== userId) return;
         if (res.ok) {
-          itemElement.classList.remove('is-unread');
-          itemElement.classList.add('is-read');
-          this.unreadCount = Math.max(0, this.unreadCount - 1);
-          this.updateUIBadgeOnly();
+          return res.json().then(data => {
+            if (!this.currentUser || this.currentUser.id !== userId) return;
+            itemElement.classList.remove('is-unread');
+            itemElement.classList.add('is-read');
+            this.unreadCount = data && typeof data.unreadCount === 'number'
+              ? data.unreadCount
+              : Math.max(0, this.unreadCount - 1);
+            this.updateUIBadgeOnly();
+          });
         }
+        if (notif) notif.isRead = false;
       }).catch(err => console.error('Error marking read:', err));
     },
 
@@ -236,6 +277,7 @@
         return;
       }
 
+      const userId = this.currentUser && this.currentUser.id;
       fetch('/api/notifications/read', {
         method: 'POST',
         headers: {
@@ -243,6 +285,7 @@
         },
         body: JSON.stringify({})
       }).then(res => {
+        if (!this.currentUser || this.currentUser.id !== userId) return;
         if (res.ok) {
           this.unreadCount = 0;
           this.updateUIBadgeOnly();
@@ -254,7 +297,7 @@
             });
           }
           if (this.notifications) {
-            this.notifications.forEach(n => n.is_read = true);
+            this.notifications.forEach(n => { n.isRead = true; n.is_read = true; });
           }
         }
       }).catch(err => console.error('Error marking all read:', err));
