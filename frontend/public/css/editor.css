@@ -39,7 +39,8 @@
    Base & Resets
    ========================================================================== */
 /* KaTeX formulas keep their own fonts and spacing (Issue #263) */
-:not(.katex, .katex *), :not(.katex, .katex *)::before, :not(.katex, .katex *)::after {
+/* :where keeps the zero specificity of the former * selector, so page rules still override the reset */
+:where(:not(.katex, .katex *)), :where(:not(.katex, .katex *))::before, :where(:not(.katex, .katex *))::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
