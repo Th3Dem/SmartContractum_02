@@ -24,6 +24,7 @@ from backend.handlers.communities import CommunitiesHandlers
 from backend.handlers.company_profile import CompanyProfileHandlers
 from backend.handlers.moderation import ModerationHandlers
 from backend.handlers.notifications import NotificationsHandlers
+from backend.handlers.author_notifications import AuthorNotificationsHandlers
 from backend.handlers.drafts import DraftsHandlers
 from backend.handlers.media import MediaHandlers
 
@@ -45,6 +46,7 @@ class ModerationRequestHandler(
     ModerationHandlers,
     AdminHandlers,
     NotificationsHandlers,
+    AuthorNotificationsHandlers,
     DraftsHandlers,
     MediaHandlers,
     http.server.SimpleHTTPRequestHandler,

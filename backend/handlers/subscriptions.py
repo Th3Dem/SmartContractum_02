@@ -6,6 +6,7 @@ import urllib.parse
 from backend.config import LEGACY_MATERIAL_TYPES, MAX_JSON_BODY_BYTES, VALID_MATERIAL_TYPES
 from backend.content import STANDARD_TOPICS, normalize_keyword
 from backend.identity import author_identities
+from backend.handlers.author_notifications import clear_author_notifications
 
 
 class SubscriptionsHandlers:
@@ -268,6 +269,10 @@ class SubscriptionsHandlers:
                         WHERE user_id = ? AND target_type = ? AND target_id = ?
                     """, (user["id"], target_type, normalized_id))
                     excluded = True
+
+            # Issue #273: hiding an author also turns their bell off; removing the exclusion does not turn it on
+            if excluded and target_type == "author":
+                clear_author_notifications(cur, user["id"], [normalized_id])
 
         self.send_json_response(200, {
             "success": True,
@@ -732,6 +737,7 @@ class SubscriptionsHandlers:
                     for item in exc_to_add:
                         conn.execute("DELETE FROM user_subscriptions WHERE user_id = ? AND target_type = ? AND target_id = ?",
                                      (item[0], item[1], item[2]))
+                    clear_author_notifications(conn, user["id"], [item[2] for item in exc_to_add if item[1] == "author"])
 
         self.send_json_response(200, {
             "success": True,
