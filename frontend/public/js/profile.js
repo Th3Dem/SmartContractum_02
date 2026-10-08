@@ -71,12 +71,228 @@
   var AUTHOR_CARD_GAP = 8;
   var AUTHOR_CARD_EDGE = 12;
   var AUTHOR_CARD_CACHE_TTL = 60000;
-  // The bell is drawn here (#272) and wired to the API in #275; until then it is not shown.
-  var AUTHOR_BELL_ENABLED = false;
+  // The bell (#272) is wired to the API through SCAuthorBell (#275)
+  var AUTHOR_BELL_ENABLED = true;
 
   var BELL_ICON_OFF = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>';
   var BELL_ICON_ON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" fill="none"></path></svg>';
   var STAR_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>';
+
+  /* ==========================================================================
+     Author notification bell (Issue #275): one client for the mini card, the full
+     profile header and the "Авторы с уведомлениями" list. The server state from
+     PUT /api/authors/<id>/notifications is the only truth; every change is announced
+     with 'smartcontractum:author-notifications' in this tab and, through a
+     BroadcastChannel, in other tabs of the same account.
+     ========================================================================== */
+
+  var BELL_LABEL_OFF = 'Уведомлять о новых публикациях и вопросах';
+  var BELL_LABEL_ON = 'Отключить уведомления автора';
+  var BELL_HINT = 'Подписка добавляет автора в вашу ленту. Колокольчик включает уведомления.';
+  var BELL_KEPT_ON_UNSUBSCRIBE = 'Уведомления автора остаются включены';
+  var BELL_EXCLUDED = 'Автор скрыт из вашей ленты. Сначала уберите его из исключений.';
+  var BELL_FAILED = 'Не удалось изменить уведомления. Попробуйте еще раз';
+  var BELL_EVENT = 'smartcontractum:author-notifications';
+  var SUBSCRIPTION_EVENT = 'smartcontractum:author-subscription';
+  var AUTH_INTENT_TTL = 10 * 60 * 1000;
+
+  function currentViewerId() {
+    var u = (window.SCAuth && window.SCAuth.currentUser) || window.currentUser || null;
+    return u && u.id ? u.id : 'guest';
+  }
+
+  var bellChannel = null;
+  try {
+    if (typeof BroadcastChannel !== 'undefined') bellChannel = new BroadcastChannel('sc-author-state');
+  } catch (e) { bellChannel = null; }
+
+  var bellClient = {
+    pending: {},
+    enabled: {},          // authorId -> bool, last state known from the server for this viewer
+    viewer: null,
+    count: null,          // number of authors with the bell on (not unread notifications)
+    listPromise: null,
+    authIntent: null      // {authorId, action, at}: what a guest wanted to do before signing in
+  };
+
+  function resetBellState() {
+    bellClient.enabled = {};
+    bellClient.count = null;
+    bellClient.listPromise = null;
+    bellClient.viewer = currentViewerId();
+  }
+
+  function sameViewer() {
+    if (bellClient.viewer !== currentViewerId()) resetBellState();
+  }
+
+  function announce(type, detail, fromOtherTab) {
+    try {
+      window.dispatchEvent(new CustomEvent(type, { detail: Object.assign({ remote: Boolean(fromOtherTab) }, detail) }));
+    } catch (e) {}
+    if (!fromOtherTab && bellChannel) {
+      try { bellChannel.postMessage({ type: type, viewer: currentViewerId(), detail: detail }); } catch (e) {}
+    }
+  }
+
+  if (bellChannel) {
+    bellChannel.onmessage = function (msg) {
+      var data = msg && msg.data;
+      if (!data || data.viewer !== currentViewerId() || data.viewer === 'guest') return;
+      if (data.type === BELL_EVENT && data.detail) {
+        sameViewer();
+        bellClient.enabled[data.detail.authorId] = Boolean(data.detail.enabled);
+        if (typeof data.detail.count === 'number') bellClient.count = data.detail.count;
+      }
+      if (data.type === BELL_EVENT || data.type === SUBSCRIPTION_EVENT) announce(data.type, data.detail, true);
+    };
+  }
+
+  function bellError(code, message) {
+    var err = new Error(message || BELL_FAILED);
+    err.code = code || 'FAILED';
+    return err;
+  }
+
+  /**
+   * Sets the bell for one author. Resolves with {authorId, enabled, isSubscribed, count} from the server.
+   * Rejects with err.code: PENDING (a request for this author is in flight), AUTH (sign-in needed),
+   * AUTHOR_EXCLUDED, AUTHOR_NOT_FOUND, SELF_NOTIFICATIONS_FORBIDDEN, STALE (the account changed) or FAILED.
+   */
+  function setAuthorBell(authorId, enabled) {
+    sameViewer();
+    if (!authorId) return Promise.reject(bellError('FAILED'));
+    if (currentViewerId() === 'guest') return Promise.reject(bellError('AUTH', 'Войдите, чтобы включить уведомления'));
+    if (bellClient.pending[authorId]) return Promise.reject(bellError('PENDING', 'Запрос уже выполняется'));
+    var viewer = currentViewerId();
+    bellClient.pending[authorId] = true;
+    return fetch('/api/authors/' + encodeURIComponent(authorId) + '/notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ enabled: Boolean(enabled) })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) { return { status: res.status, data: data || {} }; });
+      }, function () {
+        throw bellError('FAILED');
+      })
+      .then(function (r) {
+        if (viewer !== currentViewerId()) throw bellError('STALE');
+        if (r.status === 401) throw bellError('AUTH', 'Войдите, чтобы включить уведомления');
+        if (r.status < 200 || r.status >= 300 || !r.data.success) {
+          var code = r.data.code || 'FAILED';
+          var text = code === 'AUTHOR_EXCLUDED' ? BELL_EXCLUDED
+            : code === 'AUTHOR_NOT_FOUND' ? 'Автор недоступен, уведомления включить нельзя'
+            : (r.data.error || BELL_FAILED);
+          throw bellError(code, text);
+        }
+        var result = {
+          authorId: authorId,
+          enabled: Boolean(r.data.enabled),
+          isSubscribed: Boolean(r.data.isSubscribed),
+          count: typeof r.data.count === 'number' ? r.data.count : null
+        };
+        bellClient.enabled[authorId] = result.enabled;
+        if (result.count !== null) bellClient.count = result.count;
+        // Not pending any more before the views redraw from the announcement
+        delete bellClient.pending[authorId];
+        announce(BELL_EVENT, result);
+        return result;
+      })
+      .catch(function (err) {
+        delete bellClient.pending[authorId];
+        throw err;
+      });
+  }
+
+  /** Number of authors with the bell on and the set of their ids (first page, enough for warnings). */
+  function loadBellList(force) {
+    sameViewer();
+    if (currentViewerId() === 'guest') return Promise.resolve({ count: 0, ids: {} });
+    if (bellClient.listPromise && !force) return bellClient.listPromise;
+    var viewer = currentViewerId();
+    bellClient.listPromise = fetch('/api/user/author-notifications?limit=100', { credentials: 'same-origin' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.success || viewer !== currentViewerId()) { bellClient.listPromise = null; return { count: null, ids: {} }; }
+        var ids = {};
+        (data.items || []).forEach(function (item) { ids[item.authorId] = true; bellClient.enabled[item.authorId] = true; });
+        bellClient.count = typeof data.count === 'number' ? data.count : (data.items || []).length;
+        return { count: bellClient.count, ids: ids };
+      })
+      .catch(function () { bellClient.listPromise = null; return { count: null, ids: {} }; });
+    return bellClient.listPromise;
+  }
+
+  function isBellKnownOn(authorId) {
+    sameViewer();
+    return bellClient.enabled[authorId] === true;
+  }
+
+  /**
+   * Hiding an author turns their bell off (#273). When the bell is on, the first press only
+   * says so on the button; the second press within 5 s confirms. Resolves true to proceed.
+   */
+  function confirmAuthorExclusion(authorId, btn) {
+    return loadBellList(false).then(function (list) {
+      var on = isBellKnownOn(authorId) || Boolean(list.ids[authorId]);
+      if (!on || !btn) return true;
+      if (btn.getAttribute('data-bell-confirm') === authorId) {
+        btn.removeAttribute('data-bell-confirm');
+        clearTimeout(btn._bellConfirmTimer);
+        return true;
+      }
+      var original = btn.textContent;
+      var originalTitle = btn.title;
+      btn.setAttribute('data-bell-confirm', authorId);
+      btn.textContent = 'Скрыть и отключить уведомления';
+      btn.title = 'У автора включены уведомления. Скрытие отключит их. Нажмите еще раз, чтобы подтвердить';
+      btn.classList.add('is-confirming');
+      clearTimeout(btn._bellConfirmTimer);
+      btn._bellConfirmTimer = setTimeout(function () {
+        if (btn.getAttribute('data-bell-confirm') !== authorId) return;
+        btn.removeAttribute('data-bell-confirm');
+        btn.textContent = original;
+        btn.title = originalTitle;
+        btn.classList.remove('is-confirming');
+      }, 5000);
+      return false;
+    });
+  }
+
+  function rememberAuthIntent(authorId, action) {
+    bellClient.authIntent = { authorId: authorId, action: action, at: Date.now() };
+  }
+
+  /** Returns and clears what a guest wanted to do, if it is still fresh. */
+  function takeAuthIntent(authorId) {
+    var intent = bellClient.authIntent;
+    if (!intent || Date.now() - intent.at > AUTH_INTENT_TTL) { bellClient.authIntent = null; return null; }
+    if (authorId && intent.authorId !== authorId) return null;
+    bellClient.authIntent = null;
+    return intent;
+  }
+
+  function peekAuthIntent() {
+    var intent = bellClient.authIntent;
+    return intent && Date.now() - intent.at <= AUTH_INTENT_TTL ? intent : null;
+  }
+
+  function bellButtonState(btn, enabled) {
+    if (!btn) return;
+    var label = enabled ? BELL_LABEL_ON : BELL_LABEL_OFF;
+    btn.classList.toggle('is-on', Boolean(enabled));
+    btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.innerHTML = enabled ? BELL_ICON_ON : BELL_ICON_OFF;
+  }
+
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    // Per-account state never moves to another account; a guest's intent survives the sign-in
+    window.addEventListener('auth:change', resetBellState);
+  }
 
   var card = null;            // the popover element
   var cardState = {
@@ -87,7 +303,9 @@
     closeTimer: null,
     seq: 0,
     abort: null,
-    suppressFocusFor: null    // trigger that must not reopen on focus restore
+    suppressFocusFor: null,   // trigger that must not reopen on focus restore
+    status: null,             // {userId, text}: last action result shown in the card
+    afterRender: null         // callback after the next successful render (sign-in return)
   };
   var summaryCache = {};
   var isEventsBound = false;
@@ -214,6 +432,7 @@
     setExpanded(trigger, true);
     ensureCard();
     if (!sameCard || cardState.userId !== userId) {
+      if (cardState.status && cardState.status.userId !== userId) cardState.status = null;
       cardState.userId = userId;
       loadSummary(userId, false);
     }
@@ -263,7 +482,8 @@
     }
     cardState.abort = typeof AbortController !== 'undefined' ? new AbortController() : null;
     renderLoading();
-    fetch('/api/users/' + encodeURIComponent(userId), cardState.abort ? { signal: cardState.abort.signal } : {})
+    // Compact summary from #273 (about 0.6 KB instead of the full profile)
+    fetch('/api/users/' + encodeURIComponent(userId) + '/summary', cardState.abort ? { signal: cardState.abort.signal } : {})
       .then(function (res) {
         if (res.status === 404) return { notFound: true };
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -272,7 +492,7 @@
       .then(function (data) {
         if (seq !== cardState.seq || cardState.userId !== userId) return;
         if (data && data.notFound) { renderMessage('Профиль не найден', false); return; }
-        var p = data && (data.profile || data.user || data);
+        var p = data && (data.summary || data.profile || data.user || data);
         if (!data || !data.success || !p) throw new Error('Bad response');
         summaryCache[key] = { at: Date.now(), data: p };
         render(p, userId);
@@ -312,12 +532,22 @@
     '</div>';
   }
 
-  function bellHtml(enabled, userId) {
+  function bellHtml(enabled, userId, p) {
     if (!AUTHOR_BELL_ENABLED) return '';
-    var label = enabled ? 'Отключить уведомления автора' : 'Уведомлять о новых публикациях и вопросах';
+    // An unavailable author cannot be turned on; an enabled bell can always be turned off
+    if (!enabled && p && p.canNotify === false && viewerId() !== 'guest') return '';
+    var label = enabled ? BELL_LABEL_ON : BELL_LABEL_OFF;
+    var busy = bellClient.pending[userId];
     return '<button type="button" class="author-card-btn author-card-bell' + (enabled ? ' is-on' : '') + '"' +
       ' aria-pressed="' + (enabled ? 'true' : 'false') + '" aria-label="' + label + '" title="' + label + '"' +
+      (busy ? ' disabled aria-busy="true"' : '') +
       ' data-author-id="' + escapeHtml(userId) + '">' + (enabled ? BELL_ICON_ON : BELL_ICON_OFF) + '</button>';
+  }
+
+  function setCardStatus(userId, text) {
+    cardState.status = text ? { userId: userId, text: text } : null;
+    var el = card && card.querySelector('.author-card-status');
+    if (el && cardState.userId === userId) el.textContent = text || '';
   }
 
   function subscribeLabel(subscribed) {
@@ -325,6 +555,11 @@
   }
 
   function render(p, userId) {
+    var focusedClass = null;
+    if (card.contains(document.activeElement) && document.activeElement !== card) {
+      focusedClass = ['author-card-subscribe', 'author-card-bell', 'author-card-profile', 'author-card-name']
+        .filter(function (c) { return document.activeElement.classList.contains(c); })[0] || null;
+    }
     card.removeAttribute('aria-busy');
     var name = p.name || userId;
     var initials = p.initials || (name ? name.split(' ').map(function (s) { return s[0] || ''; }).join('').slice(0, 2).toUpperCase() : 'SC');
@@ -348,7 +583,7 @@
         '<button type="button" class="author-card-btn author-card-subscribe' + (subscribed ? ' is-subscribed' : '') + '"' +
           ' aria-pressed="' + (subscribed ? 'true' : 'false') + '" data-author-id="' + escapeHtml(userId) + '"' +
           ' title="' + (subscribed ? 'Отписаться от автора' : 'Добавить автора в «Мою ленту»') + '">' + subscribeLabel(subscribed) + '</button>' +
-        bellHtml(bellOn, userId) +
+        bellHtml(bellOn, userId, p) +
         '<a class="author-card-btn author-card-profile" href="' + escapeHtml(profileUrl) + '">Перейти в профиль</a>';
     }
 
@@ -372,11 +607,24 @@
         stat(p.questionsCount, 'Вопросы') +
         stat(p.commentsCount, 'Комментарии') +
       '</dl>' +
-      '<div class="author-card-actions">' + actions + '</div>';
+      '<div class="author-card-actions">' + actions + '</div>' +
+      (isOwn ? '' : '<p class="author-card-hint">' + escapeHtml(BELL_HINT) + '</p>') +
+      '<p class="author-card-status" role="status" aria-live="polite">' +
+        escapeHtml(cardState.status && cardState.status.userId === userId ? cardState.status.text : '') + '</p>';
+    if (focusedClass) {
+      var again = card.querySelector('.' + focusedClass);
+      if (again) { try { again.focus({ preventScroll: true }); } catch (e) {} }
+    }
     position();
+    if (cardState.afterRender) {
+      var after = cardState.afterRender;
+      cardState.afterRender = null;
+      after(p);
+    }
   }
 
-  function requireAuth() {
+  function requireAuth(userId, action) {
+    if (userId && action) rememberAuthIntent(userId, action);
     closeCard(false);
     if (window.SCAuth && typeof window.SCAuth.openModal === 'function') {
       window.SCAuth.openModal('login');
@@ -389,8 +637,9 @@
   function toggleSubscription(btn) {
     var userId = btn.getAttribute('data-author-id');
     if (!userId || btn.disabled) return;
-    if (viewerId() === 'guest') { requireAuth(); return; }
+    if (viewerId() === 'guest') { requireAuth(userId, 'subscribe'); return; }
     var wasSubscribed = btn.classList.contains('is-subscribed');
+    var viewer = viewerId();
     btn.disabled = true;
     btn.setAttribute('aria-busy', 'true');
     fetch('/api/subscriptions/toggle', {
@@ -399,28 +648,87 @@
       body: JSON.stringify({ targetType: 'author', targetId: userId, action: wasSubscribed ? 'unsubscribe' : 'subscribe' })
     })
       .then(function (res) {
-        if (res.status === 401) { requireAuth(); return null; }
+        if (res.status === 401) { requireAuth(userId, 'subscribe'); return null; }
         return res.json();
       })
       .then(function (data) {
+        if (data === null) return;
         if (!data || !data.success) throw new Error('subscribe failed');
+        if (viewer !== viewerId()) return;
         var subscribed = Boolean(data.subscribed || data.isSubscribed);
         var key = viewerId() + '|' + userId;
-        if (summaryCache[key]) {
-          summaryCache[key].data.isSubscribed = subscribed;
-          if (data.followersCount !== undefined) summaryCache[key].data.followersCount = data.followersCount;
-        }
-        window.dispatchEvent(new CustomEvent('smartcontractum:author-subscription', {
-          detail: { authorId: userId, subscribed: subscribed, followersCount: data.followersCount }
-        }));
-        if (cardState.userId === userId && summaryCache[key]) render(summaryCache[key].data, userId);
+        var bellOn = summaryCache[key] ? Boolean(summaryCache[key].data.authorNotificationsEnabled) : isBellKnownOn(userId);
+        setCardStatus(userId, !subscribed && bellOn ? BELL_KEPT_ON_UNSUBSCRIBE : '');
+        announce(SUBSCRIPTION_EVENT, { authorId: userId, subscribed: subscribed, followersCount: data.followersCount });
       })
       .catch(function () {
         if (!btn.isConnected) return;
         btn.disabled = false;
         btn.removeAttribute('aria-busy');
         btn.title = 'Не удалось изменить подписку. Попробуйте еще раз';
+        setCardStatus(userId, 'Не удалось изменить подписку. Попробуйте еще раз');
       });
+  }
+
+  function toggleBell(btn) {
+    var userId = btn.getAttribute('data-author-id');
+    if (!userId || btn.disabled) return;
+    if (viewerId() === 'guest') { requireAuth(userId, 'bell'); return; }
+    var key = viewerId() + '|' + userId;
+    var cached = summaryCache[key] && summaryCache[key].data;
+    var wasOn = btn.classList.contains('is-on');
+    if (!wasOn && cached && cached.isExcluded) { setCardStatus(userId, BELL_EXCLUDED); return; }
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    setCardStatus(userId, '');
+    setAuthorBell(userId, !wasOn)
+      .then(function (result) {
+        setCardStatus(userId, result.enabled ? 'Уведомления автора включены' : 'Уведомления автора отключены');
+      })
+      .catch(function (err) {
+        if (err.code === 'PENDING' || err.code === 'STALE') return;
+        if (err.code === 'AUTH') { requireAuth(userId, 'bell'); return; }
+        if (err.code === 'AUTHOR_EXCLUDED' && summaryCache[key]) summaryCache[key].data.isExcluded = true;
+        setCardStatus(userId, err.message || BELL_FAILED);
+        // The button shows what the server last confirmed, never an assumed state
+        if (cardState.userId === userId && summaryCache[key]) render(summaryCache[key].data, userId);
+        else if (btn.isConnected) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+      });
+  }
+
+  function applyAuthorState(detail) {
+    if (!detail || !detail.authorId) return;
+    var key = viewerId() + '|' + detail.authorId;
+    var entry = summaryCache[key];
+    if (entry) {
+      if (detail.enabled !== undefined) entry.data.authorNotificationsEnabled = Boolean(detail.enabled);
+      if (detail.isSubscribed !== undefined) entry.data.isSubscribed = Boolean(detail.isSubscribed);
+      if (detail.subscribed !== undefined) entry.data.isSubscribed = Boolean(detail.subscribed);
+      if (detail.followersCount !== undefined && detail.followersCount !== null) entry.data.followersCount = detail.followersCount;
+    }
+    if (card && !card.hidden && cardState.userId === detail.authorId) {
+      if (entry) render(entry.data, detail.authorId);
+      else loadSummary(detail.authorId, true);
+    }
+  }
+
+  /** After signing in from the card: reopen it for the same author and ask to confirm, never act silently. */
+  function resumeAuthIntent() {
+    var intent = peekAuthIntent();
+    if (!intent || viewerId() === 'guest') return;
+    var selector = '.btn-author-profile[data-author-id="' + String(intent.authorId).replace(/["\\]/g, '') + '"]';
+    var trigger = Array.prototype.filter.call(document.querySelectorAll(selector), function (el) {
+      return el.getClientRects().length > 0;
+    })[0];
+    if (!trigger) return;
+    takeAuthIntent(intent.authorId);
+    cardState.afterRender = function (p) {
+      if (p.isOwnProfile) { setCardStatus(intent.authorId, 'Это ваш профиль'); return; }
+      var target = card.querySelector(intent.action === 'bell' ? '.author-card-bell' : '.author-card-subscribe');
+      setCardStatus(intent.authorId, 'Вы вошли. Нажмите кнопку еще раз, чтобы подтвердить действие');
+      if (target) { try { target.focus({ preventScroll: true }); } catch (e) {} }
+    };
+    openCard(trigger, { pinned: true });
   }
 
   function onCardClick(e) {
@@ -428,6 +736,8 @@
     e.stopPropagation();
     var sub = e.target.closest('.author-card-subscribe');
     if (sub) { e.preventDefault(); toggleSubscription(sub); return; }
+    var bell = e.target.closest('.author-card-bell');
+    if (bell) { e.preventDefault(); toggleBell(bell); return; }
     var retry = e.target.closest('.author-card-retry');
     if (retry && cardState.userId) { e.preventDefault(); loadSummary(cardState.userId, true); return; }
     if (!cardState.pinned) {
@@ -549,10 +859,16 @@
     window.addEventListener('resize', reposition);
 
     // Personal state must not move between accounts
-    window.addEventListener('auth:change', function () {
+    window.addEventListener('auth:change', function (e) {
       summaryCache = {};
+      cardState.status = null;
       if (card && !card.hidden) closeCard(false);
+      if (e && e.detail && e.detail.authenticated) resumeAuthIntent();
     });
+
+    // Every visible copy of an author follows actions made elsewhere (card, profile, list, other tabs)
+    window.addEventListener(BELL_EVENT, function (e) { applyAuthorState(e.detail); });
+    window.addEventListener(SUBSCRIPTION_EVENT, function (e) { applyAuthorState(e.detail); });
 
     window.addEventListener('smartcontractum:voted', function () {
       summaryCache = {};
@@ -649,6 +965,30 @@
     closeAuthorCard: closeUserProfileModal,
     authorCardDelays: { open: AUTHOR_CARD_OPEN_DELAY, close: AUTHOR_CARD_CLOSE_DELAY },
     aggregateUserTopics: aggregateUserTopics
+  };
+  window.SCAuthorBell = {
+    set: setAuthorBell,
+    loadList: loadBellList,
+    isKnownOn: isBellKnownOn,
+    confirmExclusion: confirmAuthorExclusion,
+    rememberAuthIntent: rememberAuthIntent,
+    takeAuthIntent: takeAuthIntent,
+    applyButtonState: bellButtonState,
+    announceSubscription: function (detail) { announce(SUBSCRIPTION_EVENT, detail); },
+    // The server turned the bell off as a side effect (hiding the author, #273)
+    noteOff: function (authorId) {
+      if (!authorId || bellClient.enabled[authorId] === false) return;
+      var wasOn = bellClient.enabled[authorId] === true;
+      bellClient.enabled[authorId] = false;
+      if (wasOn && typeof bellClient.count === 'number') bellClient.count = Math.max(0, bellClient.count - 1);
+      announce(BELL_EVENT, { authorId: authorId, enabled: false, count: wasOn ? bellClient.count : null });
+    },
+    isPending: function (authorId) { return Boolean(bellClient.pending[authorId]); },
+    count: function () { return bellClient.count; },
+    labels: { off: BELL_LABEL_OFF, on: BELL_LABEL_ON, hint: BELL_HINT, keptOnUnsubscribe: BELL_KEPT_ON_UNSUBSCRIBE,
+              excluded: BELL_EXCLUDED, failed: BELL_FAILED },
+    icons: { off: BELL_ICON_OFF, on: BELL_ICON_ON },
+    events: { bell: BELL_EVENT, subscription: SUBSCRIPTION_EVENT }
   };
 
 })(typeof window !== 'undefined' ? window : this);

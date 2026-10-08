@@ -400,6 +400,10 @@
   let subscribersHasMore = false;
   let isLoadingSubscribers = false;
   let currentSubscriptionsData = null;
+  // "Авторы с уведомлениями" (Issue #275): private list of the profile owner, server paging and search
+  const bellsLimit = 20;
+  let bellsState = { q: '', offset: 0, hasMore: false, loading: false, seq: 0, total: 0 };
+  let bellsSearchTimer = null;
   let lastSocialTriggerEl = null;
   let lastAuthTriggerEl = null;
   let isInitialized = false;
@@ -1498,6 +1502,7 @@
     if (ownerNavWidget) {
       ownerNavWidget.style.display = isOwn ? 'flex' : 'none';
     }
+    if (isOwn) refreshOwnerBellsCount();
 
     // 2. Expertise widget
     const widgetExp = document.getElementById('profileWidgetExpertise');
@@ -3052,20 +3057,106 @@
     const btnEdit = document.getElementById('btnProfileEdit');
     const btnMore = document.getElementById('btnProfileMore');
 
+    const btnBell = document.getElementById('btnProfileBell');
+    const bellHint = document.getElementById('profileBellHint');
+
     if (isOwn) {
       if (btnSubscribe) btnSubscribe.style.display = 'none';
       if (btnEdit) btnEdit.style.display = 'inline-flex';
+      if (btnBell) btnBell.hidden = true;
+      if (bellHint) bellHint.hidden = true;
     } else {
       if (btnEdit) btnEdit.style.display = 'none';
       if (btnSubscribe) {
         btnSubscribe.style.display = 'inline-flex';
         updateSubscribeButtonState(btnSubscribe, Boolean(p.isSubscribed));
       }
+      if (btnBell) {
+        const bellOn = Boolean(p.authorNotificationsEnabled);
+        // A removed or blocked author cannot be turned on; an enabled bell can always be turned off
+        btnBell.hidden = !bellOn && p.canNotify === false;
+        updateBellButtonState(btnBell, bellOn);
+      }
+      if (bellHint) bellHint.hidden = Boolean(btnBell && btnBell.hidden);
     }
 
     if (btnMore) {
       btnMore.style.display = 'inline-flex';
     }
+  }
+
+  function updateBellButtonState(btn, enabled) {
+    if (!btn) return;
+    if (window.SCAuthorBell) {
+      window.SCAuthorBell.applyButtonState(btn, enabled);
+    } else {
+      btn.classList.toggle('is-on', Boolean(enabled));
+      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    }
+    const pending = Boolean(window.SCAuthorBell && currentProfile && window.SCAuthorBell.isPending(currentProfile.id || currentProfile.userId));
+    btn.disabled = pending;
+    if (pending) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
+  }
+
+  function profileAuthorId() {
+    return currentProfile ? (currentProfile.id || currentProfile.userId) : null;
+  }
+
+  function signInFor(action, triggerEl) {
+    const authorId = profileAuthorId();
+    if (authorId && window.SCAuthorBell) window.SCAuthorBell.rememberAuthIntent(authorId, action);
+    if (window.SCAuth && typeof window.SCAuth.openModal === 'function') {
+      window.SCAuth.openModal('login');
+      return;
+    }
+    openAuthModal(triggerEl);
+  }
+
+  function toggleProfileBell() {
+    const authorId = profileAuthorId();
+    const btn = document.getElementById('btnProfileBell');
+    if (!authorId || !btn || btn.disabled || !window.SCAuthorBell) return;
+    if (!currentUser) {
+      signInFor('bell', btn);
+      return;
+    }
+    const wasOn = Boolean(currentProfile.authorNotificationsEnabled);
+    if (!wasOn && currentProfile.isExcluded) {
+      showToast(window.SCAuthorBell.labels.excluded);
+      return;
+    }
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    window.SCAuthorBell.set(authorId, !wasOn)
+      .then(function (result) {
+        showToast(result.enabled ? 'Уведомления автора включены' : 'Уведомления автора отключены');
+      })
+      .catch(function (err) {
+        if (err.code === 'PENDING' || err.code === 'STALE') return;
+        if (err.code === 'AUTH') { signInFor('bell', btn); return; }
+        if (err.code === 'AUTHOR_EXCLUDED' && currentProfile) currentProfile.isExcluded = true;
+        showToast(err.message || window.SCAuthorBell.labels.failed);
+        // Back to what the server last confirmed
+        if (currentProfile && profileAuthorId() === authorId) updateBellButtonState(btn, Boolean(currentProfile.authorNotificationsEnabled));
+      });
+  }
+
+  /** Applies a bell or subscription change made anywhere (card, list, other tab) to this page. */
+  function applyAuthorStateToPage(detail) {
+    if (!detail || !detail.authorId) return;
+    if (currentProfile && profileAuthorId() === detail.authorId) {
+      if (detail.enabled !== undefined) currentProfile.authorNotificationsEnabled = Boolean(detail.enabled);
+      const subscribed = detail.subscribed !== undefined ? detail.subscribed : detail.isSubscribed;
+      if (subscribed !== undefined) currentProfile.isSubscribed = Boolean(subscribed);
+      renderActions(currentProfile);
+      if (detail.followersCount !== undefined && detail.followersCount !== null) {
+        updateProfileStats({ followersCount: detail.followersCount });
+      }
+    }
+    if (detail.enabled !== undefined && isOwnProfile()) {
+      updateOwnerBellsCount(typeof detail.count === 'number' ? detail.count : null);
+    }
+    syncBellsRow(detail);
   }
 
   function updateSubscribeButtonState(btn, isSubscribed) {
@@ -3153,20 +3244,22 @@
 
   function toggleSubscription() {
     if (!currentProfile) return;
+    const btn = document.getElementById('btnProfileSubscribe');
     if (!currentUser) {
-      openAuthModal();
+      signInFor('subscribe', btn);
       return;
     }
-
-    const btn = document.getElementById('btnProfileSubscribe');
+    if (btn && btn.disabled) return;
     if (btn) btn.disabled = true;
+    const authorId = profileAuthorId();
 
     fetch('/api/subscriptions/toggle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({
         targetType: 'author',
-        targetId: currentProfile.id || currentProfile.userId
+        targetId: authorId,
+        action: currentProfile.isSubscribed ? 'unsubscribe' : 'subscribe'
       })
     })
       .then(function (res) { return res.json(); })
@@ -3188,8 +3281,15 @@
             newFollowers = isSub ? (prevFollowers + 1) : Math.max(0, prevFollowers - 1);
           }
           updateProfileStats({ followersCount: newFollowers });
+          if (window.SCAuthorBell) {
+            window.SCAuthorBell.announceSubscription({ authorId: authorId, subscribed: isSub, followersCount: newFollowers });
+          }
 
-          showToast(isSub ? 'Вы подписались на автора' : 'Вы отписались от автора');
+          if (!isSub && currentProfile.authorNotificationsEnabled) {
+            showToast('Вы отписались от автора. ' + (window.SCAuthorBell ? window.SCAuthorBell.labels.keptOnUnsubscribe : 'Уведомления автора остаются включены'));
+          } else {
+            showToast(isSub ? 'Вы подписались на автора' : 'Вы отписались от автора');
+          }
         } else if (data && data.error) {
           showToast(data.error);
         }
@@ -3451,11 +3551,22 @@
       });
   }
 
-  function openSubscriptionsModal(triggerEl) {
+  function isOwnProfile() {
+    const p = currentProfile;
+    return Boolean(p && (p.isOwnProfile || (currentUser && (currentUser.id === p.id || currentUser.id === p.userId))));
+  }
+
+  function openSubscriptionsModal(triggerEl, initialTab) {
     if (!currentProfile) return;
     lastSocialTriggerEl = triggerEl || document.activeElement;
     socialModalMode = 'subscriptions';
     socialSubTab = 'authors';
+    const startTab = initialTab === 'bells' && isOwnProfile() ? 'bells' : 'authors';
+    const bellsPill = document.getElementById('socialSubTabBells');
+    // The bell list is private: only the owner sees this sub-section
+    if (bellsPill) bellsPill.hidden = !isOwnProfile();
+    const bellsTools = document.getElementById('socialBellsTools');
+    if (bellsTools) bellsTools.hidden = true;
 
     const titleEl = document.getElementById('socialModalTitle');
     if (titleEl) titleEl.textContent = 'Подписки';
@@ -3509,7 +3620,8 @@
         if (blogsCountEl) blogsCountEl.textContent = blogs.length;
 
         if (subnav) subnav.style.display = 'block';
-        renderSubscriptionsTabContent('authors');
+        if (isOwnProfile()) updateOwnerBellsCount(window.SCAuthorBell ? window.SCAuthorBell.count() : null);
+        renderSubscriptionsTabContent(startTab);
       })
       .catch(function () {
         if (listEl) {
@@ -3529,11 +3641,28 @@
   }
 
   function renderSubscriptionsTabContent(tab) {
+    if (tab === 'bells' && !isOwnProfile()) tab = 'authors';
     socialSubTab = tab;
     const tabAuthors = document.getElementById('socialSubTabAuthors');
     const tabBlogs = document.getElementById('socialSubTabBlogs');
-    if (tabAuthors) tabAuthors.classList.toggle('is-active', tab === 'authors');
+    const tabBells = document.getElementById('socialSubTabBells');
+    if (tabAuthors) {
+      tabAuthors.classList.toggle('is-active', tab === 'authors');
+      // For the owner the first pill is the counterpart of "Авторы с уведомлениями"
+      const label = tabAuthors.firstChild;
+      if (label && label.nodeType === 3) label.textContent = isOwnProfile() ? 'Все авторы ' : 'Авторы ';
+    }
     if (tabBlogs) tabBlogs.classList.toggle('is-active', tab === 'blogs');
+    if (tabBells) tabBells.classList.toggle('is-active', tab === 'bells');
+    const bellsTools = document.getElementById('socialBellsTools');
+    if (bellsTools) bellsTools.hidden = tab !== 'bells';
+    const actions = document.getElementById('profileSocialActions');
+    if (actions && tab !== 'bells') actions.style.display = 'none';
+
+    if (tab === 'bells') {
+      loadBells(false);
+      return;
+    }
 
     const listEl = document.getElementById('profileSocialList');
     if (!listEl || !currentSubscriptionsData) return;
@@ -3555,11 +3684,171 @@
     }
   }
 
+  // --- "Авторы с уведомлениями" -------------------------------------------------
+
+  function updateOwnerBellsCount(count) {
+    if (typeof count !== 'number') return;
+    bellsState.total = bellsState.q ? bellsState.total : count;
+    const navCount = document.getElementById('ownerNavAuthorBellsCount');
+    if (navCount) navCount.textContent = String(count);
+    const pillCount = document.getElementById('socialSubBellsCount');
+    if (pillCount) pillCount.textContent = String(count);
+  }
+
+  function refreshOwnerBellsCount() {
+    if (!window.SCAuthorBell || !currentUser) return;
+    window.SCAuthorBell.loadList(true).then(function (list) {
+      if (isOwnProfile()) updateOwnerBellsCount(list.count);
+    });
+  }
+
+  function renderBellRow(item) {
+    const name = escapeHtml(item.name || item.login || item.authorId);
+    const url = item.profileUrl || ('profile.html?id=' + encodeURIComponent(item.authorId));
+    const initials = escapeHtml(item.initials || getInitials(item.name || item.authorId));
+    const avatar = item.avatar
+      ? '<img src="' + escapeHtml(item.avatar) + '" alt="" class="profile-social-avatar-img" onerror="this.remove()">'
+      : '';
+    const status = item.available === false
+      ? 'Автор недоступен'
+      : (item.isSubscribed ? 'Вы подписаны' : 'Без подписки, только уведомления');
+    const login = item.login ? '<span class="social-bell-login">@' + escapeHtml(item.login) + '</span>' : '';
+    return '<div class="profile-social-item social-bell-row" data-author-id="' + escapeHtml(item.authorId) + '">' +
+      '<a class="profile-social-avatar-box" href="' + escapeHtml(url) + '" tabindex="-1" aria-hidden="true">' +
+        '<span class="profile-social-initials">' + initials + '</span>' + avatar +
+      '</a>' +
+      '<div class="profile-social-info">' +
+        '<a class="profile-social-name" href="' + escapeHtml(url) + '">' + name + '</a>' + login +
+        '<div class="profile-social-spec social-bell-status">' + escapeHtml(status) + '</div>' +
+      '</div>' +
+      '<button type="button" class="btn-profile-bell is-on social-bell-off" data-author-id="' + escapeHtml(item.authorId) + '"' +
+        ' aria-pressed="true" aria-label="Отключить уведомления автора ' + name + '" title="Отключить уведомления автора">' +
+        (window.SCAuthorBell ? window.SCAuthorBell.icons.on : '') +
+      '</button>' +
+    '</div>';
+  }
+
+  function bellsEmptyHtml() {
+    if (bellsState.q) {
+      return '<div class="profile-empty-state">Никого не нашли по запросу «' + escapeHtml(bellsState.q) + '»</div>';
+    }
+    return '<div class="profile-empty-state social-bells-empty">' +
+      '<p>Вы пока не включили уведомления ни для одного автора.</p>' +
+      '<p>Нажмите колокольчик в карточке автора или в его профиле, чтобы узнавать о новых публикациях и вопросах.</p>' +
+    '</div>';
+  }
+
+  function loadBells(append) {
+    const listEl = document.getElementById('profileSocialList');
+    const actions = document.getElementById('profileSocialActions');
+    if (!listEl || !isOwnProfile()) return;
+    if (!append) {
+      bellsState.offset = 0;
+      bellsState.hasMore = false;
+      listEl.innerHTML = '<div class="profile-empty-state" role="status">Загрузка авторов...</div>';
+      if (actions) actions.style.display = 'none';
+    } else if (bellsState.loading) {
+      return;
+    }
+    bellsState.loading = true;
+    const seq = ++bellsState.seq;
+    const viewer = currentUser && currentUser.id;
+    const url = '/api/user/author-notifications?limit=' + bellsLimit + '&offset=' + bellsState.offset +
+      (bellsState.q ? '&q=' + encodeURIComponent(bellsState.q) : '');
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (seq !== bellsState.seq || socialSubTab !== 'bells' || !currentUser || currentUser.id !== viewer) return;
+        bellsState.loading = false;
+        if (!data || !data.success) throw new Error('bad response');
+        const items = Array.isArray(data.items) ? data.items : [];
+        bellsState.offset += items.length;
+        bellsState.hasMore = Boolean(data.hasMore);
+        bellsState.total = typeof data.total === 'number' ? data.total : items.length;
+        if (typeof data.count === 'number') updateOwnerBellsCount(data.count);
+        if (!append) {
+          listEl.innerHTML = items.length ? items.map(renderBellRow).join('') : bellsEmptyHtml();
+        } else {
+          listEl.insertAdjacentHTML('beforeend', items.map(renderBellRow).join(''));
+        }
+        if (actions) actions.style.display = bellsState.hasMore ? 'block' : 'none';
+      })
+      .catch(function () {
+        if (seq !== bellsState.seq) return;
+        bellsState.loading = false;
+        if (append) {
+          showToast('Не удалось загрузить авторов');
+          return;
+        }
+        listEl.innerHTML =
+          '<div class="profile-error-state">' +
+            '<p class="profile-error-text">Не удалось загрузить авторов с уведомлениями</p>' +
+            '<button type="button" class="btn-profile-retry" id="btnRetryBells">Повторить попытку</button>' +
+          '</div>';
+        const retry = listEl.querySelector('#btnRetryBells');
+        if (retry) retry.addEventListener('click', function () { loadBells(false); });
+        if (actions) actions.style.display = 'none';
+      });
+  }
+
+  function turnOffBellFromList(btn) {
+    const authorId = btn.getAttribute('data-author-id');
+    const row = btn.closest('.social-bell-row');
+    const listEl = document.getElementById('profileSocialList');
+    if (!authorId || !row || !listEl || btn.disabled || !window.SCAuthorBell) return;
+    const next = row.nextElementSibling;
+    const prevCount = window.SCAuthorBell.count();
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    // The row leaves the filtered list at once and comes back if the server refuses
+    const placeholder = document.createComment('bell-row');
+    row.replaceWith(placeholder);
+    if (typeof prevCount === 'number') updateOwnerBellsCount(Math.max(0, prevCount - 1));
+    window.SCAuthorBell.set(authorId, false)
+      .then(function (result) {
+        placeholder.remove();
+        bellsState.offset = Math.max(0, bellsState.offset - 1);
+        if (!result.enabled) {
+          if (!listEl.querySelector('.social-bell-row') && !bellsState.hasMore) listEl.innerHTML = bellsEmptyHtml();
+          showToast(result.isSubscribed ? 'Уведомления отключены, подписка осталась' : 'Уведомления автора отключены');
+        }
+      })
+      .catch(function (err) {
+        if (placeholder.parentNode) placeholder.replaceWith(row);
+        else if (next && next.parentNode) next.parentNode.insertBefore(row, next);
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        if (typeof prevCount === 'number') updateOwnerBellsCount(prevCount);
+        if (err.code !== 'PENDING' && err.code !== 'STALE') showToast(err.message || window.SCAuthorBell.labels.failed);
+      });
+  }
+
+  function syncBellsRow(detail) {
+    if (socialModalMode !== 'subscriptions' || socialSubTab !== 'bells') return;
+    const listEl = document.getElementById('profileSocialList');
+    if (!listEl) return;
+    const row = listEl.querySelector('.social-bell-row[data-author-id="' + String(detail.authorId).replace(/["\\]/g, '') + '"]');
+    if (detail.enabled === false && row) {
+      row.remove();
+      if (!listEl.querySelector('.social-bell-row') && !bellsState.hasMore) listEl.innerHTML = bellsEmptyHtml();
+    } else if (detail.enabled === true && !row) {
+      loadBells(false);
+    } else if (row) {
+      const subscribed = detail.subscribed !== undefined ? detail.subscribed : detail.isSubscribed;
+      const status = row.querySelector('.social-bell-status');
+      if (status && subscribed !== undefined) status.textContent = subscribed ? 'Вы подписаны' : 'Без подписки, только уведомления';
+    }
+  }
+
   function closeSocialModal() {
     const modal = document.getElementById('profileSocialModal');
     if (modal) modal.style.display = 'none';
     socialModalMode = null;
     currentSubscriptionsData = null;
+    bellsState.seq++;
     if (lastSocialTriggerEl && typeof lastSocialTriggerEl.focus === 'function') {
       try { lastSocialTriggerEl.focus(); } catch (e) {}
     }
@@ -4626,11 +4915,55 @@
       });
     }
 
+    const subTabBells = document.getElementById('socialSubTabBells');
+    if (subTabBells) {
+      subTabBells.addEventListener('click', function () {
+        renderSubscriptionsTabContent('bells');
+      });
+    }
+
+    const bellsSearch = document.getElementById('socialBellsSearch');
+    if (bellsSearch) {
+      bellsSearch.addEventListener('input', function () {
+        clearTimeout(bellsSearchTimer);
+        bellsSearchTimer = setTimeout(function () {
+          bellsState.q = bellsSearch.value.trim();
+          loadBells(false);
+        }, 300);
+      });
+    }
+
+    const socialList = document.getElementById('profileSocialList');
+    if (socialList) {
+      socialList.addEventListener('click', function (e) {
+        const off = e.target.closest && e.target.closest('.social-bell-off');
+        if (off) {
+          e.preventDefault();
+          turnOffBellFromList(off);
+        }
+      });
+    }
+
+    const btnBell = document.getElementById('btnProfileBell');
+    if (btnBell) {
+      btnBell.addEventListener('click', toggleProfileBell);
+    }
+
+    const ownerBells = document.getElementById('ownerNavAuthorBells');
+    if (ownerBells) {
+      ownerBells.addEventListener('click', function (e) {
+        e.preventDefault();
+        openSubscriptionsModal(ownerBells, 'bells');
+      });
+    }
+
     const btnSocialLoadMore = document.getElementById('btnSocialLoadMore');
     if (btnSocialLoadMore) {
       btnSocialLoadMore.addEventListener('click', function () {
         if (socialModalMode === 'subscribers' && currentProfile && subscribersHasMore && !isLoadingSubscribers) {
           loadSubscribers(currentProfile.id || currentProfile.userId, true);
+        } else if (socialModalMode === 'subscriptions' && socialSubTab === 'bells' && bellsState.hasMore && !bellsState.loading) {
+          loadBells(true);
         }
       });
     }
@@ -4644,9 +4977,75 @@
     }
   }
 
+  /**
+   * After sign-in, sign-out or an account switch: the header controls, the owner widget and the
+   * private list follow the new account. A guest who pressed a control is asked to confirm it.
+   */
+  function refreshPersonalState() {
+    const authorId = profileAuthorId();
+    if (!authorId) return;
+    const viewer = currentUser && currentUser.id;
+    if (socialSubTab === 'bells' && socialModalMode === 'subscriptions') closeSocialModal();
+    if (!viewer) {
+      currentProfile.isOwnProfile = false;
+      currentProfile.isSubscribed = false;
+      currentProfile.authorNotificationsEnabled = false;
+      currentProfile.isExcluded = false;
+      renderActions(currentProfile);
+      const widget = document.getElementById('profileOwnerNavWidget');
+      if (widget) widget.style.display = 'none';
+      return;
+    }
+    fetch('/api/users/' + encodeURIComponent(authorId) + '/summary', { credentials: 'same-origin' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.success || !data.summary) return;
+        if (!currentUser || currentUser.id !== viewer || profileAuthorId() !== authorId) return;
+        const s = data.summary;
+        currentProfile.isOwnProfile = Boolean(s.isOwnProfile);
+        currentProfile.isSubscribed = Boolean(s.isSubscribed);
+        currentProfile.authorNotificationsEnabled = Boolean(s.authorNotificationsEnabled);
+        currentProfile.isExcluded = Boolean(s.isExcluded);
+        currentProfile.canNotify = s.canNotify;
+        renderActions(currentProfile);
+        const widget = document.getElementById('profileOwnerNavWidget');
+        if (widget) widget.style.display = s.isOwnProfile ? 'flex' : 'none';
+        if (s.isOwnProfile) refreshOwnerBellsCount();
+        const intent = window.SCAuthorBell ? window.SCAuthorBell.takeAuthIntent(authorId) : null;
+        if (intent) {
+          if (s.isOwnProfile) {
+            showToast('Это ваш профиль');
+            return;
+          }
+          const target = document.getElementById(intent.action === 'bell' ? 'btnProfileBell' : 'btnProfileSubscribe');
+          if (target) { try { target.focus(); } catch (err) {} }
+          showToast('Вы вошли. Нажмите кнопку еще раз, чтобы подтвердить действие');
+        }
+      })
+      .catch(function () {});
+  }
+
+  /** profile.html?id=<me>&subscriptions=bells opens the private list (link from the notification center). */
+  function openDeepLinkedBells() {
+    let params;
+    try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
+    if (params.get('subscriptions') !== 'bells') return;
+    let tries = 0;
+    const wait = setInterval(function () {
+      tries++;
+      if (currentProfile && currentUser) {
+        clearInterval(wait);
+        if (isOwnProfile()) openSubscriptionsModal(document.getElementById('ownerNavAuthorBells'), 'bells');
+      } else if (tries > 50) {
+        clearInterval(wait);
+      }
+    }, 100);
+  }
+
   function init() {
     if (isInitialized) return;
     isInitialized = true;
+    openDeepLinkedBells();
 
     initTheme();
     initEventListeners();
@@ -4798,6 +5197,7 @@
 
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('auth:change', function(e) {
+      const previous = currentUser && currentUser.id;
       if (e.detail && e.detail.user) {
         currentUser = e.detail.user;
         window.currentUser = e.detail.user;
@@ -4807,7 +5207,13 @@
       }
       if (window._reportedArticleIds) window._reportedArticleIds.clear();
       if (window._reportedCommentIds) window._reportedCommentIds.clear();
+      if ((currentUser && currentUser.id) !== previous) refreshPersonalState();
     });
+
+    if (window.SCAuthorBell) {
+      window.addEventListener(window.SCAuthorBell.events.bell, function (e) { applyAuthorStateToPage(e.detail); });
+      window.addEventListener(window.SCAuthorBell.events.subscription, function (e) { applyAuthorStateToPage(e.detail); });
+    }
   }
 
 })(window);

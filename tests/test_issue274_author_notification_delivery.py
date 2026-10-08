@@ -152,7 +152,7 @@ class TestIssue274AuthorNotificationDelivery(unittest.TestCase):
         p = items[pub]
         self.assertEqual(p["type"], "author_publication")
         self.assertEqual(p["materialType"], "publication")
-        self.assertEqual(p["title"], "Новая публикация автора")
+        self.assertEqual(p["title"], "Новая публикация")
         self.assertEqual(p["authorName"], "Анна Автор")
         self.assertEqual(p["materialTitle"], "Паттерны газа <script>x</script>", "raw text; the client escapes it")
         self.assertIn("Анна Автор", p["message"])
@@ -160,7 +160,7 @@ class TestIssue274AuthorNotificationDelivery(unittest.TestCase):
         self.assertFalse(p["isRead"])
         self.assertTrue(p["createdAt"])
         self.assertEqual(items[q]["materialType"], "question")
-        self.assertEqual(items[q]["title"], "Новый вопрос автора")
+        self.assertEqual(items[q]["title"], "Новый вопрос")
 
     def test_02_draft_revision_reject_create_no_event_and_resubmission_gives_one(self):
         self.bell("dl_reader", True)

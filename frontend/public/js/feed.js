@@ -5621,7 +5621,24 @@
       openAuthModal('subscriptions');
       return;
     }
-    if (btnEl) btnEl.disabled = true;
+    const hidingAuthor = targetType === 'author' && !(btnEl && btnEl.classList.contains('is-excluded'));
+    if (hidingAuthor && window.SCAuthorBell && btnEl && !btnEl.disabled) {
+      // Hiding turns the author's bell off (#273): say so before doing it (#275)
+      btnEl.disabled = true;
+      window.SCAuthorBell.confirmExclusion(targetId, btnEl).then(function (proceed) {
+        btnEl.disabled = false;
+        if (proceed) sendExceptionToggle(targetType, targetId, btnEl, title, true);
+      });
+      return;
+    }
+    sendExceptionToggle(targetType, targetId, btnEl, title, hidingAuthor);
+  }
+
+  function sendExceptionToggle(targetType, targetId, btnEl, title, hidingAuthor) {
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.classList.remove('is-confirming');
+    }
     fetch('/api/exceptions/toggle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5642,8 +5659,11 @@
           if (btnEl) {
             btnEl.classList.toggle('is-excluded', isExc);
             btnEl.textContent = isExc ? 'В исключениях' : 'Скрыть';
+            btnEl.title = '';
           }
-          showToast(isExc ? 'Добавлено в исключения' : 'Удалено из исключений');
+          const bellWasOn = hidingAuthor && isExc && window.SCAuthorBell && window.SCAuthorBell.isKnownOn(targetId);
+          if (hidingAuthor && isExc && window.SCAuthorBell) window.SCAuthorBell.noteOff(targetId);
+          showToast(isExc ? (bellWasOn ? 'Автор скрыт, его уведомления отключены' : 'Добавлено в исключения') : 'Удалено из исключений');
         }
       })
       .catch(function () {
