@@ -4013,3 +4013,33 @@ body,
 }
 
 
+
+/* Issue #263: formulas drawn with KaTeX; long formulas scroll inside their own box on phones */
+.editor-block-formula.is-rendered .formula-rendered {
+  font-family: inherit;
+  font-style: normal;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.editor-block-formula.is-rendered .katex-display {
+  margin: 0;
+}
+
+.editor-inline-formula.is-rendered {
+  font-family: inherit;
+  font-style: normal;
+  background: none;
+  border: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+}
+
+.editor-block-formula.formula-error,
+.editor-inline-formula.formula-error {
+  border-color: var(--danger-color, #ef4444);
+}

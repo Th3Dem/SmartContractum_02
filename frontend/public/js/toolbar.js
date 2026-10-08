@@ -160,9 +160,10 @@
 
       // 3. Formula Modal
       if (this.formulaInput && this.formulaPreview) {
-        this.formulaInput.addEventListener('input', () => {
-          const val = this.formulaInput.value.trim();
-          this.formulaPreview.textContent = val ? `\\(${val}\\)` : '\\(...)';
+        this.formulaInput.addEventListener('input', () => this.updateFormulaPreview());
+        ['formula-type-block', 'formula-type-inline'].forEach(id => {
+          const radio = document.getElementById(id);
+          if (radio) radio.addEventListener('change', () => this.updateFormulaPreview());
         });
       }
       if (this.formulaApplyBtn) {
@@ -328,9 +329,6 @@
       }
 
       if (this.formulaInput) this.formulaInput.value = formulaText;
-      if (this.formulaPreview) {
-        this.formulaPreview.textContent = formulaText ? `\\(${formulaText}\\)` : '\\(...)';
-      }
 
       const blockRadio = document.getElementById('formula-type-block');
       const inlineRadio = document.getElementById('formula-type-inline');
@@ -338,12 +336,27 @@
         blockRadio.checked = isBlock;
         inlineRadio.checked = !isBlock;
       }
+      this.updateFormulaPreview();
 
       if (this.formulaModal) {
         this.formulaModal.classList.add('show');
         setTimeout(() => {
           if (this.formulaInput) this.formulaInput.focus();
         }, 50);
+      }
+    }
+
+    // Live preview drawn with KaTeX; plain LaTeX text when it cannot be drawn (Issue #263)
+    updateFormulaPreview() {
+      if (!this.formulaPreview) return;
+      const val = this.formulaInput ? this.formulaInput.value.trim() : '';
+      const isBlock = Boolean(document.getElementById('formula-type-block')?.checked);
+      if (window.SCFormula && val) {
+        const ok = window.SCFormula.renderLatex(val, this.formulaPreview, isBlock);
+        this.formulaPreview.classList.toggle('formula-error', !ok);
+      } else {
+        this.formulaPreview.textContent = val ? `\\(${val}\\)` : '\\(...)';
+        this.formulaPreview.classList.remove('formula-error');
       }
     }
 
@@ -361,6 +374,7 @@
         this.editingFormulaNode.setAttribute('data-latex', latex);
         const renderEl = this.editingFormulaNode.querySelector('.formula-rendered');
         if (renderEl) renderEl.textContent = `$$\n${latex}\n$$`;
+        if (window.SCFormula) window.SCFormula.render(this.editingFormulaNode);
         this.editingFormulaNode = null;
         if (this.formulaModal) this.formulaModal.classList.remove('show');
         this.editor.focus();

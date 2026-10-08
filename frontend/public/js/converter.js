@@ -112,7 +112,7 @@
     exportToHTML(fullDocument = true) {
       this.lastExportWarnings = [];
       const title = this.getTitle();
-      const contentHtml = this.sanitizeHTML(this.editor.root.innerHTML);
+      const contentHtml = this.sanitizeHTML((window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML));
 
       // Check for custom blocks to warn about external viewer compatibility
       if (contentHtml.includes('editor-person-card')) {
@@ -180,7 +180,7 @@
       }
 
       const tempContainer = document.createElement('div');
-      tempContainer.innerHTML = this.sanitizeHTML(this.editor.root.innerHTML);
+      tempContainer.innerHTML = this.sanitizeHTML((window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML));
 
       // Detect custom blocks for loss warnings
       if (tempContainer.querySelector('.editor-person-card')) {
@@ -432,7 +432,7 @@
     exportToJSON() {
       const title = this.getTitle();
       const delta = this.editor.getContents();
-      const html = this.sanitizeHTML(this.editor.root.innerHTML);
+      const html = this.sanitizeHTML((window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML));
       const text = this.editor.getText().trim();
       const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
       let publicationSettings = null;
