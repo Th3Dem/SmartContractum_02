@@ -48,7 +48,9 @@
         'table', 'thead', 'tbody', 'tr', 'th', 'td',
         'img', 'a', 'strong', 'b', 'em', 'i', 'u', 's',
         'del', 'strike', 'sub', 'sup', 'span', 'div',
-        'br', 'hr'
+        'br', 'hr',
+        // Editor blocks (Issue #280): image with caption and spoiler
+        'figure', 'figcaption', 'details', 'summary'
       ]);
 
       // Strip unallowed tags while unwrapping child nodes
@@ -117,6 +119,7 @@
           if (tagName === 'pre' || tagName === 'code') allowedAttrs.push('data-language');
           // Formula source for KaTeX (Issue #263); KaTeX renders it as math with trust: false
           if (tagName === 'div' || tagName === 'span') allowedAttrs.push('data-latex');
+          if (tagName === 'details') allowedAttrs.push('open');
 
           if (!allowedAttrs.includes(name)) {
             el.removeAttribute(attr.name);

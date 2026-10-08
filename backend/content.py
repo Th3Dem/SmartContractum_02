@@ -59,7 +59,11 @@ class ArticleHTMLSanitizer(html.parser.HTMLParser):
         "img", "a", "strong", "b", "em", "i", "u", "s",
         "del", "strike", "sub", "sup", "span", "div",
         "br", "hr",
+        # Editor blocks (Issue #280): image with caption and spoiler
+        "figure", "figcaption", "details", "summary",
     }
+    # LaTeX source of editor formulas, rendered by KaTeX with trust: false (Issues #263, #280)
+    MAX_LATEX_LENGTH = 4000
     DROP_CONTENT_TAGS = {
         "script", "style", "iframe", "object", "embed", "applet",
         "meta", "link", "base", "form", "input", "button",
@@ -166,6 +170,11 @@ class ArticleHTMLSanitizer(html.parser.HTMLParser):
                 return bool(re.match(r'^[a-zA-Z0-9_\-:]+$', val))
             if name == 'title':
                 return True
+            if name == 'data-latex' and tag in ('div', 'span'):
+                # Plain text only; it is escaped on output and never interpreted as HTML
+                return 0 < len(val) <= self.MAX_LATEX_LENGTH and '\x00' not in val
+            if name == 'open' and tag == 'details':
+                return val in ('', 'open')
             if name == 'data-language' and tag in ('pre', 'code'):
                 return bool(re.match(r'^[a-zA-Z0-9_\-\.\+]+$', val))
             return False
