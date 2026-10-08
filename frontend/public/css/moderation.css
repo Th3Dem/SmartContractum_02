@@ -1054,3 +1054,51 @@
     margin: var(--space-3) var(--space-3) 0;
   }
 }
+
+/* Issue #262: the panel fits 320-360 px phones.
+   The tab row scrolls inside itself (as the feed tabs in #247) instead of widening the page. */
+@media (max-width: 960px) {
+  .mod-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  /* The page is a flex item of the app shell: without min-width 0 it grows to the tab row width */
+  .mod-page,
+  .mod-page > *,
+  .mod-topbar > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .mod-tabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  }
+
+  .mod-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mod-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .mod-toolbar-right {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mod-toolbar-right .mod-select,
+  .mod-toolbar-right .mod-input {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+  }
+}
