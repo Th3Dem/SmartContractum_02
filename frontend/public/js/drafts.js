@@ -51,11 +51,13 @@
 
       this.initDB().then(async () => {
         this.bindEvents();
+        await this.adoptSignedInUser();
         await this.updateBadge();
         await this.autoRestore();
       }).catch(async (err) => {
         console.warn('IndexedDB unavailable, fallback to localStorage:', err);
         this.bindEvents();
+        await this.adoptSignedInUser();
         await this.updateBadge();
         await this.autoRestore();
       });
@@ -148,6 +150,11 @@
           this.currentDraft = null;
           await this.createNewDraft();
         } else if (user) {
+          if (this.userId === user.id) {
+            // Already adopted after init (Issue #258): do not import or reload the open draft twice
+            await this.updateBadge();
+            return;
+          }
           this.userId = user.id;
           this.activeDraftKey = `${this.baseActiveDraftKey}_${this.userId}`;
           await this.importGuestDrafts(user.id);
@@ -155,6 +162,16 @@
           await this.updateBadge();
         }
       });
+    }
+
+    // The auth:change listener is bound only after IndexedDB opens; a sign-in that
+    // resolved in between would be missed and the user treated as a guest (Issue #258)
+    async adoptSignedInUser() {
+      const user = window.SCAuth && window.SCAuth.currentUser;
+      if (!user || !user.id || this.userId === user.id) return;
+      this.userId = user.id;
+      this.activeDraftKey = `${this.baseActiveDraftKey}_${this.userId}`;
+      await this.importGuestDrafts(user.id);
     }
 
     async importGuestDrafts(userId) {
