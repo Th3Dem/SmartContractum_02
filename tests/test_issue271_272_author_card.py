@@ -307,7 +307,7 @@ class TestAuthorCardBrowser(unittest.TestCase):
         ctx, page = self.open()
         try:
             page.locator("#articleAuthorName").click()
-            page.wait_for_function("() => document.querySelector('#authorCard .author-card-stats')", timeout=5000)
+            page.wait_for_function("() => !document.querySelector('#authorCard[aria-busy]') && document.querySelector('#authorCard .author-card-stat dd')", timeout=5000)
             stats = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('#authorCard .author-card-stat')]
               .map(s => [s.querySelector('dt').textContent, s.querySelector('dd').textContent]))""")
             rating = page.locator("#authorCard .author-card-rating span").inner_text()
@@ -331,7 +331,7 @@ class TestAuthorCardBrowser(unittest.TestCase):
         try:
             page.route("**/api/users/%s" % AUTHOR, lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fake)))
             page.locator("#articleAuthorName").click()
-            page.wait_for_function("() => document.querySelector('#authorCard .author-card-stats')", timeout=5000)
+            page.wait_for_function("() => !document.querySelector('#authorCard[aria-busy]') && document.querySelector('#authorCard .author-card-stat dd')", timeout=5000)
             page.wait_for_timeout(300)
             r = page.evaluate("""() => {
               const c = document.getElementById('authorCard'); const cr = c.getBoundingClientRect();
