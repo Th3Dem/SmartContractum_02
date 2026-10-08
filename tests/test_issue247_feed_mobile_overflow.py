@@ -44,6 +44,7 @@ from server import create_server, init_db
 from tests.auth_helpers import upload_auth_headers
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 PHONE_WIDTHS = [320, 360, 375, 414]
 MIN_TARGET = 32
 

@@ -39,6 +39,7 @@ import server
 from server import create_server, create_user, init_db
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 # Variables set from JavaScript at runtime (style.setProperty) are declared there
 RUNTIME_VARS = {"--phone-w", "--phone-h", "--phone-radius", "--phone-bezel-w", "--feed-header-total-height"}
 TRANSPARENT = ("rgba(0, 0, 0, 0)", "transparent")
