@@ -699,11 +699,12 @@ class TestIssue35VotingArrowsAndLiveCounters(unittest.TestCase):
         self.assertIn('value="discussed"', self.feed_html)
         self.assertIn("state.sort = sortVal;", self.feed_js)
 
-        # Fallback sorting: explicit sort has priority over tab
-        self.assertIn("const hasExplicitSort = Boolean(state.sort", self.feed_js)
-        self.assertIn("if (hasExplicitSort && state.sort === 'rating')", self.feed_js)
-        self.assertIn("else if (hasExplicitSort && state.sort === 'popular')", self.feed_js)
-        self.assertIn("else if (state.tab === 'top')", self.feed_js)
+        # Sorting is done by the server; offline there are no demo materials to sort (Issue #284)
+        offline = self.feed_js[self.feed_js.index("function handleOfflineFallback(isInitial)"):]
+        offline = offline[:offline.index("function updateResultsCount()")]
+        self.assertIn("state.articles = [];", offline)
+        self.assertIn("renderErrorState(", offline)
+        self.assertNotIn("FALLBACK_ARTICLES", self.feed_js)
         self.assertIn("smartcontractum:voted", self.feed_js)
 
     # --------------------------------------------------------------------------

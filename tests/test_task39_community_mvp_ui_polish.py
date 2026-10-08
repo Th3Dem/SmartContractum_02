@@ -19,7 +19,7 @@ import sqlite3
 
 import server
 from server import create_server, init_db
-import seed_data
+from tests.fixtures import seed_data
 from tests.backend_source import BACKEND_FILES, backend_source_file
 
 

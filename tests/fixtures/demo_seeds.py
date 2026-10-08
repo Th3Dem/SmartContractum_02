@@ -558,7 +558,7 @@ def seed_database(conn: sqlite3.Connection) -> None:
         seed_user_subscriptions(conn)
         seed_article_comments(conn)
         try:
-            import seed_data
+            from tests.fixtures import seed_data
             seed_data.seed_clubs(conn)
             seed_data.seed_companies(conn)
             conn.execute("""

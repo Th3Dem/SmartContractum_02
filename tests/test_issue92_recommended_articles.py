@@ -140,7 +140,9 @@ class TestIssue92RecommendedArticles(unittest.TestCase):
         self.assertIn('function loadRelatedArticles', self.js)
         self.assertIn('loadRelatedArticles(article)', self.js)
         self.assertIn('/api/articles?limit=12&tab=all', self.js)
-        self.assertIn('FALLBACK_ARTICLES', self.js)
+        # Only real materials are recommended, never built-in demo ones (Issue #284)
+        self.assertNotIn('FALLBACK_ARTICLES', self.js)
+        self.assertIn('applyRecommendations([]);', self.js)
 
         # Check showErrorState hides recommendations
         error_state_match = re.search(r'function showErrorState\b[^}]*relatedArticlesSection[^}]*display\s*=\s*[\'"]none[\'"]', self.js, re.DOTALL)

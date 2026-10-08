@@ -383,8 +383,8 @@ class SubscriptionsHandlers:
             if cmp_id:
                 comp_counts[cmp_id] = comp_counts.get(cmp_id, 0) + 1
 
-        import seed_data
-        desc_map = seed_data.TOPICS_DESCRIPTION_MAP
+        from backend.content import TOPICS_DESCRIPTION_MAP
+        desc_map = TOPICS_DESCRIPTION_MAP
 
         topics_list = []
         for tid, tname in STANDARD_TOPICS:

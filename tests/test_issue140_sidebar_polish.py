@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict
 
-import seed_data
+from tests.fixtures import seed_data
 import server
 from server import create_server, init_db
 

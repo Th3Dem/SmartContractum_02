@@ -105,11 +105,12 @@ def create_server(
     return httpd
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, seed: bool = False):
+def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None):
     """
     Starts the server loop listening on host:port.
     """
-    httpd = create_server(host=host, port=port, db_path=db_path, seed=seed, allow_demo_login=False, enforce_csrf=True)
+    # The product server never seeds demo content (Issue #284)
+    httpd = create_server(host=host, port=port, db_path=db_path, seed=False, allow_demo_login=False, enforce_csrf=True)
     print(f"Antigravity Moderation Server running at http://{host}:{port}/")
     print(f"Serving static files from {httpd.directory}")
     print(f"SQLite database at {httpd.db_path}")

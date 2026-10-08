@@ -45,6 +45,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import server
+from tests.fixtures import demo_seeds
 import image_decoder
 from tests.backend_source import BACKEND_FILES, backend_source_file
 from tests.auth_helpers import upload_auth_headers
@@ -1774,8 +1775,8 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
         self.assertIn(r"closest(\'.card-cover-container\')", self.card_js)
         self.assertIn('remove()', self.card_js)
 
-        # 3. Seed articles in server.py and FALLBACK_ARTICLES in feed.js use base64 data URIs
-        for art in server.APPROVED_SEED_ARTICLES:
+        # 3. Demo fixture articles (tests/fixtures, Issue #284) use base64 data URIs
+        for art in demo_seeds.APPROVED_SEED_ARTICLES:
             cov = art["publication_settings"].get("coverImage", "")
             self.assertTrue(cov.startswith("data:image/svg+xml;base64,"), f"Article {art['id']} must use base64 data URI")
             # Verify base64 decodes cleanly
@@ -1785,7 +1786,8 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
             self.assertTrue(decoded.endswith("</svg>"))
 
         self.assertNotIn('images.unsplash.com', self.feed_js)
-        self.assertIn('data:image/svg+xml;base64,', self.feed_js)
+        # The feed has no built-in demo materials any more (Issue #284)
+        self.assertNotIn('FALLBACK_ARTICLES', self.feed_js)
 
     def test_sidebar_topics_widget_styling_and_descending_sort(self):
         """Verify sidebar topics widget has row layout, left-aligned title, counter pill, and count-descending sort."""
@@ -1813,7 +1815,7 @@ class TestTask27FeedVisualRegressionsAndPolish(unittest.TestCase):
     def test_demo_badge_and_clean_metadata(self):
         """Verify demo articles have no (демо) in titles/roles, but display badge-demo in card metadata."""
         # 1. Server seed articles have isDemo: True and clean titles/roles
-        for art in server.APPROVED_SEED_ARTICLES:
+        for art in demo_seeds.APPROVED_SEED_ARTICLES:
             self.assertTrue(art["publication_settings"].get("isDemo"), f"Article {art['id']} must have isDemo: True")
             self.assertNotIn('(демо)', art["title"])
             self.assertNotIn('(демо)', art["publication_settings"]["authorRole"])
@@ -2644,7 +2646,7 @@ class TestTask30PersonalizationAndComments(unittest.TestCase):
         # Test idempotency: re-run seeding
         initial_cnt = len(rows)
         with conn:
-            server.seed_article_comments(conn)
+            demo_seeds.seed_article_comments(conn)
             cur.execute("SELECT COUNT(*) AS cnt FROM article_comments WHERE article_id = 'art-01'")
             cnt = cur.fetchone()["cnt"]
             self.assertEqual(cnt, initial_cnt, "Re-running seed_article_comments must be idempotent (no duplicates)")

@@ -5287,18 +5287,11 @@
             'Материал с указанным идентификатором не найден в утвержденном реестре публикаций платформы SmartContractum.'
           );
         } else {
-          // Offline / local static fallback check
-          const fallback = FALLBACK_ARTICLES.find(function (a) {
-            return a.id === articleId || a.draftId === articleId;
-          });
-          if (fallback) {
-            populateArticle(fallback);
-          } else {
-            showErrorState(
-              'Не удалось загрузить публикацию',
-              'Проверьте подключение к серверу платформы SmartContractum.'
-            );
-          }
+          // No demo materials offline (Issue #284)
+          showErrorState(
+            'Не удалось загрузить публикацию',
+            'Проверьте подключение к серверу платформы SmartContractum.'
+          );
         }
       });
   }
@@ -5978,14 +5971,11 @@
       })
       .then(function (data) {
         const list = (data && data.success && Array.isArray(data.articles)) ? data.articles : [];
-        if (list.length > 0) {
-          applyRecommendations(list);
-        } else {
-          applyRecommendations(FALLBACK_ARTICLES);
-        }
+        // Only real materials are recommended; with none the block stays hidden (Issue #284)
+        applyRecommendations(list);
       })
       .catch(function () {
-        applyRecommendations(FALLBACK_ARTICLES);
+        applyRecommendations([]);
       });
   }
 
@@ -6019,41 +6009,6 @@
     if (errorDesc) errorDesc.textContent = desc;
   }
 
-  // --------------------------------------------------------------------------
-  // 7. Offline Fallback Seed Articles
-  // --------------------------------------------------------------------------
-  const FALLBACK_ARTICLES = [
-    {
-      id: 'art-01',
-      title: 'Интеграция смарт-контрактов с платформой цифрового рубля Банка России',
-      description: 'Архитектурный анализ взаимодействия шлюзов ПКСК с платформой цифрового рубля: моделирование атомарных транзакций, двухфазный коммит и валидация криптографических подписей по ГОСТ Р 34.12-2015.',
-      author: 'Алексей Смирнов',
-      authorInitials: 'АС',
-      authorRole: 'Архитектор решений (демо)',
-      date: '26 сентября 2026',
-      topics: ['digital-ruble-payments', 'pksc-architecture', 'smart-contracts-development'],
-      format: 'tutorial',
-      complexity: 'hard',
-      readingTime: '5 мин',
-      keywords: ['Цифровой рубль', 'Банк России', 'ПКСК', 'Смарт-контракты', 'Атомарные расчеты'],
-      html: '<h2>Архитектурный обзор</h2><p>Интеграция корпоративных сетей со шлюзом цифрового рубля.</p>'
-    },
-    {
-      id: 'art-02',
-      title: 'Аудит безопасности смарт-контрактов по ГОСТ Р 57580: типичные уязвимости и превентивный анализ',
-      description: 'Разбор критических векторов атак на корпоративные распределенные реестры: повторный вход (reentrancy), ошибки управления доступом и методы автоматизированного аудита исходного кода.',
-      author: 'Екатерина Романова',
-      authorInitials: 'ЕР',
-      authorRole: 'Ведущий аудитор безопасности (демо)',
-      date: '25 сентября 2026',
-      topics: ['information-security', 'audit-and-verification', 'smart-contracts-development'],
-      format: 'review',
-      complexity: 'hard',
-      readingTime: '6 мин',
-      keywords: ['Аудит ИБ', 'ГОСТ Р 57580', 'Уязвимости', 'Reentrancy', 'Формальная верификация'],
-      html: '<h2>Векторы атак</h2><p>Анализ безопасности смарт-контрактов по ГОСТ.</p>'
-    }
-  ];
 
   // --------------------------------------------------------------------------
   // 7b. Code Block Copy Buttons & Notifications

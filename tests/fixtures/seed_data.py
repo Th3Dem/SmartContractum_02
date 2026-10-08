@@ -88,24 +88,7 @@ STANDARD_TOPICS: List[Tuple[str, str]] = [
 
 TOPICS_TITLE_MAP: Dict[str, str] = dict(STANDARD_TOPICS)
 
-TOPICS_DESCRIPTION_MAP: Dict[str, str] = {
-    "pksc-architecture": "Архитектурные паттерны, консенсус и масштабирование корпоративных систем",
-    "smart-contracts-development": "Написание безопасного кода, оптимизация исполнения и шаблоны контрактов",
-    "business-logic-deals": "Автоматизация бизнес-процессов, алгоритмы сделок и транзакций",
-    "testing-and-quality": "Модульное, интеграционное и нагрузочное тестирование контрактов и узлов",
-    "information-security": "Защита узлов, предотвращение атак и безопасность ключей",
-    "audit-and-verification": "Формальная верификация, статический анализ и аудит безопасности",
-    "law-and-compliance": "Правовой статус смарт-контрактов и регуляторные требования РФ",
-    "oracles-and-data": "Поставка доверенных внешних данных и верификация источников",
-    "integrations-and-api": "Интеграция реестров с банковскими и корпоративными системами",
-    "digital-ruble-payments": "Программируемые расчеты, интеграция цифрового рубля и платежи",
-    "lifecycle-versioning": "Управление версиями контрактов и обновление логики",
-    "infrastructure-operations": "Развертывание узлов, мониторинг и сопровождение сетей",
-    "infrastructure-and-nodes": "Развертывание узлов, мониторинг и сопровождение сетей",
-    "analytics-and-monitoring": "Аналитика распределенных реестров, телеметрия и мониторинг смарт-контрактов",
-    "standards-and-protocols": "Отраслевые стандарты, форматы токенизации и протоколы взаимодействия",
-    "business-cases-adoption": "Практические кейсы внедрения распределенных реестров",
-}
+from backend.content import TOPICS_DESCRIPTION_MAP  # noqa: E402,F401  (real configuration, Issue #284)
 
 CLUBS_DATA = [
     {

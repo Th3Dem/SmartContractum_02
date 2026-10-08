@@ -517,8 +517,8 @@ class CommunitiesHandlers:
         query = urllib.parse.parse_qs(parsed_url.query)
         search_query = (query.get("search", [""])[0] or "").strip().lower()
 
-        import seed_data
-        desc_map = seed_data.TOPICS_DESCRIPTION_MAP
+        from backend.content import TOPICS_DESCRIPTION_MAP
+        desc_map = TOPICS_DESCRIPTION_MAP
 
         user = self.get_current_user()
         user_subs = set()

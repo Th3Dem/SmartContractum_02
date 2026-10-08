@@ -3,7 +3,7 @@
 server.py - SmartContractum web server entry point.
 
 The application lives in the backend/ package:
-- backend/config.py, db.py, users.py, security.py, mail.py, content.py, submissions.py, seeds.py, storage.py
+- backend/config.py, db.py, users.py, security.py, mail.py, content.py, submissions.py, storage.py
 - backend/handlers/: HTTP handlers grouped by product area, assembled in backend/app.py
 
 This module loads the local .env (only when run as a script), re-exports the public names
@@ -11,7 +11,7 @@ of the package for existing imports such as `from server import init_db`, and pa
 command line.
 
 Usage:
-    python3 server.py --port 8000 [--host 127.0.0.1] [--db path] [--seed]
+    python3 server.py --port 8000 [--host 127.0.0.1] [--db path]
     python3 server.py --send-test-email ADDRESS
     python3 server.py --create-admin LOGIN EMAIL
 """
@@ -36,7 +36,6 @@ from backend.storage import *  # noqa: F401,F403
 from backend.security import *  # noqa: F401,F403
 from backend.mail import *  # noqa: F401,F403
 from backend.users import *  # noqa: F401,F403
-from backend.seeds import *  # noqa: F401,F403
 from backend.db import *  # noqa: F401,F403
 from backend.submissions import *  # noqa: F401,F403
 from backend.app import *  # noqa: F401,F403
@@ -62,7 +61,6 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=None, help="Port to listen on (default 8000)")
     parser.add_argument("--host", type=str, default=os.environ.get("HOST", "0.0.0.0"), help="Host to bind to (default 0.0.0.0)")
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
-    parser.add_argument("--seed", action="store_true", help="Seed database with demo data on startup")
     parser.add_argument("--send-test-email", metavar="ADDRESS", help="Send one test email with the current mail settings and exit")
     parser.add_argument("--create-admin", nargs=2, metavar=("LOGIN", "EMAIL"),
                         help="Create or promote the administrator account with a new random password and exit")
@@ -96,4 +94,4 @@ if __name__ == "__main__":
         print(f"Test email sent to {args.send_test_email}")
         sys.exit(0)
     port = args.port or args.port_pos or int(os.environ.get("PORT", 8000))
-    run_server(host=args.host, port=port, db_path=args.db, seed=args.seed)
+    run_server(host=args.host, port=port, db_path=args.db)

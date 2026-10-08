@@ -22,6 +22,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'public')
 
 import server
+from tests.fixtures import demo_seeds
 
 
 class TestIssue54SC026FeedCardHabrLayout(unittest.TestCase):
@@ -123,7 +124,7 @@ class TestIssue54SC026FeedCardHabrLayout(unittest.TestCase):
         # feed.js search still indexes keywords
         self.assertIn('art.keywords', self.feed_js)
         # server.py returns keywords in publication settings
-        self.assertIn('keywords', server.APPROVED_SEED_ARTICLES[0].get('publication_settings', {}))
+        self.assertIn('keywords', demo_seeds.APPROVED_SEED_ARTICLES[0].get('publication_settings', {}))
         # GET /api/articles returns keywords
         req = urllib.request.Request(f"{self.base_url}/api/articles")
         with urllib.request.urlopen(req) as resp:
