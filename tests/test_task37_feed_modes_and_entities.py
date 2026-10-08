@@ -36,7 +36,7 @@ from server import (
     get_db_connection,
     init_db,
 )
-import seed_data
+from tests.fixtures import seed_data
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")

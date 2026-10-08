@@ -13,10 +13,9 @@ Test Matrix:
 5. test_init_db_env_enable: SEED_ON_INIT="1" enables seeding when seed is None.
 6. test_create_server_seed_false: create_server(seed=False) leaves DB without demo records.
 7. test_create_server_seed_true: create_server(seed=True) seeds DB with demo records.
-8. test_scripts_seed_cli: scripts/seed.py --db <path> populates demo data with exit code 0.
-9. test_scripts_seed_executable: Direct execution of ./scripts/seed.py succeeds.
-10. test_server_subprocess_without_seed: server.py without --seed starts cleanly and leaves DB unseeded.
-11. test_server_subprocess_with_seed: server.py with --seed starts cleanly and seeds demo records.
+8. test_demo_content_is_only_a_test_fixture: demo data lives in tests/fixtures only (Issue #284).
+9. test_server_subprocess_without_seed: server.py starts cleanly and leaves DB unseeded.
+10. test_server_rejects_seed_flag: server.py has no --seed option (Issue #284).
 """
 
 import os
@@ -34,7 +33,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 import server
-from server import create_server, init_db, seed_database
+from server import create_server, init_db
+from tests.fixtures.demo_seeds import seed_database
 
 
 def get_free_port() -> int:
@@ -186,38 +186,14 @@ class TestIssue18SeparateServerStartupAndSeed(unittest.TestCase):
         finally:
             httpd.server_close()
 
-    def test_scripts_seed_cli(self):
-        """scripts/seed.py --db <path> populates demo data with returncode 0."""
-        script_path = os.path.join(PROJECT_ROOT, "scripts", "seed.py")
-        res = subprocess.run(
-            [sys.executable, script_path, "--db", self.db_path],
-            cwd=PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(res.returncode, 0, f"seed.py failed: {res.stderr}")
-        self.assertIn("Database seeded successfully.", res.stdout)
-
-        conn = sqlite3.connect(self.db_path)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM moderation_submissions")
-        self.assertGreater(cur.fetchone()[0], 0)
-        cur.execute("SELECT COUNT(*) FROM companies")
-        self.assertGreater(cur.fetchone()[0], 0)
-        conn.close()
-
-    def test_scripts_seed_executable(self):
-        """Executing scripts/seed.py directly works as executable."""
-        script_path = os.path.join(PROJECT_ROOT, "scripts", "seed.py")
-        self.assertTrue(os.access(script_path, os.X_OK), "scripts/seed.py must be executable")
-        res = subprocess.run(
-            [script_path, "--db", self.db_path],
-            cwd=PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(res.returncode, 0, f"Executable failed: {res.stderr}")
-        self.assertIn("Database seeded successfully.", res.stdout)
+    def test_demo_content_is_only_a_test_fixture(self):
+        """Issue #284: no demo seeding in the product code; the data lives in tests/fixtures."""
+        self.assertFalse(os.path.exists(os.path.join(PROJECT_ROOT, "scripts", "seed.py")))
+        self.assertFalse(os.path.exists(os.path.join(PROJECT_ROOT, "seed_data.py")))
+        self.assertFalse(os.path.exists(os.path.join(PROJECT_ROOT, "backend", "seeds.py")))
+        self.assertTrue(os.path.exists(os.path.join(PROJECT_ROOT, "tests", "fixtures", "demo_seeds.py")))
+        with open(os.path.join(PROJECT_ROOT, "backend", "app.py"), encoding="utf-8") as f:
+            self.assertIn("seed=False, allow_demo_login=False", f.read(), "run_server never seeds")
 
     def test_server_subprocess_without_seed(self):
         """Running server.py via subprocess without --seed leaves DB without demo records."""
@@ -270,57 +246,23 @@ class TestIssue18SeparateServerStartupAndSeed(unittest.TestCase):
         self.assertEqual(cur.fetchone()[0], 0, "server.py without --seed should not seed companies")
         conn.close()
 
-    def test_server_subprocess_with_seed(self):
-        """Running server.py --seed via subprocess populates demo records."""
-        port = get_free_port()
-        proc = subprocess.Popen(
-            [sys.executable, "server.py", "--host", "127.0.0.1", "--port", str(port), "--db", self.db_path, "--seed"],
-            cwd=PROJECT_ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+    def test_server_rejects_seed_flag(self):
+        """Issue #284: server.py has no --seed option and exits with a usage error."""
+        res = subprocess.run(
+            [sys.executable, "server.py", "--host", "127.0.0.1", "--port", str(get_free_port()),
+             "--db", self.db_path, "--seed"],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=20,
         )
-        try:
-            # Wait for server to initialize and seed database
-            started = False
-            for _ in range(60):
-                if proc.poll() is not None:
-                    break
-                if os.path.exists(self.db_path):
-                    try:
-                        conn_chk = sqlite3.connect(self.db_path)
-                        cur_chk = conn_chk.cursor()
-                        cur_chk.execute("SELECT COUNT(*) FROM moderation_submissions")
-                        row = cur_chk.fetchone()
-                        conn_chk.close()
-                        if row and row[0] > 0:
-                            started = True
-                            break
-                    except Exception:
-                        pass
-                time.sleep(0.1)
-
-            self.assertTrue(started, "Server did not seed database in time")
-        finally:
-            proc.terminate()
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("unrecognized arguments: --seed", res.stderr)
+        if os.path.exists(self.db_path):
+            conn = sqlite3.connect(self.db_path)
             try:
-                proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-            if proc.stdout:
-                proc.stdout.close()
-            if proc.stderr:
-                proc.stderr.close()
-
-        conn = sqlite3.connect(self.db_path)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM moderation_submissions")
-        self.assertGreater(cur.fetchone()[0], 0, "server.py --seed should populate moderation_submissions")
-        cur.execute("SELECT COUNT(*) FROM companies")
-        self.assertGreater(cur.fetchone()[0], 0, "server.py --seed should populate companies")
-        conn.close()
-
+                tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+                if "moderation_submissions" in tables:
+                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM moderation_submissions").fetchone()[0], 0)
+            finally:
+                conn.close()
 
 if __name__ == "__main__":
     unittest.main()

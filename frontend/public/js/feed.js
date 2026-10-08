@@ -2026,40 +2026,8 @@
 
   function fallbackCatalog(isInitial, query) {
     const footer = document.getElementById('feedCatalogFooter');
-    let fallbackPool = [];
-    if (activeSettingsSubsType === 'author') {
-      fallbackPool = [
-        { id: 'alexey-smirnov', title: 'Алексей Смирнов', role: 'Архитектор решений', count: 8 },
-        { id: 'ekaterina-romanova', title: 'Екатерина Романова', role: 'Ведущий аудитор безопасности', count: 12 },
-        { id: 'ilya-melnikov', title: 'Илья Мельников', role: 'Советник по правовым вопросам ЦФА', count: 6 },
-        { id: 'viktor-nesterov', title: 'Виктор Нестеров', role: 'Инженер распределенных систем', count: 10 },
-        { id: 'dmitry-kuznetsov', title: 'Дмитрий Кузнецов', role: 'Tech Lead Blockchain Core', count: 5 },
-        { id: 'anna-orlova', title: 'Анна Орлова', role: 'Руководитель комплаенс практики', count: 4 }
-      ];
-    } else if (activeSettingsSubsType === 'tag') {
-      fallbackPool = [
-        { id: 'смарт-контракты', title: 'смарт-контракты', count: 15 },
-        { id: 'цифровой-рубль', title: 'цифровой-рубль', count: 12 },
-        { id: 'безопасность', title: 'безопасность', count: 10 },
-        { id: 'аудит', title: 'аудит', count: 8 },
-        { id: 'цфа', title: 'цфа', count: 7 },
-        { id: 'пкск', title: 'пкск', count: 6 },
-        { id: 'оракулы', title: 'оракулы', count: 5 },
-        { id: 'комплаенс', title: 'комплаенс', count: 5 },
-        { id: 'reentrancy', title: 'reentrancy', count: 4 },
-        { id: 'solidity', title: 'solidity', count: 4 }
-      ];
-    }
-
-    if (query) {
-      const qLower = query.toLowerCase();
-      fallbackPool = fallbackPool.filter(function (it) {
-        return (it.title && it.title.toLowerCase().indexOf(qLower) !== -1) ||
-               (it.role && it.role.toLowerCase().indexOf(qLower) !== -1);
-      });
-    }
-
-    catalogItems = fallbackPool;
+    // No invented authors or tags when the catalog is unavailable (Issue #284)
+    catalogItems = [];
     catalogHasMore = false;
     if (footer) footer.style.display = 'none';
     renderFeedSettingsCatalogList();
@@ -4316,103 +4284,12 @@
   const loadArticles = fetchFeed;
 
   function handleOfflineFallback(isInitial) {
-    if (state.savedOnly) {
-      const bookmarks = getBookmarks();
-      const filtered = FALLBACK_ARTICLES.filter(function (a) {
-        return bookmarks.indexOf(a.id) !== -1;
-      });
-      state.articles = filtered;
-      state.total = filtered.length;
-      state.hasMore = false;
-      renderFeedCards(isInitial);
-      updateResultsCount();
-      return;
-    }
-
-    let items = filterArticleList(FALLBACK_ARTICLES);
-
-    // Apply sorting in offline fallback: explicit state.sort has strict priority over tab
-    const hasExplicitSort = Boolean(state.sort && state.sort !== 'default' && state.sort !== 'none');
-    if (hasExplicitSort && state.sort === 'rating') {
-      items.sort(function (a, b) {
-        const sa = a.score !== undefined ? a.score : 0;
-        const sb = b.score !== undefined ? b.score : 0;
-        if (sb !== sa) return sb - sa;
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else if (hasExplicitSort && state.sort === 'popular') {
-      items.sort(function (a, b) {
-        const la = (a.likesCount !== undefined ? a.likesCount : a.views || 0);
-        const lb = (b.likesCount !== undefined ? b.likesCount : b.views || 0);
-        if (lb !== la) return lb - la;
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else if (hasExplicitSort && state.sort === 'oldest') {
-      items.sort(function (a, b) {
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return da - db;
-      });
-    } else if (hasExplicitSort && (state.sort === 'discussed' || state.sort === 'comments')) {
-      items.sort(function (a, b) {
-        const ca = a.commentsCount || 0;
-        const cb = b.commentsCount || 0;
-        if (cb !== ca) return cb - ca;
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else if (hasExplicitSort && state.sort === 'newest') {
-      items.sort(function (a, b) {
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else if (state.tab === 'top') {
-      items.sort(function (a, b) {
-        const sa = a.score !== undefined ? a.score : 0;
-        const sb = b.score !== undefined ? b.score : 0;
-        if (sb !== sa) return sb - sa;
-        const ca = a.commentsCount || 0;
-        const cb = b.commentsCount || 0;
-        if (cb !== ca) return cb - ca;
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else if (state.tab === 'focus') {
-      items.sort(function (a, b) {
-        const la = (a.likesCount !== undefined ? a.likesCount : a.views || 0);
-        const lb = (b.likesCount !== undefined ? b.likesCount : b.views || 0);
-        if (lb !== la) return lb - la;
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    } else {
-      items.sort(function (a, b) {
-        const da = parseArticleDate(a) || 0;
-        const db = parseArticleDate(b) || 0;
-        return db - da;
-      });
-    }
-
-    state.articles = items;
-    state.total = items.length;
+    // No demo materials offline (Issue #284): say there is no connection and offer a retry
+    state.articles = [];
+    state.total = 0;
     state.hasMore = false;
-    renderFeedCards(isInitial);
     updateResultsCount();
-    renderSidebarTopics({
-      'digital-ruble-payments': 1,
-      'smart-contracts-development': 2,
-      'information-security': 1,
-      'law-and-compliance': 1,
-      'oracles-and-data': 1
-    });
+    renderErrorState('Нет соединения с сервером. Проверьте подключение и повторите попытку.', 'Нет соединения');
   }
 
   function updateResultsCount() {
@@ -4796,7 +4673,7 @@
     }
   }
 
-  function renderErrorState(message) {
+  function renderErrorState(message, title) {
     const container = document.getElementById('feedCardsContainer');
     if (!container) return;
 
@@ -4807,7 +4684,7 @@
           '<line x1="12" y1="8" x2="12" y2="12"></line>' +
           '<line x1="12" y1="16" x2="12.01" y2="16"></line>' +
         '</svg>' +
-        '<h3 class="empty-state-title">Ошибка загрузки</h3>' +
+        '<h3 class="empty-state-title">' + escapeHtml(title || 'Ошибка загрузки') + '</h3>' +
         '<p class="empty-state-desc">' + escapeHtml(message) + '</p>' +
         '<button type="button" class="btn btn-secondary" id="feedRetryBtn" onclick="if(window.FeedApp&&window.FeedApp.loadArticles){window.FeedApp.loadArticles(true);}else{window.location.reload();}">' +
           'Повторить попытку' +
@@ -5413,107 +5290,6 @@
     renderItems();
   }
 
-  // --------------------------------------------------------------------------
-  // 12. Offline Fallback Seed Articles
-  // --------------------------------------------------------------------------
-  const FALLBACK_ARTICLES = [
-    {
-      id: 'art-01',
-      title: 'Интеграция смарт-контрактов с платформой Цифрового рубля Банка России',
-      description: 'Архитектурный обзор и практический кейс интеграции децентрализованных коммерческих смарт-контрактов с двухуровневой платформой Цифрового рубля.',
-      author: 'Алексей Смирнов',
-      authorRole: 'Архитектор решений',
-      authorInitials: 'АС',
-      date: '26 сентября 2026',
-      readingTime: '8 мин',
-      readingMinutes: 8,
-      topic: 'smart-contracts-development',
-      topics: ['smart-contracts-development', 'digital-ruble-payments', 'pksc-architecture'],
-      targetAudience: 'architects-developers',
-      format: 'article',
-      complexity: 'hard',
-      isDemo: true,
-      keywords: ['Цифровой рубль', 'Банк России', 'ПКСК', 'Смарт-контракты', 'Атомарные расчеты'],
-      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDYwYzE4Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGUxZTM4Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNjM2NmYxIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmcxKSIvPjxjaXJjbGUgY3g9IjYyMCIgY3k9IjE4MCIgcj0iMTYwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoNTYsMTg5LDI0OCwwLjE1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iNjIwIiBjeT0iMTgwIiByPSIxMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSg5OSwxMDIsMjQxLDAuMikiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtZGFzaGFycmF5PSI4IDYiLz48Y2lyY2xlIGN4PSI2MjAiIGN5PSIxODAiIHI9IjYwIiBmaWxsPSJyZ2JhKDU2LDE4OSwyNDgsMC4wOCkiLz48cmVjdCB4PSI2NCIgeT0iNjQiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzIiIHJ4PSIxNiIgZmlsbD0icmdiYSg1NiwxODksMjQ4LDAuMTIpIiBzdHJva2U9InJnYmEoNTYsMTg5LDI0OCwwLjMpIi8+PHRleHQgeD0iODQiIHk9Ijg1IiBmaWxsPSIjMzhiZGY4IiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiIGZvbnQtd2VpZ2h0PSI3MDAiIGxldHRlci1zcGFjaW5nPSIxIj7QptCY0KTQoNCe0JLQntCZINCg0KPQkdCb0Kw8L3RleHQ+PHRleHQgeD0iNjQiIHk9IjE2MCIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM0IiBmb250LXdlaWdodD0iODAwIj7QmNC90YLQtdCz0YDQsNGG0LjRjyDRgdC80LDRgNGCLdC60L7QvdGC0YDQsNC60YLQvtCyPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSIyMDIiIGZpbGw9IiM5NGEzYjgiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzNCIgZm9udC13ZWlnaHQ9IjgwMCI+0YEg0L/Qu9Cw0YLRhNC+0YDQvNC+0Lkg0JHQsNC90LrQsCDQoNC+0YHRgdC40Lg8L3RleHQ+PGxpbmUgeDE9IjY0IiB5MT0iMjM2IiB4Mj0iMzgwIiB5Mj0iMjM2IiBzdHJva2U9InVybCgjYWNjMSkiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHRleHQgeD0iNjQiIHk9IjI3NCIgZmlsbD0iI2NiZDVlMSIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2Ij7QkNGA0YXQuNGC0LXQutGC0YPRgNCwINGI0LvRjtC30LAg4oCiINCU0LLRg9GF0YTQsNC30L3Ri9C5INC60L7QvNC80LjRgiAyUEMg4oCiINCT0J7QodCiINCgIDM0LjEwLTIwMTI8L3RleHQ+PC9zdmc+'
-    },
-    {
-      id: 'art-02',
-      title: 'Практическое руководство по аудиту информационной безопасности смарт-контрактов',
-      description: 'Исчерпывающая методология проведения статического и динамического аудита безопасности смарт-контрактов в соответствии с требованиями ГОСТ Р 57580.',
-      author: 'Екатерина Романова',
-      authorRole: 'Ведущий аудитор безопасности',
-      authorInitials: 'ЕР',
-      date: '25 сентября 2026',
-      readingTime: '12 мин',
-      readingMinutes: 12,
-      topic: 'information-security',
-      topics: ['information-security', 'audit-and-verification', 'testing-and-quality'],
-      targetAudience: 'security-auditors',
-      format: 'guide',
-      complexity: 'medium',
-      isDemo: true,
-      keywords: ['Аудит ИБ', 'ГОСТ Р 57580', 'Уязвимости', 'Reentrancy', 'Формальная верификация'],
-      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDYwZjE0Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGQyMjIwIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTBiOTgxIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmcyKSIvPjxwYXRoIGQ9Ik02MDAgOTAgTDcxMCAxNDAgTDcxMCAyNzAgTDYwMCAzNTAgTDQ5MCAyNzAgTDQ5MCAxNDAgWiIgZmlsbD0icmdiYSgxNiwxODUsMTI5LDAuMDYpIiBzdHJva2U9InJnYmEoMTYsMTg1LDEyOSwwLjMpIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNjAwIDEzMCBMNjcwIDE2NSBMNjcwIDI0NSBMNjAwIDI5NSBMNTMwIDI0NSBMNTMwIDE2NSBaIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoNTYsMTg5LDI0OCwwLjI1KSIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1kYXNoYXJyYXk9IjYgNCIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjE0MCIgaGVpZ2h0PSIzMiIgcng9IjE2IiBmaWxsPSJyZ2JhKDE2LDE4NSwxMjksMC4xMikiIHN0cm9rZT0icmdiYSgxNiwxODUsMTI5LDAuMykiLz48dGV4dCB4PSI4NCIgeT0iODUiIGZpbGw9IiMxMGI5ODEiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9IjEiPtCR0JXQl9Ce0J/QkNCh0J3QntCh0KLQrDwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMTYwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtCQ0YPQtNC40YIg0YHQvNCw0YDRgi3QutC+0L3RgtGA0LDQutGC0L7QsjwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMjAyIiBmaWxsPSIjOTRhM2I4IiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtC/0L4g0YHRgtCw0L3QtNCw0YDRgtGDINCT0J7QodCiINCgIDU3NTgwPC90ZXh0PjxsaW5lIHgxPSI2NCIgeTE9IjIzNiIgeDI9IjM4MCIgeTI9IjIzNiIgc3Ryb2tlPSJ1cmwoI2FjYzIpIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjx0ZXh0IHg9IjY0IiB5PSIyNzQiIGZpbGw9IiNjYmQ1ZTEiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNiI+0J/RgNC10LLQtdC90YLQuNCy0L3Ri9C5INCw0L3QsNC70LjQtyDigKIgUmVlbnRyYW5jeUd1YXJkIOKAoiDQpNC+0YDQvNCw0LvRjNC90LDRjyDQstC10YDQuNGE0LjQutCw0YbQuNGPPC90ZXh0Pjwvc3ZnPg=='
-    },
-    {
-      id: 'art-03',
-      title: 'Правовая квалификация смарт-контрактов и комплаенс ЦФА в РФ',
-      description: 'Анализ актуальной судебной практики, регуляторных требований Федерального закона № 259-ФЗ и правового статуса самоисполняемых соглашений.',
-      author: 'Илья Мельников',
-      authorRole: 'Советник по правовым вопросам ЦФА',
-      authorInitials: 'ИМ',
-      date: '24 сентября 2026',
-      readingTime: '6 мин',
-      readingMinutes: 6,
-      topic: 'law-and-compliance',
-      topics: ['law-and-compliance', 'business-cases-adoption'],
-      targetAudience: 'lawyers-compliance',
-      format: 'analytics',
-      complexity: 'easy',
-      isDemo: true,
-      keywords: ['Право', 'Комплаенс', 'ГК РФ', 'Цифровые права', 'ЦФА'],
-      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzMiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTAwYzFlIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWExNTMyIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzMiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjYTg1NWY3Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNjM2NmYxIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmczKSIvPjxwYXRoIGQ9Ik01NTAgMTIwIEw2NzAgMTIwIEw2MTAgMjAwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgxNjgsODUsMjQ3LDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPjxsaW5lIHgxPSI2MTAiIHkxPSI4MCIgeDI9IjYxMCIgeTI9IjMwMCIgc3Ryb2tlPSJyZ2JhKDE2OCw4NSwyNDcsMC4yKSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iNjQiIHk9IjY0IiB3aWR0aD0iMTgwIiBoZWlnaHQ9IjMyIiByeD0iMTYiIGZpbGw9InJnYmEoMTY4LDg1LDI0NywwLjEyKSIgc3Ryb2tlPSJyZ2JhKDE2OCw4NSwyNDcsMC4zKSIvPjx0ZXh0IHg9Ijg0IiB5PSI4NSIgZmlsbD0iI2MwODRmYyIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIiBmb250LXdlaWdodD0iNzAwIiBsZXR0ZXItc3BhY2luZz0iMSI+0J/QoNCQ0JLQniDQmCDQmtCe0JzQn9Cb0JDQldCd0KE8L3RleHQ+PHRleHQgeD0iNjQiIHk9IjE2MCIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM0IiBmb250LXdlaWdodD0iODAwIj7Qn9GA0LDQstC+0LLQsNGPINC60LLQsNC70LjRhNC40LrQsNGG0LjRjzwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMjAyIiBmaWxsPSIjOTRhM2I4IiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtGB0LzQsNGA0YIt0LrQvtC90YLRgNCw0LrRgtC+0LIg0LIg0KDQpDwvdGV4dD48bGluZSB4MT0iNjQiIHkxPSIyMzYiIHgyPSIzODAiIHkyPSIyMzYiIHN0cm9rZT0idXJsKCNhY2MzKSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48dGV4dCB4PSI2NCIgeT0iMjc0IiBmaWxsPSIjY2JkNWUxIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiPtCh0YLQsNGC0YzRjyAzMDkg0JPQmiDQoNCkIOKAoiDQptCk0JAgKDI1OS3QpNCXKSDigKIg0JDRgNCx0LjRgtGA0LDQttC90LDRjyDQv9GA0LDQutGC0LjQutCwPC90ZXh0Pjwvc3ZnPg=='
-    },
-    {
-      id: 'art-04',
-      title: 'Архитектура надежных оракулов данных для распределенных реестров',
-      description: 'Проектирование децентрализованной поставки рыночных данных, валютных курсов и фактов исполнения внешних обязательств в защищенные реестры.',
-      author: 'Виктор Нестеров',
-      authorRole: 'Инженер распределенных систем',
-      authorInitials: 'ВН',
-      date: '23 сентября 2026',
-      readingTime: '10 мин',
-      readingMinutes: 10,
-      topic: 'oracles-and-data',
-      topics: ['oracles-and-data', 'integrations-and-api'],
-      targetAudience: 'architects-developers',
-      format: 'case',
-      complexity: 'hard',
-      isDemo: true,
-      keywords: ['Оракулы', 'Внешние данные', 'API', 'Консенсус', 'ЦФА'],
-      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzQiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGMxNDFlIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMTMyNzNhIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzQiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZjU5ZTBiIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMzhiZGY4Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmc0KSIvPjxjaXJjbGUgY3g9IjYyMCIgY3k9IjE4MCIgcj0iMTMwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjQ1LDE1OCwxMSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxjaXJjbGUgY3g9IjU2MCIgY3k9IjE1MCIgcj0iMTQiIGZpbGw9IiNmNTllMGIiLz48Y2lyY2xlIGN4PSI2NzAiIGN5PSIxMzAiIHI9IjEwIiBmaWxsPSIjMzhiZGY4Ii8+PGNpcmNsZSBjeD0iNjQwIiBjeT0iMjQwIiByPSIxMiIgZmlsbD0iIzEwYjk4MSIvPjxsaW5lIHgxPSI1NjAiIHkxPSIxNTAiIHgyPSI2NzAiIHkyPSIxMzAiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxsaW5lIHgxPSI2NzAiIHkxPSIxMzAiIHgyPSI2NDAiIHkyPSIyNDAiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxsaW5lIHgxPSI2NDAiIHkxPSIyNDAiIHgyPSI1NjAiIHkyPSIxNTAiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIiBzdHJva2Utd2lkdGg9IjEuNSIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjE2MCIgaGVpZ2h0PSIzMiIgcng9IjE2IiBmaWxsPSJyZ2JhKDI0NSwxNTgsMTEsMC4xMikiIHN0cm9rZT0icmdiYSgyNDUsMTU4LDExLDAuMykiLz48dGV4dCB4PSI4NCIgeT0iODUiIGZpbGw9IiNmYmJmMjQiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9IjEiPtCe0KDQkNCa0KPQm9CrINCYINCU0JDQndCd0KvQlTwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMTYwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtCf0L7RgdGC0LDQstC60LAg0LLQvdC10YjQvdC40YUg0LTQsNC90L3Ri9GFPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSIyMDIiIGZpbGw9IiM5NGEzYjgiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzNCIgZm9udC13ZWlnaHQ9IjgwMCI+0LTQu9GPINC60L7RgNC/0L7RgNCw0YLQuNCy0L3Ri9GFINGA0LXQtdGB0YLRgNC+0LI8L3RleHQ+PGxpbmUgeDE9IjY0IiB5MT0iMjM2IiB4Mj0iMzgwIiB5Mj0iMjM2IiBzdHJva2U9InVybCgjYWNjNCkiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHRleHQgeD0iNjQiIHk9IjI3NCIgZmlsbD0iI2NiZDVlMSIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2Ij5CRlQt0LrQstC+0YDRg9C8IOKAoiDQkNCz0YDQtdCz0LDRhtC40Y8g0LzQtdC00LjQsNC90Ysg4oCiINCX0LDRidC40YLQsCDQvtGCINGB0LPQvtCy0L7RgNCwPC90ZXh0Pjwvc3ZnPg=='
-    },
-    {
-      id: 'art-05',
-      title: 'Оптимизация расхода газа при пакетной обработке транзакций в смарт-контрактах',
-      description: 'Вопрос по лучшим практикам уменьшения storage writes и оптимизации циклов при массовых взаиморасчетах с контрагентами.',
-      author: 'Дмитрий Кузнецов',
-      authorRole: 'Tech Lead Blockchain Core',
-      authorInitials: 'ДК',
-      date: '22 сентября 2026',
-      isoDate: '2026-09-22T08:00:00Z',
-      readingTime: '4 мин',
-      readingMinutes: 4,
-      topic: 'smart-contracts-development',
-      topics: ['smart-contracts-development'],
-      targetAudience: 'architects-developers',
-      format: 'question',
-      complexity: 'none',
-      isDemo: true,
-      keywords: ['Вопрос', 'Solidity', 'Газ', 'Storage', 'Оптимизация'],
-      coverImage: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3ODAgNDQwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjQ0MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZzUiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTAwZTE4Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWExNzMwIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImFjYzUiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMzhkZmY4Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMTBiOTgxIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9Ijc4MCIgaGVpZ2h0PSI0NDAiIGZpbGw9InVybCgjYmc1KSIvPjxyZWN0IHg9IjY0IiB5PSI2NCIgd2lkdGg9IjEzMCIgaGVpZ2h0PSIzMiIgcng9IjE2IiBmaWxsPSJyZ2JhKDU2LDE4OSwyNDgsMC4xMikiIHN0cm9rZT0icmdiYSg1NiwxODksMjQ4LDAuMykiLz48dGV4dCB4PSI4NCIgeT0iODUiIGZpbGw9IiMzOGRmZjgiIGZvbnQtZmFtaWx5PSJPbmVzdCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9IjEiPtCS0J7Qn9Cg0J7QoTwvdGV4dD48dGV4dCB4PSI2NCIgeT0iMTYwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iT25lc3QsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI4MDAiPtCe0L/RgtC40LzQuNC30LDRhtC40Y8g0LPQsNC30LA8L3RleHQ+PHRleHQgeD0iNjQiIHk9IjIwMiIgZmlsbD0iIzk0YTNiOCIgZm9udC1mYW1pbHk9Ik9uZXN0LCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM0IiBmb250LXdlaWdodD0iODAwIj7Qv9GA0Lgg0L/QsNC60LXRgtC90L7QuSDRgdCx0L7RgNC60LU8L3RleHQ+PC9zdmc+'
-    }
-  ];
 
   // --------------------------------------------------------------------------
   // 12b. Task 37: Entities (Clubs, Companies, Directions) & Subscriptions Modal

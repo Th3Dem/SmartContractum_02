@@ -209,7 +209,7 @@ class TestIssue20SC020FeedErrorRetryAndOfflineBadge(unittest.TestCase):
 
     def test_07_render_error_state_with_retry_button_and_event_listener(self):
         """Verify renderErrorState creates #feedRetryBtn and binds click to loadArticles(true)."""
-        render_err_idx = self.feed_js.find("function renderErrorState(message)")
+        render_err_idx = self.feed_js.find("function renderErrorState(message")
         self.assertNotEqual(render_err_idx, -1)
 
         render_body = self.feed_js[render_err_idx:render_err_idx + 1200]

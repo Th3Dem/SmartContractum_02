@@ -9,7 +9,6 @@ from typing import Optional
 from backend import config
 from backend.config import VALID_STATUSES
 from backend.content import extract_article_text
-from backend.seeds import seed_database
 from backend.companies import migrate_company_schema
 from backend.media_library import migrate_media_schema
 from backend.users import disable_legacy_admin_password, migrate_legacy_profiles
@@ -474,6 +473,8 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
             seed = False
 
     if seed:
+        # Demo content exists only as a test fixture (Issue #284); the product server never seeds
+        from tests.fixtures.demo_seeds import seed_database
         seed_database(conn)
 
     migrate_legacy_profiles(conn)
