@@ -25,6 +25,14 @@
 
       if (!this.wrap || !this.btn || !this.popup) return;
 
+      // Issue #275: managing the followed authors lives in the profile, the popup only links to it
+      this.manageLink = document.createElement('a');
+      this.manageLink.className = 'notif-manage-link';
+      this.manageLink.id = 'notifManageAuthorsLink';
+      this.manageLink.textContent = 'Управлять авторами';
+      this.manageLink.hidden = true;
+      this.popup.appendChild(this.manageLink);
+
       this.btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.togglePopup();
@@ -127,6 +135,18 @@
       }
     },
 
+    updateManageLink: function() {
+      if (!this.manageLink) return;
+      const user = this.currentUser;
+      if (user && user.id) {
+        this.manageLink.href = 'profile.html?id=' + encodeURIComponent(user.id) + '&subscriptions=bells';
+        this.manageLink.hidden = false;
+      } else {
+        this.manageLink.removeAttribute('href');
+        this.manageLink.hidden = true;
+      }
+    },
+
     resetUI: function() {
       this.unreadCount = 0;
       this.notifications = [];
@@ -137,6 +157,7 @@
       if (this.listContainer) {
         this.listContainer.innerHTML = '<div class="notif-empty-state">Нет новых уведомлений</div>';
       }
+      this.updateManageLink();
     },
 
     fetchNotifications: function() {
@@ -178,6 +199,7 @@
     },
 
     updateUI: function() {
+      this.updateManageLink();
       if (this.badge) {
         if (this.unreadCount > 0) {
           this.badge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount;

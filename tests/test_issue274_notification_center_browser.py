@@ -133,11 +133,11 @@ class TestNotificationCenterBrowser(unittest.TestCase):
             by_href = {i["href"]: i for i in items}
             pub = by_href["article.html?id=%s" % self.sids[0]]
             self.assertEqual(pub["type"], "author_publication")
-            self.assertEqual(pub["title"], "Новая публикация автора")
+            self.assertEqual(pub["title"], "Новая публикация")
             self.assertIn("Анна Автор", pub["msg"])
             self.assertIn("<b>жирно</b>", pub["msg"], "title is shown as text")
             self.assertNotIn("<b>", pub["html"], "and never injected as markup")
-            self.assertEqual(by_href["article.html?id=%s" % self.sids[2]]["title"], "Новый вопрос автора")
+            self.assertEqual(by_href["article.html?id=%s" % self.sids[2]]["title"], "Новый вопрос")
             hidden = next(i for i in items if i["unavailable"])
             self.assertEqual((hidden["href"], hidden["title"]), ("#", "Материал недоступен"))
             self.assertNotIn("Скрытый заголовок", page.locator("#notifListContainer").inner_text())

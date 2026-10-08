@@ -214,7 +214,7 @@ class TestAuthorCardBrowser(unittest.TestCase):
             def slow(route):
                 time.sleep(0.9)
                 route.continue_()
-            page.route("**/api/users/%s" % AUTHOR, slow)
+            page.route("**/api/users/%s/summary" % AUTHOR, slow)
             page.locator("#articleAuthorName").click()
             page.wait_for_timeout(100)
             other = page.locator('.btn-author-profile[data-author-id="author_volkova"]').first
@@ -329,7 +329,7 @@ class TestAuthorCardBrowser(unittest.TestCase):
             "isSubscribed": False, "isOwnProfile": False}}
         ctx, page = self.open(width=320, height=700)
         try:
-            page.route("**/api/users/%s" % AUTHOR, lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fake)))
+            page.route("**/api/users/%s/summary" % AUTHOR, lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fake)))
             page.locator("#articleAuthorName").click()
             page.wait_for_function("() => !document.querySelector('#authorCard[aria-busy]') && document.querySelector('#authorCard .author-card-stat dd')", timeout=5000)
             page.wait_for_timeout(300)
@@ -369,13 +369,13 @@ class TestAuthorCardBrowser(unittest.TestCase):
                     route.fulfill(status=500, body="{}")
                 else:
                     route.continue_()
-            page.route("**/api/users/%s" % AUTHOR, flaky)
+            page.route("**/api/users/%s/summary" % AUTHOR, flaky)
             page.locator("#articleAuthorName").click()
             page.wait_for_selector("#authorCard .author-card-retry", timeout=5000)
             self.assertIn("Не удалось загрузить профиль", page.locator("#authorCard").inner_text())
             page.locator("#authorCard .author-card-retry").click()
             page.wait_for_function("() => document.querySelector('#authorCardName').textContent.trim() === 'Алексей Смирнов'", timeout=5000)
-            page.unroute("**/api/users/%s" % AUTHOR)
+            page.unroute("**/api/users/%s/summary" % AUTHOR)
             page.evaluate("""() => { const b = document.createElement('button'); b.className = 'btn-author-profile'; b.id = 'ghost';
               b.setAttribute('data-author-id', 'nobody-here'); b.textContent = 'ghost'; document.body.prepend(b); }""")
             page.locator("#ghost").click()

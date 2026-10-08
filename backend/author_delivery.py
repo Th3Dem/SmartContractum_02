@@ -18,8 +18,8 @@ AUTHOR_MATERIAL_TYPES = {
 AUTHOR_NOTIFICATION_TYPES = tuple(AUTHOR_MATERIAL_TYPES.values())
 
 TYPE_TITLES = {
-    "author_publication": "Новая публикация автора",
-    "author_question": "Новый вопрос автора",
+    "author_publication": "Новая публикация",
+    "author_question": "Новый вопрос",
 }
 UNAVAILABLE_TITLE = "Материал недоступен"
 UNAVAILABLE_MESSAGE = "Автор снял материал с публикации или он был удален."

@@ -3044,6 +3044,25 @@
   margin-left: auto;
 }
 
+/* Issue #275: one short hint next to the subscription and bell, and the result of the last action */
+.author-card-hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.author-card-status {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.author-card-status:empty {
+  display: none;
+}
+
 .author-card-own {
   margin: 0;
   color: var(--text-muted);
@@ -3117,4 +3136,159 @@
     flex: 1 0 100%;
     margin-left: 0;
   }
+}
+
+/* ==========================================================================
+   Author notification bell (Issue #275): full profile header, owner widget,
+   "Авторы с уведомлениями" list. Same icon, labels and states as the mini card.
+   ========================================================================== */
+.btn-profile-bell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.btn-profile-bell:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.btn-profile-bell.is-on {
+  border-color: var(--accent-color);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+
+.btn-profile-bell:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.btn-profile-bell:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.btn-profile-bell[hidden],
+.profile-bell-hint[hidden] {
+  display: none;
+}
+
+.profile-bell-hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.profile-owner-nav-count {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.profile-owner-nav-count:empty {
+  display: none;
+}
+
+.social-bells-tools {
+  margin-bottom: 12px;
+}
+
+.social-bells-tools[hidden] {
+  display: none;
+}
+
+.social-bells-search {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.social-bells-search:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+  border-color: var(--accent-color);
+}
+
+.social-bell-row .profile-social-avatar-box {
+  position: relative;
+  text-decoration: none;
+}
+
+.social-bell-row .profile-social-avatar-img {
+  position: absolute;
+  inset: 0;
+}
+
+.social-bell-row .profile-social-name {
+  color: var(--text-primary);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.social-bell-row .profile-social-name:hover {
+  color: var(--accent-color);
+}
+
+.social-bell-login {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.social-bells-empty p {
+  margin: 0 0 6px;
+}
+
+#socialSubTabBells[hidden] {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .btn-profile-bell {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Three sub-sections in the owner's subscriptions do not fit one row on phones: wrap instead of
+   scrolling half-hidden pills */
+@media (max-width: 480px) {
+  .social-modal-subnav .profile-filter-pills {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .social-modal-subnav .profile-filter-pill {
+    flex: 1 1 auto;
+  }
+}
+
+.social-bell-row .social-bell-status {
+  white-space: normal;
 }

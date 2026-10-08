@@ -6558,3 +6558,10 @@ body.is-directions-tab .widget-topics-card {
     height: 32px;
   }
 }
+
+/* Issue #275: hiding an author with the bell on asks for a second press */
+.subs-toggle-exc-btn.is-confirming {
+  border-color: var(--warning-color, #f59e0b);
+  color: var(--warning-color, #f59e0b);
+  white-space: normal;
+}

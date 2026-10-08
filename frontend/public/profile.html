@@ -228,12 +228,14 @@
                   <div class="profile-spec" id="profileSpec"></div>
                   <div class="profile-company" id="profileCompany" style="display: none;"></div>
                   <div class="profile-bio" id="profileBio" style="display: none;"></div>
+                  <p class="profile-bell-hint" id="profileBellHint" hidden>Подписка добавляет автора в вашу ленту. Колокольчик включает уведомления.</p>
                 </div>
 
                 <div class="profile-actions" id="profileActions">
                   <button type="button" class="btn-profile-subscribe" id="btnProfileSubscribe" style="display: none;">
                     <span>Подписаться</span>
                   </button>
+                  <button type="button" class="btn-profile-bell" id="btnProfileBell" aria-pressed="false" aria-label="Уведомлять о новых публикациях и вопросах" title="Уведомлять о новых публикациях и вопросах" hidden></button>
                   <a href="settings.html#profile" class="btn-profile-edit" id="btnProfileEdit" style="display: none;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -501,6 +503,11 @@
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                       <span>Подписки</span>
                     </a>
+                    <a href="#author-notifications" class="profile-owner-nav-link" id="ownerNavAuthorBells">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+                      <span>Авторы с уведомлениями</span>
+                      <span class="profile-owner-nav-count" id="ownerNavAuthorBellsCount" aria-label="Число авторов с уведомлениями"></span>
+                    </a>
                     <a href="settings.html" class="profile-owner-nav-link" id="ownerNavSettings">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                       <span>Настройки</span>
@@ -739,10 +746,14 @@
         <div class="social-modal-subnav" id="socialModalSubnav" style="display: none;">
           <div class="profile-filter-pills" role="radiogroup" aria-label="Категории подписок">
             <button type="button" class="profile-filter-pill is-active" id="socialSubTabAuthors" data-social-tab="authors">Авторы <span class="social-pill-count" id="socialSubAuthorsCount"></span></button>
+            <button type="button" class="profile-filter-pill" id="socialSubTabBells" data-social-tab="bells" hidden>Авторы с уведомлениями <span class="social-pill-count" id="socialSubBellsCount"></span></button>
             <button type="button" class="profile-filter-pill" id="socialSubTabBlogs" data-social-tab="blogs">Блоги <span class="social-pill-count" id="socialSubBlogsCount"></span></button>
           </div>
         </div>
         <div class="feed-modal-body profile-social-modal-body" id="profileSocialModalBody">
+          <div class="social-bells-tools" id="socialBellsTools" hidden>
+            <input type="search" class="social-bells-search" id="socialBellsSearch" placeholder="Поиск по имени или нику" aria-label="Поиск авторов по имени или нику" autocomplete="off" maxlength="100">
+          </div>
           <div class="profile-social-list" id="profileSocialList"></div>
           <div class="profile-social-actions" id="profileSocialActions" style="display: none;">
             <button type="button" class="btn btn-secondary btn-social-load-more" id="btnSocialLoadMore">Показать еще</button>
