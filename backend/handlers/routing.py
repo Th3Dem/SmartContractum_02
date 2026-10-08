@@ -120,6 +120,9 @@ class RoutingHandlers:
             elif rest.endswith("/subscriptions"):
                 user_id = rest[:-len("/subscriptions")].strip("/")
                 self.handle_get_user_profile_subscriptions(user_id, parsed)
+            elif rest.endswith("/summary"):
+                user_id = rest[:-len("/summary")].strip("/")
+                self.handle_get_user_summary(user_id)
             else:
                 user_id = rest
                 if user_id.endswith("/profile"):
@@ -127,6 +130,8 @@ class RoutingHandlers:
                 self.handle_get_user_profile(user_id)
         elif path == "/api/user/profile":
             self.handle_get_current_user_profile(parsed)
+        elif path.rstrip("/") == "/api/user/author-notifications":
+            self.handle_get_author_notifications_list(parsed)
         elif path == "/api/user/pinned":
             self.handle_get_user_pinned()
         elif path == "/api/drafts":
@@ -377,6 +382,11 @@ class RoutingHandlers:
         elif path.startswith("/api/drafts/"):
             self.handle_put_draft(path)
             return
+        elif path.startswith("/api/authors/") and path.rstrip("/").endswith("/notifications"):
+            author_id = urllib.parse.unquote(path[len("/api/authors/"):].rstrip("/")[:-len("/notifications")].strip("/"))
+            if author_id and "/" not in author_id:
+                self.handle_put_author_notifications(author_id)
+                return
         elif path.startswith("/api/companies/") and path.strip("/").count("/") == 2:
             self.handle_update_company(path.strip("/").split("/")[2])
             return
