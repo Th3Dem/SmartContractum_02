@@ -1010,4 +1010,20 @@
   .co-identity {
     min-width: 0;
   }
+
+  /* Issue #261: actions go under the name, so the name keeps the full card width */
+  .co-hero-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .co-identity {
+    width: 100%;
+  }
+
+  /* Break only words that are longer than a line, not every word */
+  .co-name {
+    overflow-wrap: break-word;
+  }
 }

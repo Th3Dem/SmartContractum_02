@@ -841,7 +841,7 @@
 
     const titleInput = document.getElementById('questionTitleInput');
     const title = titleInput ? titleInput.value : '';
-    const html = state.quill ? state.quill.root.innerHTML : '';
+    const html = state.quill ? (window.SCFormula ? window.SCFormula.sourceHtml(state.quill.root) : state.quill.root.innerHTML) : '';
     const delta = state.quill ? state.quill.getContents() : null;
 
     // Do not save completely empty drafts
@@ -947,7 +947,7 @@
 
     const titleInput = document.getElementById('questionTitleInput');
     const title = titleInput.value.trim();
-    const quillHtml = state.quill.root.innerHTML;
+    const quillHtml = (window.SCFormula ? window.SCFormula.sourceHtml(state.quill.root) : state.quill.root.innerHTML);
     const rawText = state.quill.getText().trim();
 
     // Generate description snippet (50 to 500 chars)

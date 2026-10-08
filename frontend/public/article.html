@@ -17,6 +17,7 @@
 
   <!-- Highlight.js Themes (Offline-first) -->
   <link rel="stylesheet" id="hljs-theme" href="vendor/highlight/github-dark.min.css">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
 
   <!-- Application Styles (100% Offline-First, Onest font family) -->
   <link rel="stylesheet" href="css/theme.css">
@@ -24,7 +25,8 @@
   <link rel="stylesheet" href="css/profile.css">
 
   <style>
-    body, button, input, textarea, select, h1, h2, h3, h4, h5, h6, p, span, a, div, *, *::before, *::after {
+    /* Onest everywhere except inside KaTeX formulas, which need their math fonts (Issue #263) */
+    :where(:not(.katex, .katex *)), :where(:not(.katex, .katex *))::before, :where(:not(.katex, .katex *))::after {
       font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     }
   </style>
@@ -900,6 +902,8 @@
   <script src="js/auth.js"></script>
   <script src="js/notifications.js"></script>
 <script src="vendor/highlight/highlight.min.js"></script>
+  <script src="vendor/katex/katex.min.js"></script>
+  <script src="js/formula-render.js"></script>
   <script src="js/config.js"></script>
   <script src="js/votes.js"></script>
   <script src="js/profile.js"></script>

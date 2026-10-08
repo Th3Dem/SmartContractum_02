@@ -12,6 +12,13 @@
   const DB_VERSION = 2;
   const STORE_NAME = 'drafts';
 
+  // Draft fields are user data (local and from the account): never insert them as HTML (Issue #260)
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   class DraftsManager {
     constructor(editor, titleInput, options = {}) {
       if (typeof titleInput === 'string') {
@@ -339,7 +346,7 @@
       const title = this.titleInput ? this.titleInput.value.trim() : '';
       const text = this.editor && typeof this.editor.getText === 'function' ? this.editor.getText().trim() : '';
       const delta = this.editor && typeof this.editor.getContents === 'function' ? this.editor.getContents() : null;
-      const html = this.editor && this.editor.root ? this.editor.root.innerHTML : '';
+      const html = this.editor && this.editor.root ? (window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML) : '';
       const tags = (this.tagsGetter && typeof this.tagsGetter === 'function')
         ? (this.tagsGetter() || [])
         : ((this.currentDraft && this.currentDraft.tags) || []);
@@ -1087,25 +1094,25 @@
 
         const snippetText = d.snippet || d.textSnippet || '';
         const snippetHtml = snippetText
-          ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${snippetText}</div>`
+          ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(snippetText)}</div>`
           : '';
 
         const tagsHtml = (Array.isArray(d.tags) && d.tags.length > 0)
           ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">` +
-            d.tags.map(t => `<span style="display: inline-block; font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">${t}</span>`).join('') +
+            d.tags.map(t => `<span style="display: inline-block; font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">${escapeHtml(t)}</span>`).join('') +
             `</div>`
           : '';
 
         item.innerHTML = `
           <div style="flex: 1; overflow: hidden; padding-right: 12px;">
             <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-              ${d.title || 'Без названия'}
+              ${escapeHtml(d.title || 'Без названия')}
             </div>
             ${snippetHtml}
             <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 12px; margin-top: 4px;">
-              <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${dateStr}</span>
-              <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> ${d.wordCount || 0} сл.</span>
-              <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${d.readingTime || 1} мин</span>
+              <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${escapeHtml(dateStr)}</span>
+              <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> ${escapeHtml(d.wordCount || 0)} сл.</span>
+              <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${escapeHtml(d.readingTime || 1)} мин</span>
             </div>
             ${tagsHtml}
           </div>

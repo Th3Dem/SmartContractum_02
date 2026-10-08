@@ -147,6 +147,7 @@
       node.setAttribute('data-latex', latex);
       node.textContent = latex ? `\\(${latex}\\)` : '\\(...)';
       node.title = `LaTeX: ${latex}`;
+      if (window.SCFormula) window.SCFormula.render(node);  // Issue #263
       return node;
     }
 
@@ -181,6 +182,7 @@
       badge.innerHTML = `<span>LaTeX</span> <button type="button" class="formula-edit-action" title="Редактировать формулу"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg><span>Изменить</span></button>`;
       node.appendChild(badge);
 
+      if (window.SCFormula) window.SCFormula.render(node);  // Issue #263
       return node;
     }
 

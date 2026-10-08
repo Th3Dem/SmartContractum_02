@@ -115,6 +115,8 @@
           if (tagName === 'img') allowedAttrs.push('src', 'alt', 'width', 'height', 'loading');
           if (tagName === 'th' || tagName === 'td') allowedAttrs.push('colspan', 'rowspan', 'scope');
           if (tagName === 'pre' || tagName === 'code') allowedAttrs.push('data-language');
+          // Formula source for KaTeX (Issue #263); KaTeX renders it as math with trust: false
+          if (tagName === 'div' || tagName === 'span') allowedAttrs.push('data-latex');
 
           if (!allowedAttrs.includes(name)) {
             el.removeAttribute(attr.name);
@@ -5206,6 +5208,11 @@
         wrapper.appendChild(table);
       }
     });
+
+    // Formulas drawn with the vendored KaTeX (Issue #263)
+    if (window.SCFormula) {
+      window.SCFormula.renderIn(contentContainer);
+    }
 
     // 2. Syntax highlighting for code blocks
     if (window.hljs) {
