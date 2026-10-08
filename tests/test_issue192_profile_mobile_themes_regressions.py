@@ -67,6 +67,7 @@ import server
 from server import create_server, init_db
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 PROFILE_JS_PATH = os.path.join(FRONTEND_DIR, "js", "profile.js")
 PROFILE_PAGE_JS_PATH = os.path.join(FRONTEND_DIR, "js", "profile-page.js")
 PROFILE_CSS_PATH = os.path.join(FRONTEND_DIR, "css", "profile.css")
