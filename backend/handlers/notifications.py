@@ -1,5 +1,6 @@
 """Notifications of the current user."""
 
+from backend.author_delivery import AUTHOR_NOTIFICATION_TYPES, present_author_notification
 from backend.config import MAX_JSON_BODY_BYTES
 
 
@@ -38,21 +39,25 @@ class NotificationsHandlers:
                 """, (user["id"],))
                 unread_cnt = cur.fetchone()["unread_cnt"]
 
-            notifs = []
-            for r in rows:
-                notifs.append({
-                    "id": r["id"],
-                    "userId": r["user_id"],
-                    "actorId": r["actor_id"],
-                    "actorName": r["actor_name"],
-                    "articleId": r["article_id"],
-                    "commentId": r["comment_id"],
-                    "type": r["type"],
-                    "title": r["title"],
-                    "message": r["message"],
-                    "isRead": bool(r["is_read"]),
-                    "createdAt": r["created_at"]
-                })
+                notifs = []
+                for r in rows:
+                    item = {
+                        "id": r["id"],
+                        "userId": r["user_id"],
+                        "actorId": r["actor_id"],
+                        "actorName": r["actor_name"],
+                        "articleId": r["article_id"],
+                        "commentId": r["comment_id"],
+                        "type": r["type"],
+                        "title": r["title"],
+                        "message": r["message"],
+                        "isRead": bool(r["is_read"]),
+                        "createdAt": r["created_at"]
+                    }
+                    if r["type"] in AUTHOR_NOTIFICATION_TYPES:
+                        # Publicity is rechecked on every read (Issue #274); unread rows stay counted
+                        present_author_notification(cur, item)
+                    notifs.append(item)
 
             self.send_json_response(200, {
                 "success": True,
