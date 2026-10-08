@@ -99,14 +99,21 @@ class TestIssue2SC007AuthorProfileClick(unittest.TestCase):
         )
 
     def test_02_feed_js_click_handler_reads_data_author_id_with_fallback(self):
-        """Verify feed.js click handler extracts data-author-id with fallback to data-user-id."""
-        pattern = r"const\s+authorId\s*=\s*authorBtn\.getAttribute\(['\"]data-author-id['\"]\)\s*\|\|\s*authorBtn\.getAttribute\(['\"]data-user-id['\"]\)"
+        """The author card (Issues #271, #272) reads data-author-id with a data-user-id fallback.
+
+        Event handling moved from feed.js to the shared component in profile.js;
+        feed.js only initialises it.
+        """
+        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
+        with open(profile_js_path, "r", encoding="utf-8") as f:
+            profile_js = f.read()
+        pattern = r"el\.getAttribute\(['\"]data-author-id['\"]\)\s*\|\|\s*el\.getAttribute\(['\"]data-user-id['\"]\)"
         self.assertTrue(
-            re.search(pattern, self.feed_js),
-            "feed.js must extract authorId from data-author-id with data-user-id fallback"
+            re.search(pattern, profile_js),
+            "profile.js must extract authorId from data-author-id with data-user-id fallback"
         )
-        self.assertIn("openUserProfileModal(authorId)", self.feed_js)
-        self.assertIn("e.target.closest('.btn-author-profile')", self.feed_js)
+        self.assertIn("closest('.btn-author-profile')", profile_js)
+        self.assertIn("initUserProfileModal()", self.feed_js)
 
     def test_03_click_extraction_logic_simulation(self):
         """Simulate attribute extraction logic for various DOM dataset states."""

@@ -876,9 +876,11 @@ class TestAccessibilityAndFocusRegressions(unittest.TestCase):
         with open(PROFILE_PAGE_JS_PATH, "r", encoding="utf-8") as f:
             page_js = f.read()
 
-        # In Quick Profile (profile.js)
-        self.assertIn("function trapModalFocus(e, modalEl)", profile_js)
-        self.assertIn("trapModalFocus(e, userModal)", profile_js)
+        # Quick Profile became a non-modal author card (Issues #271, #272): no focus trap,
+        # Tab moves from the trigger into the card and Escape returns focus to the trigger.
+        self.assertNotIn("trapModalFocus", profile_js)
+        self.assertIn("e.key === 'Escape'", profile_js)
+        self.assertIn("closeCard(true)", profile_js)
 
         # In Full Profile Page (profile-page.js)
         self.assertIn("function trapModalFocus(e, modalEl)", page_js)
@@ -976,7 +978,9 @@ class TestVisualMatrixAndThemeRegressions(unittest.TestCase):
         with open(PROFILE_PAGE_JS_PATH, "r", encoding="utf-8") as f:
             page_js = f.read()
 
-        self.assertIn(r"this.onerror=null", profile_js)
+        # Author card: a broken avatar image removes itself and uncovers the initials under it.
+        self.assertIn('onerror="this.remove()"', profile_js)
+        self.assertIn('class="author-card-initials"', profile_js)
         self.assertIn("avatarImg.onerror", page_js)
         self.assertIn("avatarInitials.style.display = 'block'", page_js)
 

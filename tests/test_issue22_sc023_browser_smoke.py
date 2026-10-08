@@ -565,7 +565,7 @@ class TestBrowserSmoke(unittest.TestCase):
             page.close()
 
     def test_02_author_profile_modal_opens_on_click(self) -> None:
-        """Clicks .btn-author-profile, verifies #userProfileModal becomes visible (SC-007)."""
+        """Clicks .btn-author-profile, verifies the author mini card opens (SC-007, Issues #271, #272)."""
         page = self.browser.new_page()
         try:
             page.goto(f"{self.base_url}/feed.html", wait_until="domcontentloaded")
@@ -582,27 +582,19 @@ class TestBrowserSmoke(unittest.TestCase):
                 "Author profile trigger must contain expected data-author-id"
             )
 
-            # Click author profile button
+            # Click author profile button: since Issues #271, #272 it opens the author mini card
             author_btn.click()
 
-            # Modal becomes visible
-            modal = page.locator("#userProfileModal")
-            modal.wait_for(state="visible", timeout=5000)
-            self.assertTrue(
-                modal.is_visible(),
-                "#userProfileModal must become visible after clicking author button"
-            )
+            card = page.locator("#authorCard")
+            card.wait_for(state="visible", timeout=5000)
+            self.assertEqual(card.get_attribute("role"), "dialog")
+            self.assertEqual(page.locator("#userProfileModal").count(), 0, "central modal is gone")
 
-            # Modal body loads author details
-            modal_body = page.locator("#userProfileModalBody")
-            page.wait_for_function(
-                "document.getElementById('userProfileModalBody') && "
-                "!document.getElementById('userProfileModalBody').innerText.includes('Загрузка профиля')",
-                timeout=5000
-            )
-            body_text = modal_body.text_content() or ""
-            self.assertIn("Алексей Экспертов", body_text)
-            self.assertIn("Antigravity Labs", body_text)
+            # Card loads author details
+            page.wait_for_selector("#authorCard .author-card-name", timeout=5000)
+            self.assertIn("Алексей Экспертов", page.locator("#authorCard .author-card-name").text_content() or "")
+            self.assertEqual(page.locator("#authorCard .author-card-stat").count(), 4)
+            self.assertEqual(page.locator("#authorCard .author-card-profile").count(), 1)
         finally:
             page.close()
 

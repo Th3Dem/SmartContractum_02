@@ -112,88 +112,64 @@ class TestIssue173QuickProfileRedesign(unittest.TestCase):
             """, (user_id, name, specialization, company, bio, avatar))
         conn.close()
 
+    # Issues #271 and #272 replaced the central quick profile modal with the author mini card
+    # (non-modal popover in profile.js). The checks below keep the intent of #173 on the new card.
+
+    def _profile_js(self):
+        with open(os.path.join(FRONTEND_DIR, "js", "profile.js"), "r", encoding="utf-8") as f:
+            return f.read()
+
+    def _render_fn(self):
+        code = self._profile_js()
+        idx = code.find("function render(p, userId)")
+        self.assertNotEqual(idx, -1)
+        return code[idx:idx + 5000]
+
     def test_01_profile_js_removes_publications_list_and_renders_cta(self):
-        """Verify profile.js does not render long publications list and includes CTA button."""
-        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
-        self.assertTrue(os.path.exists(profile_js_path))
-
-        with open(profile_js_path, "r", encoding="utf-8") as f:
-            code = f.read()
-
-        # openUserProfileModal function body inspection
-        open_modal_idx = code.find("function openUserProfileModal")
-        self.assertNotEqual(open_modal_idx, -1)
-        modal_fn = code[open_modal_idx:open_modal_idx + 4500]
-
-        # Publications list should NOT be rendered in modal body
-        self.assertNotIn("articlesHtml", modal_fn)
-        self.assertNotIn("user-profile-articles-list", modal_fn)
-        self.assertNotIn("user-profile-articles-title", modal_fn)
-
-        # Primary CTA button linking to profile.html
-        self.assertIn("btn-quick-profile-open", modal_fn)
-        self.assertIn("profile.html?id=", modal_fn)
-        self.assertIn("Открыть профиль →", modal_fn)
-
-        # Title link
-        self.assertIn("user-profile-name-link", modal_fn)
+        """The card has no publications list and links to the full profile."""
+        render_fn = self._render_fn()
+        self.assertNotIn("articlesHtml", render_fn)
+        self.assertNotIn("user-profile-articles-list", render_fn)
+        self.assertIn("profile.html?id=", render_fn)
+        self.assertIn("Перейти в профиль", render_fn)
+        self.assertIn("author-card-name", render_fn)
 
     def test_02_reputation_summary_and_pluralized_activity_line(self):
-        """Verify rating box with approved tooltip and pluralized activity metrics."""
-        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
-        with open(profile_js_path, "r", encoding="utf-8") as f:
-            code = f.read()
-
-        # Rating box with exact approved tooltip
-        self.assertIn("user-profile-rating-box", code)
-        self.assertIn("user-profile-rating-num", code)
-        self.assertIn("Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются", code)
-
-        # Meta line and pluralization
-        self.assertIn("user-profile-meta-line", code)
-        self.assertIn("pluralizePublications", code)
-        self.assertIn("pluralizeAnswers", code)
-        self.assertIn("pluralizeSolutions", code)
+        """Rating with its explanation and the four profile metrics."""
+        render_fn = self._render_fn()
+        self.assertIn("author-card-rating", render_fn)
+        self.assertIn("Сумма оценок публикаций, ответов и комментариев. Лайки не учитываются", render_fn)
+        for label in ("Подписчики", "Публикации", "Вопросы", "Комментарии"):
+            self.assertIn(label, render_fn)
 
     def test_03_avatar_real_image_and_fallback(self):
-        """Verify avatar renders real image tag or initials fallback."""
-        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
-        with open(profile_js_path, "r", encoding="utf-8") as f:
-            code = f.read()
-
-        self.assertIn("user-profile-avatar-img", code)
-        self.assertIn("user-profile-avatar-initials", code)
-        self.assertIn("u.avatar", code)
+        """Real avatar image with initials underneath as the fallback."""
+        render_fn = self._render_fn()
+        self.assertIn("author-card-avatar-img", render_fn)
+        self.assertIn("author-card-initials", render_fn)
+        self.assertIn("p.avatar", render_fn)
 
     def test_04_foreign_vs_own_profile_actions(self):
-        """Verify subscribe button for foreign profiles and hidden subscribe for own profile."""
-        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
-        with open(profile_js_path, "r", encoding="utf-8") as f:
-            code = f.read()
-
-        self.assertIn("btn-quick-profile-subscribe", code)
+        """Subscribe for other people, no subscribe on the own profile."""
+        code = self._profile_js()
+        self.assertIn("author-card-subscribe", code)
         self.assertIn("is-subscribed", code)
         self.assertIn("Вы подписаны", code)
         self.assertIn("Подписаться", code)
         self.assertIn("isOwn", code)
+        self.assertIn("Это ваш профиль", code)
         self.assertIn("/api/subscriptions/toggle", code)
 
     def test_05_modal_title_neutral_in_all_templates(self):
-        """Verify modal title is 'Профиль пользователя' across all pages and script."""
-        pages = ["feed.html", "article.html", "profile.html"]
-        for p in pages:
-            path = os.path.join(FRONTEND_DIR, p)
-            with open(path, "r", encoding="utf-8") as f:
+        """No generic modal title and no old modal markup; the card is labelled by the author name."""
+        for p in ["feed.html", "article.html", "profile.html"]:
+            with open(os.path.join(FRONTEND_DIR, p), "r", encoding="utf-8") as f:
                 content = f.read()
-            self.assertIn("userProfileModalTitle", content)
-            self.assertIn("Профиль пользователя", content)
+            self.assertNotIn("userProfileModalTitle", content)
             self.assertNotIn("Профиль эксперта", content)
-
-        profile_js_path = os.path.join(FRONTEND_DIR, "js", "profile.js")
-        with open(profile_js_path, "r", encoding="utf-8") as f:
-            js_code = f.read()
-        self.assertIn("Профиль пользователя", js_code)
-        self.assertNotIn("Профиль эксперта", js_code)
+        js_code = self._profile_js()
+        self.assertNotIn("Профиль пользователя'", js_code)
+        self.assertIn("card.setAttribute('aria-labelledby', 'authorCardName');", js_code)
 
     def test_06_css_compact_geometry_and_classes(self):
         """Verify profile.css defines max-width: 460px, padding: 20px 24px, and action styles."""
@@ -267,15 +243,9 @@ class TestIssue173QuickProfileRedesign(unittest.TestCase):
             self.assertNotIn("http://", clean_content)
             self.assertNotIn("https://", clean_content)
 
-        # Check modal section in feed.html
-        feed_path = os.path.join(FRONTEND_DIR, "feed.html")
-        with open(feed_path, "r", encoding="utf-8") as f:
-            feed_content = f.read()
-        modal_idx = feed_content.find('id="userProfileModal"')
-        self.assertGreater(modal_idx, 0)
-        modal_chunk = feed_content[modal_idx:modal_idx + 1500]
-        self.assertNotIn("\u2014", modal_chunk, "Em dash found in feed.html userProfileModal")
-        self.assertIsNone(emoji_pattern.search(modal_chunk), "Emoji found in feed.html userProfileModal")
+        # The old modal markup is gone from the feed (Issues #271, #272)
+        with open(os.path.join(FRONTEND_DIR, "feed.html"), "r", encoding="utf-8") as f:
+            self.assertNotIn('id="userProfileModal"', f.read())
 
 if __name__ == "__main__":
     unittest.main()
