@@ -2044,8 +2044,8 @@
       const title = (this.titleInput ? this.titleInput.value : '').trim();
       const delta = this.editor ? this.editor.getContents() : null;
       const html = (window.EditorApp && window.EditorApp.Converter)
-        ? window.EditorApp.Converter.sanitizeHTML(this.editor.root.innerHTML)
-        : (this.editor ? this.editor.root.innerHTML : '');
+        ? window.EditorApp.Converter.sanitizeHTML((window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML))
+        : (this.editor ? (window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML) : '');
 
       const settings = this.getSettings();
       const payload = {

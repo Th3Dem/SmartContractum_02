@@ -339,7 +339,7 @@
       const title = this.titleInput ? this.titleInput.value.trim() : '';
       const text = this.editor && typeof this.editor.getText === 'function' ? this.editor.getText().trim() : '';
       const delta = this.editor && typeof this.editor.getContents === 'function' ? this.editor.getContents() : null;
-      const html = this.editor && this.editor.root ? this.editor.root.innerHTML : '';
+      const html = this.editor && this.editor.root ? (window.SCFormula ? window.SCFormula.sourceHtml(this.editor.root) : this.editor.root.innerHTML) : '';
       const tags = (this.tagsGetter && typeof this.tagsGetter === 'function')
         ? (this.tagsGetter() || [])
         : ((this.currentDraft && this.currentDraft.tags) || []);
