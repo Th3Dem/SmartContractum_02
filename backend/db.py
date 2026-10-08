@@ -79,6 +79,17 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_user_id ON user_feed_exceptions(user_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_lookup ON user_feed_exceptions(user_id, target_type, target_id);")
+        # Issue #273: per-author notification bell, independent of the subscription.
+        # A row means "on"; no row means "off" (the default, also for existing subscriptions).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_author_notifications (
+                user_id TEXT NOT NULL,
+                author_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, author_id)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_author_notifications_author ON user_author_notifications(author_id);")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS article_likes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

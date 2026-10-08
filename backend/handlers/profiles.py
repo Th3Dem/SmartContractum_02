@@ -6,6 +6,8 @@ import urllib.parse
 from typing import Any, Dict
 
 from backend import config
+from backend.author_metrics import author_metrics, material_kind, profile_exists
+from backend.handlers.author_notifications import notifications_enabled
 from backend.config import MAX_JSON_BODY_BYTES
 from backend.content import TOPICS_TITLE_MAP, format_date_ru, make_content_snippet
 from backend.identity import sync_comment_snapshots
@@ -65,27 +67,8 @@ class ProfilesHandlers:
                 cur.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
                 p_row = cur.fetchone()
 
-                # User existence check: user_profiles, sessions, moderation_submissions, article_comments
-                user_exists = (p_row is not None)
-                if not user_exists:
-                    cur.execute("SELECT 1 FROM users WHERE id = ? LIMIT 1", (user_id,))
-                    if cur.fetchone():
-                        user_exists = True
-
-                if not user_exists:
-                    cur.execute("SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1", (user_id,))
-                    if cur.fetchone():
-                        user_exists = True
-
-                if not user_exists:
-                    cur.execute("SELECT 1 FROM moderation_submissions WHERE author_id = ? LIMIT 1", (user_id,))
-                    if cur.fetchone():
-                        user_exists = True
-
-                if not user_exists:
-                    cur.execute("SELECT 1 FROM article_comments WHERE user_id = ? LIMIT 1", (user_id,))
-                    if cur.fetchone():
-                        user_exists = True
+                # User existence check shared with the author summary (Issue #273)
+                user_exists = profile_exists(cur, user_id)
 
                 if not user_exists:
                     self.send_json_response(404, {
@@ -116,57 +99,14 @@ class ProfilesHandlers:
                 """, (user_id,))
                 c_stats = cur.fetchone()
 
-                cur.execute("""
-                    SELECT COUNT(DISTINCT ac.id) AS total_comments
-                    FROM article_comments ac
-                    JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                    WHERE ac.user_id = ?
-                      AND ac.status = 'published'
-                      AND (ac.comment_type IS NULL OR ac.comment_type != 'answer')
-                      AND ms.status = 'approved'
-                """, (user_id,))
-                comm_stats = cur.fetchone()
-                comments_count = int(comm_stats["total_comments"] or 0) if comm_stats else 0
-
-                cur.execute("""
-                    SELECT COALESCE(SUM(v.value), 0) AS pub_score
-                    FROM article_votes v
-                    WHERE v.article_id IN (
-                        SELECT id FROM moderation_submissions WHERE author_id = ? AND status = 'approved'
-                        UNION
-                        SELECT draft_id FROM moderation_submissions WHERE author_id = ? AND status = 'approved' AND draft_id IS NOT NULL
-                    )
-                """, (user_id, user_id))
-                pub_score = cur.fetchone()["pub_score"] or 0
-
-                cur.execute("""
-                    SELECT COALESCE(SUM(v.value), 0) AS comm_score
-                    FROM comment_votes v
-                    WHERE v.comment_id IN (
-                        SELECT ac.id
-                        FROM article_comments ac
-                        JOIN moderation_submissions ms ON (ac.article_id = ms.id OR (ms.draft_id IS NOT NULL AND ac.article_id = ms.draft_id))
-                        WHERE ac.user_id = ?
-                          AND ac.status = 'published'
-                          AND ms.status = 'approved'
-                    )
-                """, (user_id,))
-                comm_score = cur.fetchone()["comm_score"] or 0
-
-                total_rating = int(pub_score) + int(comm_score)
-
-                # Followers & following counts
-                cur.execute("""
-                    SELECT COUNT(*) AS cnt FROM user_subscriptions
-                    WHERE target_type = 'author' AND target_id = ?
-                """, (user_id,))
-                followers_count = cur.fetchone()["cnt"] or 0
-
-                cur.execute("""
-                    SELECT COUNT(*) AS cnt FROM user_subscriptions
-                    WHERE user_id = ? AND target_type = 'author'
-                """, (user_id,))
-                following_count = cur.fetchone()["cnt"] or 0
+                # Rating and counters shared with the author summary (Issue #273)
+                metrics = author_metrics(cur, user_id)
+                comments_count = metrics["commentsCount"]
+                pub_score = metrics["materialsRating"]
+                comm_score = metrics["discussionsRating"]
+                total_rating = metrics["rating"]
+                followers_count = metrics["followersCount"]
+                following_count = metrics["followingCount"]
 
                 # Registration / creation date (stable, do not fabricate today's timestamp)
                 created_at_val = None
@@ -198,12 +138,15 @@ class ProfilesHandlers:
 
                 curr_user = self.get_current_user()
                 is_sub = False
+                bell_on = False
                 if curr_user:
                     cur.execute(
                         "SELECT id FROM user_subscriptions WHERE user_id = ? AND target_type = 'author' AND target_id = ?",
                         (curr_user["id"], user_id)
                     )
                     is_sub = bool(cur.fetchone())
+                    # Personal bell state of the current viewer only (Issue #273)
+                    bell_on = curr_user["id"] != user_id and notifications_enabled(cur, curr_user["id"], user_id)
 
             specialization = p_row["specialization"].strip() if p_row and p_row["specialization"] else ""
             company = p_row["company"] if p_row and p_row["company"] else ""
@@ -222,11 +165,7 @@ class ProfilesHandlers:
             questions_count = 0
             publications_count = 0
             for pr in pub_rows:
-                try:
-                    pst = json.loads(pr["publication_settings"]) if pr["publication_settings"] else {}
-                except Exception:
-                    pst = {}
-                mtype = pst.get("materialType") or pst.get("type") or "article"
+                mtype = material_kind(pr["publication_settings"])
                 if mtype == "question":
                     questions_count += 1
                 else:
@@ -373,6 +312,7 @@ class ProfilesHandlers:
                 "createdAt": created_at_val,
                 "date": format_date_ru(created_at_val) if created_at_val else None,
                 "isSubscribed": is_sub,
+                "authorNotificationsEnabled": bell_on,
                 "isOwnProfile": is_own_profile,
                 "rating": total_rating,
                 "score": total_rating,
