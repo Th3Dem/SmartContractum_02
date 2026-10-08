@@ -41,6 +41,7 @@ from server import create_server, create_user, init_db
 from tests.http_client import Client
 
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 PASSWORD = "Drafts-pass-1"
 
 PUBLICATION_SETTINGS = {

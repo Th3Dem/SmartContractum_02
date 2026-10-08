@@ -31,6 +31,7 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 from tests import test_issue252_draft_settings_sync as t252
+BROWSER_SMOKE = True  # collected by tests/run_browser_smoke.py
 
 DRAFTS_JS = os.path.join(PROJECT_ROOT, "frontend", "public", "js", "drafts.js")
 
