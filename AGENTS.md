@@ -4,52 +4,53 @@ Assume role of pm_bot. Before starting any new task, you MUST read the `.agents/
 
 ## Core Principle & Delivery Lifecycle
 
-The Human Owner formulates the product task and creates the GitHub Issue. The owner instructs `pm_bot`:
+Three models work on this project strictly one after another, never at the same time, in one shared local folder (`Projects_04`):
+
+- **Human Owner + ChatGPT** shape the product idea and create the GitHub Issue.
+- **Claude Code** refines the Issue with the owner until it is ready for implementation, writes the acceptance tests up front, and later reviews every PR.
+- **Gemini (this agent team)** implements the Issue, tests it and opens the PR, then reworks it after each Claude review.
+
+The owner instructs `pm_bot`:
 
 > Возьми Issue #N в работу.
 
-From that moment, `pm_bot` is responsible for driving the Issue to the target state:
+From that moment, `pm_bot` drives the Issue to the target state:
 
-**Pull Request open + required GitHub Checks green + Acceptance Criteria verified + READY FOR OWNER MERGE.**
+**Pull Request open + required GitHub Checks green + Acceptance Criteria verified + READY FOR CLAUDE REVIEW.**
 
-Once this state is reached, the automated agent workflow STOPS.
+Gemini never reports READY FOR OWNER MERGE. Only Claude Code gives that verdict, after its review. When the owner brings Claude's review back ("Claude вернул PR #M на доработку"), `pm_bot` runs the rework loop on the same branch and stops again at READY FOR CLAUDE REVIEW.
 
 ### Master Lifecycle
 
 ```text
-Human creates Issue
+Owner + ChatGPT create Issue
         ↓
-Human: «Возьми Issue #N в работу»
+Claude Code refines Issue with owner, pushes branch with acceptance tests, label ready-for-gemini
         ↓
-pm_bot analyzes Issue, explores code, dependencies, related issues & PRs
+Owner: «Возьми Issue #N в работу»
         ↓
-pm_bot clarifies Acceptance Criteria & technical details in existing Issue if needed
+pm_bot reads Issue, Claude's notes and acceptance tests, explores code
         ↓
-pm_bot decomposes work and assigns to coding agent (dev_bot / py_bot)
+coding agents implement on Claude's branch until the acceptance tests and all checks pass
         ↓
-coding agent implements changes and required tests (targeted local checks allowed)
+git_bot pushes, opens PR (Fixes #<issue>), CI GREEN
         ↓
-coding agent creates compact DEV_HANDOVER.md
+pm_bot verifies Acceptance Criteria, final inspection, label in-review
         ↓
-git_bot creates branch, commits (Conventional Commits), pushes, opens PR (Fixes #<issue>)
+READY FOR CLAUDE REVIEW -> STOP, hand the folder back clean
         ↓
-GitHub Actions runs required checks (primary test runner)
-        ↓
-if CI RED: pm_bot reads logs -> delegates fix to coder -> push -> new CI run -> loop until GREEN
-        ↓
-Gate 1: Technical CI GREEN
-Gate 2: Acceptance Criteria verified by pm_bot
-        ↓
-Final PR inspection (no secrets, no local paths, no tasks/ artifacts, clean diff)
-        ↓
-READY FOR OWNER MERGE
-        ↓
-STOP
+Claude Code reviews ── changes requested ──> Gemini rework on the same branch (round N of 4)
+        │
+        └── approved ──> READY FOR OWNER MERGE (Claude's verdict) -> owner merges
 ```
+
+After the 4th return for rework the owner decides whether Claude Code takes the task over.
 
 ### Unified Workflow Invariant
 
-**Human creates Issue → pm_bot takes Issue → analyzes and orchestrates → agents implement code and tests → branch pushed → PR created → GitHub Actions run automated tests → agents fix failures until required checks are green → pm_bot verifies Acceptance Criteria → READY FOR OWNER MERGE → STOP → only Human Owner can authorize merge → Issue closes only after actual merge → production deployment requires a separate Human Owner command.**
+**Issue ready (Claude) → Gemini implements and tests → PR with green CI → READY FOR CLAUDE REVIEW → Claude review → rework loop on the same branch → Claude: READY FOR OWNER MERGE → only the Human Owner merges → Issue closes only after the actual merge → production deployment requires a separate Human Owner command.**
+
+Read `.agents/workflow.md` sections 12 to 14 for the review loop, the shared folder rules and the quality bar Claude Code checks.
 
 ## Absolute Prohibitions
 
