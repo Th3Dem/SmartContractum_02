@@ -11,6 +11,7 @@ def save_media_file(data: bytes, ext: str, media_dir: Optional[str] = None) -> s
     Saves image data to disk in media_dir/<sha256>.<ext> and returns /media/<sha256>.<ext>.
     """
     target_dir = media_dir or config.MEDIA_DIR
+    config.check_forbidden_test_path(target_dir)
     os.makedirs(target_dir, exist_ok=True)
     clean_ext = ext.lstrip(".").lower()
     if clean_ext == "jpeg":

@@ -8,19 +8,23 @@ header shortcuts are in place, and code hygiene rules are respected.
 
 import http.client
 import os
+import shutil
+import tempfile
+import threading
 import unittest
 import urllib.parse
-from server import create_server, DEFAULT_DB_PATH
+from server import create_server
 
 
 class TestMobileEmulator(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.httpd = create_server(host="127.0.0.1", port=0, db_path=DEFAULT_DB_PATH)
+        cls.temp_dir = tempfile.mkdtemp(prefix="sc-emulator-")
+        cls.db_path = os.path.join(cls.temp_dir, "test.db")
+        cls.httpd = create_server(host="127.0.0.1", port=0, db_path=cls.db_path, seed=False)
         cls.port = cls.httpd.server_address[1]
         cls.base_url = f"http://127.0.0.1:{cls.port}"
 
-        import threading
         cls.server_thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
         cls.server_thread.start()
 
@@ -31,6 +35,8 @@ class TestMobileEmulator(unittest.TestCase):
             cls.httpd.server_close()
         except Exception:
             pass
+        if hasattr(cls, "temp_dir") and os.path.exists(cls.temp_dir):
+            shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
     def _get(self, path):
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)

@@ -46,6 +46,27 @@ _FORWARDED_SETTINGS = ("DEFAULT_DB_PATH", "MEDIA_DIR")
 
 
 class _ServerModule(types.ModuleType):
+    @property
+    def DEFAULT_DB_PATH(self):
+        return config.DEFAULT_DB_PATH
+
+    @DEFAULT_DB_PATH.setter
+    def DEFAULT_DB_PATH(self, value):
+        config.DEFAULT_DB_PATH = value
+
+    @property
+    def MEDIA_DIR(self):
+        return config.MEDIA_DIR
+
+    @MEDIA_DIR.setter
+    def MEDIA_DIR(self, value):
+        config.MEDIA_DIR = value
+
+    def __getattr__(self, name):
+        if name in _FORWARDED_SETTINGS:
+            return getattr(config, name)
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
     def __setattr__(self, name, value):
         if name in _FORWARDED_SETTINGS:
             setattr(config, name, value)
@@ -56,17 +77,21 @@ sys.modules[__name__].__class__ = _ServerModule
 
 
 if __name__ == "__main__":
+    config.set_product_mode(True)
     parser = argparse.ArgumentParser(description="Antigravity Moderation Server")
     parser.add_argument("port_pos", nargs="?", type=int, default=None, help="Port to listen on (positional)")
     parser.add_argument("--port", type=int, default=None, help="Port to listen on (default 8000)")
     parser.add_argument("--host", type=str, default=os.environ.get("HOST", "0.0.0.0"), help="Host to bind to (default 0.0.0.0)")
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
+    parser.add_argument("--media-dir", type=str, default=None, help="Path to media directory")
     parser.add_argument("--send-test-email", metavar="ADDRESS", help="Send one test email with the current mail settings and exit")
     parser.add_argument("--create-admin", nargs=2, metavar=("LOGIN", "EMAIL"),
                         help="Create or promote the administrator account with a new random password and exit")
     args = parser.parse_args()
+    product_db = args.db or config.DEFAULT_DB_PATH
+    product_media = getattr(args, "media_dir", None) or config.MEDIA_DIR
     if args.create_admin:
-        admin_conn = init_db(args.db or config.DEFAULT_DB_PATH, seed=False)
+        admin_conn = init_db(product_db, seed=False)
         try:
             admin_id, admin_password = create_admin(admin_conn, args.create_admin[0], args.create_admin[1])
         except ValueError as e:
@@ -94,4 +119,4 @@ if __name__ == "__main__":
         print(f"Test email sent to {args.send_test_email}")
         sys.exit(0)
     port = args.port or args.port_pos or int(os.environ.get("PORT", 8000))
-    run_server(host=args.host, port=port, db_path=args.db)
+    run_server(host=args.host, port=port, db_path=product_db, media_dir=product_media)

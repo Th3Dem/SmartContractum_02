@@ -5,7 +5,9 @@ import json
 import threading
 import sqlite3
 import os
+import shutil
 import sys
+import tempfile
 import time
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -16,9 +18,8 @@ import server
 class TestIssue209Drafts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.db_path = os.path.join(REPO_ROOT, "data", "test_drafts.db")
-        if os.path.exists(cls.db_path):
-            os.remove(cls.db_path)
+        cls.temp_dir = tempfile.mkdtemp(prefix="sc-test209-")
+        cls.db_path = os.path.join(cls.temp_dir, "test_drafts.db")
             
         cls.httpd = server.create_server(host="127.0.0.1", port=8105, db_path=cls.db_path, seed=False, enforce_csrf=False)
         cls.server_thread = threading.Thread(target=cls.httpd.serve_forever)
@@ -30,11 +31,8 @@ class TestIssue209Drafts(unittest.TestCase):
     def tearDownClass(cls):
         cls.httpd.shutdown()
         cls.server_thread.join()
-        if os.path.exists(cls.db_path):
-            try:
-                os.remove(cls.db_path)
-            except Exception:
-                pass
+        if hasattr(cls, "temp_dir") and os.path.exists(cls.temp_dir):
+            shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
     def setUp(self):
         self.base_url = "http://127.0.0.1:8105"

@@ -720,6 +720,17 @@
 [2026-10-03 15:55] | dev_bot | IMPLEMENTATION_COMPLETE | Report: user-scoped состояние жалоб для материалов и комментариев (Task: issue-133-user-scoped-report-state)
 [2026-10-03 15:56] | git_bot | PR_CREATED | Открыт PR #135 для Issue #133 (Fixes #133), ветка fix/issue-133-user-scoped-report-state (Task: issue-133-user-scoped-report-state)
 [2026-10-03 15:58] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #135 готов к слиянию владельцем (Task: issue-133-user-scoped-report-state)
+[2026-10-09 11:00] | pm_bot | TASK_INIT | Старт задачи Issue #288: Test runs must never touch the local data/ (DB and media) (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:01] | pm_bot | DEV_ASSIGN | Назначение реализации backend на py_bot для Issue #288 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:15] | py_bot | IMPLEMENTATION_COMPLETE | Изоляция локальных данных data/ при запуске тестов (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:20] | git_bot | PR_CREATED | Открыт PR #289 для Issue #288 (Fixes #288), ветка fix/issue-288-tests-never-touch-local-data (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:35] | pm_bot | READY_FOR_CLAUDE_REVIEW | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #289 готов к ревью Claude Code (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:45] | pm_bot | REVIEW_REWORK | Начало доработки по замечаниям Claude Code round 1 of 4 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:00] | py_bot | IMPLEMENTATION_COMPLETE | Устранение замечаний Claude Code round 1 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:05] | pm_bot | READY_FOR_CLAUDE_REVIEW | Доработка round 1 завершена, критерии подтверждены, PR #289 готов к ревью Claude Code (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:15] | pm_bot | REVIEW_REWORK | Начало доработки по замечаниям Claude Code round 2 of 4 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:45] | py_bot | IMPLEMENTATION_COMPLETE | Устранение замечаний Claude Code round 2 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:50] | pm_bot | READY_FOR_CLAUDE_REVIEW | Доработка round 2 завершена, критерии подтверждены, PR #289 готов к ревью Claude Code (Task: issue-288-tests-never-touch-local-data)
 
 
 

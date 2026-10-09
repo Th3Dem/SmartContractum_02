@@ -1,6 +1,11 @@
 """Paths, limits and allowed values; loading of the local .env file."""
+import atexit
 import os
-from typing import List
+import shutil
+import sys
+import tempfile
+import types
+from typing import List, Optional
 
 
 def load_env_file(path: str) -> List[str]:
@@ -27,13 +32,94 @@ def load_env_file(path: str) -> List[str]:
                 loaded.append(key)
     return loaded
 
+
 # Base paths
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_PUBLIC_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-DEFAULT_DB_PATH = os.path.join(DATA_DIR, "moderation.db")
-MEDIA_DIR = os.path.join(DATA_DIR, "media")
-os.makedirs(MEDIA_DIR, exist_ok=True)
+
+
+_IS_PRODUCT_PROCESS: bool = False
+
+
+def set_product_mode(enabled: bool = True) -> None:
+    """Marks the current process as a product server execution rather than a test run."""
+    global _IS_PRODUCT_PROCESS
+    _IS_PRODUCT_PROCESS = enabled
+
+
+def is_product_mode() -> bool:
+    return _IS_PRODUCT_PROCESS
+
+
+def is_under_test() -> bool:
+    if _IS_PRODUCT_PROCESS:
+        return False
+    return "unittest" in sys.modules
+
+
+_TEST_DATA_DIR = None
+
+
+def get_test_data_dir() -> str:
+    global _TEST_DATA_DIR
+    if _TEST_DATA_DIR is None:
+        _TEST_DATA_DIR = tempfile.mkdtemp(prefix="sc-test-data-")
+        atexit.register(shutil.rmtree, _TEST_DATA_DIR, ignore_errors=True)
+    return _TEST_DATA_DIR
+
+
+def check_forbidden_test_path(path: Optional[str]) -> None:
+    if not path or path == ":memory:":
+        return
+    if not is_under_test():
+        return
+    real_target = os.path.realpath(os.path.abspath(path))
+    real_data = os.path.realpath(os.path.abspath(DATA_DIR))
+    if real_target == real_data or real_target.startswith(real_data + os.sep):
+        raise RuntimeError(f"Test runs must never touch repository data directory: {path}")
+
+
+_CUSTOM_DB_PATH: Optional[str] = None
+_CUSTOM_MEDIA_DIR: Optional[str] = None
+
+
+class _ConfigModule(types.ModuleType):
+    @property
+    def DEFAULT_DB_PATH(self) -> str:
+        env_db = os.environ.get("MODERATION_DB_PATH")
+        if env_db:
+            return env_db
+        if _CUSTOM_DB_PATH is not None:
+            return _CUSTOM_DB_PATH
+        if is_under_test():
+            return os.path.join(get_test_data_dir(), "moderation.db")
+        return os.path.join(DATA_DIR, "moderation.db")
+
+    @DEFAULT_DB_PATH.setter
+    def DEFAULT_DB_PATH(self, value: Optional[str]) -> None:
+        global _CUSTOM_DB_PATH
+        _CUSTOM_DB_PATH = value
+
+    @property
+    def MEDIA_DIR(self) -> str:
+        env_media = os.environ.get("MEDIA_DIR")
+        if env_media:
+            return env_media
+        if _CUSTOM_MEDIA_DIR is not None:
+            return _CUSTOM_MEDIA_DIR
+        if is_under_test():
+            return os.path.join(get_test_data_dir(), "media")
+        return os.path.join(DATA_DIR, "media")
+
+    @MEDIA_DIR.setter
+    def MEDIA_DIR(self, value: Optional[str]) -> None:
+        global _CUSTOM_MEDIA_DIR
+        _CUSTOM_MEDIA_DIR = value
+
+    def __dir__(self):
+        return list(super().__dir__()) + ["DEFAULT_DB_PATH", "MEDIA_DIR"]
+
 
 # Allowed configuration values
 VALID_COMPLEXITIES = {"none", "easy", "medium", "hard"}
@@ -49,3 +135,27 @@ MAX_MEDIA_BODY_BYTES = 15 * 1024 * 1024  # 15 МБ для загрузки ме�
 def site_url() -> str:
     """Public base URL used in links inside emails, without a trailing slash."""
     return os.environ.get("SITE_URL", "http://localhost:8000").rstrip("/")
+
+
+__all__ = [
+    "load_env_file",
+    "PROJECT_ROOT",
+    "FRONTEND_PUBLIC_DIR",
+    "DATA_DIR",
+    "DEFAULT_DB_PATH",
+    "MEDIA_DIR",
+    "set_product_mode",
+    "is_product_mode",
+    "is_under_test",
+    "get_test_data_dir",
+    "check_forbidden_test_path",
+    "VALID_COMPLEXITIES",
+    "VALID_STATUSES",
+    "VALID_MATERIAL_TYPES",
+    "LEGACY_MATERIAL_TYPES",
+    "MAX_JSON_BODY_BYTES",
+    "MAX_MEDIA_BODY_BYTES",
+    "site_url",
+]
+
+sys.modules[__name__].__class__ = _ConfigModule
