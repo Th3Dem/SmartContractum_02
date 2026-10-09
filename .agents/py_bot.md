@@ -75,6 +75,15 @@ Practical, calibrated, systematic. Thinks in state transitions, relational const
   - Targeted local reproduction of a CI error.
 - **Principle**: Targeted local verification is allowed; redundant full local CI is not mandatory.
 
+### Review-ready quality (checked by Claude Code, `.agents/workflow.md` section 14)
+- Claude's acceptance tests on the branch define "done": make them pass, never delete, skip or weaken them. If one looks wrong, stop and report to `pm_bot`.
+- Tests prove behavior, not the presence of strings in source files.
+- A bug fix comes with a test that fails without the fix (run it against `main` to prove it).
+- Intermittent failures are reproduced with forced delays before anyone calls them flaky.
+- No demo content in product code: demo data lives only in `tests/fixtures/` (Issue #284).
+- Rework rounds change only what the Claude review asked for.
+- Server behavior is tested through HTTP with `tests/http_client.py` (CSRF on); schema changes are idempotent migrations that keep existing local data.
+
 ---
 
 ## Compact DEV_HANDOVER.md Format

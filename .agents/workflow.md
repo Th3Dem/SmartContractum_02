@@ -4,7 +4,7 @@ This document defines the mandatory, state-driven lifecycle for feature developm
 
 The unified workflow invariant:
 
-**Human creates Issue → pm_bot takes Issue → analyzes and orchestrates → agents implement code and tests → branch pushed → PR created → GitHub Actions run automated tests → agents fix failures until required checks are green → pm_bot verifies Acceptance Criteria → READY FOR OWNER MERGE → STOP → only Human Owner can authorize merge → Issue closes only after actual merge → production deployment requires a separate Human Owner command.**
+**Owner + ChatGPT create Issue → Claude Code refines it and writes acceptance tests → pm_bot takes Issue → agents implement code and tests on Claude's branch → PR created → GitHub Actions green → pm_bot verifies Acceptance Criteria → READY FOR CLAUDE REVIEW → STOP → Claude Code reviews → rework loop on the same branch until Claude's verdict READY FOR OWNER MERGE → only Human Owner merges → Issue closes only after actual merge → production deployment requires a separate Human Owner command.**
 
 ---
 
@@ -18,16 +18,24 @@ The human project owner is the ultimate decision maker:
 - Authorizes Pull Request merge into `main`.
 - Authorizes production deployment.
 
+### Claude Code (Issue refinement and review)
+A separate model working in the same folder, never at the same time as Gemini:
+- Refines the Issue with the owner until it is ready (Definition of Ready, section 12).
+- Writes acceptance tests up front and pushes them on the feature branch Gemini continues.
+- Reviews every Gemini PR on GitHub (`gh pr review`): code, tests, live check, design, privacy.
+- Gives the only verdict that a PR is READY FOR OWNER MERGE.
+- Never fixes Gemini's PR itself; every finding goes back to Gemini.
+
 ### pm_bot (Project Manager & Orchestrator)
 `pm_bot` is the orchestrator and delivery owner, NOT a coding agent:
-- Receives intake from the Human Owner: "Возьми Issue #N в работу".
+- Receives intake from the Human Owner: "Возьми Issue #N в работу", or a Claude review to rework: "Claude вернул PR #M на доработку".
 - Analyzes the Issue, inspects the codebase, dependencies, and related PRs/issues.
 - Refines technical details and Acceptance Criteria in the existing Issue without changing product intent.
 - Decomposes work and selects specialist coding agents (`py_bot` for Python/backend, `dev_bot` for frontend/styling).
 - Controls implementation and tracks GitHub Actions CI.
 - Organizes fixes if CI checks fail.
 - Verifies Acceptance Criteria once CI is green.
-- Conducts final PR inspection and drives the task to `READY FOR OWNER MERGE`.
+- Conducts final PR inspection and drives the task to `READY FOR CLAUDE REVIEW`.
 - Halts the workflow and waits for the Human Owner's explicit decision.
 
 ### Coding Agents (`py_bot`, `dev_bot`)
@@ -65,37 +73,35 @@ The primary, independent automated testing environment:
 ## 2. End-to-End Lifecycle
 
 ```text
-Human creates Issue
+Owner + ChatGPT create Issue
         ↓
-Human: «Возьми Issue #N в работу»
+Claude Code refines Issue with owner (Definition of Ready), pushes feature branch
+with acceptance tests, sets label ready-for-gemini
         ↓
-pm_bot analyzes Issue, explores code, dependencies, related issues & PRs
+Owner: «Возьми Issue #N в работу»
         ↓
-pm_bot clarifies Acceptance Criteria & technical details in existing Issue if needed
+pm_bot reads Issue, Claude's notes and acceptance tests, explores code
         ↓
-pm_bot decomposes work and assigns to coding agent (dev_bot / py_bot)
+pm_bot assigns work to coding agent (dev_bot / py_bot) on Claude's branch
         ↓
-coding agent implements changes and required tests (targeted local checks allowed)
+coding agent implements changes and tests until acceptance tests pass
         ↓
-coding agent creates compact DEV_HANDOVER.md
+git_bot commits, pushes, opens PR (Fixes #<issue>)
         ↓
-git_bot creates branch, commits (Conventional Commits), pushes, opens PR (Fixes #<issue>)
-        ↓
-GitHub Actions runs required checks (primary test runner)
-        ↓
-if CI RED: pm_bot reads logs -> delegates fix to coder -> push -> new CI run -> loop until GREEN
+GitHub Actions runs required checks; if RED: fix loop on the same branch until GREEN
         ↓
 Gate 1: Technical CI GREEN
-Gate 2: Acceptance Criteria verified by pm_bot
+Gate 2: Acceptance Criteria verified by pm_bot, quality bar of section 14 met
         ↓
-Final PR inspection (no secrets, no local paths, no tasks/ artifacts, clean diff)
+Final PR inspection, label in-review
         ↓
-READY FOR OWNER MERGE
+READY FOR CLAUDE REVIEW -> STOP, folder handed back clean (section 13)
         ↓
-STOP
+Claude Code review on GitHub
+   changes requested -> label changes-requested -> owner: «Claude вернул PR #M на доработку»
+                     -> rework on the same branch (section 12) -> READY FOR CLAUDE REVIEW again
+   approved          -> label ready-to-merge -> owner merges
 ```
-
----
 
 ## 3. GitHub Issue as Single Source of Truth
 
@@ -191,13 +197,13 @@ Fixes #<issue-number>
 - Residual risks or deployment notes
 ```
 
-### Dual Verification Gates before READY FOR OWNER MERGE
-A Pull Request can ONLY be marked ready for the owner when BOTH gates pass:
+### Dual Verification Gates before READY FOR CLAUDE REVIEW
+A Pull Request can ONLY be handed to Claude Code for review when BOTH gates pass:
 - **Gate 1 (Technical)**: All required GitHub Actions checks are GREEN.
 - **Gate 2 (Product / Acceptance)**: `pm_bot` has verified that all Acceptance Criteria and expected user behaviors from the Issue are satisfied.
 
 ### Final PR Inspection Checklist
-Before declaring `READY FOR OWNER MERGE`, `pm_bot` must verify:
+Before declaring `READY FOR CLAUDE REVIEW`, `pm_bot` must verify:
 - [ ] PR correctly references `Fixes #<issue>`.
 - [ ] Scope strictly matches the Issue (no accidental scope creep).
 - [ ] No merge conflicts with `main`.
@@ -208,6 +214,9 @@ Before declaring `READY FOR OWNER MERGE`, `pm_bot` must verify:
 - [ ] No em dashes in commit messages.
 - [ ] All required GitHub Checks are GREEN.
 - [ ] All Acceptance Criteria are proven.
+- [ ] Claude's acceptance tests are present and unchanged, or every change is explained in the PR.
+- [ ] Quality bar of section 14 is met (regression tests, UI checks, live check).
+- [ ] Every finding of the previous Claude review is answered (rework rounds only).
 
 ---
 
@@ -219,10 +228,11 @@ Issue #<number>: OPEN
 PR #<number>: OPEN
 Required GitHub Checks: GREEN
 Acceptance Criteria: VERIFIED
-Status: READY FOR OWNER MERGE
+Review round: <N> of 4
+Status: READY FOR CLAUDE REVIEW
 ```
 
-At this point, the agent workflow **STOPS**.
+At this point, the agent workflow **STOPS** and the folder is handed back clean (section 13). The owner takes the PR to Claude Code. READY FOR OWNER MERGE is Claude's verdict only; Gemini never reports it.
 
 ### Absolute Prohibitions without Human Command
 Agents are strictly prohibited from:
@@ -245,13 +255,13 @@ Agents are strictly prohibited from:
 
 ## 9. Handling Owner Feedback on Green PRs
 
-If the Human Owner reviews a green PR and requests adjustments:
+Claude review findings follow section 12. If the Human Owner requests adjustments directly:
 1. Both Issue and PR remain `OPEN`.
 2. `pm_bot` decomposes the requested adjustments and delegates to coding agents.
 3. Fixes are committed to the **same** branch and pushed.
 4. GitHub Actions re-runs CI checks.
 5. `pm_bot` re-verifies Acceptance Criteria.
-6. Workflow halts again at `READY FOR OWNER MERGE`.
+6. Workflow halts again at `READY FOR CLAUDE REVIEW`.
 
 ---
 
@@ -295,6 +305,67 @@ Standard Actions:
 - `PR_CREATED`: `git_bot` opens PR on GitHub
 - `CI_FAILED`: `git_bot` reports failing CI run
 - `DEV_REWORK`: `pm_bot` routes CI failure back to coding agent
-- `READY_FOR_OWNER_MERGE`: `pm_bot` confirms green CI + verified acceptance criteria; halts workflow
+- `READY_FOR_CLAUDE_REVIEW`: `pm_bot` confirms green CI + verified acceptance criteria; halts workflow
+- `REVIEW_REWORK`: `pm_bot` starts a rework round after a Claude review (round N of 4)
 - `PR_MERGED`: `git_bot` logs confirmation after Human Owner merges PR
 - `DEPLOY_COMPLETE`: `ops_bot` logs production deployment execution
+
+---
+
+## 12. Claude Code Review Loop
+
+### Definition of Ready (before Gemini starts)
+Claude Code and the owner bring the Issue to this state before the label `ready-for-gemini`:
+- product intent unchanged from the owner's Issue;
+- testable Acceptance Criteria, scope and explicit out-of-scope;
+- affected modules and files, related Issues and PRs;
+- risks, security and privacy notes;
+- for UI: widths, themes and states to check;
+- how to verify it live;
+- acceptance tests pushed on the feature branch named in the Issue (`feat/issue-<N>-<short-name>` or `fix/...`).
+
+### Starting the work
+- `git_bot` checks out the branch Claude named in the Issue (`git fetch && git checkout <branch> && git pull`) instead of creating a new one. Only when the Issue names no branch, create one from latest `main` as in section 4.
+- Claude's acceptance tests define "done". They fail before the implementation and must pass after it.
+- Never delete, skip or weaken an acceptance test to make it pass. If a test is wrong or contradicts the Issue, stop and report it to the owner for Claude; any agreed change is listed in the PR.
+
+### Review comments
+- Claude reviews on GitHub with severities: **blocker** (must fix before merge), **major** (must fix), **minor** (fix or answer).
+- Read them with `gh pr view <M> --comments` and `gh api repos/Th3Dem/SmartContractum_02/pulls/<M>/comments`.
+- Fix every blocker and major on the **same** branch, never in a new PR. For each finding, reply on the PR with what was changed, or why not (minor only).
+- Do not change code that the review did not ask for (no drive-by refactoring in rework rounds).
+
+### Rounds
+- Count review rounds in the PR conversation and in `WORKLOG.md` (`REVIEW_REWORK`, round N of 4).
+- After the 4th return for rework the owner decides whether Claude Code takes the task over. Gemini stops and waits.
+
+### Labels
+`ready-for-gemini` (Issue ready), `in-review` (PR waits for Claude), `changes-requested` (rework needed), `ready-to-merge` (Claude approved). Gemini sets `in-review` on the PR when it stops; Claude sets the others.
+
+---
+
+## 13. Shared Working Folder (Projects_04)
+
+Gemini and Claude Code use the same local folder, strictly one after another.
+
+- **One agent at a time.** Start only when the owner hands you the folder; never run while the other model works.
+- **Start of a session:** `git status` must be clean. If it is not, stop and report; never discard someone else's changes.
+- **End of a session (handoff):** everything committed and pushed to the feature branch, then `git checkout main && git pull`, `git status` clean. Local artifacts stay ignored (`tasks/`, `data/`, `.env`).
+- **Local data is shared and precious.** `data/moderation.db` and `data/media/` hold the owner's real local portal content. Never delete, reset, reseed or migrate them by hand. Live checks run on a copy: `python3 server.py --port 8765 --db <copy>` with a copied `MEDIA_DIR` when uploads are involved.
+- **One local server.** `localhost:8000` serves this folder. Restart it after switching branches (Python modules load at start); stop throwaway servers when done.
+- **Files of the other model:** `CLAUDE.md` is Claude's local file, do not edit or commit it. Claude changes Gemini rule files only through a PR the owner merges.
+
+---
+
+## 14. Quality Bar Claude Code Checks
+
+A PR passes Claude's review only if:
+- **Scope:** every changed line traces to the Issue; no unrelated refactoring; found side issues are reported, not fixed silently.
+- **Tests prove behavior,** not the presence of strings in source files. Server behavior through HTTP (`tests/http_client.py`), UI behavior through browser tests (`BROWSER_SMOKE = True`, collected by `tests/run_browser_smoke.py`; do not edit `ci.yml`).
+- **Bug fixes** include a test that fails without the fix and passes with it (prove it by running the test against `main`).
+- **Races and intermittent failures** are reproduced with forced delays before being called flaky.
+- **UI tasks:** checked at 320, 375, 414, 768, 1024 px and desktop, light and dark themes, keyboard; no horizontal scroll, nothing clipped; buttons 32 to 34 px (44 px on touch). State it in the PR.
+- **Live check** on a copy of the DB with the user scenarios from the Issue, described in the PR (what was run and what was seen).
+- **No demo content in product code** (Issue #284): demo data lives only in `tests/fixtures/`; the five real starter authors are `tests/fixtures/starter_content.py`. Never add fake materials, authors or fallbacks to `backend/` or `frontend/`.
+- **Security:** escaping of user data, CSRF on writes, authorization on every endpoint, sanitizer allowlists kept strict.
+- **Privacy and style:** no IPs, local paths, secrets, `data/` or `tasks/` in the diff; no emojis and no em dashes; Conventional Commits; PR sections Issue / What / Why / Acceptance Criteria / Tests / Known risks.

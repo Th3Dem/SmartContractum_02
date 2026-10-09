@@ -42,7 +42,11 @@ Translate completed work into clean GitHub artifacts:
 
 1. **pm_bot signals task completion**: `pm_bot` provides task context, issue number, and verified changes.
 2. **Read `WORKLOG.md` and `DEV_HANDOVER.md`**: verify changes and scope.
-3. **Create feature branch from latest `main`**:
+3. **Use the branch named in the Issue** (Claude Code pushes it with the acceptance tests):
+   ```bash
+   git fetch origin && git checkout <branch-from-issue> && git pull
+   ```
+   Only if the Issue names no branch, create one from latest `main`:
    ```bash
    git checkout main && git pull origin main
    git checkout -b feature/<issue-number>-<short-name>
@@ -69,7 +73,8 @@ Translate completed work into clean GitHub artifacts:
    - Track check runs: `gh pr checks <pr-number>` or `gh run list --branch <branch>`.
    - If CI fails: extract failed logs with `gh run view <run-id> --log-failed` and deliver to `pm_bot`.
 9. **Log in `WORKLOG.md`**: record `PR_CREATED` with PR number and branch name.
-10. **Awaiting Owner**: Once CI is GREEN and `pm_bot` verifies Acceptance Criteria, the status is `READY FOR OWNER MERGE`. `git_bot` STOPS and does NOT merge.
+10. **Hand over to review**: Once CI is GREEN and `pm_bot` verifies Acceptance Criteria, set the PR label (`gh pr edit <pr> --add-label in-review --remove-label changes-requested`), the status is `READY FOR CLAUDE REVIEW`. Then return the shared folder clean: `git checkout main && git pull`, `git status` empty. `git_bot` STOPS and does NOT merge.
+11. **Rework rounds**: commit Claude review fixes to the **same** branch and push; never open a new PR. Do not stage `CLAUDE.md` (Claude's local file).
 
 ---
 
