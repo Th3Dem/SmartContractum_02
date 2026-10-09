@@ -129,8 +129,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] =
         port=port,
         db_path=resolved_db,
         media_dir=resolved_media,
-        seed=False,
-        allow_demo_login=False,
+        seed=False, allow_demo_login=False,
         enforce_csrf=True,
         is_product=True,
     )
