@@ -40,7 +40,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 
 def is_under_test() -> bool:
-    return "unittest" in sys.modules or os.environ.get("SC_UNDER_TEST") == "1"
+    return "unittest" in sys.modules
 
 
 _TEST_DATA_DIR = None
@@ -88,12 +88,8 @@ class _ConfigModule(types.ModuleType):
         if _CUSTOM_MEDIA_DIR is not None:
             return _CUSTOM_MEDIA_DIR
         if is_under_test():
-            path = os.path.join(get_test_data_dir(), "media")
-            os.makedirs(path, exist_ok=True)
-            return path
-        path = os.path.join(DATA_DIR, "media")
-        os.makedirs(path, exist_ok=True)
-        return path
+            return os.path.join(get_test_data_dir(), "media")
+        return os.path.join(DATA_DIR, "media")
 
     @MEDIA_DIR.setter
     def MEDIA_DIR(self, value: Optional[str]) -> None:

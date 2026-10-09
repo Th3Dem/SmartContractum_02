@@ -14,13 +14,16 @@ from backend.media_library import migrate_media_schema
 from backend.users import disable_legacy_admin_password, migrate_legacy_profiles
 
 
-def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlite3.Connection:
+def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None, is_product: bool = False) -> sqlite3.Connection:
     """
     Initializes the SQLite database and ensures schema and tables exist.
     Optionally seeds demo data if seed is True or environment/test defaults dictate.
     """
-    target_path = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
-    config.check_forbidden_test_path(target_path)
+    if is_product:
+        target_path = db_path or os.environ.get("MODERATION_DB_PATH") or os.path.join(config.DATA_DIR, "moderation.db")
+    else:
+        target_path = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
+        config.check_forbidden_test_path(target_path)
     if target_path != ":memory:":
         os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
 
@@ -464,7 +467,9 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
                 pass
 
     if seed is None:
-        if os.environ.get("SEED_ON_INIT") == "1":
+        if is_product:
+            seed = False
+        elif os.environ.get("SEED_ON_INIT") == "1":
             seed = True
         elif os.environ.get("SEED_ON_INIT") == "0":
             seed = False

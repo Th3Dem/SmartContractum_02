@@ -66,17 +66,22 @@ def create_server(
     seed: Optional[bool] = None,
     allow_demo_login: Optional[bool] = None,
     enforce_csrf: Optional[bool] = None,
-    allow_csrf_bypass: bool = False
+    allow_csrf_bypass: bool = False,
+    is_product: bool = False
 ) -> http.server.ThreadingHTTPServer:
     """
     Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
-    resolved_db = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
-    config.check_forbidden_test_path(resolved_db)
-    resolved_media = media_dir or os.environ.get("MEDIA_DIR", config.MEDIA_DIR)
-    config.check_forbidden_test_path(resolved_media)
+    if is_product:
+        resolved_db = db_path or os.environ.get("MODERATION_DB_PATH") or os.path.join(config.DATA_DIR, "moderation.db")
+        resolved_media = media_dir or os.environ.get("MEDIA_DIR") or os.path.join(config.DATA_DIR, "media")
+    else:
+        resolved_db = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
+        config.check_forbidden_test_path(resolved_db)
+        resolved_media = media_dir or os.environ.get("MEDIA_DIR", config.MEDIA_DIR)
+        config.check_forbidden_test_path(resolved_media)
 
-    init_db(resolved_db, seed=seed)
+    init_db(resolved_db, seed=seed, is_product=is_product)
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, ModerationRequestHandler)
     httpd.db_path = resolved_db
@@ -110,15 +115,29 @@ def create_server(
     return httpd
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None):
+def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] = None, media_dir: Optional[str] = None):
     """
     Starts the server loop listening on host:port.
+    The product server entry point explicitly resolves to data/moderation.db and data/media
+    unless overridden, and never uses test redirection.
     """
+    resolved_db = db_path or os.environ.get("MODERATION_DB_PATH") or os.path.join(config.DATA_DIR, "moderation.db")
+    resolved_media = media_dir or os.environ.get("MEDIA_DIR") or os.path.join(config.DATA_DIR, "media")
     # The product server never seeds demo content (Issue #284)
-    httpd = create_server(host=host, port=port, db_path=db_path, seed=False, allow_demo_login=False, enforce_csrf=True)
+    httpd = create_server(
+        host=host,
+        port=port,
+        db_path=resolved_db,
+        media_dir=resolved_media,
+        seed=False,
+        allow_demo_login=False,
+        enforce_csrf=True,
+        is_product=True,
+    )
     print(f"Antigravity Moderation Server running at http://{host}:{port}/")
     print(f"Serving static files from {httpd.directory}")
-    print(f"SQLite database at {httpd.db_path}")
+    print(f"SQLite database at {os.path.abspath(httpd.db_path)}")
+    print(f"Media directory at {os.path.abspath(httpd.media_dir)}")
     print(EMAIL_SERVICE.describe())
     if "EMAIL_VERIFICATION_SECRET" not in os.environ:
         print("WARNING: EMAIL_VERIFICATION_SECRET is not set; the public default is used. Set it in .env before production.")

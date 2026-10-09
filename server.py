@@ -86,8 +86,10 @@ if __name__ == "__main__":
     parser.add_argument("--create-admin", nargs=2, metavar=("LOGIN", "EMAIL"),
                         help="Create or promote the administrator account with a new random password and exit")
     args = parser.parse_args()
+    product_db = args.db or os.environ.get("MODERATION_DB_PATH") or os.path.join(config.DATA_DIR, "moderation.db")
+    product_media = os.environ.get("MEDIA_DIR") or os.path.join(config.DATA_DIR, "media")
     if args.create_admin:
-        admin_conn = init_db(args.db or config.DEFAULT_DB_PATH, seed=False)
+        admin_conn = init_db(product_db, seed=False, is_product=True)
         try:
             admin_id, admin_password = create_admin(admin_conn, args.create_admin[0], args.create_admin[1])
         except ValueError as e:
@@ -115,4 +117,4 @@ if __name__ == "__main__":
         print(f"Test email sent to {args.send_test_email}")
         sys.exit(0)
     port = args.port or args.port_pos or int(os.environ.get("PORT", 8000))
-    run_server(host=args.host, port=port, db_path=args.db)
+    run_server(host=args.host, port=port, db_path=product_db, media_dir=product_media)
