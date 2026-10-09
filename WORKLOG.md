@@ -728,6 +728,9 @@
 [2026-10-09 11:45] | pm_bot | REVIEW_REWORK | Начало доработки по замечаниям Claude Code round 1 of 4 (Task: issue-288-tests-never-touch-local-data)
 [2026-10-09 12:00] | py_bot | IMPLEMENTATION_COMPLETE | Устранение замечаний Claude Code round 1 (Task: issue-288-tests-never-touch-local-data)
 [2026-10-09 12:05] | pm_bot | READY_FOR_CLAUDE_REVIEW | Доработка round 1 завершена, критерии подтверждены, PR #289 готов к ревью Claude Code (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:15] | pm_bot | REVIEW_REWORK | Начало доработки по замечаниям Claude Code round 2 of 4 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:45] | py_bot | IMPLEMENTATION_COMPLETE | Устранение замечаний Claude Code round 2 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 12:50] | pm_bot | READY_FOR_CLAUDE_REVIEW | Доработка round 2 завершена, критерии подтверждены, PR #289 готов к ревью Claude Code (Task: issue-288-tests-never-touch-local-data)
 
 
 

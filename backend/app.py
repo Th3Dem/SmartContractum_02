@@ -66,22 +66,17 @@ def create_server(
     seed: Optional[bool] = None,
     allow_demo_login: Optional[bool] = None,
     enforce_csrf: Optional[bool] = None,
-    allow_csrf_bypass: bool = False,
-    is_product: bool = False
+    allow_csrf_bypass: bool = False
 ) -> http.server.ThreadingHTTPServer:
     """
     Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
-    if is_product:
-        resolved_db = db_path or os.environ.get("MODERATION_DB_PATH") or os.path.join(config.DATA_DIR, "moderation.db")
-        resolved_media = media_dir or os.environ.get("MEDIA_DIR") or os.path.join(config.DATA_DIR, "media")
-    else:
-        resolved_db = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
-        config.check_forbidden_test_path(resolved_db)
-        resolved_media = media_dir or os.environ.get("MEDIA_DIR", config.MEDIA_DIR)
-        config.check_forbidden_test_path(resolved_media)
+    resolved_db = db_path or config.DEFAULT_DB_PATH
+    config.check_forbidden_test_path(resolved_db)
+    resolved_media = media_dir or config.MEDIA_DIR
+    config.check_forbidden_test_path(resolved_media)
 
-    init_db(resolved_db, seed=seed, is_product=is_product)
+    init_db(resolved_db, seed=seed)
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, ModerationRequestHandler)
     httpd.db_path = resolved_db
@@ -121,8 +116,9 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] =
     The product server entry point explicitly resolves to data/moderation.db and data/media
     unless overridden, and never uses test redirection.
     """
-    resolved_db = db_path or os.environ.get("MODERATION_DB_PATH") or os.path.join(config.DATA_DIR, "moderation.db")
-    resolved_media = media_dir or os.environ.get("MEDIA_DIR") or os.path.join(config.DATA_DIR, "media")
+    config.set_product_mode(True)
+    resolved_db = db_path or config.DEFAULT_DB_PATH
+    resolved_media = media_dir or config.MEDIA_DIR
     # The product server never seeds demo content (Issue #284)
     httpd = create_server(
         host=host,
@@ -131,7 +127,6 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, db_path: Optional[str] =
         media_dir=resolved_media,
         seed=False, allow_demo_login=False,
         enforce_csrf=True,
-        is_product=True,
     )
     print(f"Antigravity Moderation Server running at http://{host}:{port}/")
     print(f"Serving static files from {httpd.directory}")

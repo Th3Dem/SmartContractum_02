@@ -39,7 +39,22 @@ FRONTEND_PUBLIC_DIR = os.path.join(PROJECT_ROOT, "frontend", "public")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 
+_IS_PRODUCT_PROCESS: bool = False
+
+
+def set_product_mode(enabled: bool = True) -> None:
+    """Marks the current process as a product server execution rather than a test run."""
+    global _IS_PRODUCT_PROCESS
+    _IS_PRODUCT_PROCESS = enabled
+
+
+def is_product_mode() -> bool:
+    return _IS_PRODUCT_PROCESS
+
+
 def is_under_test() -> bool:
+    if _IS_PRODUCT_PROCESS:
+        return False
     return "unittest" in sys.modules
 
 
@@ -74,6 +89,9 @@ class _ConfigModule(types.ModuleType):
     def DEFAULT_DB_PATH(self) -> str:
         if _CUSTOM_DB_PATH is not None:
             return _CUSTOM_DB_PATH
+        env_db = os.environ.get("MODERATION_DB_PATH")
+        if env_db:
+            return env_db
         if is_under_test():
             return os.path.join(get_test_data_dir(), "moderation.db")
         return os.path.join(DATA_DIR, "moderation.db")
@@ -87,6 +105,9 @@ class _ConfigModule(types.ModuleType):
     def MEDIA_DIR(self) -> str:
         if _CUSTOM_MEDIA_DIR is not None:
             return _CUSTOM_MEDIA_DIR
+        env_media = os.environ.get("MEDIA_DIR")
+        if env_media:
+            return env_media
         if is_under_test():
             return os.path.join(get_test_data_dir(), "media")
         return os.path.join(DATA_DIR, "media")
@@ -123,6 +144,8 @@ __all__ = [
     "DATA_DIR",
     "DEFAULT_DB_PATH",
     "MEDIA_DIR",
+    "set_product_mode",
+    "is_product_mode",
     "is_under_test",
     "get_test_data_dir",
     "check_forbidden_test_path",
