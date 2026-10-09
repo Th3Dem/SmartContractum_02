@@ -723,6 +723,7 @@
 [2026-10-09 11:00] | pm_bot | TASK_INIT | Старт задачи Issue #288: Test runs must never touch the local data/ (DB and media) (Task: issue-288-tests-never-touch-local-data)
 [2026-10-09 11:01] | pm_bot | DEV_ASSIGN | Назначение реализации backend на py_bot для Issue #288 (Task: issue-288-tests-never-touch-local-data)
 [2026-10-09 11:15] | py_bot | IMPLEMENTATION_COMPLETE | Изоляция локальных данных data/ при запуске тестов (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:20] | git_bot | PR_CREATED | Открыт PR #289 для Issue #288 (Fixes #288), ветка fix/issue-288-tests-never-touch-local-data (Task: issue-288-tests-never-touch-local-data)
 
 
 
