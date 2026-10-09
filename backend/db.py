@@ -19,7 +19,7 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
     Initializes the SQLite database and ensures schema and tables exist.
     Optionally seeds demo data if seed is True or environment/test defaults dictate.
     """
-    target_path = db_path or config.DEFAULT_DB_PATH
+    target_path = db_path or os.environ.get("MODERATION_DB_PATH") or config.DEFAULT_DB_PATH
     config.check_forbidden_test_path(target_path)
     if target_path != ":memory:":
         os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)

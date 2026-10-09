@@ -87,11 +87,11 @@ _CUSTOM_MEDIA_DIR: Optional[str] = None
 class _ConfigModule(types.ModuleType):
     @property
     def DEFAULT_DB_PATH(self) -> str:
-        if _CUSTOM_DB_PATH is not None:
-            return _CUSTOM_DB_PATH
         env_db = os.environ.get("MODERATION_DB_PATH")
         if env_db:
             return env_db
+        if _CUSTOM_DB_PATH is not None:
+            return _CUSTOM_DB_PATH
         if is_under_test():
             return os.path.join(get_test_data_dir(), "moderation.db")
         return os.path.join(DATA_DIR, "moderation.db")
@@ -103,11 +103,11 @@ class _ConfigModule(types.ModuleType):
 
     @property
     def MEDIA_DIR(self) -> str:
-        if _CUSTOM_MEDIA_DIR is not None:
-            return _CUSTOM_MEDIA_DIR
         env_media = os.environ.get("MEDIA_DIR")
         if env_media:
             return env_media
+        if _CUSTOM_MEDIA_DIR is not None:
+            return _CUSTOM_MEDIA_DIR
         if is_under_test():
             return os.path.join(get_test_data_dir(), "media")
         return os.path.join(DATA_DIR, "media")

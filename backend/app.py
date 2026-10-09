@@ -71,9 +71,9 @@ def create_server(
     """
     Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
-    resolved_db = db_path or config.DEFAULT_DB_PATH
+    resolved_db = db_path or os.environ.get("MODERATION_DB_PATH") or config.DEFAULT_DB_PATH
     config.check_forbidden_test_path(resolved_db)
-    resolved_media = media_dir or config.MEDIA_DIR
+    resolved_media = media_dir or os.environ.get("MEDIA_DIR") or config.MEDIA_DIR
     config.check_forbidden_test_path(resolved_media)
 
     init_db(resolved_db, seed=seed)
