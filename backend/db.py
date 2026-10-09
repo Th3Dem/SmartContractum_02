@@ -20,6 +20,7 @@ def init_db(db_path: Optional[str] = None, seed: Optional[bool] = None) -> sqlit
     Optionally seeds demo data if seed is True or environment/test defaults dictate.
     """
     target_path = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
+    config.check_forbidden_test_path(target_path)
     if target_path != ":memory:":
         os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
 
@@ -496,6 +497,7 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     Returns a new SQLite connection for the specified database path.
     """
     target_path = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
+    config.check_forbidden_test_path(target_path)
     conn = sqlite3.connect(target_path)
     conn.row_factory = sqlite3.Row
     try:

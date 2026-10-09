@@ -46,6 +46,27 @@ _FORWARDED_SETTINGS = ("DEFAULT_DB_PATH", "MEDIA_DIR")
 
 
 class _ServerModule(types.ModuleType):
+    @property
+    def DEFAULT_DB_PATH(self):
+        return config.DEFAULT_DB_PATH
+
+    @DEFAULT_DB_PATH.setter
+    def DEFAULT_DB_PATH(self, value):
+        config.DEFAULT_DB_PATH = value
+
+    @property
+    def MEDIA_DIR(self):
+        return config.MEDIA_DIR
+
+    @MEDIA_DIR.setter
+    def MEDIA_DIR(self, value):
+        config.MEDIA_DIR = value
+
+    def __getattr__(self, name):
+        if name in _FORWARDED_SETTINGS:
+            return getattr(config, name)
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
     def __setattr__(self, name, value):
         if name in _FORWARDED_SETTINGS:
             setattr(config, name, value)

@@ -71,12 +71,17 @@ def create_server(
     """
     Creates and returns a ThreadingHTTPServer instance with initialized database and media storage.
     """
-    init_db(db_path, seed=seed)
+    resolved_db = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
+    config.check_forbidden_test_path(resolved_db)
+    resolved_media = media_dir or os.environ.get("MEDIA_DIR", config.MEDIA_DIR)
+    config.check_forbidden_test_path(resolved_media)
+
+    init_db(resolved_db, seed=seed)
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, ModerationRequestHandler)
-    httpd.db_path = db_path or os.environ.get("MODERATION_DB_PATH", config.DEFAULT_DB_PATH)
+    httpd.db_path = resolved_db
     httpd.directory = directory or FRONTEND_PUBLIC_DIR
-    httpd.media_dir = media_dir or os.environ.get("MEDIA_DIR", config.MEDIA_DIR)
+    httpd.media_dir = resolved_media
     os.makedirs(httpd.media_dir, exist_ok=True)
 
     if allow_demo_login is None:

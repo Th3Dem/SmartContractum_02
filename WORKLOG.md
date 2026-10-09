@@ -720,6 +720,9 @@
 [2026-10-03 15:55] | dev_bot | IMPLEMENTATION_COMPLETE | Report: user-scoped состояние жалоб для материалов и комментариев (Task: issue-133-user-scoped-report-state)
 [2026-10-03 15:56] | git_bot | PR_CREATED | Открыт PR #135 для Issue #133 (Fixes #133), ветка fix/issue-133-user-scoped-report-state (Task: issue-133-user-scoped-report-state)
 [2026-10-03 15:58] | pm_bot | READY_FOR_OWNER_MERGE | Проверки CI пройдены (GREEN), критерии приемки подтверждены, PR #135 готов к слиянию владельцем (Task: issue-133-user-scoped-report-state)
+[2026-10-09 11:00] | pm_bot | TASK_INIT | Старт задачи Issue #288: Test runs must never touch the local data/ (DB and media) (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:01] | pm_bot | DEV_ASSIGN | Назначение реализации backend на py_bot для Issue #288 (Task: issue-288-tests-never-touch-local-data)
+[2026-10-09 11:15] | py_bot | IMPLEMENTATION_COMPLETE | Изоляция локальных данных data/ при запуске тестов (Task: issue-288-tests-never-touch-local-data)
 
 
 
